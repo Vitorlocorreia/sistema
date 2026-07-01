@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Proposta Comercial — Portal de Gestão de Canteiro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&display=swap" rel="stylesheet" />
+  <style>
+    /* ─────────────────────────────────── tokens */
+    :root {
+      --amber:      #F59E0B;
+      --amber-10:   rgba(245,158,11,.10);
+      --amber-25:   rgba(245,158,11,.25);
+      --green:      #10B981;
+      --green-10:   rgba(16,185,129,.10);
+      --blue:       #3B82F6;
+      --blue-10:    rgba(59,130,246,.10);
+      --purple:     #8B5CF6;
+      --purple-10:  rgba(139,92,246,.10);
+      --red:        #EF4444;
+      --ink:        #0D0F14;
+      --ink-soft:   #1C1F2A;
+      --body:       #374151;
+      --muted:      #6B7280;
+      --border:     #E5E7EB;
+      --bg-light:   #F9FAFB;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { font-size: 15px; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: 'Inter', sans-serif; color: var(--body); background: #fff; line-height: 1.65; }
+
+    /* ─────────────────────────────────── page wrapper */
+    .doc { max-width: 860px; margin: 0 auto; }
+
+    /* ─────────────────────────────────── cover */
+    .cover {
+      background: var(--ink-soft);
+      padding: 72px 64px 64px;
+      position: relative; overflow: hidden;
+    }
+    .cover::after {
+      content: '';
+      position: absolute; bottom: -80px; right: -80px;
+      width: 400px; height: 400px; border-radius: 50%;
+      background: radial-gradient(circle at center, rgba(245,158,11,.15) 0%, transparent 65%);
+      pointer-events: none;
+    }
+    .cover-eyebrow {
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid rgba(245,158,11,.35);
+      background: rgba(245,158,11,.10);
+      color: var(--amber); font-size: 10px; font-weight: 800;
+      letter-spacing: 1.5px; text-transform: uppercase;
+      padding: 5px 12px; border-radius: 4px; margin-bottom: 28px;
+    }
+    .cover h1 {
+      font-size: 46px; font-weight: 900; line-height: 1.08;
+      letter-spacing: -1.5px; color: #fff; margin-bottom: 18px;
+    }
+    .cover h1 em { font-style: normal; color: var(--amber); }
+    .cover .lead {
+      font-size: 15px; color: rgba(255,255,255,.55);
+      max-width: 520px; line-height: 1.7; margin-bottom: 52px;
+    }
+    .cover-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 0; border: 1px solid rgba(255,255,255,.08); border-radius: 8px;
+      overflow: hidden;
+    }
+    .cover-cell {
+      padding: 16px 20px;
+      border-right: 1px solid rgba(255,255,255,.08);
+    }
+    .cover-cell:last-child { border-right: none; }
+    .cover-cell dt { font-size: 9px; color: rgba(255,255,255,.35); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 5px; }
+    .cover-cell dd { font-size: 13px; color: rgba(255,255,255,.80); font-weight: 700; }
+
+    /* ─────────────────────────────────── sections */
+    section { padding: 52px 64px; border-bottom: 1px solid var(--border); }
+    section:last-of-type { border-bottom: none; }
+
+    .sec-label {
+      font-size: 9px; font-weight: 800; letter-spacing: 1.8px;
+      text-transform: uppercase; color: var(--amber);
+      display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+    }
+    .sec-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    h2 { font-size: 28px; font-weight: 900; color: var(--ink); letter-spacing: -.6px; line-height: 1.2; margin-bottom: 10px; }
+    .intro { font-size: 14px; color: var(--muted); max-width: 580px; line-height: 1.7; margin-bottom: 32px; }
+
+    /* ─────────────────────────────────── pain cards */
+    .pains { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .pain {
+      padding: 20px; border-radius: 8px;
+      background: var(--bg-light); border: 1px solid var(--border);
+    }
+    .pain-icon { font-size: 22px; margin-bottom: 10px; }
+    .pain h3 { font-size: 12px; font-weight: 800; color: var(--ink); margin-bottom: 6px; }
+    .pain p  { font-size: 12px; color: var(--muted); line-height: 1.55; }
+
+    /* ─────────────────────────────────── solution headline */
+    .solution-hl {
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; flex-direction: column;
+      padding: 40px 64px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .solution-hl h2 { font-size: 32px; max-width: 560px; }
+    .solution-hl p  { font-size: 14px; color: var(--muted); max-width: 480px; }
+
+    /* ─────────────────────────────────── module rows */
+    .modules { display: flex; flex-direction: column; }
+    .mod {
+      display: grid; grid-template-columns: 72px 1fr 180px;
+      gap: 24px; align-items: start;
+      padding: 28px 64px; border-bottom: 1px solid var(--border);
+    }
+    .mod:last-child { border-bottom: none; }
+    .mod-dot {
+      width: 52px; height: 52px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 22px; flex-shrink: 0; margin-top: 2px;
+    }
+    .mod h3 { font-size: 15px; font-weight: 800; color: var(--ink); margin-bottom: 5px; }
+    .mod .tagline { font-size: 12px; font-weight: 600; color: var(--amber); margin-bottom: 8px; }
+    .mod p { font-size: 13px; color: var(--muted); line-height: 1.6; margin-bottom: 10px; }
+    .mod-feats { display: flex; flex-direction: column; gap: 5px; }
+    .mod-feat { font-size: 11px; color: var(--body); display: flex; gap: 7px; align-items: flex-start; }
+    .mod-feat::before { content: '✓'; color: var(--green); font-weight: 900; flex-shrink: 0; }
+
+    /* sidebar preview */
+    .mod-preview {
+      background: var(--ink-soft); border-radius: 8px;
+      padding: 14px 16px; margin-top: 4px;
+    }
+    .preview-label { font-size: 9px; color: rgba(255,255,255,.35); font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+    .preview-stat { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .preview-stat span { font-size: 11px; color: rgba(255,255,255,.55); }
+    .preview-stat strong { font-size: 12px; font-weight: 800; }
+    .preview-bar { height: 4px; border-radius: 2px; background: rgba(255,255,255,.08); margin-bottom: 10px; overflow: hidden; }
+    .preview-bar div { height: 100%; border-radius: 2px; }
+
+    .kanban-preview { display: flex; gap: 6px; margin-top: 2px; }
+    .kp-col { flex: 1; }
+    .kp-label { font-size: 8px; color: rgba(255,255,255,.35); font-weight: 700; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 5px; }
+    .kp-card { background: rgba(255,255,255,.07); border-radius: 4px; padding: 5px 7px; font-size: 9px; color: rgba(255,255,255,.65); margin-bottom: 4px; line-height: 1.35; }
+
+    .rdo-preview-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    .rdo-chip { background: rgba(255,255,255,.07); border-radius: 4px; padding: 4px 8px; font-size: 9px; color: rgba(255,255,255,.65); }
+
+    /* ─────────────────────────────────── differentials */
+    .diffs { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; }
+    .diff {
+      padding: 22px 20px; border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    .diff-icon { font-size: 24px; margin-bottom: 12px; }
+    .diff h3 { font-size: 13px; font-weight: 800; color: var(--ink); margin-bottom: 6px; }
+    .diff p  { font-size: 12px; color: var(--muted); line-height: 1.55; }
+
+    /* ─────────────────────────────────── comparison table */
+    .comparison { width: 100%; border-collapse: collapse; margin-top: 28px; }
+    .comparison thead th { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .8px; padding: 12px 16px; background: var(--bg-light); border-bottom: 2px solid var(--border); text-align: left; }
+    .comparison thead th:first-child { border-radius: 8px 0 0 0; }
+    .comparison thead th:last-child  { border-radius: 0 8px 0 0; }
+    .comparison thead th.highlight { background: var(--amber-10); color: var(--amber); }
+    .comparison tbody td { font-size: 12px; padding: 11px 16px; border-bottom: 1px solid var(--border); color: var(--body); }
+    .comparison tbody td:first-child { font-weight: 700; color: var(--ink); }
+    .comparison .yes { color: var(--green); font-weight: 800; }
+    .comparison .no  { color: #D1D5DB; }
+    .comparison .partial { color: var(--amber); font-weight: 700; }
+    .comparison tbody tr:last-child td { border-bottom: none; }
+    .comparison tbody tr:hover td { background: var(--bg-light); }
+
+    /* ─────────────────────────────────── numbers */
+    .numbers { display: grid; grid-template-columns: repeat(3,1fr); gap: 1px; background: var(--border); border-radius: 8px; overflow: hidden; margin-top: 28px; }
+    .num { background: #fff; padding: 28px 24px; text-align: center; }
+    .num big { font-size: 42px; font-weight: 900; color: var(--ink); letter-spacing: -2px; line-height: 1; display: block; margin-bottom: 6px; }
+    .num big span { color: var(--amber); }
+    .num p { font-size: 12px; color: var(--muted); }
+
+    /* ─────────────────────────────────── timeline */
+    .timeline { display: flex; flex-direction: column; gap: 0; margin-top: 28px; position: relative; }
+    .timeline::before { content: ''; position: absolute; left: 24px; top: 40px; bottom: 40px; width: 2px; background: var(--border); }
+    .tl-step { display: flex; gap: 24px; padding: 18px 0; align-items: flex-start; }
+    .tl-num { width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px; position: relative; z-index: 1; }
+    .tl-body h3 { font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
+    .tl-body p  { font-size: 12px; color: var(--muted); line-height: 1.55; }
+    .tl-body .period { font-size: 10px; font-weight: 800; color: var(--amber); margin-top: 6px; letter-spacing: .3px; }
+
+    /* ─────────────────────────────────── objections */
+    .objections { display: flex; flex-direction: column; gap: 0; }
+    .obj { padding: 20px 0; border-bottom: 1px solid var(--border); display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .obj:last-child { border-bottom: none; }
+    .obj-q { font-size: 13px; font-weight: 700; color: var(--ink); display: flex; gap: 8px; }
+    .obj-q::before { content: '?'; color: var(--muted); font-size: 16px; font-weight: 900; flex-shrink: 0; line-height: 1.2; }
+    .obj-a { font-size: 13px; color: var(--muted); line-height: 1.6; display: flex; gap: 8px; }
+    .obj-a::before { content: '→'; color: var(--green); font-weight: 900; flex-shrink: 0; line-height: 1.6; }
+
+    /* ─────────────────────────────────── script box */
+    .script-box {
+      background: var(--ink-soft); border-radius: 8px; padding: 24px 28px;
+      margin-top: 16px; border-left: 3px solid var(--amber);
+    }
+    .script-box p { font-size: 13px; color: rgba(255,255,255,.70); line-height: 1.75; font-style: italic; }
+    .script-label { font-size: 9px; font-weight: 800; color: var(--amber); letter-spacing: 1.2px; text-transform: uppercase; margin-bottom: 10px; }
+
+    /* ─────────────────────────────────── CTA */
+    .cta {
+      background: var(--ink-soft); padding: 64px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .cta::before {
+      content: ''; position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
+      width: 500px; height: 300px; border-radius: 50%;
+      background: radial-gradient(circle, rgba(245,158,11,.12) 0%, transparent 70%);
+    }
+    .cta h2 { color: #fff; font-size: 30px; margin-bottom: 10px; position: relative; }
+    .cta p  { color: rgba(255,255,255,.50); font-size: 14px; margin-bottom: 32px; position: relative; }
+    .cta-row { display: flex; gap: 12px; justify-content: center; position: relative; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; font-size: 12px; letter-spacing: .8px; text-transform: uppercase; padding: 13px 28px; border-radius: 6px; text-decoration: none; }
+    .btn-amber { background: var(--amber); color: var(--ink); }
+    .btn-ghost { border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.65); }
+
+    /* ─────────────────────────────────── footer */
+    .foot {
+      padding: 20px 64px; background: var(--bg-light);
+      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid var(--border);
+    }
+    .foot span { font-size: 11px; color: var(--muted); font-weight: 600; }
+
+    /* ─────────────────────────────────── guide tag */
+    .guide-section { background: var(--bg-light); }
+    .guide-header {
+      background: var(--ink); color: #fff;
+      padding: 28px 64px;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .guide-header h2 { color: #fff; font-size: 20px; }
+    .guide-header p  { color: rgba(255,255,255,.50); font-size: 12px; margin-top: 2px; }
+    .guide-badge { background: var(--amber); color: var(--ink); font-size: 9px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; padding: 4px 10px; border-radius: 4px; white-space: nowrap; flex-shrink: 0; }
+
+    .step { padding: 32px 64px; border-bottom: 1px solid var(--border); background: #fff; }
+    .step-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+    .step-num { width: 32px; height: 32px; border-radius: 50%; background: var(--amber-10); border: 1px solid var(--amber-25); color: var(--amber); font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .step-title { font-size: 15px; font-weight: 800; color: var(--ink); }
+    .step-time { font-size: 10px; color: var(--muted); background: var(--bg-light); border: 1px solid var(--border); padding: 2px 8px; border-radius: 20px; margin-left: auto; }
+    .step p { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 14px; }
+
+    .action-tag { display: inline-flex; align-items: center; gap: 6px; background: var(--blue-10); color: var(--blue); border: 1px solid rgba(59,130,246,.2); font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 4px; margin-bottom: 12px; }
+
+    /* ─────────────────────────────────── tips */
+    .tip {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: rgba(16,185,129,.06); border: 1px solid rgba(16,185,129,.2);
+      border-radius: 8px; padding: 14px 16px; margin-top: 16px;
+    }
+    .tip-icon { font-size: 18px; flex-shrink: 0; }
+    .tip p { font-size: 12px; color: var(--green); line-height: 1.6; font-weight: 500; }
+
+    .warn {
+      display: flex; gap: 12px; align-items: flex-start;
+      background: var(--amber-10); border: 1px solid var(--amber-25);
+      border-radius: 8px; padding: 14px 16px; margin-top: 16px;
+    }
+    .warn-icon { font-size: 18px; flex-shrink: 0; }
+    .warn p { font-size: 12px; color: #92400E; line-height: 1.6; font-weight: 500; }
+
+    /* ─────────────────────────────────── checklist */
+    .checklist { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+    .check { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; color: var(--body); }
+    .check::before { content: '☐'; font-size: 16px; flex-shrink: 0; color: var(--muted); line-height: 1.3; }
+
+    /* ─────────────────────────────────── print */
+    @media print {
+      @page { size: A4; margin: 0; }
+      html { font-size: 13px; }
+      .cover { padding: 56px 48px 48px; }
+      section, .step { padding-left: 48px; padding-right: 48px; }
+      .mod { padding-left: 48px; padding-right: 48px; }
+      .guide-header { padding: 20px 48px; }
+      .cta { padding: 48px; }
+      .foot { padding: 16px 48px; }
+      .cover h1 { font-size: 38px; }
+      .pains, .diffs, .numbers { break-inside: avoid; }
+      .mod, .tl-step, .obj { break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+<div class="doc">
+
+<!-- ══════════════════════════════════════════════════════════
+     CAPA
+══════════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="cover-eyebrow">📄 Proposta Comercial · Confidencial</div>
+  <h1>Portal de Gestão de<br /><em>Canteiro de Obras</em></h1>
+  <p class="lead">
+    Um sistema integrado que digitaliza a operação de campo da sua construtora — relatórios,
+    compras, tarefas e galeria fotográfica em um único portal responsivo, sem mensalidades
+    de softwares de terceiros.
+  </p>
+  <div class="cover-grid">
+    <div class="cover-cell">
+      <dt>Data</dt>
+      <dd>Julho / 2026</dd>
+    </div>
+    <div class="cover-cell">
+      <dt>Versão Atual</dt>
+      <dd>Protótipo v1.0</dd>
+    </div>
+    <div class="cover-cell">
+      <dt>Plataforma</dt>
+      <dd>Web · iOS · Android</dd>
+    </div>
+    <div class="cover-cell">
+      <dt>Modalidade</dt>
+      <dd>SaaS / Licença</dd>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     O PROBLEMA
+══════════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">01 · Contexto</div>
+  <h2>Os Problemas que o Setor Enfrenta Todo Dia</h2>
+  <p class="intro">Construtoras de todos os tamanhos perdem tempo e dinheiro nos mesmos gargalos de comunicação. Reconhece algum desses?</p>
+
+  <div class="pains">
+    <div class="pain">
+      <div class="pain-icon">📋</div>
+      <h3>RDOs em papel ou planilha</h3>
+      <p>O relatório do canteiro chega ao escritório com dias de atraso. Decisões são tomadas com informações velhas.</p>
+    </div>
+    <div class="pain">
+      <div class="pain-icon">📦</div>
+      <h3>Compras sem rastreabilidade</h3>
+      <p>Solicitações de material pelo WhatsApp se perdem. Ninguém sabe se o pedido foi cotado, aprovado ou entregue.</p>
+    </div>
+    <div class="pain">
+      <div class="pain-icon">💬</div>
+      <h3>Tarefas misturadas no zap</h3>
+      <p>Ordens técnicas de segurança e engenharia se perdem em conversas informais. Sem histórico, sem responsável claro.</p>
+    </div>
+    <div class="pain">
+      <div class="pain-icon">📸</div>
+      <h3>Fotos espalhadas em drives</h3>
+      <p>Registros fotográficos da obra em grupos de WhatsApp ou pastas desorganizadas. Impossível mostrar evolução ao cliente.</p>
+    </div>
+    <div class="pain">
+      <div class="pain-icon">💰</div>
+      <h3>Licenças de software caras</h3>
+      <p>Trello, ClickUp, ERPs pesados: cada ferramenta adiciona uma mensalidade. O custo de TI cresce sem controle.</p>
+    </div>
+    <div class="pain">
+      <div class="pain-icon">📊</div>
+      <h3>Falta de visão consolidada</h3>
+      <p>O diretor precisa ligar para 3 pessoas para saber como está cada obra. Não há painel único de controle.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     SOLUÇÃO — HEADLINE
+══════════════════════════════════════════════════════════ -->
+<div class="solution-hl">
+  <div class="sec-label">02 · A Solução</div>
+  <h2>Um portal. Cinco módulos. Toda a obra sob controle.</h2>
+  <p style="margin-top:10px;">Desenvolvemos uma plataforma corporativa construída sob medida para o canteiro, acessível do celular do mestre de obras no campo e do computador do diretor no escritório.</p>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MÓDULOS
+══════════════════════════════════════════════════════════ -->
+<div class="modules">
+
+  <!-- DASHBOARD -->
+  <div class="mod">
+    <div class="mod-dot" style="background:var(--amber-10);">📊</div>
+    <div>
+      <p class="tagline">Módulo 01 · Dashboard</p>
+      <h3>Painel de Controle Executivo</h3>
+      <p>A primeira tela que o diretor vê de manhã. Consolida todos os KPIs das obras ativas com alertas gerados automaticamente por inteligência operacional.</p>
+      <div class="mod-feats">
+        <span class="mod-feat">Obras ativas, RDOs do dia, pedidos pendentes e faturamento planejado</span>
+        <span class="mod-feat">IA de Campo: detecta paradas de equipamento, atrasos de chuva e compras críticas travadas</span>
+        <span class="mod-feat">Ações rápidas em um clique: criar RDO, solicitar material, ver galeria</span>
+        <span class="mod-feat">Gráfico de curva de produtividade e execução por empreendimento</span>
+      </div>
+    </div>
+    <div class="mod-preview">
+      <div class="preview-label">Prévia do Painel</div>
+      <div class="preview-stat">
+        <span>Obras Ativas</span>
+        <strong style="color:var(--amber);">3</strong>
+      </div>
+      <div class="preview-stat">
+        <span>RDOs Hoje</span>
+        <strong style="color:var(--green);">2</strong>
+      </div>
+      <div class="preview-stat">
+        <span>Pedidos Pend.</span>
+        <strong style="color:var(--red);">5</strong>
+      </div>
+      <div class="preview-bar"><div style="width:72%;background:var(--amber);"></div></div>
+      <div style="font-size:9px;color:rgba(255,255,255,.3);line-height:1.4;">⚡ Alerta IA: Betoneira parada há 2 dias — Obra Horizonte</div>
+    </div>
+  </div>
+
+  <!-- SUPRIMENTOS -->
+  <div class="mod">
+    <div class="mod-dot" style="background:var(--blue-10);">📦</div>
+    <div>
+      <p class="tagline">Módulo 02 · Suprimentos</p>
+      <h3>Gestão de Compras — Kanban Visual</h3>
+      <p>Substitui planilhas e e-mails. Cada solicitação de material percorre um fluxo visual com rastreabilidade total e controle de alçadas de aprovação por valor.</p>
+      <div class="mod-feats">
+        <span class="mod-feat">Esteira: Solicitado → Em Cotação → Aprovação → Em Trânsito → Entregue</span>
+        <span class="mod-feat">Modal de aprovação com fornecedor, valor e prazo confirmados em tela</span>
+        <span class="mod-feat">Badge "Atrasado" automático: acende em vermelho quando o prazo vence</span>
+        <span class="mod-feat">Controle de alçada: pedidos acima de determinado valor exigem ok da diretoria</span>
+      </div>
+    </div>
+    <div class="mod-preview">
+      <div class="preview-label">Kanban de Compras</div>
+      <div class="kanban-preview">
+        <div class="kp-col">
+          <div class="kp-label">Solicitado</div>
+          <div class="kp-card">Cimento CP-III</div>
+          <div class="kp-card">Vergalhão 10mm</div>
+        </div>
+        <div class="kp-col">
+          <div class="kp-label">Aprovação</div>
+          <div class="kp-card" style="border-left:2px solid var(--red);">Bomba d'água ⚠</div>
+        </div>
+        <div class="kp-col">
+          <div class="kp-label">Entregue</div>
+          <div class="kp-card" style="border-left:2px solid var(--green);">Brita ✓</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAREFAS -->
+  <div class="mod">
+    <div class="mod-dot" style="background:var(--purple-10);">📋</div>
+    <div>
+      <p class="tagline">Módulo 03 · Quadro de Tarefas</p>
+      <h3>Substituto do Trello — Nativo e Gratuito</h3>
+      <p>Elimina a licença do Trello/ClickUp. Gestão visual de atividades técnicas, administrativas e de segurança, dentro do mesmo portal de compras e obras.</p>
+      <div class="mod-feats">
+        <span class="mod-feat">Fluxo: A Fazer → Em Andamento → Em Revisão → Concluído</span>
+        <span class="mod-feat">Categorias por cor: Manutenção, Segurança, Engenharia, Administrativo, Qualidade</span>
+        <span class="mod-feat">Atribuição de responsáveis e prazo com badge "Vencido" automático</span>
+        <span class="mod-feat">Filtro por obra e por categoria com contagem em tempo real</span>
+      </div>
+    </div>
+    <div class="mod-preview">
+      <div class="preview-label">Quadro de Tarefas</div>
+      <div class="kp-card" style="margin-bottom:6px;border-left:2px solid var(--amber);">🔧 Calibrar bomba hidráulica <br/><span style="font-size:8px;opacity:.5;">Manutenção · Pedro</span></div>
+      <div class="kp-card" style="margin-bottom:6px;border-left:2px solid var(--red);">🛡️ Vistoria de andaimes — Nível 3 <br/><span style="font-size:8px;color:var(--red);">Vencido · Segurança</span></div>
+      <div class="kp-card" style="border-left:2px solid var(--green);">✅ Slump test — Concretagem B2 <br/><span style="font-size:8px;opacity:.5;">Qualidade · Concluído</span></div>
+    </div>
+  </div>
+
+  <!-- RDO -->
+  <div class="mod">
+    <div class="mod-dot" style="background:var(--green-10);">📝</div>
+    <div>
+      <p class="tagline">Módulo 04 · RDO Digital</p>
+      <h3>Diário de Obra Sem Papel</h3>
+      <p>Elimina o papel e cria um histórico jurídico da obra. Preenchimento simples pelo encarregado no celular; análise imediata pelo escritório.</p>
+      <div class="mod-feats">
+        <span class="mod-feat">Clima, condição do solo, efetivo próprio e terceirizado por turno</span>
+        <span class="mod-feat">Registro de maquinário, horas operadas e paradas não planejadas</span>
+        <span class="mod-feat">Assinatura digital com carimbo de data/hora e registro de responsável</span>
+        <span class="mod-feat">Exportação PDF profissional para envio ao cliente final com 1 clique</span>
+      </div>
+    </div>
+    <div class="mod-preview">
+      <div class="preview-label">RDO — Obra Horizonte · 30/06</div>
+      <div class="rdo-preview-row">
+        <div class="rdo-chip">☀️ Ensolarado</div>
+        <div class="rdo-chip">Solo Seco</div>
+      </div>
+      <div class="rdo-preview-row">
+        <div class="rdo-chip">👷 18 próprios</div>
+        <div class="rdo-chip">🤝 6 terceiros</div>
+      </div>
+      <div class="preview-bar" style="margin:8px 0;"><div style="width:85%;background:var(--green);"></div></div>
+      <div style="font-size:9px;color:rgba(255,255,255,.35);">Progresso geral da obra: 85%</div>
+      <div style="margin-top:8px;background:var(--amber-10);border:1px solid var(--amber-25);border-radius:4px;padding:5px 8px;font-size:9px;color:var(--amber);font-weight:700;">✔ Assinado digitalmente</div>
+    </div>
+  </div>
+
+  <!-- GALERIA -->
+  <div class="mod">
+    <div class="mod-dot" style="background:rgba(6,182,212,.10);">📸</div>
+    <div>
+      <p class="tagline">Módulo 05 · Galeria de Evolução</p>
+      <h3>Antes &amp; Depois — O Módulo que Vende a Obra</h3>
+      <p>Documentação visual do avanço físico. Encanta investidores e clientes finais com um comparativo deslizante que mostra a evolução da obra na linha do tempo.</p>
+      <div class="mod-feats">
+        <span class="mod-feat">Slider interativo comparando foto mais antiga vs. foto mais recente automaticamente</span>
+        <span class="mod-feat">Integração com Google Drive da construtora: imagens sempre atualizadas</span>
+        <span class="mod-feat">Galeria com filtro por empreendimento e lightbox full-screen para inspeção técnica</span>
+        <span class="mod-feat">Comprovação visual de progresso para cliente final e investidores</span>
+      </div>
+    </div>
+    <div class="mod-preview">
+      <div class="preview-label">Antes &amp; Depois · Bela Vista</div>
+      <div style="display:flex;gap:6px;margin-top:4px;">
+        <div style="flex:1;background:rgba(255,255,255,.06);border-radius:4px;padding:10px 6px;text-align:center;">
+          <div style="font-size:9px;color:rgba(255,255,255,.35);margin-bottom:4px;">Fundação</div>
+          <div style="font-size:18px;">🏗️</div>
+        </div>
+        <div style="display:flex;align-items:center;color:var(--amber);font-size:14px;font-weight:900;">←→</div>
+        <div style="flex:1;background:rgba(245,158,11,.08);border:1px solid var(--amber-25);border-radius:4px;padding:10px 6px;text-align:center;">
+          <div style="font-size:9px;color:var(--amber);margin-bottom:4px;">Atual</div>
+          <div style="font-size:18px;">🏢</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:9px;color:rgba(255,255,255,.3);">Arraste o controle para comparar fases</div>
+    </div>
+  </div>
+
+</div><!-- /modules -->
+
+<!-- ══════════════════════════════════════════════════════════
+     DIFERENCIAIS
+══════════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">03 · Por que escolher</div>
+  <h2>O que nos Diferencia no Mercado</h2>
+  <p class="intro">Não somos mais um software genérico. Somos uma solução criada para a realidade da construção civil brasileira.</p>
+
+  <div class="diffs">
+    <div class="diff" style="border-color:var(--amber-25);background:var(--amber-10);">
+      <div class="diff-icon">💰</div>
+      <h3>Custo Operacional Zero</h3>
+      <p>Sem mensalidades de Trello, ClickUp ou ERPs pesados. O quadro de tarefas e o kanban de compras já estão incluídos no portal, sem cobrança extra por usuário.</p>
+    </div>
+    <div class="diff" style="border-color:rgba(16,185,129,.25);background:var(--green-10);">
+      <div class="diff-icon">📱</div>
+      <h3>Funciona no Celular do Mestre de Obras</h3>
+      <p>100% responsivo. O encarregado preenche o RDO no canteiro pelo celular; o diretor aprova a compra no notebook no escritório. Mesma experiência, qualquer tela.</p>
+    </div>
+    <div class="diff" style="border-color:rgba(59,130,246,.25);background:var(--blue-10);">
+      <div class="diff-icon">🔒</div>
+      <h3>Dados da Construtora, Não de Terceiros</h3>
+      <p>As fotos do canteiro ficam no Google Drive da sua empresa. Nenhuma imagem vai para servidores de terceiros. Soberania e privacidade totais.</p>
+    </div>
+    <div class="diff" style="border-color:rgba(139,92,246,.25);background:var(--purple-10);">
+      <div class="diff-icon">⚡</div>
+      <h3>Implantação em Semanas, Não Meses</h3>
+      <p>O protótipo funcional já existe. Personalizamos com as obras, equipes e identidade visual da sua construtora. Você começa a operar em 2 a 4 semanas.</p>
+    </div>
+    <div class="diff" style="border-color:rgba(6,182,212,.25);background:rgba(6,182,212,.06);">
+      <div class="diff-icon">🤖</div>
+      <h3>IA de Campo Sem Custo de API</h3>
+      <p>O sistema analisa todos os RDOs e compras e gera alertas preventivos automaticamente, sem pagar por APIs de IA externas. Inteligência nativa, custo zero.</p>
+    </div>
+    <div class="diff" style="border-color:var(--border);background:var(--bg-light);">
+      <div class="diff-icon">🎨</div>
+      <h3>Personalização Completa</h3>
+      <p>Sidebar reordenável por cada usuário. Cada gestor organiza o portal do jeito que trabalha. A identidade visual da construtora aplicada em todo o sistema.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     COMPARATIVO
+══════════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">04 · Comparativo</div>
+  <h2>Portal vs. Soluções Tradicionais</h2>
+  <p class="intro">Veja por que o portal supera as alternativas já adotadas pelo mercado.</p>
+
+  <table class="comparison">
+    <thead>
+      <tr>
+        <th>Recurso</th>
+        <th style="text-align:center;">Planilhas / WhatsApp</th>
+        <th style="text-align:center;">ERPs Tradicionais</th>
+        <th style="text-align:center;" class="highlight">Portal Canteiro ★</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>RDO Digital com Assinatura</td>
+        <td style="text-align:center;" class="no">✗</td>
+        <td style="text-align:center;" class="partial">Pago extra</td>
+        <td style="text-align:center;" class="yes">✓ Incluído</td>
+      </tr>
+      <tr>
+        <td>Kanban de Compras Visual</td>
+        <td style="text-align:center;" class="no">✗</td>
+        <td style="text-align:center;" class="partial">Pago extra</td>
+        <td style="text-align:center;" class="yes">✓ Incluído</td>
+      </tr>
+      <tr>
+        <td>Quadro de Tarefas (estilo Trello)</td>
+        <td style="text-align:center;" class="no">✗</td>
+        <td style="text-align:center;" class="no">✗</td>
+        <td style="text-align:center;" class="yes">✓ Incluído</td>
+      </tr>
+      <tr>
+        <td>Galeria Antes &amp; Depois</td>
+        <td style="text-align:center;" class="no">✗</td>
+        <td style="text-align:center;" class="no">✗</td>
+        <td style="text-align:center;" class="yes">✓ Incluído</td>
+      </tr>
+      <tr>
+        <td>Funciona no Celular</td>
+        <td style="text-align:center;" class="partial">Parcial</td>
+        <td style="text-align:center;" class="partial">App separado</td>
+        <td style="text-align:center;" class="yes">✓ 100%</td>
+      </tr>
+      <tr>
+        <td>IA de Alertas Preventivos</td>
+        <td style="text-align:center;" class="no">✗</td>
+        <td style="text-align:center;" class="no">✗</td>
+        <td style="text-align:center;" class="yes">✓ Nativa</td>
+      </tr>
+      <tr>
+        <td>Custo por Usuário Adicional</td>
+        <td style="text-align:center;" class="partial">Baixo</td>
+        <td style="text-align:center;" class="no">Alto</td>
+        <td style="text-align:center;" class="yes">Incluído</td>
+      </tr>
+      <tr>
+        <td>Tempo de Implantação</td>
+        <td style="text-align:center;" class="partial">Imediato</td>
+        <td style="text-align:center;" class="no">3–12 meses</td>
+        <td style="text-align:center;" class="yes">2–4 semanas</td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     NÚMEROS
+══════════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">05 · Impacto</div>
+  <h2>O que o Sistema Entrega em Números</h2>
+  <div class="numbers">
+    <div class="num">
+      <big><span>−</span>80<span>%</span></big>
+      <p>do tempo gasto gerenciando compras e aprovações por e-mail ou telefone</p>
+    </div>
+    <div class="num">
+      <big>5<span>x</span></big>
+      <p>mais rápido para o escritório tomar decisões com dados do canteiro em tempo real</p>
+    </div>
+    <div class="num">
+      <big><span>R$</span>0</big>
+      <p>de custo com licenças de Trello, ClickUp ou sistemas de RDO separados</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     CRONOGRAMA
+══════════════════════════════════════════════════════════ -->
+<section>
+  <div class="sec-label">06 · Implantação</div>
+  <h2>Como Funciona a Implantação</h2>
+  <p class="intro">Metodologia de entrega incremental. Você gera valor desde a primeira semana.</p>
+
+  <div class="timeline">
+    <div class="tl-step">
+      <div class="tl-num" style="background:var(--amber-10);color:var(--amber);border:1px solid var(--amber-25);">1</div>
+      <div class="tl-body">
+        <h3>Levantamento &amp; Personalização</h3>
+        <p>Mapeamos seus fluxos de compras, obras ativas, equipes e hierarquia de aprovações. Configuramos o portal com a identidade da sua construtora e integramos com o Google Drive corporativo.</p>
+        <div class="period">⏱ Semanas 1 – 2</div>
+      </div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-num" style="background:var(--blue-10);color:var(--blue);border:1px solid rgba(59,130,246,.25);">2</div>
+      <div class="tl-body">
+        <h3>Treinamento &amp; Piloto em uma Obra</h3>
+        <p>Treinamento das equipes de campo (encarregados/mestres) e escritório (engenheiros/compras/diretoria). Implantamos em uma obra piloto para validar os fluxos antes do rollout.</p>
+        <div class="period">⏱ Semanas 3 – 4</div>
+      </div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-num" style="background:var(--green-10);color:var(--green);border:1px solid rgba(16,185,129,.25);">3</div>
+      <div class="tl-body">
+        <h3>Rollout Completo para Todas as Obras</h3>
+        <p>Expansão para todos os empreendimentos ativos, ativação do RDO digital e assinatura eletrônica, e integração com ERP ou sistema financeiro existente.</p>
+        <div class="period">⏱ Semanas 5 – 8</div>
+      </div>
+    </div>
+    <div class="tl-step">
+      <div class="tl-num" style="background:var(--purple-10);color:var(--purple);border:1px solid rgba(139,92,246,.25);">4</div>
+      <div class="tl-body">
+        <h3>Evolução Contínua &amp; Novos Módulos</h3>
+        <p>Módulos adicionais (Frota &amp; GPS, Financeiro, Ponto Eletrônico) conforme demanda. Contrato de manutenção, atualizações de segurança e suporte técnico dedicado.</p>
+        <div class="period">⏱ Mês 3 em diante</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════
+     CTA
+══════════════════════════════════════════════════════════ -->
+<div class="cta">
+  <h2>Pronto para ver o sistema ao vivo?</h2>
+  <p>Este protótipo está em operação. Podemos agendar uma demonstração interativa para você testar cada módulo em tempo real.</p>
+  <div class="cta-row">
+    <a class="btn btn-amber" href="#">✉ Solicitar Demonstração</a>
+    <a class="btn btn-ghost" href="#">📞 Falar com a Equipe</a>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     ════ GUIA DO SÓCIO (página separada) ════
+══════════════════════════════════════════════════════════ -->
+
+<div class="guide-header" style="margin-top:0;page-break-before:always;">
+  <div>
+    <h2>🎤 Roteiro da Apresentação ao Cliente</h2>
+    <p>Guia exclusivo para o apresentador · Não compartilhar com o cliente</p>
+  </div>
+  <div class="guide-badge">Uso Interno</div>
+</div>
+
+<!-- PREP -->
+<div class="step guide-section">
+  <div class="step-head">
+    <div class="step-num">0</div>
+    <div class="step-title">Antes da Call — Checklist de Preparação</div>
+    <div class="step-time">15 min antes</div>
+  </div>
+  <p>Faça isso antes de entrar na chamada para garantir uma demonstração sem travamentos:</p>
+  <div class="checklist">
+    <div class="check">Abra o portal no navegador (Chrome ou Edge) em aba separada</div>
+    <div class="check">Ajuste o zoom do navegador para 90% para caber mais conteúdo na tela</div>
+    <div class="check">Coloque o modo escuro ligado no sistema operacional (deixa o portal mais elegante)</div>
+    <div class="check">Teste o slider "Antes e Depois" do módulo Obras uma vez antes</div>
+    <div class="check">Tenha esta proposta aberta em outra aba para consultar durante a conversa</div>
+    <div class="check">Desligue notificações do celular e do computador durante a call</div>
+  </div>
+  <div class="warn">
+    <div class="warn-icon">⚠️</div>
+    <p>Se o cliente pedir para ver algo que não está no protótipo, diga: <strong>"Esse é o próximo módulo do nosso roadmap — já está planejado e posso mostrar o wireframe depois da call."</strong> Nunca prometa o que não existe ainda.</p>
+  </div>
+</div>
+
+<!-- ETAPA 1 -->
+<div class="step guide-section">
+  <div class="step-head">
+    <div class="step-num">1</div>
+    <div class="step-title">Abertura — Conecte com os Problemas do Cliente</div>
+    <div class="step-time">3 – 5 min</div>
+  </div>
+  <p>Não comece mostrando o sistema. Comece falando dos <strong>problemas dele</strong>. Isso gera sintonia imediata.</p>
+  <div class="script-box">
+    <div class="script-label">💬 Script sugerido</div>
+    <p>"Antes de eu abrir o sistema, deixa eu te fazer uma pergunta rápida: como você controla hoje as compras de material das suas obras? É WhatsApp? E-mail? Planilha? … Certo. E quando o diretor quer saber como está o andamento de uma obra hoje, ele consegue ver isso em tempo real ou precisa ligar para o engenheiro?"</p>
+  </div>
+  <div class="tip">
+    <div class="tip-icon">💡</div>
+    <p>Deixe o cliente falar por 1–2 minutos. Cada problema que ele citar, você vai poder apontar o módulo exato que resolve. Isso é muito mais poderoso do que um pitch genérico.</p>
+  </div>
+</div>
+
+<!-- ETAPA 2 -->
+<div class="step guide-section">
+  <div class="step-head">
+    <div class="step-num">2</div>
+    <div class="step-title">Dashboard — O Painel que o Diretor Abre de Manhã</div>
+    <div class="step-time">3 – 4 min</div>
+  </div>
+  <div class="action-tag">🖥️ Ação: Abra a tela principal do portal (página inicial)</div>
+  <p>Mostre o painel de KPIs e o bloco de alertas da IA. Destaque o número de obras ativas, RDOs do dia e pedidos pendentes.</p>
+  <div class="script-box">
+    <div class="script-label">💬 Script sugerido</div>
+    <p>"Esta é a primeira tela que o gestor vê ao abrir o sistema. Ela consolida, em tempo real, tudo que está acontecendo nas obras. Mas o que é mais poderoso aqui é esse painel de alertas. A IA do sistema analisa silenciosamente os RDOs e as compras a noite toda. Se uma betoneira parou, se um material crítico está atrasado, se um pedido caro está esperando aprovação há dois dias — ele aparece aqui, de manhã, antes de você precisar fazer uma ligação sequer."</p>
+  </div>
+</div>
+
+<!-- ETAPA 3 -->
+<div class="step guide-section">
+  <div class="step-head">
+    <div class="step-num">3</div>
+    <div class="step-title">Suprimentos — Acabe com o WhatsApp de Compras</div>
+    <div class="step-time">4 – 5 min</div>
+  </div>
+  <div class="action-tag">🖥️ Ação: Navegue para a aba Suprimentos</div>
+  <p>Mostre o Kanban de compras. Simule mover um card de "Para Aprovação" e mostre o modal de confirmação aparecendo.</p>
+  <div class="script-box">
+    <div class="script-label">💬 Script sugerido</div>
+    <p>"Aqui acabou o controle de compras por WhatsApp. Toda solicitação do canteiro cai nessa coluna aqui — 'Solicitado'. Vai passando pelos estágios: cotação, aprovação, em trânsito, entregue. O diretor recebe esse modal de segurança aqui — ele vê o fornecedor, o valor, o prazo — e aprova com um clique. Se a data combinada vencer, automaticamente o item acende esse alerta vermelho de atraso. Nada se perde mais."</p>
+  </div>
+</div>
+
+<!-- ETAPA 4 -->
+<div class="step guide-section">
+  <div class="step-head">
+    <div class="step-num">4</div>
+    <div class="step-title">Quadro de Tarefas — Adeus Trello Pago</div>
+    <div class="step-time">3 min</div>
+  </div>
+  <div class="action-tag">🖥️ Ação: Role para baixo na página de Suprimentos para mostrar o Quadro de Tarefas</div>
+  <p>Mova uma tarefa de segurança para "Em Revisão". Mostre as categorias por cor.</p>
+  <div class="script-box">
+    <div class="script-label">💬 Script sugerido</div>
+    <p>"Logo abaixo das compras, temos o quadro de tarefas geral — que elimina a necessidade de pagar Trello ou ClickUp. Cada tarefa tem uma categoria: segurança, engenharia, qualidade, manutenção. Cada uma tem um responsável e um prazo. Se vencer, o badge 'Vencido' aparece automaticamente. A equipe de engenharia e segurança coordena tudo aqui, sem sair do mesmo sistema de compras."</p>
+  </div>
+</div>
+
+<!-- ETAPA 5 -->
+<div class="step guide-section">
+  <div class="step-head">
+    <div class="step-num">5</div>
+    <div class="step-title">RDO Digital — Histórico Jurídico da Obra</div>
+    <div class="step-time">3 – 4 min</div>
+  </div>
+  <div class="action-tag">🖥️ Ação: Navegue para a aba RDO. Clique em um relatório da lista.</div>
+  <p>Mostre as abas de efetivo e equipamentos. Clique em "Exportar PDF" e depois em "Assinar Digitalmente".</p>
+  <div class="script-box">
+    <div class="script-label">💬 Script sugerido</div>
+    <p>"O RDO é preenchido pelo encarregado no celular, no fim do turno. Clima, efetivo próprio e terceirizado, maquinário, atividades do dia. O escritório vê isso em tempo real, não mais dois dias depois. Para formalizar, o engenheiro assina digitalmente aqui — fica registrado com data e hora. E com um clique, gera um PDF profissional para enviar ao cliente final ou guardar no arquivo da obra."</p>
+  </div>
+</div>
+
+<!-- ETAPA 6 -->
+<div class="step guide-section">
+  <div class="step-head">
+    <div class="step-num">6</div>
+    <div class="step-title">Galeria — O Módulo que Encanta o Cliente Final</div>
+    <div class="step-time">3 – 4 min</div>
+  </div>
+  <div class="action-tag">🖥️ Ação: Navegue para a aba Obras. Arraste o slider Antes & Depois lentamente.</div>
+  <p>Este é o fechamento visual. Arraste o controle deslizante. Depois clique em uma foto para o lightbox.</p>
+  <div class="script-box">
+    <div class="script-label">💬 Script sugerido</div>
+    <p>"E para fechar, o módulo favorito de todo cliente que vê a demo: o Antes e Depois. Esse controle aqui compara automaticamente a foto mais antiga com a mais recente da obra. Arraste para a esquerda — fundação. Arraste para a direita — obra atual. O cliente final da construtora ama isso. Gera confiança imediata e prova o avanço físico sem precisar de reunião. As fotos vêm direto do Google Drive da empresa."</p>
+  </div>
+  <div class="tip">
+    <div class="tip-icon">🎯</div>
+    <p>Se possível, passe o controle do mouse para o cliente e deixe ele arrastar o slider sozinho. A sensação física de interagir com a interface gera forte desejo de compra.</p>
+  </div>
+</div>
+
+<!-- ETAPA 7 - OBJECTIONS -->
+<div class="step guide-section">
+  <div class="step-head">
+    <div class="step-num">7</div>
+    <div class="step-title">Como Responder as Objeções Mais Comuns</div>
+    <div class="step-time">Quando surgirem</div>
+  </div>
+  <div class="objections">
+    <div class="obj">
+      <div class="obj-q">Como os dados são alimentados no sistema? É manual?</div>
+      <div class="obj-a">O protótipo usa dados simulados para demonstração. Na implantação, configuramos as integrações com o ERP da empresa ou a equipe preenche via formulários simples no celular. O encarregado leva menos de 5 minutos por dia.</div>
+    </div>
+    <div class="obj">
+      <div class="obj-q">E a segurança dos dados? Onde ficam armazenados?</div>
+      <div class="obj-a">As fotos ficam no Google Drive da própria construtora — zero dado em servidor de terceiros. Os dados operacionais são hospedados em infraestrutura com criptografia padrão bancário, com backups automáticos diários.</div>
+    </div>
+    <div class="obj">
+      <div class="obj-q">Quanto tempo leva para implementar?</div>
+      <div class="obj-a">O protótipo já existe e está em operação. Para a construtora do cliente, são 2 a 4 semanas: 1 semana de personalização, 1 de treinamento, e na terceira semana já está operando na obra piloto.</div>
+    </div>
+    <div class="obj">
+      <div class="obj-q">Vocês têm integração com [ERP / sistema X]?</div>
+      <div class="obj-a">Trabalhamos com APIs padrão REST, então a integração com qualquer ERP moderno é viável. Mapeamos as integrações necessárias na fase de levantamento (semana 1) e entregamos o plano de integração antes de assinar.</div>
+    </div>
+    <div class="obj">
+      <div class="obj-q">E se eu quiser cancelar?</div>
+      <div class="obj-a">O contrato não tem fidelidade obrigatória. Se o cliente quiser sair, exportamos todos os dados dele (RDOs, fotos, histórico de compras) em formato padrão (PDF/CSV/JSON). Os dados são sempre dele.</div>
+    </div>
+  </div>
+</div>
+
+<!-- DICAS FINAIS -->
+<div class="step guide-section" style="border-bottom:none;">
+  <div class="step-head">
+    <div class="step-num">★</div>
+    <div class="step-title">Dicas Finais para Fechar a Reunião</div>
+  </div>
+  <div class="checklist">
+    <div class="check"><strong>Fale de negócio, não de tecnologia.</strong> Use "economia de tempo", "controle financeiro", "evitar atrasos" — não "API", "Next.js" ou "localStorage".</div>
+    <div class="check"><strong>Pergunte sobre a dor específica deles.</strong> "Hoje você tem como saber em tempo real quantos funcionários estão em cada obra?" — se a resposta for não, você já vendeu o RDO.</div>
+    <div class="check"><strong>Proponha um piloto.</strong> Em vez de fechar o contrato completo na hora, ofereça: "Vamos implantar em uma obra por 30 dias e você mede o resultado."</div>
+    <div class="check"><strong>Termine com próximo passo claro.</strong> Não saia da call sem combinar: data da proposta formal, e-mail de follow-up ou próxima reunião com decisor.</div>
+    <div class="check"><strong>Documente os problemas mencionados.</strong> Anote tudo que o cliente disse que dói. Na proposta formal, espelhe exatamente esses problemas com as soluções do sistema.</div>
+  </div>
+  <div class="warn" style="margin-top:24px;">
+    <div class="warn-icon">🏆</div>
+    <p><strong>Objetivo da call de amanhã:</strong> Não é fechar. É gerar interesse suficiente para o cliente pedir a proposta formal e agendar a próxima reunião com o decisor financeiro. Sucesso = próxima reunião marcada.</p>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="foot">
+  <span>Portal de Gestão de Canteiro · Protótipo v1.0</span>
+  <span>Documento Confidencial — Uso Interno</span>
+  <span>Julho 2026</span>
+</div>
+
+</div><!-- /doc -->
+</body>
+</html>

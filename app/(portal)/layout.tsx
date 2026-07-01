@@ -274,8 +274,23 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       </aside>
 
       {/* MAIN CONTAINER */}
-      <main className="flex-1 px-4 py-6 md:px-10 md:py-8 min-w-0 overflow-y-auto">
-        {children}
+      {/* Browser modules (frota, financeiro, ponto) get no padding so iframe fills the area */}
+      <main
+        className="flex-1 min-w-0 overflow-y-auto"
+        style={
+          ['/frota', '/financeiro', '/ponto'].some(p => pathname.startsWith(p))
+            ? { padding: 0, display: 'flex', flexDirection: 'column' }
+            : undefined
+        }
+      >
+        {['/frota', '/financeiro', '/ponto'].some(p => pathname.startsWith(p))
+          ? children
+          : (
+            <div className="px-4 py-6 md:px-10 md:py-8">
+              {children}
+            </div>
+          )
+        }
       </main>
     </div>
   )
