@@ -284,7 +284,7 @@ export default function RDO() {
       <PageTitle modulo="Corporativo" titulo="Diario de Obra (RDO)" />
 
       {/* KPI Row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
         {[
           { label: 'Total no Mes', value: totalRdos, color: C.inkSoft },
           { label: 'Aprovados', value: aprovados, color: C.green },
@@ -305,7 +305,7 @@ export default function RDO() {
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' }}>
+      <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-5 items-start">
         
         {/* Left Side: Filter Panel and List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -501,7 +501,10 @@ export default function RDO() {
               gap: 20
             }}>
               {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
+              <div 
+                className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-4"
+                style={{ borderBottom: `1px solid ${C.border}` }}
+              >
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <FileText size={18} color={C.amber} />
@@ -514,7 +517,7 @@ export default function RDO() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="flex flex-wrap gap-2">
                   <motion.button 
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
@@ -564,7 +567,7 @@ export default function RDO() {
               </div>
 
               {/* Grid Geral (Obra, Data, Clima, Condição Solo) */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
                 
                 <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, padding: '12px 14px', borderRadius: 2 }}>
                   <div style={{ fontSize: 9, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', marginBottom: 4 }}>Obra Atribuída</div>
@@ -625,7 +628,7 @@ export default function RDO() {
               </div>
 
               {/* Mão de Obra e Equipamentos */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 
                 {/* Mão de Obra / Efetivo */}
                 <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, padding: 16, borderRadius: 2 }}>

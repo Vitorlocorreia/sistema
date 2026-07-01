@@ -247,7 +247,7 @@ export default function Suprimentos() {
       <PageTitle modulo="Portal Nativo" titulo="Gestão de Suprimentos" />
 
       {/* Top Aggregations */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 24 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, padding: 16, borderRadius: 2 }}>
           <div style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', marginBottom: 6 }}>Total Planejado/Gasto</div>
           <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, fontFamily: 'var(--font-display)' }}>
@@ -319,7 +319,7 @@ export default function Suprimentos() {
 
       {/* Kanban Board */}
       <Panel title="Fluxo de Suprimentos da Construtora">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 14, overflowX: 'auto', paddingBottom: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 14, overflowX: 'auto', paddingBottom: 10 }}>
           {colunas.map(col => {
             const items = filteredSupplies.filter(s => s.status === col.id)
             return (
@@ -798,7 +798,7 @@ function QuadroTarefas() {
     <Panel
       title="Quadro de Tarefas — Substituto do Trello"
       action={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="flex flex-wrap items-center gap-2">
           {/* Filtro tipo */}
           <select
             value={filtroTipo}
@@ -839,7 +839,7 @@ function QuadroTarefas() {
       </div>
 
       {/* Kanban Columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, overflowX: 'auto' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(260px, 1fr))', gap: 12, overflowX: 'auto', paddingBottom: 10 }}>
         {colunasGeral.map(col => {
           const items = tarefasFiltradas.filter(t => t.status === col.id)
           return (

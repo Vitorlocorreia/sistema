@@ -155,7 +155,7 @@ export default function Dashboard() {
       </div>
 
       {/* KPIs Grid */}
-      <div style={{ display: 'flex', gap: 16, marginBottom: 24, flexWrap: 'wrap' }}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {(Object.keys(metricConfig) as MetricType[]).map((key) => {
           const config = metricConfig[key]
           return (
@@ -246,7 +246,7 @@ export default function Dashboard() {
       </div>
 
       {/* Obras + Suprimentos */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 20, marginBottom: 24 }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-6">
         <Panel title="Andamento das Obras">
           <div style={{ display: 'grid', gap: 16 }}>
             {obras.map(o => (

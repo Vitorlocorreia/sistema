@@ -98,19 +98,21 @@ export default function Obras() {
           ))}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 260px', gap: 12, alignItems: 'stretch' }}>
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_260px] gap-3 items-stretch">
 
           {/* Interactive Slider */}
-          <div style={{
-            position: 'relative',
-            width: '100%',
-            height: 300,
-            overflow: 'hidden',
-            borderRadius: 2,
-            border: `1px solid ${C.border}`,
-            background: '#0B0C0E',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
-          }}>
+          <div 
+            className="h-[220px] sm:h-[300px]"
+            style={{
+              position: 'relative',
+              width: '100%',
+              overflow: 'hidden',
+              borderRadius: 2,
+              border: `1px solid ${C.border}`,
+              background: '#0B0C0E',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
+            }}
+          >
             {/* DEPOIS (behind) */}
             {depois && (
               <img

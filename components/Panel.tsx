@@ -17,14 +17,14 @@ export function Panel({ title, action, children }: Props) {
       display: 'flex',
       flexDirection: 'column',
     }}>
-      <div style={{
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        padding: '14px 20px', 
-        borderBottom: `1px solid ${C.border}`,
-        background: '#161821'
-      }}>
+      <div 
+        className="flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        style={{
+          padding: '14px 20px', 
+          borderBottom: `1px solid ${C.border}`,
+          background: '#161821'
+        }}
+      >
         <span style={{ 
           fontSize: 12, 
           fontWeight: 900, 
@@ -33,7 +33,11 @@ export function Panel({ title, action, children }: Props) {
           letterSpacing: 0.8,
           fontFamily: 'var(--font-display)' 
         }}>{title}</span>
-        {action}
+        {action && (
+          <div className="flex flex-wrap items-center gap-2">
+            {action}
+          </div>
+        )}
       </div>
       <div style={{ padding: 20 }}>{children}</div>
     </div>

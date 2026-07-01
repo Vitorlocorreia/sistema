@@ -1,9 +1,8 @@
-'use client'
 import { useState, useRef, useEffect } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutGrid, Wallet, DollarSign, Clock, Package,
-  Camera, FileText, Truck, ChevronRight, GripVertical, Settings, X
+  Camera, FileText, Truck, ChevronRight, GripVertical, Settings, X, Menu
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import { apps as defaultApps } from '@/lib/mock'
@@ -35,6 +34,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const pathname = usePathname()
   const [order, setOrder] = useState<string[]>(() => defaultApps.map(a => a.id))
   const [editMode, setEditMode] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const dragItem = useRef<number | null>(null)
   const dragOver = useRef<number | null>(null)
 
@@ -47,6 +47,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(order))
   }, [order])
+
+  // Close mobile sidebar on route change
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
 
   const sortedApps = order.map(id => defaultApps.find(a => a.id === id)!).filter(Boolean)
 
@@ -65,21 +70,57 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: C.bg, fontFamily: 'var(--font-sans)' }}>
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#0B0C0E] text-[#F3F4F6] font-sans selection:bg-[#F59E0B] selection:text-[#0B0C0E]">
+
+      {/* ── MOBILE HEADER ────────────────────────────────────────── */}
+      <header className="md:hidden flex items-center justify-between px-6 py-4 bg-[#12141C] border-b border-[#222530] sticky top-0 z-40">
+        <div className="flex items-center gap-3">
+          <div className="width-8 height-8 w-8 h-8 rounded bg-[#F59E0B] flex items-center justify-center">
+            <Wallet size={16} color="#0B0C0E" strokeWidth={2.5} />
+          </div>
+          <div>
+            <span className="font-bold text-xs uppercase tracking-wider text-[#F3F4F6] block">Carteira de Apps</span>
+            <span className="text-[9px] text-[#9CA3AF] uppercase tracking-widest block">Portal Construtora</span>
+          </div>
+        </div>
+        <button 
+          onClick={() => setMobileOpen(true)}
+          className="p-2 -mr-2 text-[#9CA3AF] hover:text-[#F3F4F6] focus:outline-none"
+        >
+          <Menu size={22} />
+        </button>
+      </header>
+
+      {/* ── BACKDROP FOR MOBILE DRAWER ───────────────────────────── */}
+      {mobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/75 z-40 md:hidden transition-opacity duration-300"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
 
       {/* ── SIDEBAR ─────────────────────────────────────────────── */}
-      <aside style={{
-        width: 280,
-        background: C.bgPanel,
-        borderRight: `1px solid ${C.border}`,
-        padding: '24px 16px',
-        display: 'flex',
-        flexDirection: 'column',
-        flexShrink: 0,
-      }}>
+      <aside 
+        className={`
+          fixed inset-y-0 left-0 z-50 md:static md:flex flex-col flex-shrink-0
+          w-[280px] bg-[#12141C] border-r border-[#222530] p-6
+          transform transition-transform duration-300 ease-out md:translate-x-0
+          ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
+        `}
+      >
+        {/* Mobile close button */}
+        <div className="md:hidden flex justify-end mb-4">
+          <button 
+            onClick={() => setMobileOpen(false)}
+            className="p-1.5 text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#222530] rounded"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 8px', marginBottom: 28 }}>
-          <div style={{ width: 34, height: 34, borderRadius: 2, background: C.amber, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="flex items-center gap-3 px-2 mb-7">
+          <div className="w-[34px] h-[34px] rounded bg-[#F59E0B] flex items-center justify-center">
             <Wallet size={18} color="#0B0C0E" strokeWidth={2.5} />
           </div>
           <div>
@@ -90,7 +131,10 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
         {/* Dashboard link */}
         <button
-          onClick={() => router.push('/')}
+          onClick={() => {
+            router.push('/')
+            setMobileOpen(false)
+          }}
           style={{
             all: 'unset',
             cursor: 'pointer',
@@ -113,7 +157,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         </button>
 
         {/* Section header + edit toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '18px 8px 10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '18px 8px 10px' }} className="justify-between">
           <div style={{ fontSize: 9, fontWeight: 800, color: '#4B5563', textTransform: 'uppercase', letterSpacing: 1.2 }}>
             Meus Aplicativos
           </div>
@@ -162,7 +206,12 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                   userSelect: 'none',
                   opacity: 1,
                 }}
-                onClick={() => { if (!editMode) router.push(`/${app.id}`) }}
+                onClick={() => { 
+                  if (!editMode) {
+                    router.push(`/${app.id}`)
+                    setMobileOpen(false)
+                  }
+                }}
                 className={editMode ? '' : 'hover:bg-brand-card/50 hover:border-brand-border'}
               >
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
@@ -224,7 +273,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       </aside>
 
       {/* MAIN CONTAINER */}
-      <main style={{ flex: 1, padding: '32px 40px', minWidth: 0, overflowY: 'auto' }}>
+      <main className="flex-1 px-4 py-6 md:px-10 md:py-8 min-w-0 overflow-y-auto">
         {children}
       </main>
     </div>
