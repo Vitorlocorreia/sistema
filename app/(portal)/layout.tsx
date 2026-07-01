@@ -8,6 +8,7 @@ import {
 import { C } from '@/lib/tokens'
 import { apps as defaultApps } from '@/lib/mock'
 import { StatusBadge } from '@/components/StatusBadge'
+import { EmbeddedBrowser } from '@/components/EmbeddedBrowser'
 
 const iconMap: Record<string, any> = {
   DollarSign, Clock, Package, Camera, FileText, Truck
@@ -274,7 +275,6 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       </aside>
 
       {/* MAIN CONTAINER */}
-      {/* Browser modules (frota, financeiro, ponto) get no padding so iframe fills the area */}
       <main
         className="flex-1 min-w-0 overflow-y-auto"
         style={
@@ -283,14 +283,43 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             : undefined
         }
       >
-        {['/frota', '/financeiro', '/ponto'].some(p => pathname.startsWith(p))
-          ? children
-          : (
-            <div className="px-4 py-6 md:px-10 md:py-8">
-              {children}
-            </div>
-          )
-        }
+        {/* Render persistent browser views so the iframe remains mounted, keeping its state */}
+        <div style={{ display: pathname === '/frota' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+          <EmbeddedBrowser
+            defaultUrl="https://app.infleet.com.br"
+            shortcutLabel="Infleet"
+            shortcutIcon={<Truck size={13} />}
+            accentColor={C.amber}
+          />
+        </div>
+
+        <div style={{ display: pathname === '/financeiro' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+          <EmbeddedBrowser
+            defaultUrl="https://totalerp.com.br"
+            shortcutLabel="Total ERP"
+            shortcutIcon={<DollarSign size={13} />}
+            accentColor={C.amber}
+          />
+        </div>
+
+        <div style={{ display: pathname === '/ponto' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
+          <EmbeddedBrowser
+            defaultUrl="https://faceponto.com.br"
+            shortcutLabel="FacePonto"
+            shortcutIcon={<Clock size={13} />}
+            accentColor={C.green}
+          />
+        </div>
+
+        {/* Regular pages container */}
+        <div 
+          style={{ 
+            display: !['/frota', '/financeiro', '/ponto'].some(p => pathname.startsWith(p)) ? 'block' : 'none' 
+          }}
+          className="px-4 py-6 md:px-10 md:py-8"
+        >
+          {children}
+        </div>
       </main>
     </div>
   )
