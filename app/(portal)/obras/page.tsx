@@ -10,6 +10,14 @@ import { toast } from '@/components/Toast'
 import { motion, AnimatePresence } from 'motion/react'
 import type { Obra } from '@/lib/types'
 
+const card: React.CSSProperties = {
+  background: C.bgPanel,
+  border: `1px solid ${C.border}`,
+  borderRadius: 10,
+  padding: '20px 24px',
+}
+
+
 // Estilos de formulários nativos do sistema
 const inputStyle: React.CSSProperties = {
   background: '#0B0C0E',
