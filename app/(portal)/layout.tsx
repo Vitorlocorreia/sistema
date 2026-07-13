@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutGrid, Wallet, DollarSign, Clock, Package,
@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import type { Colaborador } from '@/lib/types'
+import { motion, AnimatePresence } from 'motion/react'
 
 const defaultApps = [
   { id: 'financeiro',   nome: 'Financeiro',       sub: 'Módulo Nativo',  status: 'novo',      icone: 'DollarSign' },
@@ -26,6 +27,30 @@ const iconMap: Record<string, any> = {
 }
 
 const STORAGE_KEY = 'sidebar_order'
+const APPS_CACHE_KEY = 'apps_autorizados_cache'
+const SESSION_KEY = 'colaborador_sessao'
+
+// Lê apps do cache local (evita roundtrip ao banco em navegações)
+function readAppsCache(): string[] | null {
+  try {
+    const raw = localStorage.getItem(APPS_CACHE_KEY)
+    if (!raw) return null
+    const { apps, ts } = JSON.parse(raw)
+    // Cache válido por 5 minutos
+    if (Date.now() - ts < 5 * 60 * 1000) return apps
+    return null
+  } catch { return null }
+}
+
+function writeAppsCache(apps: string[]) {
+  try {
+    localStorage.setItem(APPS_CACHE_KEY, JSON.stringify({ apps, ts: Date.now() }))
+  } catch { }
+}
+
+function invalidateAppsCache() {
+  try { localStorage.removeItem(APPS_CACHE_KEY) } catch { }
+}
 
 function loadOrder(): string[] {
   if (typeof window === 'undefined') return defaultApps.map(a => a.id)
@@ -63,64 +88,93 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const dragItem = useRef<number | null>(null)
   const dragOver = useRef<number | null>(null)
   const [colaborador, setColaborador] = useState<Colaborador | null>(null)
-  const [appsAutorizados, setAppsAutorizados] = useState<string[]>(['financeiro'])
+  const [appsAutorizados, setAppsAutorizados] = useState<string[]>([])
   const [authChecked, setAuthChecked] = useState(false)
 
-  // ── Auth guard: verifica sessão no localStorage e no Supabase ───────────────────
+  // ── Auth guard OTIMISTA: mostra UI imediatamente a partir do cache local ───
   useEffect(() => {
-    async function verificarAuth() {
-      const raw = localStorage.getItem('colaborador_sessao')
-      if (!raw) {
-        router.replace('/login')
-        return
-      }
+    const raw = localStorage.getItem(SESSION_KEY)
+    if (!raw) {
+      router.replace('/login')
+      return
+    }
+
+    let sessao: Colaborador | null = null
+    try {
+      sessao = JSON.parse(raw)
+    } catch {
+      router.replace('/login')
+      return
+    }
+
+    if (!sessao) { router.replace('/login'); return }
+
+    // 1. Carrega sessão do cache LOCAL instantaneamente (sem esperar banco)
+    setColaborador(sessao)
+
+    // 2. Carrega apps do cache (sem roundtrip)
+    const cachedApps = readAppsCache()
+    if (cachedApps) {
+      setAppsAutorizados(cachedApps)
+      setAuthChecked(true)
+    }
+
+    // 3. Valida e atualiza em background (não bloqueia a UI)
+    const validarEmBackground = async () => {
       try {
-        const sessao: Colaborador = JSON.parse(raw)
-        // Busca colaborador atualizado no banco
         const { data: c, error } = await supabase
           .from('colaboradores')
           .select('*')
-          .eq('id', sessao.id)
+          .eq('id', sessao!.id)
           .single()
 
         if (error || !c) {
+          // Sessão inválida no banco → expulsa
+          localStorage.removeItem(SESSION_KEY)
+          invalidateAppsCache()
           router.replace('/login')
           return
         }
 
+        // Atualiza sessão local com dados frescos
         setColaborador(c)
-        localStorage.setItem('colaborador_sessao', JSON.stringify(c))
+        localStorage.setItem(SESSION_KEY, JSON.stringify(c))
         localStorage.setItem('perfil_ativo', c.cargo)
 
-        // Resolve lista de apps permitidos (dinamicamente do banco)
+        // Resolve lista de apps
+        let listaApps: string[]
         if (c.override_permissoes) {
-          const listaApps = c.apps ? c.apps.split(',').map((a: string) => a.trim()).filter(Boolean) : ['financeiro']
-          setAppsAutorizados(listaApps)
+          listaApps = c.apps
+            ? c.apps.split(',').map((a: string) => a.trim()).filter(Boolean)
+            : ['financeiro']
         } else {
-          // Busca permissões do cargo
           const { data: perm } = await supabase
             .from('config_permissoes')
             .select('apps')
             .eq('cargo', c.cargo)
             .single()
-
-          const listaApps = perm?.apps ? perm.apps.split(',').map((a: string) => a.trim()).filter(Boolean) : ['financeiro']
-          setAppsAutorizados(listaApps)
+          listaApps = perm?.apps
+            ? perm.apps.split(',').map((a: string) => a.trim()).filter(Boolean)
+            : ['financeiro']
         }
+
+        setAppsAutorizados(listaApps)
+        writeAppsCache(listaApps)
+        setAuthChecked(true)
       } catch {
-        router.replace('/login')
-        return
+        // Falha de rede — mantém UI com cache, tenta de novo depois
+        if (!authChecked) setAuthChecked(true)
       }
-      setAuthChecked(true)
     }
 
-    verificarAuth()
-  }, [router])
+    validarEmBackground()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
-  // Escuta mudanças de sessão (login em outra aba, logout)
+  // Escuta mudanças de sessão (logout em outra aba)
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'colaborador_sessao') {
+      if (e.key === SESSION_KEY) {
         if (!e.newValue) {
           router.replace('/login')
         } else {
@@ -137,18 +191,19 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(order)) }, [order])
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
-  // ── Route guard: impede acesso via URL direta a apps não autorizados
+  // Route guard: só redireciona se authChecked E apps carregados
   useEffect(() => {
-    if (!authChecked || !colaborador) return
+    if (!authChecked || appsAutorizados.length === 0) return
     const appAcessado = defaultApps.find(app => pathname.startsWith(`/${app.id}`))
     if (appAcessado && !appsAutorizados.includes(appAcessado.id)) {
       router.replace('/')
     }
-  }, [pathname, colaborador, authChecked, appsAutorizados, router])
+  }, [pathname, authChecked, appsAutorizados, router])
 
   function handleLogout() {
-    localStorage.removeItem('colaborador_sessao')
+    localStorage.removeItem(SESSION_KEY)
     localStorage.removeItem('perfil_ativo')
+    invalidateAppsCache()
     router.replace('/login')
   }
 
@@ -171,22 +226,21 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     dragOver.current = null
   }
 
-  // Aguarda verificação de auth antes de renderizar
+  // Skeleton mínimo enquanto carrega (só na primeira vez sem cache)
   if (!authChecked) {
     return (
-      <div style={{
-        minHeight: '100vh', background: '#0B0C0E',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
+      <div style={{ minHeight: '100vh', background: '#0B0C0E', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{
           width: 32, height: 32, borderRadius: '50%',
           border: '3px solid #F59E0B', borderTopColor: 'transparent',
-          animation: 'spin 0.7s linear infinite',
+          animation: 'spin 0.6s linear infinite',
         }} />
         <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
       </div>
     )
   }
+
+  const isEmbedded = ['/frota', '/ponto'].some(p => pathname.startsWith(p))
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#0B0C0E] text-[#F3F4F6] font-sans selection:bg-[#F59E0B] selection:text-[#0B0C0E]">
@@ -211,19 +265,25 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       </header>
 
       {/* ── BACKDROP ─────────────────────────────────────────────── */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 bg-black/75 z-40 md:hidden"
-          onClick={() => setMobileOpen(false)}
-        />
-      )}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            className="fixed inset-0 bg-black/75 z-40 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* ── SIDEBAR ─────────────────────────────────────────────── */}
       <aside
         className={`
           fixed inset-y-0 left-0 z-50 md:static md:flex flex-col flex-shrink-0
           w-[280px] bg-[#12141C] border-r border-[#222530] p-6
-          transform transition-transform duration-300 ease-out md:translate-x-0
+          transform transition-transform duration-250 ease-out md:translate-x-0
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
@@ -306,7 +366,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                   padding: '12px 14px', borderRadius: 2,
                   background: active ? '#1E2230' : 'transparent',
                   border: `1px solid ${active ? C.amber : editMode ? C.border : 'transparent'}`,
-                  transition: 'all 0.15s',
+                  transition: 'all 0.12s ease',
                   cursor: editMode ? 'grab' : 'pointer',
                   userSelect: 'none',
                 }}
@@ -321,7 +381,8 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
                     <div style={{
                       width: 32, height: 32, borderRadius: 2,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: active ? `${C.amber}22` : C.border
+                      background: active ? `${C.amber}22` : C.border,
+                      transition: 'background 0.12s',
                     }}>
                       <Icon size={16} color={active ? C.amber : C.inkSoft} strokeWidth={2} />
                     </div>
@@ -390,12 +451,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       {/* MAIN CONTAINER */}
       <main
         className="flex-1 min-w-0 overflow-y-auto"
-        style={
-          ['/frota', '/ponto'].some(p => pathname.startsWith(p))
-            ? { padding: 0, display: 'flex', flexDirection: 'column' }
-            : undefined
-        }
+        style={isEmbedded ? { padding: 0, display: 'flex', flexDirection: 'column' } : undefined}
       >
+        {/* Embedded browsers (never unmounted → sem delay de reload) */}
         <div style={{ display: pathname === '/frota' ? 'flex' : 'none', flex: 1, flexDirection: 'column' }}>
           <EmbeddedBrowser
             defaultUrl="https://app.infleet.com.br"
@@ -412,12 +470,22 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             accentColor={C.green}
           />
         </div>
-        <div
-          style={{ display: !['/frota', '/ponto'].some(p => pathname.startsWith(p)) ? 'block' : 'none' }}
-          className="px-4 py-6 md:px-10 md:py-8"
-        >
-          {children}
-        </div>
+
+        {/* Conteúdo dos módulos nativos com transição suave entre páginas */}
+        <AnimatePresence mode="wait" initial={false}>
+          {!isEmbedded && (
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="px-4 py-6 md:px-10 md:py-8"
+            >
+              {children}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   )
