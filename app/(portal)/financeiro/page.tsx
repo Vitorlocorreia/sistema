@@ -1,5 +1,5 @@
-﻿'use client'
-import { useState, useEffect, useCallback } from 'react'
+'use client'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus,
   Building2, Users, FileText, CheckCircle, Clock, X,
@@ -134,8 +134,11 @@ export default function FinanceiroPage() {
       if (perm) setPermissaoAtiva(perm as ConfigPermissao)
     }
 
-    // Carrega lista de colaboradores para a aba de permissões
-    const { data: cols } = await supabase.from('colaboradores').select('*').order('nome')
+    // Carrega lista de colaboradores para a aba de permissões (sem a coluna senha por segurança)
+    const { data: cols } = await supabase
+      .from('colaboradores')
+      .select('id, nome, email, cargo, empresa_id, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor')
+      .order('nome')
     setColaboradores(cols ?? [])
 
     setLoadingAcesso(false)
@@ -280,36 +283,45 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     }
   }, [colaboradorAtivo])
 
-  const filtered = selected === 'todas' ? contas : contas.filter(c => c.empresa_id === selected)
+  const filtered = useMemo(() => selected === 'todas' ? contas : contas.filter(c => c.empresa_id === selected), [contas, selected])
 
-  const receitas     = filtered.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + c.valor, 0)
-  const despesas     = filtered.filter(c => c.tipo === 'pagar'   && c.status === 'Pago').reduce((s, c) => s + c.valor, 0)
-  const resultado    = receitas - despesas
+  const { receitas, despesas, resultado } = useMemo(() => {
+    const rec = filtered.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + c.valor, 0)
+    const des = filtered.filter(c => c.tipo === 'pagar'   && c.status === 'Pago').reduce((s, c) => s + c.valor, 0)
+    return { receitas: rec, despesas: des, resultado: rec - des }
+  }, [filtered])
 
-  const hoje = new Date()
-  const mais7 = new Date()
-  mais7.setDate(hoje.getDate() + 7)
-  const mais30 = new Date()
-  mais30.setDate(hoje.getDate() + 30)
+  const { vencidas, vencendo7, vencendo30, totalVencido, total7d, total30d } = useMemo(() => {
+    const hoje = new Date()
+    const mais7 = new Date()
+    mais7.setDate(hoje.getDate() + 7)
+    const mais30 = new Date()
+    mais30.setDate(hoje.getDate() + 30)
 
-  const vencidas = filtered.filter(c => isVencido(c.data_vencimento, c.status))
-  const vencendo7 = filtered.filter(c => {
-    if (c.status !== 'Pendente') return false
-    const d = new Date(c.data_vencimento + 'T00:00:00')
-    return d >= hoje && d <= mais7
-  })
-  const vencendo30 = filtered.filter(c => {
-    if (c.status !== 'Pendente') return false
-    const d = new Date(c.data_vencimento + 'T00:00:00')
-    return d >= hoje && d <= mais30
-  })
+    const v = filtered.filter(c => isVencido(c.data_vencimento, c.status))
+    const v7 = filtered.filter(c => {
+      if (c.status !== 'Pendente') return false
+      const d = new Date(c.data_vencimento + 'T00:00:00')
+      return d >= hoje && d <= mais7
+    })
+    const v30 = filtered.filter(c => {
+      if (c.status !== 'Pendente') return false
+      const d = new Date(c.data_vencimento + 'T00:00:00')
+      return d >= hoje && d <= mais30
+    })
 
-  const totalVencido = vencidas.reduce((s, c) => s + c.valor, 0)
-  const total7d = vencendo7.reduce((s, c) => s + c.valor, 0)
-  const total30d = vencendo30.reduce((s, c) => s + c.valor, 0)
+    return {
+      vencidas: v,
+      vencendo7: v7,
+      vencendo30: v30,
+      totalVencido: v.reduce((s, c) => s + c.valor, 0),
+      total7d: v7.reduce((s, c) => s + c.valor, 0),
+      total30d: v30.reduce((s, c) => s + c.valor, 0)
+    }
+  }, [filtered])
 
   // Gráfico Recharts
-  const chartData = (() => {
+  const chartData = useMemo(() => {
     const meses = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
     const atual = new Date().getMonth()
     
@@ -338,10 +350,10 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       }
     })
     return ultimos6
-  })()
+  }, [filtered])
 
   // DRE
-  const dre = (() => {
+  const dre = useMemo(() => {
     const categoriasReceita: Record<string, number> = {}
     const categoriasDespesa: Record<string, number> = {}
 
@@ -358,7 +370,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       receitas: Object.entries(categoriasReceita).map(([cat, val]) => ({ cat, val })),
       despesas: Object.entries(categoriasDespesa).map(([cat, val]) => ({ cat, val })),
     }
-  })()
+  }, [filtered])
 
   const kpis = [
     { label: 'Saldo Recebido',   value: fmt(resultado),    icon: DollarSign,    color: resultado >= 0 ? '#34D399' : '#F87171' },
@@ -643,11 +655,35 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     load()
   }
 
-  const filtered = fornecedores.filter(f =>
-    f.razao_social.toLowerCase().includes(search.toLowerCase()) ||
-    (f.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
-    (f.categoria ?? '').toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = useMemo(() =>
+    fornecedores.filter(f =>
+      f.razao_social.toLowerCase().includes(search.toLowerCase()) ||
+      (f.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (f.categoria ?? '').toLowerCase().includes(search.toLowerCase())
+    )
+  , [fornecedores, search])
+
+  // Indexador O(1): pré-computa totais de contas por fornecedor uma única vez
+  const contasResumoMap = useMemo(() => {
+    const map: Record<string, { totalEmAberto: number; totalPago: number; totalPagasCount: number; temVencidas: boolean }> = {}
+    contasFornecedores.forEach(c => {
+      if (!c.fornecedor_id) return
+      if (!map[c.fornecedor_id]) {
+        map[c.fornecedor_id] = { totalEmAberto: 0, totalPago: 0, totalPagasCount: 0, temVencidas: false }
+      }
+      const item = map[c.fornecedor_id]
+      if (c.status === 'Pago') {
+        item.totalPago += Number(c.valor || 0)
+        item.totalPagasCount += 1
+      } else if (c.status === 'Pendente' || c.status === 'Aguardando Aprovação' || c.status === 'Vencido') {
+        item.totalEmAberto += Number(c.valor || 0)
+      }
+      if (isVencido(c.data_vencimento, c.status)) {
+        item.temVencidas = true
+      }
+    })
+    return map
+  }, [contasFornecedores])
 
   // Verifica permissão dinamicamente do banco
   const podeCriar = permissaoAtiva?.pode_fornecedores
@@ -748,10 +784,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(f => {
-            const contasF = contasFornecedores.filter(c => c.fornecedor_id === f.id)
-            const pagas = contasF.filter(c => c.status === 'Pago')
-            const emAberto = contasF.filter(c => c.status === 'Pendente' || c.status === 'Aguardando Aprovação' || c.status === 'Vencido')
-            const temContasVencidas = contasF.some(c => isVencido(c.data_vencimento, c.status))
+            const resumo = contasResumoMap[f.id] || { totalEmAberto: 0, totalPago: 0, totalPagasCount: 0, temVencidas: false }
+            const { totalEmAberto, totalPago, totalPagasCount, temVencidas: temContasVencidas } = resumo
 
             return (
               <div key={f.id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14, borderLeft: temContasVencidas ? `3px solid #EF4444` : `1px solid ${C.border}` }}>
@@ -773,8 +807,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', marginRight: 16 }}>
-                    <div style={{ fontSize: 11, color: C.inkSoft }}>Em Aberto: <strong style={{ color: temContasVencidas ? '#EF4444' : C.ink }}>{fmt(emAberto.reduce((sum, c) => sum + c.valor, 0))}</strong></div>
-                    <div style={{ fontSize: 10, color: '#34D399' }}>Pagas: {pagas.length} ({fmt(pagas.reduce((sum, c) => sum + c.valor, 0))})</div>
+                    <div style={{ fontSize: 11, color: C.inkSoft }}>Em Aberto: <strong style={{ color: temContasVencidas ? '#EF4444' : C.ink }}>{fmt(totalEmAberto)}</strong></div>
+                    <div style={{ fontSize: 10, color: '#34D399' }}>Pagas: {totalPagasCount} ({fmt(totalPago)})</div>
                   </div>
                   {podeCriar && (
                     <button onClick={() => remove(f.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4, flexShrink: 0 }}><X size={14} /></button>

@@ -235,8 +235,8 @@ export interface Colaborador {
   cargo: string
   empresa_id: string | null
   email: string | null
-  senha: string | null
-  created_at: string
+  senha?: string | null
+  created_at?: string
   override_permissoes: boolean
   pode_empresas: boolean
   pode_fornecedores: boolean

@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Building2, FileText, Package, Camera, TrendingUp, Plus } from 'lucide-react'
 import { KpiCard } from '@/components/KpiCard'
@@ -33,10 +33,10 @@ export default function Dashboard() {
         { data: sp },
         { data: ft }
       ] = await Promise.all([
-        supabase.from('obras').select('*').order('nome'),
-        supabase.from('rdos').select('*, obra:obras(nome)').order('data', { ascending: false }),
-        supabase.from('suprimentos').select('*, obra:obras(nome)').order('created_at', { ascending: false }),
-        supabase.from('fotos').select('*, obra:obras(nome)').order('created_at', { ascending: false })
+        supabase.from('obras').select('id, nome, status, progresso').order('nome'),
+        supabase.from('rdos').select('id, resumo, status, obra:obras(nome)').order('data', { ascending: false }),
+        supabase.from('suprimentos').select('id, titulo, quantidade, unidade, status, obra:obras(nome)').order('created_at', { ascending: false }),
+        supabase.from('fotos').select('id, legenda, imagem_url, data_iso, obra:obras(nome)').order('created_at', { ascending: false })
       ])
 
       setObrasList(ob ?? [])
@@ -48,7 +48,7 @@ export default function Dashboard() {
     loadData()
   }, [])
 
-  const metricConfig = {
+  const metricConfig = useMemo(() => ({
     obras: {
       label: 'Obras ativas',
       value: String(obrasList.length),
@@ -89,43 +89,45 @@ export default function Dashboard() {
       yAxisFormatter: (v: number) => `${v}`,
       tooltipFormatter: (v: number) => `${v} fotos`
     }
-  }
+  }), [obrasList, rdosList, suprimentosList, fotosList])
 
   const currentConfig = metricConfig[selectedMetric]
 
   // Dynamic AI insights
-  const pendingApproval = suprimentosList.filter(s => s.status === 'Aprovação')
-  const atrasados = rdosList.filter(r => (r.resumo ?? '').toLowerCase().includes('atraso'))
-  
-  const insights = [
-    ...(pendingApproval.length > 0 ? [{
-      emoji: '💰', color: C.amber,
-      text: `Aprovação Pendente: ${pendingApproval.length} pedido(s) de material aguardando liberação em `,
-      link: { label: 'Suprimentos', href: '/suprimentos' }
-    }] : []),
-    ...(atrasados.length > 0 ? [{
-      emoji: '⚠️', color: '#EF4444',
-      text: `Atenção (${atrasados[0].obra?.nome ?? 'Obra'}): ${atrasados[0].resumo}`,
-    }] : []),
-    ...(obrasList.length === 0 ? [{
-      emoji: '🏗️', color: C.amber,
-      text: 'Bem-vindo ao sistema! Comece cadastrando suas obras em Suprimentos ou gerando o primeiro Diário de Obra.',
-    }] : []),
-    ...(obrasList.length > 0 && pendingApproval.length === 0 && atrasados.length === 0 ? [{
-      emoji: '✅', color: '#10B981',
-      text: `Tudo em ordem: ${obrasList.length} obra(s) ativa(s), sem alertas pendentes.`,
-    }] : []),
-  ]
+  const insights = useMemo(() => {
+    const pendingApproval = suprimentosList.filter(s => s.status === 'Aprovação')
+    const atrasados = rdosList.filter(r => (r.resumo ?? '').toLowerCase().includes('atraso'))
+    
+    return [
+      ...(pendingApproval.length > 0 ? [{
+        emoji: '💰', color: C.amber,
+        text: `Aprovação Pendente: ${pendingApproval.length} pedido(s) de material aguardando liberação em `,
+        link: { label: 'Suprimentos', href: '/suprimentos' }
+      }] : []),
+      ...(atrasados.length > 0 ? [{
+        emoji: '⚠️', color: '#EF4444',
+        text: `Atenção (${atrasados[0].obra?.nome ?? 'Obra'}): ${atrasados[0].resumo}`,
+      }] : []),
+      ...(obrasList.length === 0 ? [{
+        emoji: '🏗️', color: C.amber,
+        text: 'Bem-vindo ao sistema! Comece cadastrando suas obras em Suprimentos ou gerando o primeiro Diário de Obra.',
+      }] : []),
+      ...(obrasList.length > 0 && pendingApproval.length === 0 && atrasados.length === 0 ? [{
+        emoji: '✅', color: '#10B981',
+        text: `Tudo em ordem: ${obrasList.length} obra(s) ativa(s), sem alertas pendentes.`,
+      }] : []),
+    ]
+  }, [suprimentosList, rdosList, obrasList])
 
   // Historical data fallback
-  const chartHistory = [
+  const chartHistory = useMemo(() => [
     { data: 'Jan', obras: 1, rdos: Math.max(0, rdosList.length - 4), suprimentos: Math.max(0, suprimentosList.length - 2), fotos: Math.max(0, fotosList.length - 3) },
     { data: 'Fev', obras: 1, rdos: Math.max(0, rdosList.length - 3), suprimentos: Math.max(0, suprimentosList.length - 2), fotos: Math.max(0, fotosList.length - 2) },
     { data: 'Mar', obras: 2, rdos: Math.max(0, rdosList.length - 2), suprimentos: Math.max(0, suprimentosList.length - 1), fotos: Math.max(0, fotosList.length - 2) },
     { data: 'Abr', obras: 2, rdos: Math.max(0, rdosList.length - 1), suprimentos: Math.max(0, suprimentosList.length - 1), fotos: Math.max(0, fotosList.length - 1) },
     { data: 'Mai', obras: 3, rdos: rdosList.length, suprimentos: suprimentosList.length, fotos: fotosList.length },
     { data: 'Jun', obras: obrasList.length, rdos: rdosList.length, suprimentos: suprimentosList.length, fotos: fotosList.length },
-  ]
+  ], [obrasList.length, rdosList.length, suprimentosList.length, fotosList.length])
 
   return (
     <>

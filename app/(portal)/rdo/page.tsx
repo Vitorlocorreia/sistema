@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { 
   Plus, FileText, Calendar, Building, Sun, CloudRain, Cloud, 
   UserCheck, AlertTriangle, Hammer, CheckCircle2, FileUp, 
@@ -84,27 +84,29 @@ export default function RDO() {
     const rdosList = (r as RdoCompleto[]) ?? []
     setRdos(rdosList)
     setObras(o ?? [])
-    if (o && o.length > 0 && !newObraId) {
-      setNewObraId(o[0].id)
+    
+    if (o && o.length > 0) {
+      setNewObraId(prev => prev || o[0].id)
     }
 
-    // Set first item as selected if none is selected
-    if (rdosList.length > 0 && !selectedRdo) {
-      setSelectedRdo(rdosList[0])
+    if (rdosList.length > 0) {
+      setSelectedRdo(prev => prev || rdosList[0])
     }
     setLoading(false)
-  }, [newObraId, selectedRdo])
+  }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
-  const filteredRdos = rdos.filter(r => {
-    const matchesSearch = 
-      r.responsavel.toLowerCase().includes(search.toLowerCase()) || 
-      (r.resumo ?? '').toLowerCase().includes(search.toLowerCase())
-    const matchesObra = filterObra === 'Todas' || r.obra?.nome === filterObra
-    const matchesStatus = filterStatus === 'Todos' || r.status === filterStatus
-    return matchesSearch && matchesObra && matchesStatus
-  })
+  const filteredRdos = useMemo(() => {
+    return rdos.filter(r => {
+      const matchesSearch = 
+        r.responsavel.toLowerCase().includes(search.toLowerCase()) || 
+        (r.resumo ?? '').toLowerCase().includes(search.toLowerCase())
+      const matchesObra = filterObra === 'Todas' || r.obra?.nome === filterObra
+      const matchesStatus = filterStatus === 'Todos' || r.status === filterStatus
+      return matchesSearch && matchesObra && matchesStatus
+    })
+  }, [rdos, search, filterObra, filterStatus])
 
   const getWeatherIcon = (weather: string) => {
     switch (weather.toLowerCase()) {

@@ -52,12 +52,91 @@ const btnGhost: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 6
 }
 
+interface BeforeAfterSliderProps {
+  antes: any
+  depois: any
+  fmtDate: (d: string) => string
+}
+
+function BeforeAfterSlider({ antes, depois, fmtDate }: BeforeAfterSliderProps) {
+  const [sliderPos, setSliderPos] = useState(50)
+  
+  return (
+    <div 
+      className="h-[220px] sm:h-[300px]"
+      style={{
+        position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 2,
+        border: `1px solid ${C.border}`, background: '#0B0C0E', boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
+      }}
+    >
+      {/* DEPOIS */}
+      {depois && (
+        <img
+          src={depois.imagem_url ?? '/obra_finalizada.png'}
+          alt={`Depois — ${depois.legenda}`}
+          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
+        />
+      )}
+      <div style={{
+        position: 'absolute', bottom: 14, right: 14, zIndex: 10,
+        background: 'rgba(11,12,14,0.88)', border: `1px solid ${C.green}55`,
+        padding: '5px 11px', fontSize: 9, fontWeight: 900, color: C.green,
+        textTransform: 'uppercase', borderRadius: 2, letterSpacing: 0.5
+      }}>
+        DEPOIS — {depois ? fmtDate(depois.data_iso) : '—'}
+      </div>
+
+      {/* ANTES */}
+      {antes && (
+        <img
+          src={antes.imagem_url ?? '/obra_fundacao.png'}
+          alt={`Antes — ${antes.legenda}`}
+          style={{
+            position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+            objectFit: 'cover', pointerEvents: 'none',
+            clipPath: `polygon(0 0, ${sliderPos}% 0, ${sliderPos}% 100%, 0 100%)`
+          }}
+        />
+      )}
+      <div style={{
+        position: 'absolute', bottom: 14, left: 14, zIndex: 10,
+        background: 'rgba(11,12,14,0.88)', border: `1px solid ${C.amber}55`,
+        padding: '5px 11px', fontSize: 9, fontWeight: 900, color: C.amber,
+        textTransform: 'uppercase', borderRadius: 2, letterSpacing: 0.5
+      }}>
+        ANTES — {antes ? fmtDate(antes.data_iso) : '—'}
+      </div>
+
+      {/* Slider bar */}
+      <div style={{
+        position: 'absolute', top: 0, bottom: 0, left: `${sliderPos}%`,
+        width: 2, background: C.amber, pointerEvents: 'none',
+        transform: 'translateX(-50%)', zIndex: 20,
+        boxShadow: '0 0 12px rgba(245,158,11,0.6)'
+      }}>
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+          width: 34, height: 34, borderRadius: 2, background: '#12141C', border: `1px solid ${C.amber}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.6)'
+        }}>
+          <span style={{ fontSize: 14, color: C.amber, fontWeight: 900 }}>↔</span>
+        </div>
+      </div>
+
+      <input
+        type="range" min="0" max="100" value={sliderPos}
+        onChange={(e) => setSliderPos(Number(e.target.value))}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'ew-resize', zIndex: 30 }}
+      />
+    </div>
+  )
+}
+
 export default function Obras() {
   const [fotosList, setFotosList] = useState<any[]>([])
   const [obrasList, setObrasList] = useState<Obra[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [sliderPos, setSliderPos] = useState(50)
   const [obraSelecionada, setObraSelecionada] = useState<string>('')
   const [filtroObra, setFiltroObra] = useState<string>('Todas')
   const [lightboxFoto, setLightboxFoto] = useState<any | null>(null)
@@ -105,15 +184,14 @@ export default function Obras() {
     setFotosList(list)
     setObrasList(o ?? [])
 
-    // Seleciona automaticamente a primeira obra com fotos se nada estiver selecionado
     const obrasWithPhotos = [...new Set(list.map((item: any) => item.obra?.nome).filter(Boolean))] as string[]
-    if (obrasWithPhotos.length > 0 && !obraSelecionada) {
-      setObraSelecionada(obrasWithPhotos[0])
-    } else if (o && o.length > 0 && !obraSelecionada) {
-      setObraSelecionada(o[0].nome)
+    if (obrasWithPhotos.length > 0) {
+      setObraSelecionada(prev => prev || obrasWithPhotos[0])
+    } else if (o && o.length > 0) {
+      setObraSelecionada(prev => prev || o[0].nome)
     }
     setLoading(false)
-  }, [obraSelecionada])
+  }, [])
 
   useEffect(() => {
     loadData()
@@ -222,9 +300,11 @@ export default function Obras() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const fotosFiltradas = filtroObra === 'Todas'
-    ? fotosList
-    : fotosList.filter((f) => f.obra?.nome === filtroObra)
+  const fotosFiltradas = useMemo(() => {
+    return filtroObra === 'Todas'
+      ? fotosList
+      : fotosList.filter((f) => f.obra?.nome === filtroObra)
+  }, [fotosList, filtroObra])
 
   // Calculate elapsed days
   const diasDecorridos = useMemo(() => {
@@ -240,7 +320,6 @@ export default function Obras() {
 
   const pularParaObraComFotos = (nome: string) => {
     setObraSelecionada(nome)
-    setSliderPos(50)
   }
 
   // Apenas Administradores e Operadores podem gerenciar obras
@@ -308,73 +387,7 @@ export default function Obras() {
 
               <div className="grid grid-cols-1 md:grid-cols-[1fr_260px] gap-3 items-stretch">
                 {/* Interactive Slider */}
-                <div 
-                  className="h-[220px] sm:h-[300px]"
-                  style={{
-                    position: 'relative', width: '100%', overflow: 'hidden', borderRadius: 2,
-                    border: `1px solid ${C.border}`, background: '#0B0C0E', boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
-                  }}
-                >
-                  {/* DEPOIS */}
-                  {depois && (
-                    <img
-                      src={depois.imagem_url ?? '/obra_finalizada.png'}
-                      alt={`Depois — ${depois.legenda}`}
-                      style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }}
-                    />
-                  )}
-                  <div style={{
-                    position: 'absolute', bottom: 14, right: 14, zIndex: 10,
-                    background: 'rgba(11,12,14,0.88)', border: `1px solid ${C.green}55`,
-                    padding: '5px 11px', fontSize: 9, fontWeight: 900, color: C.green,
-                    textTransform: 'uppercase', borderRadius: 2, letterSpacing: 0.5
-                  }}>
-                    DEPOIS — {depois ? fmtDate(depois.data_iso) : '—'}
-                  </div>
-
-                  {/* ANTES */}
-                  {antes && (
-                    <img
-                      src={antes.imagem_url ?? '/obra_fundacao.png'}
-                      alt={`Antes — ${antes.legenda}`}
-                      style={{
-                        position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-                        objectFit: 'cover', pointerEvents: 'none',
-                        clipPath: `polygon(0 0, ${sliderPos}% 0, ${sliderPos}% 100%, 0 100%)`
-                      }}
-                    />
-                  )}
-                  <div style={{
-                    position: 'absolute', bottom: 14, left: 14, zIndex: 10,
-                    background: 'rgba(11,12,14,0.88)', border: `1px solid ${C.amber}55`,
-                    padding: '5px 11px', fontSize: 9, fontWeight: 900, color: C.amber,
-                    textTransform: 'uppercase', borderRadius: 2, letterSpacing: 0.5
-                  }}>
-                    ANTES — {antes ? fmtDate(antes.data_iso) : '—'}
-                  </div>
-
-                  {/* Slider bar */}
-                  <div style={{
-                    position: 'absolute', top: 0, bottom: 0, left: `${sliderPos}%`,
-                    width: 2, background: C.amber, pointerEvents: 'none',
-                    transform: 'translateX(-50%)', zIndex: 20,
-                    boxShadow: '0 0 12px rgba(245,158,11,0.6)'
-                  }}>
-                    <div style={{
-                      position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-                      width: 34, height: 34, borderRadius: 2, background: '#12141C', border: `1px solid ${C.amber}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.6)'
-                    }}>
-                      <span style={{ fontSize: 14, color: C.amber, fontWeight: 900 }}>↔</span>
-                    </div>
-                  </div>
-
-                  <input
-                    type="range" min="0" max="100" value={sliderPos}
-                    onChange={(e) => setSliderPos(Number(e.target.value))}
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0, cursor: 'ew-resize', zIndex: 30 }}
-                  />
-                </div>
+                <BeforeAfterSlider antes={antes} depois={depois} fmtDate={fmtDate} />
 
                 {/* Info Panel */}
                 <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 2, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>

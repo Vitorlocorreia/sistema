@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { 
   Plus, Layers, Calendar, User, DollarSign, Building, 
   ArrowRight, ArrowLeft, Eye, Check, X, Truck, PackageCheck,
@@ -101,11 +101,12 @@ export default function Suprimentos() {
     ])
     setSupplies(s ?? [])
     setObras(o ?? [])
-    if (o && o.length > 0 && !newObraId) {
-      setNewObraId(o[0].id)
+    
+    if (o && o.length > 0) {
+      setNewObraId(prev => prev || o[0].id)
     }
     setLoading(false)
-  }, [newObraId])
+  }, [])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -113,7 +114,25 @@ export default function Suprimentos() {
   const isOverdue = (item: Suprimento) =>
     !!item.data_vencimento && item.data_vencimento < today && item.status !== 'Entregue'
 
-  const filteredSupplies = supplies.filter(s => selectedObra === 'Todas' || s.obra?.nome === selectedObra)
+  const filteredSupplies = useMemo(() => {
+    return supplies.filter(s => selectedObra === 'Todas' || s.obra?.nome === selectedObra)
+  }, [supplies, selectedObra])
+
+  const suppliesByStatus = useMemo(() => {
+    const map: Record<string, typeof supplies> = {
+      'Solicitado': [],
+      'Em Cotação': [],
+      'Aprovação': [],
+      'Em Trânsito': [],
+      'Entregue': []
+    }
+    filteredSupplies.forEach(s => {
+      if (map[s.status]) {
+        map[s.status].push(s)
+      }
+    })
+    return map
+  }, [filteredSupplies])
 
   const moveItem = async (id: string, direction: 'forward' | 'backward') => {
     const statusOrder: StatusSuprimento[] = ['Solicitado', 'Em Cotação', 'Aprovação', 'Em Trânsito', 'Entregue']
@@ -157,10 +176,9 @@ export default function Suprimentos() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newMaterial.trim() || !newObraId) return
-
+    if (!newMaterial.trim()) return
     const { error } = await supabase.from('suprimentos').insert({
-      titulo: newMaterial,
+      titulo: newMaterial.trim(),
       quantidade: newQuantidade || '1',
       unidade: newUnidade,
       obra_id: newObraId,
@@ -168,14 +186,12 @@ export default function Suprimentos() {
       prioridade: newPrioridade,
       status: 'Solicitado',
       solicitante: 'Portal Corporativo',
-      fornecedor: newFornecedor || null
+      fornecedor: newFornecedor.trim() || null
     })
-
     if (error) {
-      toast('Erro ao criar solicitação', 'error')
+      toast('Erro ao criar solicitação: ' + error.message, 'error')
       return
     }
-
     setIsCreateOpen(false)
     setNewMaterial('')
     setNewQuantidade('')
@@ -186,9 +202,14 @@ export default function Suprimentos() {
   }
 
   // KPIs
-  const totalAprovacao = filteredSupplies.filter(s => s.status === 'Aprovação').reduce((sum, item) => sum + Number(item.valor || 0), 0)
-  const countAprovacao = filteredSupplies.filter(s => s.status === 'Aprovação').length
-  const totalGeral = filteredSupplies.reduce((sum, item) => sum + Number(item.valor || 0), 0)
+  const { totalAprovacao, countAprovacao, totalGeral } = useMemo(() => {
+    const aprovacao = filteredSupplies.filter(s => s.status === 'Aprovação')
+    return {
+      totalAprovacao: aprovacao.reduce((sum, item) => sum + Number(item.valor || 0), 0),
+      countAprovacao: aprovacao.length,
+      totalGeral: filteredSupplies.reduce((sum, item) => sum + Number(item.valor || 0), 0)
+    }
+  }, [filteredSupplies])
 
   return (
     <>
@@ -261,7 +282,7 @@ export default function Suprimentos() {
         <Panel title="Fluxo de Suprimentos da Construtora">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 14, overflowX: 'auto', paddingBottom: 10 }}>
             {colunasSuprimentos.map(col => {
-              const items = filteredSupplies.filter(s => s.status === col.id)
+              const items = suppliesByStatus[col.id] || []
               return (
                 <div 
                   key={col.id}
