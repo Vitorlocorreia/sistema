@@ -901,7 +901,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         .from('comprovantes')
         .upload(fileName, anexoFile, { upsert: true })
       if (uploadErr) {
-        toast.error('Erro ao enviar o comprovante. Verifique o bucket "comprovantes" no Supabase.')
+        toast('Erro ao enviar o comprovante. Verifique o bucket "comprovantes" no Supabase.', 'error')
         setSaving(false)
         return
       }
