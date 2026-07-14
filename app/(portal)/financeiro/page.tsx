@@ -851,6 +851,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [obras, setObras]               = useState<Obra[]>([])
   const [saving, setSaving]             = useState(false)
   const [ok, setOk]                     = useState(false)
+  const [anexoFile, setAnexoFile]       = useState<File | null>(null)
   const [anexoNome, setAnexoNome]       = useState('')
 
   const [form, setForm] = useState({
@@ -890,6 +891,23 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     }
     setSaving(true)
 
+    // Upload real do comprovante para o Supabase Storage
+    let comprovanteUrl: string | null = null
+    if (anexoFile) {
+      const ext = anexoFile.name.split('.').pop()
+      const fileName = `comprovante_${Date.now()}.${ext}`
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('comprovantes')
+        .upload(fileName, anexoFile, { upsert: true })
+      if (uploadErr) {
+        toast.error('Erro ao enviar o comprovante. Verifique o bucket "comprovantes" no Supabase.')
+        setSaving(false)
+        return
+      }
+      const { data: { publicUrl } } = supabase.storage.from('comprovantes').getPublicUrl(uploadData.path)
+      comprovanteUrl = publicUrl
+    }
+
     const valorNum = parseFloat(form.valor)
     
     // Regra de aprovação parametrizada pelo banco de dados config_permissoes
@@ -925,7 +943,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         fornecedor_id: form.fornecedor_id || null,
         obra_id: form.obra_id || null,
         categoria: form.categoria || null,
-        comprovante_url: anexoNome ? `/uploads/${anexoNome}` : null,
+        comprovante_url: comprovanteUrl,
       })
     }
 
@@ -933,6 +951,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
     setSaving(false)
     setOk(true)
+    setAnexoFile(null)
     setAnexoNome('')
     setTimeout(() => setOk(false), 4000)
     
@@ -951,6 +970,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
+      setAnexoFile(e.target.files[0])
       setAnexoNome(e.target.files[0].name)
     }
   }
@@ -1236,7 +1256,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                       <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
                         {c.descricao}
                         {c.comprovante_url && (
-                          <a href="#" onClick={e => { e.preventDefault(); alert(`Documento anexo simulado: ${c.comprovante_url}`); }} style={{ color: C.amber, display: 'inline-flex', alignItems: 'center' }}>
+                          <a
+                            href={c.comprovante_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="Ver comprovante"
+                            style={{ color: C.amber, display: 'inline-flex', alignItems: 'center' }}
+                          >
                             <Eye size={12} />
                           </a>
                         )}

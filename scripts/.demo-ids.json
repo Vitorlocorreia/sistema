@@ -1,0 +1,61 @@
+{
+  "obras": [
+    "5ed97534-4a3a-4a1c-9721-72510975a4c6",
+    "74d039cd-4a90-45bc-a732-9797a17fa190",
+    "907cb519-6649-4aca-bff3-81f2e58a0b53",
+    "a83d0e3d-5986-4e51-bdbe-2e60e902c8b7"
+  ],
+  "fotos": [
+    "82b952bd-b09a-46f2-a8ff-c89d45caddfc",
+    "d402a12c-980b-4a11-bd53-e2f85d99dbcf",
+    "abeed5fc-50d9-41a9-94d5-1fc76d9b8dd8",
+    "8c85b692-8e13-40ec-b404-24089fdf5554"
+  ],
+  "empresas": [
+    "39ee4c0d-ba26-4afb-bfa6-412dbca2d36a"
+  ],
+  "fornecedores": [
+    "7d301795-fdd9-4792-a4ad-e3b1e764c490",
+    "d829f824-6022-4709-ac03-f9f027f54363",
+    "d313f6c0-b5a0-4366-a837-91634a484f8d"
+  ],
+  "contas": [
+    "47b42212-4557-4282-b9d4-9495c2a07e47",
+    "be647cd8-59fb-4a8c-a35c-6cc34d532dad",
+    "d629d17a-5168-45b1-b496-733c622d46d5",
+    "e9c0eb39-0df0-474a-872e-88d7065b4f1b",
+    "cf3955e6-7722-481c-870b-b522a1d367b7",
+    "eabf0784-d4de-4ee4-95b7-db4f612da5fd",
+    "9f995bb1-c4a5-48e5-a909-96ea82bf6bef"
+  ],
+  "suprimentos": [
+    "a1901f51-c125-404f-aaa1-0e07adb9a0c6",
+    "e0e8398f-b2e1-404f-a3db-3e9c500663d1",
+    "98a3ba53-6249-4d2a-9f81-3c54fdaa70c0",
+    "e2c71625-d76f-4c99-a925-1e021c89fe38"
+  ],
+  "equipe": [
+    "7da4de4f-1e54-4356-9230-0b0a33b75027",
+    "4bd9a268-f687-48fd-bd33-8486c3b57097",
+    "e4b92eef-9dd1-4eca-95ec-a19687bb4839"
+  ],
+  "tarefas": [
+    "67d8249a-985e-4578-91f4-8cfa32de108b",
+    "79171a19-b510-4400-9b68-6ca85fec88b1",
+    "9bf39d5b-c6e8-4ea9-87a6-9db69ab20e88"
+  ],
+  "rdos": [
+    "cf0c4995-302c-40b0-bf1c-7b9afb386b86",
+    "c6eb2dc6-079b-4678-a283-98f4e3054f97"
+  ],
+  "rdo_atividades": [
+    "502fe02d-9521-48ff-9240-676b97ad2c2c",
+    "7a0f4f4a-b89f-4698-b994-552b5317ad1c",
+    "9214a6e1-ebd5-4d6e-afd7-7bd82d4e4c12"
+  ],
+  "rdo_equipamentos": [
+    "dfacffbe-d711-4c75-bf50-6ccc9432ac50",
+    "303433d4-cc0f-4712-b70b-7c72afe8e216",
+    "e18e615c-9334-4466-81f9-be988d450bc4"
+  ]
+}
