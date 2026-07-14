@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
+import { toast } from '@/components/Toast'
 import type { Empresa, Fornecedor, Conta, ContaComRelacoes, Obra, Colaborador, ConfigPermissao } from '@/lib/types'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { motion, AnimatePresence } from 'motion/react'
