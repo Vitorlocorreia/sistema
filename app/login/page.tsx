@@ -44,7 +44,28 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const normalizedEmail = email.trim().toLowerCase()
-      const { error: authError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password: senha })
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password: senha })
+
+      // Contas criadas pelo Administrador Geral usam o Supabase Auth e deixam
+      // a senha nula na tabela de colaboradores. Nesses casos, o Auth valida a senha.
+      if (!authError && authData.user) {
+        const profileResult = await supabase
+          .from('colaboradores')
+          .select('*')
+          .eq('email', normalizedEmail)
+          .maybeSingle()
+        if (profileResult.error || !profileResult.data) {
+          await supabase.auth.signOut()
+          setErro('Usuario autenticado, mas o perfil de colaborador nao foi encontrado.')
+          setLoading(false)
+          return
+        }
+        localStorage.setItem('sessao_auth_segura', 'true')
+        localStorage.setItem('colaborador_sessao', JSON.stringify(profileResult.data))
+        localStorage.setItem('perfil_ativo', profileResult.data.cargo)
+        router.replace('/')
+        return
+      }
 
       const { data, error } = await supabase
         .from('colaboradores')
