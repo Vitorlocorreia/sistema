@@ -559,11 +559,16 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const save = async () => {
     if (!form.razao_social.trim()) return
     setSaving(true)
-    await supabase.from('empresas').insert(form)
+    const { error } = await supabase.from('empresas').insert({ ...form, razao_social: form.razao_social.trim(), nome_fantasia: form.nome_fantasia.trim() || null, cnpj: form.cnpj.trim() || null })
+    if (error) {
+      setSaving(false)
+      return toast(`Não foi possível salvar a empresa: ${error.message}`, 'error')
+    }
     setForm({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#C8A96E' })
     setShowForm(false)
     setSaving(false)
-    load()
+    await load()
+    toast('Empresa cadastrada.', 'success')
   }
 
   const remove = async (id: string) => {
@@ -1257,6 +1262,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     load()
   }
 
+  const alterarStatus = async (id: string, status: ContaComRelacoes['status']) => {
+    const payload: Record<string, string | null> = { status }
+    if (status === 'Pago') payload.pago_em = new Date().toISOString()
+    if (status !== 'Pago') payload.pago_em = null
+    const { error } = await supabase.from('contas').update(payload).eq('id', id)
+    if (error) return toast(error.message, 'error')
+    await load()
+  }
+
   const excluir = async (id: string) => {
     if (!confirm('Deseja realmente excluir este lançamento financeiro?')) return
     await supabase.from('contas').delete().eq('id', id)
@@ -1388,6 +1402,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                       }}>
                         {c.status.toUpperCase()}
                       </span>
+                      {(podeAprovar || permissaoAtiva?.pode_lancar) && <select value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, marginTop: 6, padding: '4px 6px', fontSize: 10 }}>
+                        <option value="LanÃ§ado">LanÃ§ado</option>
+                        <option value="Aguardando aprovaÃ§Ã£o">Aguardando aprovaÃ§Ã£o</option>
+                        <option value="Liberado/OK">Liberado/OK</option>
+                        <option value="A pagar">A pagar</option>
+                        <option value="Pago">Pago</option>
+                      </select>}
                       {c.aprovado_por && (
                         <div style={{ fontSize: 9, color: '#34D399', marginTop: 4 }}>
                   ✓ Aprovado por: {c.aprovado_por}
