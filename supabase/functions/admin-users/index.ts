@@ -58,17 +58,25 @@ Deno.serve(async request => {
     const senha = String(payload.senha || '')
     const cargo = String(payload.cargo || 'operador').trim()
     if (!nome || !email || senha.length < 8) return json({ error: 'Informe nome, e-mail e uma senha com no mínimo 8 caracteres.' }, 400)
-    const { data: authUser, error: authError } = await admin.auth.admin.createUser({ email, password: senha, email_confirm: true, user_metadata: { nome } })
-    if (authError || !authUser.user) return json({ error: authError?.message || 'Não foi possível criar o usuário Auth.' }, 400)
+    const existingAuth = await findAuthUserByEmail(email)
+    let authUserId = existingAuth?.id
+    if (existingAuth) {
+      const { error: updateAuthError } = await admin.auth.admin.updateUserById(existingAuth.id, { password: senha, email_confirm: true, user_metadata: { nome } })
+      if (updateAuthError) return json({ error: updateAuthError.message }, 400)
+    } else {
+      const { data: authUser, error: authError } = await admin.auth.admin.createUser({ email, password: senha, email_confirm: true, user_metadata: { nome } })
+      if (authError || !authUser.user) return json({ error: authError?.message || 'Não foi possível criar o usuário Auth.' }, 400)
+      authUserId = authUser.user.id
+    }
     const { data: config } = await admin.from('config_permissoes').select('apps').eq('cargo', cargo).maybeSingle()
     const profile = { nome, email, cargo, empresa_id: payload.empresa_id || null, senha: null, override_permissoes: false, apps: config?.apps || cargo }
     const { data: existing } = await admin.from('colaboradores').select('id').ilike('email', email).maybeSingle()
     const profileResult = existing ? await admin.from('colaboradores').update(profile).eq('id', existing.id) : await admin.from('colaboradores').insert(profile)
     if (profileResult.error) {
-      await admin.auth.admin.deleteUser(authUser.user.id)
+      if (!existingAuth && authUserId) await admin.auth.admin.deleteUser(authUserId)
       return json({ error: profileResult.error.message }, 400)
     }
-    return json({ ok: true, user_id: authUser.user.id })
+    return json({ ok: true, user_id: authUserId })
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : 'Erro interno.' }, 500)
   }

@@ -1616,7 +1616,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
     setLoading(true)
     try {
       // 1. Cria colaborador
-      const { error: errCol } = await supabase.from('colaboradores').insert({
+      const { data: result, error: functionError } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'create_user', nome: sol.nome, email: sol.email, senha: sol.senha_provisoria, cargo: sol.cargo_solicitado, empresa_id: sol.cargo_solicitado === 'admin_geral' ? null : sol.empresa_id }
+      })
+      /* const { error: errCol } = await supabase.from('colaboradores').insert({
         nome: sol.nome,
         email: sol.email,
         senha: sol.senha_provisoria,
@@ -1626,7 +1629,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
         apps: 'financeiro'
       })
 
-      if (errCol) {
+      */
+      const errCol = { message: result?.error || functionError?.message || 'não foi possível criar a conta Auth.' }
+      if (functionError || result?.error) {
         alert('Erro ao criar colaborador a partir da solicitação: ' + errCol.message)
         setLoading(false)
         return
