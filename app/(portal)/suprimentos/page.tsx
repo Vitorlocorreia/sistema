@@ -119,6 +119,17 @@ export default function QuadrosPage() {
     const next = boards.filter(b => b.id !== boardId); setBoards(next); setBoardId(next[0]?.id || '')
   }
 
+  async function deleteBoard() {
+    if (!selectedBoard) return
+    const confirmation = prompt(`Para excluir permanentemente o quadro "${selectedBoard.nome}", digite EXCLUIR`)
+    if (confirmation !== 'EXCLUIR') return
+    const { error } = await supabase.from('quadros').delete().eq('id', boardId)
+    if (error) return toast(error.message, 'error')
+    const next = boards.filter(board => board.id !== boardId)
+    setBoards(next); setBoardId(''); setColumns([]); setCards([]); setDraft(null)
+    toast('Quadro excluído permanentemente.', 'success')
+  }
+
   async function addColumn() {
     const titulo = prompt('Título da coluna:')?.trim()
     if (!titulo || !boardId) return
@@ -247,6 +258,7 @@ export default function QuadrosPage() {
       <select style={{ ...field, width: 260 }} value={boardId} onChange={e => setBoardId(e.target.value)}><option value="">Selecione um quadro</option>{boards.map(b => <option key={b.id} value={b.id}>{b.nome}</option>)}</select>
       {selectedBoard && <><input style={{ ...field, width: 190 }} placeholder="Buscar cartões..." value={search} onChange={e => setSearch(e.target.value)} /><select style={{ ...field, width: 140 }} value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}><option value="todas">Todas prioridades</option>{['Baixa','Média','Alta','Urgente'].map(item => <option key={item}>{item}</option>)}</select><button style={ghost} onClick={() => setView('board')}>Quadro</button><button style={ghost} onClick={() => setView('table')}>Tabela</button><button style={ghost} onClick={() => setView('calendar')}>Calendário</button><button style={ghost} onClick={addCustomField}>+ Campo</button><button style={ghost} onClick={addAutomation}>⚡ Automação</button></>}
       <button style={button} onClick={createBoard}><Plus size={14}/> Novo quadro</button>
+      {selectedBoard && <button style={{ ...ghost, color: '#F87171', borderColor: '#F8717144' }} onClick={() => void deleteBoard()}><Trash2 size={13}/> Excluir quadro</button>}
       {selectedBoard && <><button style={ghost} onClick={renameBoard}>Renomear</button><button style={ghost} onClick={addColumn}><Plus size={14}/> Coluna</button><button style={ghost} onClick={openHistory}><History size={14}/> Histórico</button><button style={ghost} onClick={archiveBoard}><Archive size={14}/> Arquivar</button></>}
     </div>
     {loading ? <p style={{ color: C.inkSoft }}>Carregando quadros…</p> : !selectedBoard ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
