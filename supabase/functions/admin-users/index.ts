@@ -19,6 +19,29 @@ Deno.serve(async request => {
   try {
     if (!(await isAdmin(request))) return json({ error: 'Apenas o Administrador Geral pode criar usuários.' }, 403)
     const payload = await request.json()
+    if (payload.action === 'delete_user') {
+      const collaboratorId = String(payload.collaborator_id || '').trim()
+      if (!collaboratorId) return json({ error: 'Informe o colaborador para exclusao.' }, 400)
+      const { data: collaborator, error: collaboratorError } = await admin
+        .from('colaboradores')
+        .select('id, email')
+        .eq('id', collaboratorId)
+        .maybeSingle()
+      if (collaboratorError) return json({ error: collaboratorError.message }, 400)
+      if (!collaborator) return json({ error: 'Colaborador nao encontrado.' }, 404)
+
+      // Auth e tabela de colaboradores sao fontes separadas: removemos os dois.
+      if (collaborator.email) {
+        const { data: authUser } = await admin.auth.admin.getUserByEmail(collaborator.email)
+        if (authUser.user) {
+          const { error: deleteAuthError } = await admin.auth.admin.deleteUser(authUser.user.id)
+          if (deleteAuthError) return json({ error: deleteAuthError.message }, 400)
+        }
+      }
+      const { error: deleteProfileError } = await admin.from('colaboradores').delete().eq('id', collaboratorId)
+      if (deleteProfileError) return json({ error: deleteProfileError.message }, 400)
+      return json({ ok: true })
+    }
     if (payload.action !== 'create_user') return json({ error: 'Ação inválida.' }, 400)
     const nome = String(payload.nome || '').trim()
     const email = String(payload.email || '').trim().toLowerCase()

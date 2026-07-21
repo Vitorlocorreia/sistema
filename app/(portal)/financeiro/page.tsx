@@ -1671,9 +1671,29 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
       alert('Você não pode excluir o usuário que está ativamente conectado no momento.')
       return
     }
-    if (!confirm('Deseja excluir este colaborador do sistema?')) return
-    await supabase.from('colaboradores').delete().eq('id', id)
-    onRefresh()
+    if (!confirm('Deseja excluir definitivamente este colaborador? O acesso Auth e o perfil serao removidos.')) return
+    setSavingCol(true)
+    try {
+      const { data: result, error } = await supabase.functions.invoke('admin-users', {
+        body: { action: 'delete_user', collaborator_id: id }
+      })
+      if (error || result?.error) {
+        let detail = result?.error || error?.message || 'nao foi possivel excluir'
+        const response = (error as { context?: Response } | null)?.context
+        if (response) {
+          try {
+            const body = await response.clone().json() as { error?: string }
+            detail = body.error || detail
+          } catch { /* mantÃ©m a mensagem padrÃ£o */ }
+        }
+        alert('Erro ao excluir colaborador: ' + detail)
+        return
+      }
+      alert('Colaborador excluido do sistema e do Supabase Auth.')
+      onRefresh()
+    } finally {
+      setSavingCol(false)
+    }
   }
 
   // Alternar checkbox de uma permissão localmente antes de salvar
