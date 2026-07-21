@@ -1544,18 +1544,12 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
       ? colaboradorAtivo.empresa_id 
       : colForm.cargo === 'admin_geral' ? null : (colForm.empresa_id || null)
 
-    const { error } = await supabase.from('colaboradores').insert({
-      nome: colForm.nome.trim(),
-      email: colForm.email.trim().toLowerCase(),
-      senha: colForm.senha,
-      cargo: colForm.cargo,
-      empresa_id: empresaIdDestino,
-      override_permissoes: false,
-      apps: 'financeiro'
+    const { data: result, error } = await supabase.functions.invoke('admin-users', {
+      body: { action: 'create_user', nome: colForm.nome.trim(), email: colForm.email.trim().toLowerCase(), senha: colForm.senha, cargo: colForm.cargo, empresa_id: empresaIdDestino }
     })
 
-    if (error) {
-      alert('Erro ao criar colaborador: ' + error.message)
+    if (error || result?.error) {
+      alert('Erro ao criar colaborador: ' + (result?.error || error?.message || 'não foi possível concluir'))
     } else {
       setColForm({
         nome: '',
