@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import type { Obra, Rdo, RdoCompleto } from '@/lib/types'
 
 type EfetivoTerceiroForm = { empresa_nome: string; funcao: string; quantidade: string; observacoes: string; valor_diaria: string }
+type PlanejadoExecutadoForm = { servico: string; unidade: string; planejada: string; executada: string; observacoes: string }
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
@@ -64,6 +65,7 @@ export default function RDO() {
   const [newEfetivoProprio, setNewEfetivoProprio] = useState('10')
   const [newEfetivoTerceiros, setNewEfetivoTerceiros] = useState('5')
   const [newTerceiros, setNewTerceiros] = useState<EfetivoTerceiroForm[]>([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
+  const [newPlanejadoExecutado, setNewPlanejadoExecutado] = useState<PlanejadoExecutadoForm[]>([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
   const [newResumo, setNewResumo] = useState('')
   const [newOcorrencias, setNewOcorrencias] = useState('')
   const [newDefinicaoServico, setNewDefinicaoServico] = useState('')
@@ -85,7 +87,7 @@ export default function RDO() {
       { data: r },
       { data: o }
     ] = await Promise.all([
-      supabase.from('rdos').select('*, obra:obras(nome), atividades:rdo_atividades(*), equipamentos:rdo_equipamentos(*), terceiros:rdo_efetivos_terceiros(*)').order('data', { ascending: false }),
+      supabase.from('rdos').select('*, obra:obras(nome), atividades:rdo_atividades(*), equipamentos:rdo_equipamentos(*), terceiros:rdo_efetivos_terceiros(*), planejado_executado:rdo_planejado_executado(*)').order('data', { ascending: false }),
       supabase.from('obras').select('*').order('nome')
     ])
 
@@ -186,6 +188,18 @@ export default function RDO() {
       })))
     }
 
+    const validPlanejamento = newPlanejadoExecutado.filter(item => item.servico.trim() !== '')
+    if (validPlanejamento.length > 0) {
+      await supabase.from('rdo_planejado_executado').insert(validPlanejamento.map(item => ({
+        rdo_id: rdoData.id,
+        servico: item.servico.trim(),
+        unidade: item.unidade.trim() || null,
+        quantidade_planejada: parseFloat(item.planejada) || 0,
+        quantidade_executada: parseFloat(item.executada) || 0,
+        observacoes: item.observacoes.trim() || null,
+      })))
+    }
+
     for (const foto of newFotos) {
       const path = `${newObraId}/${rdoData.id}/${crypto.randomUUID()}-${foto.name}`
       const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, foto)
@@ -199,6 +213,7 @@ export default function RDO() {
     setActForm([''])
     setNewResumo(''); setNewOcorrencias(''); setNewDefinicaoServico(''); setNewLiberacoes(''); setNewFotos([])
     setNewTerceiros([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
+    setNewPlanejadoExecutado([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
     setEquipForm([
       { nome: 'Retroescavadeira', status: 'OPERANDO' },
       { nome: 'Betoneira', status: 'OPERANDO' }
@@ -412,6 +427,11 @@ export default function RDO() {
                     {(selectedRdo as any).terceiros?.length ? <div style={{ display: 'grid', gap: 7 }}>{(selectedRdo as any).terceiros.map((item: any) => <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 60px 110px 120px', gap: 8, alignItems: 'center', padding: '8px 10px', background: C.bgCard, border: `1px solid ${C.border}`, fontSize: 11 }}><strong>{item.empresa_nome}</strong><span>{item.funcao || '—'}</span><span>{item.quantidade} col.</span><span>{item.valor_diaria ? `R$ ${Number(item.valor_diaria).toFixed(2)}/dia` : 'Sem valor'}</span><span style={{ color: item.pagamento_status === 'pago' ? C.green : C.amber, fontWeight: 800 }}>{item.pagamento_status}</span>{item.observacoes && <small style={{ gridColumn: '1 / -1', color: C.inkSoft }}>{item.observacoes}</small>}</div>)}</div> : <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhuma empresa terceirizada detalhada neste RDO.</p>}
                   </div>
 
+                  <div>
+                    <span style={labelStyle}>Planejado x executado</span>
+                    {(selectedRdo as any).planejado_executado?.length ? <div style={{ display: 'grid', gap: 7 }}>{(selectedRdo as any).planejado_executado.map((item: any) => { const planned = Number(item.quantidade_planejada) || 0; const executed = Number(item.quantidade_executada) || 0; const percentage = planned > 0 ? Math.min(100, executed / planned * 100) : 0; return <div key={item.id} style={{ padding: 9, background: C.bgCard, border: `1px solid ${C.border}`, fontSize: 11 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{item.servico}</strong><span>{executed} / {planned} {item.unidade || ''} ({percentage.toFixed(1)}%)</span></div><div style={{ height: 5, marginTop: 6, background: '#222530', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? C.green : C.amber }} /></div>{item.observacoes && <small style={{ display: 'block', marginTop: 5, color: C.inkSoft }}>{item.observacoes}</small>}</div> })}</div> : <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhum serviço planejado registrado.</p>}
+                  </div>
+
                   {/* Comments */}
                   {(selectedRdo.definicao_servico || selectedRdo.liberacoes) && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div><span style={labelStyle}>Definição dos serviços</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.definicao_servico || '—'}</p></div>
@@ -589,6 +609,10 @@ export default function RDO() {
                           />
                         ))}
                       </div>
+                    </div>
+                    <div style={{ border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><label style={labelStyle}>Planejado x executado</label><button type="button" onClick={() => setNewPlanejadoExecutado(items => [...items, { servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ SERVIÇO</button></div>
+                      <div style={{ display: 'grid', gap: 9 }}>{newPlanejadoExecutado.map((item, index) => { const planned = parseFloat(item.planejada) || 0; const executed = parseFloat(item.executada) || 0; const percentage = planned > 0 ? Math.min(100, (executed / planned) * 100) : 0; return <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 110px 110px', gap: 8, alignItems: 'end' }}><div><label style={labelStyle}>Serviço *</label><input style={inputStyle} placeholder="Ex.: alvenaria" value={item.servico} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, servico: e.target.value } : x))} /></div><div><label style={labelStyle}>Unidade</label><input style={inputStyle} placeholder="m²" value={item.unidade} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, unidade: e.target.value } : x))} /></div><div><label style={labelStyle}>Planejado</label><input type="number" step="0.001" style={inputStyle} value={item.planejada} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, planejada: e.target.value } : x))} /></div><div><label style={labelStyle}>Executado</label><input type="number" step="0.001" style={inputStyle} value={item.executada} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, executada: e.target.value } : x))} /></div><div style={{ gridColumn: '1 / -1' }}><div style={{ height: 5, background: '#222530', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? C.green : C.amber }} /></div><small style={{ color: percentage >= 100 ? C.green : C.inkSoft, fontSize: 9 }}>{percentage.toFixed(1)}% executado</small></div><div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações</label><input style={inputStyle} placeholder="Frente, motivo de diferença ou evidência" value={item.observacoes} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>{newPlanejadoExecutado.length > 1 && <button type="button" onClick={() => setNewPlanejadoExecutado(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover</button>}</div> })}</div>
                     </div>
                     <div><label style={labelStyle}>Definição dos serviços</label><textarea rows={2} style={inputStyle} value={newDefinicaoServico} onChange={e => setNewDefinicaoServico(e.target.value)} /></div>
                     <div><label style={labelStyle}>Liberações</label><textarea rows={2} style={inputStyle} value={newLiberacoes} onChange={e => setNewLiberacoes(e.target.value)} placeholder="Frentes, áreas, projetos ou serviços liberados" /></div>
