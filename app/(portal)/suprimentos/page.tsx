@@ -121,8 +121,7 @@ export default function QuadrosPage() {
 
   async function deleteBoard() {
     if (!selectedBoard) return
-    const confirmation = prompt(`Para excluir permanentemente o quadro "${selectedBoard.nome}", digite EXCLUIR`)
-    if (confirmation !== 'EXCLUIR') return
+    if (!confirm(`Deseja excluir permanentemente o quadro "${selectedBoard.nome}"?`)) return
     const { error } = await supabase.from('quadros').delete().eq('id', boardId)
     if (error) return toast(error.message, 'error')
     const next = boards.filter(board => board.id !== boardId)
