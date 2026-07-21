@@ -69,7 +69,23 @@ Deno.serve(async request => {
       authUserId = authUser.user.id
     }
     const { data: config } = await admin.from('config_permissoes').select('apps').eq('cargo', cargo).maybeSingle()
-    const profile = { nome, email, cargo, empresa_id: payload.empresa_id || null, senha: null, override_permissoes: false, apps: config?.apps || cargo }
+    const isGlobalAdmin = cargo === 'admin_geral'
+    const allApps = 'rh,ponto,financeiro,suprimentos,obras,rdo,frota,usuarios'
+    const profile = {
+      nome,
+      email,
+      cargo,
+      empresa_id: isGlobalAdmin ? null : (payload.empresa_id || null),
+      senha: null,
+      override_permissoes: isGlobalAdmin,
+      apps: isGlobalAdmin ? allApps : (config?.apps || cargo),
+      pode_empresas: isGlobalAdmin,
+      pode_fornecedores: isGlobalAdmin,
+      pode_lancar: isGlobalAdmin,
+      pode_pagar: isGlobalAdmin,
+      pode_aprovar: isGlobalAdmin,
+      limite_valor: isGlobalAdmin ? null : undefined
+    }
     const { data: existing } = await admin.from('colaboradores').select('id').ilike('email', email).maybeSingle()
     const profileResult = existing ? await admin.from('colaboradores').update(profile).eq('id', existing.id) : await admin.from('colaboradores').insert(profile)
     if (profileResult.error) {
