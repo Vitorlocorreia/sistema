@@ -146,7 +146,7 @@ export default function Dashboard() {
         {[
           { label: '+ Novo RDO', href: '/rdo', color: C.amber },
           { label: '+ Solicitar Material', href: '/suprimentos', color: C.green },
-          { label: 'Ver Galeria', href: '/obras', color: '#3B82F6' },
+          { label: 'Ver Obras', href: '/obras', color: '#3B82F6' },
         ].map(a => (
           <motion.button
             key={a.label}

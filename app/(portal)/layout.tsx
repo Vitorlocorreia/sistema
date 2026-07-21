@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutGrid, Wallet, DollarSign, Clock, Package,
-  Camera, FileText, Truck, ChevronRight, GripVertical, Settings, X, Menu, LogOut, Users
+  Camera, Building2, FileText, Truck, ChevronRight, GripVertical, Settings, X, Menu, LogOut, Users
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import type { Colaborador } from '@/lib/types'
@@ -14,7 +14,7 @@ const defaultApps = [
   { id: 'rh',           nome: 'Gestão de RH',     sub: 'Portal Nativo',  status: 'novo',      icone: 'Users' },
   { id: 'ponto',        nome: 'Controle de Ponto',sub: 'FacePonto',      status: 'atalho',    icone: 'Clock',     url: 'https://faceponto.com.br' },
   { id: 'suprimentos',  nome: 'Quadros & Suprimentos', sub: 'Trello Editável', status: 'novo', icone: 'Package' },
-  { id: 'obras',        nome: 'Galeria de Obras', sub: 'Google Drive',   status: 'integrado', icone: 'Camera'     },
+  { id: 'obras',        nome: 'Obras',             sub: 'Gestão de Obras', status: 'novo',      icone: 'Building2' },
   { id: 'rdo',          nome: 'Diário de Obra',   sub: 'Escout',         status: 'novo',      icone: 'FileText'   },
   { id: 'frota',        nome: 'Frota & GPS',      sub: 'Infleet',        status: 'atalho',    icone: 'Truck',     url: 'https://app.infleet.com.br' },
 ]
@@ -24,7 +24,7 @@ import { EmbeddedBrowser } from '@/components/EmbeddedBrowser'
 import { supabase } from '@/lib/supabase'
 
 const iconMap: Record<string, any> = {
-  DollarSign, Clock, Package, Camera, FileText, Truck, Users
+  DollarSign, Clock, Package, Camera, Building2, FileText, Truck, Users
 }
 
 const STORAGE_KEY = 'sidebar_order'
