@@ -43,10 +43,13 @@ export default function LoginPage() {
     setErro(null)
     setLoading(true)
     try {
+      const normalizedEmail = email.trim().toLowerCase()
+      const { error: authError } = await supabase.auth.signInWithPassword({ email: normalizedEmail, password: senha })
+
       const { data, error } = await supabase
         .from('colaboradores')
         .select('*')
-        .eq('email', email.trim().toLowerCase())
+        .eq('email', normalizedEmail)
         .eq('senha', senha)
         .single()
 
@@ -55,6 +58,11 @@ export default function LoginPage() {
         setLoading(false)
         return
       }
+
+      // Usuários antigos continuam entrando sem disparar signUp/e-mails.
+      // Quando o mesmo e-mail existir no Supabase Auth, a sessão segura será
+      // usada automaticamente; até lá, mantemos a sessão legada do protótipo.
+      localStorage.setItem('sessao_auth_segura', authError ? 'false' : 'true')
 
       // Salva sessão no localStorage
       localStorage.setItem('colaborador_sessao', JSON.stringify(data))

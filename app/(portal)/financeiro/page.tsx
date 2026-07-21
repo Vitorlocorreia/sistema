@@ -10,7 +10,7 @@ import {
 import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/Toast'
-import type { Empresa, Fornecedor, Conta, ContaComRelacoes, Obra, Colaborador, ConfigPermissao } from '@/lib/types'
+import type { Empresa, Fornecedor, Conta, ContaComRelacoes, Obra, Colaborador, ConfigPermissao, CargoSistema } from '@/lib/types'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -24,7 +24,7 @@ const fmtDate = (d: string) => {
 }
 
 const isVencido = (d: string, status: string) =>
-  (status === 'Pendente' || status === 'Aguardando Aprovação') && new Date(d + 'T00:00:00') < new Date()
+  status !== 'Pago' && new Date(d + 'T00:00:00') < new Date()
 
 // ─── NAV TABS ────────────────────────────────────────────────────────────────
 const TABS = [
@@ -43,6 +43,7 @@ const NOMES_CARGOS: Record<string, string> = {
   admin_empresa: 'Administrador por Empresa',
   operador: 'Operador Financeiro',
   visualizador: 'Visualizador',
+  rh: 'RH / Admissões',
 }
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
@@ -265,7 +266,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: c }, { data: e }] = await Promise.all([
-      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_vencimento'),
+      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao'),
       supabase.from('empresas').select('*').order('razao_social'),
     ])
     setContas((c as ContaComRelacoes[]) ?? [])
@@ -299,15 +300,15 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     const mais30 = new Date()
     mais30.setDate(hoje.getDate() + 30)
 
-    const v = filtered.filter(c => isVencido(c.data_vencimento, c.status))
+    const v = filtered.filter(c => isVencido(c.data_previsao || c.data_vencimento, c.status))
     const v7 = filtered.filter(c => {
-      if (c.status !== 'Pendente') return false
-      const d = new Date(c.data_vencimento + 'T00:00:00')
+      if (c.status === 'Pago') return false
+      const d = new Date((c.data_previsao || c.data_vencimento) + 'T00:00:00')
       return d >= hoje && d <= mais7
     })
     const v30 = filtered.filter(c => {
-      if (c.status !== 'Pendente') return false
-      const d = new Date(c.data_vencimento + 'T00:00:00')
+      if (c.status === 'Pago') return false
+      const d = new Date((c.data_previsao || c.data_vencimento) + 'T00:00:00')
       return d >= hoje && d <= mais30
     })
 
@@ -613,7 +614,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [form, setForm] = useState({
     razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ' as 'PJ'|'PF',
     telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
-    endereco: '', prazo_pagamento: 0, banco: '', agencia: '', conta: ''
+    endereco: '', banco: '', agencia: '', conta: ''
   })
   const [saving, setSaving] = useState(false)
 
@@ -637,13 +638,13 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     const payload = {
       ...form,
       empresa_id: form.empresa_id || null,
-      prazo_pagamento: Number(form.prazo_pagamento) || 0
+      prazo_pagamento: 0
     }
     await supabase.from('fornecedores').insert(payload)
     setForm({
       razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ',
       telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
-      endereco: '', prazo_pagamento: 0, banco: '', agencia: '', conta: ''
+      endereco: '', banco: '', agencia: '', conta: ''
     })
     setShowForm(false)
     setSaving(false)
@@ -676,10 +677,10 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       if (c.status === 'Pago') {
         item.totalPago += Number(c.valor || 0)
         item.totalPagasCount += 1
-      } else if (c.status === 'Pendente' || c.status === 'Aguardando Aprovação' || c.status === 'Vencido') {
+      } else {
         item.totalEmAberto += Number(c.valor || 0)
       }
-      if (isVencido(c.data_vencimento, c.status)) {
+      if (isVencido(c.data_previsao || c.data_vencimento, c.status)) {
         item.temVencidas = true
       }
     })
@@ -733,10 +734,6 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
             <div>
               <label style={label}>Categoria</label>
               <input style={input} value={form.categoria} onChange={e => setForm(prev => ({ ...prev, categoria: e.target.value }))} placeholder="Ex: Material, Serviço, Equipamentos" />
-            </div>
-            <div>
-              <label style={label}>Prazo de Pagamento (dias)</label>
-              <input type="number" style={input} value={form.prazo_pagamento} onChange={e => setForm(prev => ({ ...prev, prazo_pagamento: Number(e.target.value) }))} placeholder="Ex: 15" />
             </div>
             <div>
               <label style={label}>Banco</label>
@@ -804,7 +801,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
-                      {f.cnpj ?? 'Sem CNPJ'} · {f.categoria ?? 'Sem Categoria'} · Prazo: {f.prazo_pagamento ?? 0} dias
+                      {f.cnpj ?? 'Sem CNPJ'} · {f.categoria ?? 'Sem Categoria'}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', marginRight: 16 }}>
@@ -863,7 +860,14 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     categoria: '',
     descricao: '',
     valor: '',
-    data_vencimento: '',
+    data_previsao: '',
+    possui_fornecedor: false,
+    observacoes: '',
+    pagamento_antecipado: false,
+    tipo_antecipacao: 'Parcial' as 'Parcial'|'Total',
+    valor_antecipado: '',
+    data_antecipacao: '',
+    justificativa_antecipacao: '',
     recorrencia: 'unico' as 'unico'|'mensal'|'semanal',
   })
 
@@ -886,7 +890,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   }, [colaboradorAtivo])
 
   const save = async () => {
-    if (!form.empresa_id || !form.descricao || !form.valor || !form.data_vencimento) {
+    if (!form.empresa_id || !form.descricao || !form.valor || !form.data_previsao) {
       alert('Preencha os campos obrigatórios (*)')
       return
     }
@@ -912,15 +916,15 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     const valorNum = parseFloat(form.valor)
     
     // Regra de aprovação parametrizada pelo banco de dados config_permissoes
-    let statusInicial: 'Pendente' | 'Aguardando Aprovação' = 'Pendente'
+    let statusInicial: 'Lançado' | 'Aguardando aprovação' = 'Lançado'
     const limiteAprovacao = permissaoAtiva?.limite_valor || 5000
     
     if (form.tipo === 'pagar' && valorNum > limiteAprovacao && !permissaoAtiva?.pode_aprovar) {
-      statusInicial = 'Aguardando Aprovação'
+      statusInicial = 'Aguardando aprovação'
     }
 
     const parcelas = []
-    const vencimentoBase = new Date(form.data_vencimento + 'T00:00:00')
+    const vencimentoBase = new Date(form.data_previsao + 'T00:00:00')
     const totalParcelas = form.recorrencia === 'mensal' ? 12 : form.recorrencia === 'semanal' ? 4 : 1
 
     for (let i = 0; i < totalParcelas; i++) {
@@ -938,10 +942,18 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         tipo: form.tipo,
         descricao: form.recorrencia !== 'unico' ? `${form.descricao} (${i + 1}/${totalParcelas})` : form.descricao,
         valor: valorNum,
+        data_previsao: isoDateString,
         data_vencimento: isoDateString,
         status: statusInicial,
         recorrencia: form.recorrencia,
-        fornecedor_id: form.fornecedor_id || null,
+        fornecedor_id: form.possui_fornecedor ? (form.fornecedor_id || null) : null,
+        possui_fornecedor: form.possui_fornecedor,
+        observacoes: form.observacoes || null,
+        pagamento_antecipado: form.pagamento_antecipado,
+        tipo_antecipacao: form.pagamento_antecipado ? form.tipo_antecipacao : null,
+        valor_antecipado: form.pagamento_antecipado ? (parseFloat(form.valor_antecipado) || null) : null,
+        data_antecipacao: form.pagamento_antecipado ? (form.data_antecipacao || null) : null,
+        justificativa_antecipacao: form.pagamento_antecipado ? (form.justificativa_antecipacao || null) : null,
         obra_id: form.obra_id || null,
         categoria: form.categoria || null,
         comprovante_url: comprovanteUrl,
@@ -964,7 +976,14 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       categoria: '',
       descricao: '',
       valor: '',
-      data_vencimento: '',
+      data_previsao: '',
+      possui_fornecedor: false,
+      observacoes: '',
+      pagamento_antecipado: false,
+      tipo_antecipacao: 'Parcial',
+      valor_antecipado: '',
+      data_antecipacao: '',
+      justificativa_antecipacao: '',
       recorrencia: 'unico'
     })
   }
@@ -1035,12 +1054,17 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                 </select>
               </div>
               <div>
-                <label style={label}>Fornecedor ou Cliente</label>
-                <select style={input} value={form.fornecedor_id} onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}>
-                  <option value="">Nenhum</option>
-                  {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                <label style={label}>Possui fornecedor?</label>
+                <select style={input} value={form.possui_fornecedor ? 'sim' : 'nao'} onChange={e => setForm(f => ({ ...f, possui_fornecedor: e.target.value === 'sim', fornecedor_id: e.target.value === 'sim' ? f.fornecedor_id : '' }))}>
+                  <option value="nao">Não possui</option><option value="sim">Possui</option>
                 </select>
               </div>
+              {form.possui_fornecedor && <div>
+                <label style={label}>Fornecedor</label>
+                <select style={input} value={form.fornecedor_id} onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}>
+                  <option value="">Selecione</option>{fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                </select>
+              </div>}
               <div>
                 <label style={label}>Obra Vinculada</label>
                 <select style={input} value={form.obra_id} onChange={e => setForm(f => ({ ...f, obra_id: e.target.value }))}>
@@ -1078,9 +1102,24 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                 <input style={input} type="number" step="0.01" min="0" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
               </div>
               <div>
-                <label style={label}>Data de Vencimento *</label>
-                <input style={input} type="date" value={form.data_vencimento} onChange={e => setForm(f => ({ ...f, data_vencimento: e.target.value }))} />
+                <label style={label}>Data de Previsão *</label>
+                <input style={input} type="date" value={form.data_previsao} onChange={e => setForm(f => ({ ...f, data_previsao: e.target.value }))} />
               </div>
+            </div>
+
+            <div>
+              <label style={label}>Observações do lançamento</label>
+              <textarea style={input} rows={3} value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Informações para aprovação, pagamento ou conferência" />
+            </div>
+
+            <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 14 }}>
+              <label style={{ ...label, display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={form.pagamento_antecipado} onChange={e => setForm(f => ({ ...f, pagamento_antecipado: e.target.checked }))} /> Pagamento antecipado</label>
+              {form.pagamento_antecipado && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
+                <select style={input} value={form.tipo_antecipacao} onChange={e => setForm(f => ({ ...f, tipo_antecipacao: e.target.value as 'Parcial'|'Total' }))}><option>Parcial</option><option>Total</option></select>
+                <input style={input} type="number" step="0.01" placeholder="Valor antecipado" value={form.valor_antecipado} onChange={e => setForm(f => ({ ...f, valor_antecipado: e.target.value }))} />
+                <input style={input} type="date" value={form.data_antecipacao} onChange={e => setForm(f => ({ ...f, data_antecipacao: e.target.value }))} />
+                <input style={input} placeholder="Justificativa" value={form.justificativa_antecipacao} onChange={e => setForm(f => ({ ...f, justificativa_antecipacao: e.target.value }))} />
+              </div>}
             </div>
 
             <div style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '14px 18px', background: '#0B0C0E33' }}>
@@ -1125,20 +1164,18 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [loading, setLoading]   = useState(true)
   const [filtEmpresa, setFiltEmpresa] = useState('')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
-  const [filtStatus, setFiltStatus]   = useState<'todos'|'Pendente'|'Pago'|'Vencido'|'Aguardando Aprovação'>('todos')
+  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago'>('todos')
+  const [filtDataInicio, setFiltDataInicio] = useState('')
+  const [filtDataFim, setFiltDataFim] = useState('')
   const [search, setSearch]           = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: c }, { data: e }] = await Promise.all([
-      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_vencimento', { ascending: false }),
+      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao', { ascending: false }),
       supabase.from('empresas').select('*').order('razao_social'),
     ])
-    const updated = (c as ContaComRelacoes[] ?? []).map(ct => ({
-      ...ct,
-      status: (ct.status === 'Pendente' && isVencido(ct.data_vencimento, ct.status)) ? 'Vencido' as const : ct.status,
-    }))
-    setContas(updated)
+    setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
     setLoading(false)
   }, [])
@@ -1161,10 +1198,21 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const aprovarLançamento = async (id: string) => {
     const nomeAprovador = colaboradorAtivo.nome
     await supabase.from('contas').update({
-      status: 'Pendente',
+      status: 'Liberado/OK',
       aprovado_por: nomeAprovador,
       aprovado_em: new Date().toISOString()
     }).eq('id', id)
+    load()
+  }
+
+  const avancarStatus = async (conta: ContaComRelacoes) => {
+    const proximo: Partial<Record<ContaComRelacoes['status'], ContaComRelacoes['status']>> = {
+      'Lançado': 'Aguardando aprovação',
+      'Liberado/OK': 'A pagar',
+    }
+    const status = proximo[conta.status]
+    if (!status) return
+    await supabase.from('contas').update({ status }).eq('id', conta.id)
     load()
   }
 
@@ -1178,8 +1226,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
     const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
     const matchStatus  = filtStatus === 'todos' || c.status === filtStatus
+    const data = c.data_previsao || c.data_vencimento
+    const matchInicio = !filtDataInicio || data >= filtDataInicio
+    const matchFim = !filtDataFim || data <= filtDataFim
     const matchSearch  = !search || c.descricao.toLowerCase().includes(search.toLowerCase()) || (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase())
-    return matchEmpresa && matchTipo && matchStatus && matchSearch
+    return matchEmpresa && matchTipo && matchStatus && matchSearch && matchInicio && matchFim
   })
 
   const totalPago     = filtered.filter(c => c.status === 'Pago' && c.tipo === 'pagar').reduce((s, c) => s + c.valor, 0)
@@ -1221,11 +1272,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         </select>
         <select style={{ ...input, width: 150 }} value={filtStatus} onChange={e => setFiltStatus(e.target.value as any)}>
           <option value="todos">Todos os status</option>
-          <option value="Pendente">Pendente</option>
+          <option value="Lançado">Lançado</option>
+          <option value="Aguardando aprovação">Aguardando aprovação</option>
+          <option value="Liberado/OK">Liberado/OK</option>
+          <option value="A pagar">A pagar</option>
           <option value="Pago">Pago</option>
-          <option value="Vencido">Vencido</option>
-          <option value="Aguardando Aprovação">Aguardando Aprovação</option>
         </select>
+        <input title="Previsão inicial" aria-label="Previsão inicial" style={{ ...input, width: 145 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
+        <input title="Previsão final" aria-label="Previsão final" style={{ ...input, width: 145 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
       </div>
 
       {loading ? (
@@ -1235,16 +1289,17 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#0B0C0E' }}>
-                {['Tipo','Descrição','Empresa','Vínculo','Vencimento','Valor','Status','Ações'].map(h => (
+                {['Tipo','Descrição','Empresa','Vínculo','Previsão','Valor','Status','Ações'].map(h => (
                   <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: .6, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(c => {
-                const venc = c.status === 'Vencido' || isVencido(c.data_vencimento, c.status)
+                const dataPrevisao = c.data_previsao || c.data_vencimento
+                const venc = isVencido(dataPrevisao, c.status)
                 const pago = c.status === 'Pago'
-                const aguardandoAprovacao = c.status === 'Aguardando Aprovação'
+                const aguardandoAprovacao = c.status === 'Aguardando aprovação'
                 
                 return (
                   <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}`, background: aguardandoAprovacao ? '#3B82F605' : 'none' }}>
@@ -1279,7 +1334,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                       <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.nome_fantasia ?? c.fornecedor?.razao_social ?? 'Geral'}</div>
                       {c.obra && <div style={{ fontSize: 10, color: C.amber }}>Obra: {c.obra.nome}</div>}
                     </td>
-                    <td style={{ padding: '12px 14px', color: C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(c.data_vencimento)}</td>
+                    <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>PREVISÃO ATRASADA</div>}</td>
                     <td style={{ padding: '12px 14px', fontWeight: 900, color: c.tipo === 'receber' ? '#34D399' : '#F87171', whiteSpace: 'nowrap' }}>
                       {c.tipo === 'receber' ? '+' : '-'}{fmt(c.valor)}
                     </td>
@@ -1289,7 +1344,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                         background: pago ? '#34D39920' : aguardandoAprovacao ? '#3B82F620' : venc ? '#F8717120' : C.amber + '20',
                         color: pago ? '#34D399' : aguardandoAprovacao ? '#3B82F6' : venc ? '#F87171' : C.amber,
                       }}>
-                        {aguardandoAprovacao ? 'AGUARDANDO APROVAÇÃO' : venc ? 'VENCIDO' : c.status.toUpperCase()}
+                        {c.status.toUpperCase()}
                       </span>
                       {c.aprovado_por && (
                         <div style={{ fontSize: 9, color: '#34D399', marginTop: 4 }}>
@@ -1305,7 +1360,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                           </button>
                         )}
 
-                        {!pago && !aguardandoAprovacao && podePagar && (
+                        {c.status === 'Lançado' && (
+                          <button onClick={() => avancarStatus(c)} style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}>Enviar aprovação</button>
+                        )}
+
+                        {c.status === 'Liberado/OK' && podePagar && (
+                          <button onClick={() => avancarStatus(c)} style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}>A pagar</button>
+                        )}
+
+                        {c.status === 'A pagar' && podePagar && (
                           <button onClick={() => marcarPago(c.id)} title="Marcar como Pago" style={{ ...btnGhost, padding: '4px 10px', fontSize: 10, color: '#34D399', borderColor: '#34D39944' }}>
                             <CheckCircle size={11} /> Pago
                           </button>
@@ -1353,6 +1416,7 @@ const ALL_APPS = [
 function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: PermissoesTabProps) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [configPermissoes, setConfigPermissoes] = useState<ConfigPermissao[]>([])
+  const [cargos, setCargos] = useState<CargoSistema[]>([])
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoAcesso[]>([])
   const [loading, setLoading] = useState(true)
   const [savingPerms, setSavingPerms] = useState<string | null>(null)
@@ -1360,6 +1424,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   // States do Novo Colaborador
   const [showColForm, setShowColForm] = useState(false)
   const [savingCol, setSavingCol] = useState(false)
+  const [showCargoForm, setShowCargoForm] = useState(false)
+  const [savingCargo, setSavingCargo] = useState(false)
+  const [cargoForm, setCargoForm] = useState({ codigo: '', nome: '', descricao: '', apps: 'rh' })
   const [colForm, setColForm] = useState({
     nome: '',
     email: '',
@@ -1386,13 +1453,15 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [{ data: e }, { data: p }] = await Promise.all([
+      const [{ data: e }, { data: p }, { data: c }] = await Promise.all([
         supabase.from('empresas').select('*').order('razao_social'),
-        supabase.from('config_permissoes').select('*').order('cargo')
+        supabase.from('config_permissoes').select('*').order('cargo'),
+        supabase.from('cargos_sistema').select('*').eq('ativo', true).order('nome')
       ])
       
       setEmpresas(e ?? [])
       setConfigPermissoes((p as ConfigPermissao[]) ?? [])
+      setCargos((c as CargoSistema[]) ?? [])
 
       // Carrega solicitações pendentes
       let querySol = supabase.from('solicitacoes_acesso').select('*').eq('status', 'pendente')
@@ -1407,6 +1476,40 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
       setLoading(false)
     }
   }, [colaboradorAtivo])
+
+  const criarCargo = async () => {
+    if (!isGeral) return
+    const codigo = cargoForm.codigo.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_')
+    const nome = cargoForm.nome.trim()
+    if (!codigo || !nome) return alert('Informe o código e o nome do novo cargo.')
+    if (['admin_geral', 'admin_empresa'].includes(codigo)) return alert('Este código é reservado.')
+    setSavingCargo(true)
+    const { error: cargoError } = await supabase.from('cargos_sistema').insert({ codigo, nome, descricao: cargoForm.descricao.trim() || null })
+    if (cargoError) {
+      setSavingCargo(false)
+      return alert('Erro ao criar cargo: ' + cargoError.message)
+    }
+    const { error: permError } = await supabase.from('config_permissoes').insert({
+      cargo: codigo,
+      pode_empresas: false,
+      pode_fornecedores: false,
+      pode_lancar: false,
+      pode_pagar: false,
+      pode_aprovar: false,
+      limite_valor: 0,
+      apps: cargoForm.apps.trim() || 'financeiro',
+    })
+    if (permError) {
+      await supabase.from('cargos_sistema').delete().eq('codigo', codigo)
+      setSavingCargo(false)
+      return alert('Cargo criado parcialmente; permissões falharam: ' + permError.message)
+    }
+    setCargoForm({ codigo: '', nome: '', descricao: '', apps: 'rh' })
+    setShowCargoForm(false)
+    setSavingCargo(false)
+    await loadData()
+    alert(`Cargo "${nome}" criado. Agora configure as permissões na matriz abaixo.`)
+  }
 
   useEffect(() => {
     loadData()
@@ -1634,6 +1737,26 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
 
   return (
     <div>
+      {isGeral && (
+        <div style={{ ...card, marginBottom: 20, borderColor: C.amber + '55' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>Cargos e permissões</h3>
+              <p style={{ margin: '5px 0 0', fontSize: 11, color: C.inkSoft }}>Crie um perfil uma vez, defina os módulos e depois atribua-o aos colaboradores.</p>
+            </div>
+            <button style={{ ...btn(), padding: '7px 12px', fontSize: 10 }} onClick={() => setShowCargoForm(value => !value)}><Sliders size={13} /> {showCargoForm ? 'Fechar' : 'Criar novo cargo'}</button>
+          </div>
+          {showCargoForm && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 1.5fr auto', gap: 9, alignItems: 'end', marginTop: 14 }}>
+              <div><label style={label}>Código</label><input style={input} value={cargoForm.codigo} onChange={event => setCargoForm({ ...cargoForm, codigo: event.target.value })} placeholder="ex: mestre_obra" /></div>
+              <div><label style={label}>Nome do cargo</label><input style={input} value={cargoForm.nome} onChange={event => setCargoForm({ ...cargoForm, nome: event.target.value })} placeholder="Mestre de obra" /></div>
+              <div><label style={label}>Descrição</label><input style={input} value={cargoForm.descricao} onChange={event => setCargoForm({ ...cargoForm, descricao: event.target.value })} placeholder="O que este cargo faz" /></div>
+              <div><label style={label}>Módulos (separados por vírgula)</label><input style={input} value={cargoForm.apps} onChange={event => setCargoForm({ ...cargoForm, apps: event.target.value })} placeholder="rh,obras,rdo" /></div>
+              <button style={{ ...btn('#10B981'), padding: '9px 12px', fontSize: 10 }} disabled={savingCargo} onClick={() => void criarCargo()}>{savingCargo ? 'Salvando...' : 'Criar cargo'}</button>
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: isGeral ? '1.2fr 1.8fr' : '1fr', gap: 24, alignItems: 'start' }}>
         
         {/* COLUNA ESQUERDA: LISTA DE COLABORADORES E SOLICITAÇÕES */}
@@ -1726,10 +1849,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                       <div>
                         <label style={label}>Cargo / Nível de Acesso</label>
                         <select style={input} value={colForm.cargo} onChange={e => setColForm(c => ({ ...c, cargo: e.target.value }))}>
-                          <option value="admin_geral">Administrador Geral</option>
-                          <option value="admin_empresa">Administrador por Empresa</option>
-                          <option value="operador">Operador Financeiro</option>
-                          <option value="visualizador">Visualizador</option>
+                          {configPermissoes.map(config => <option key={config.cargo} value={config.cargo}>{NOMES_CARGOS[config.cargo] || cargos.find(cargo => cargo.codigo === config.cargo)?.nome || config.cargo}</option>)}
                         </select>
                       </div>
 
@@ -1747,9 +1867,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                     <div>
                       <label style={label}>Cargo / Nível de Acesso</label>
                       <select style={input} value={colForm.cargo} onChange={e => setColForm(c => ({ ...c, cargo: e.target.value }))}>
-                        <option value="operador">Operador Financeiro</option>
-                        <option value="visualizador">Visualizador</option>
-                        <option value="admin_empresa">Administrador por Empresa</option>
+                        {configPermissoes.filter(config => config.cargo !== 'admin_geral').map(config => <option key={config.cargo} value={config.cargo}>{NOMES_CARGOS[config.cargo] || cargos.find(cargo => cargo.codigo === config.cargo)?.nome || config.cargo}</option>)}
                       </select>
                     </div>
                   )}

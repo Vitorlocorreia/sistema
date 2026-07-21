@@ -61,6 +61,11 @@ export default function RDO() {
   const [newCondicaoSolo, setNewCondicaoSolo] = useState('Seco')
   const [newEfetivoProprio, setNewEfetivoProprio] = useState('10')
   const [newEfetivoTerceiros, setNewEfetivoTerceiros] = useState('5')
+  const [newResumo, setNewResumo] = useState('')
+  const [newOcorrencias, setNewOcorrencias] = useState('')
+  const [newDefinicaoServico, setNewDefinicaoServico] = useState('')
+  const [newLiberacoes, setNewLiberacoes] = useState('')
+  const [newFotos, setNewFotos] = useState<File[]>([])
   
   // Equipments state in form
   const [equipForm, setEquipForm] = useState<{ nome: string; status: 'OPERANDO' | 'PARADO' | 'MANUTENÇÃO' }[]>([
@@ -138,7 +143,10 @@ export default function RDO() {
       efetivo_proprio: parseInt(newEfetivoProprio) || 0,
       efetivo_terceiros: parseInt(newEfetivoTerceiros) || 0,
       status: 'Rascunho',
-      resumo: `Diário preenchido por ${newResponsavel}.`
+      resumo: newResumo || `Diário preenchido por ${newResponsavel}.`,
+      ocorrencias: newOcorrencias || null,
+      definicao_servico: newDefinicaoServico || null,
+      liberacoes: newLiberacoes || null
     }).select().single()
 
     if (rdoErr || !rdoData) {
@@ -162,11 +170,18 @@ export default function RDO() {
       )
     }
 
+    for (const foto of newFotos) {
+      const path = `${newObraId}/${rdoData.id}/${crypto.randomUUID()}-${foto.name}`
+      const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, foto)
+      if (!uploadError) await supabase.from('fotos').insert({ obra_id: newObraId, rdo_id: rdoData.id, legenda: `Foto do RDO ${newData}`, imagem_url: path, data_iso: newData })
+    }
+
     setIsCreateOpen(false)
     toast('Diário de Obra criado com sucesso!', 'success')
     
     // Reset form
     setActForm([''])
+    setNewResumo(''); setNewOcorrencias(''); setNewDefinicaoServico(''); setNewLiberacoes(''); setNewFotos([])
     setEquipForm([
       { nome: 'Retroescavadeira', status: 'OPERANDO' },
       { nome: 'Betoneira', status: 'OPERANDO' }
@@ -376,6 +391,10 @@ export default function RDO() {
                   </div>
 
                   {/* Comments */}
+                  {(selectedRdo.definicao_servico || selectedRdo.liberacoes) && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div><span style={labelStyle}>Definição dos serviços</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.definicao_servico || '—'}</p></div>
+                    <div><span style={labelStyle}>Liberações</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.liberacoes || '—'}</p></div>
+                  </div>}
                   {selectedRdo.ocorrencias && (
                     <div>
                       <span style={labelStyle}>Ocorrências / Observações</span>
@@ -453,6 +472,8 @@ export default function RDO() {
                         <input type="date" value={newData} onChange={e => setNewData(e.target.value)} style={inputStyle} />
                       </div>
                     </div>
+                    <div><label style={labelStyle}>Relato livre do dia</label><textarea rows={3} value={newResumo} onChange={e => setNewResumo(e.target.value)} style={inputStyle} placeholder="Escreva livremente o que aconteceu no dia" /></div>
+                    <div><label style={labelStyle}>Ocorrências</label><textarea rows={2} value={newOcorrencias} onChange={e => setNewOcorrencias(e.target.value)} style={inputStyle} placeholder="Ocorrências, impactos e providências" /></div>
                     <div>
                       <label style={labelStyle}>Responsável Técnico *</label>
                       <input type="text" value={newResponsavel} onChange={e => setNewResponsavel(e.target.value)} style={inputStyle} />
@@ -531,6 +552,9 @@ export default function RDO() {
                         ))}
                       </div>
                     </div>
+                    <div><label style={labelStyle}>Definição dos serviços</label><textarea rows={2} style={inputStyle} value={newDefinicaoServico} onChange={e => setNewDefinicaoServico(e.target.value)} /></div>
+                    <div><label style={labelStyle}>Liberações</label><textarea rows={2} style={inputStyle} value={newLiberacoes} onChange={e => setNewLiberacoes(e.target.value)} placeholder="Frentes, áreas, projetos ou serviços liberados" /></div>
+                    <div><label style={labelStyle}>Fotos do RDO</label><input type="file" multiple accept="image/jpeg,image/png,image/webp" style={inputStyle} onChange={e => setNewFotos(Array.from(e.target.files || []))}/>{newFotos.length > 0 && <small style={{ color: C.green }}>{newFotos.length} foto(s) selecionada(s)</small>}</div>
                   </>
                 )}
 
