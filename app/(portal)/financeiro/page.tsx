@@ -1301,7 +1301,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
               {filtered.map(c => {
                 const dataReferencia = c.tipo === 'pagar' ? (c.data_vencimento || c.data_previsao) : (c.data_previsao || c.data_vencimento)
                 const dataPrevisao = dataReferencia
-                const venc = isVencido(dataReferencia, c.status)
+                const venc = isVencido(dataReferencia || '', c.status)
                 const pago = c.status === 'Pago'
                 const aguardandoAprovacao = c.status === 'Aguardando aprovação'
                 
