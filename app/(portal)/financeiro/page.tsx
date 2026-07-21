@@ -861,6 +861,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     descricao: '',
     valor: '',
     data_previsao: '',
+    data_vencimento: '',
     possui_fornecedor: false,
     observacoes: '',
     pagamento_antecipado: false,
@@ -890,7 +891,8 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   }, [colaboradorAtivo])
 
   const save = async () => {
-    if (!form.empresa_id || !form.descricao || !form.valor || !form.data_previsao) {
+    const dataBase = form.tipo === 'pagar' ? form.data_vencimento : form.data_previsao
+    if (!form.empresa_id || !form.descricao || !form.valor || !dataBase) {
       alert('Preencha os campos obrigatórios (*)')
       return
     }
@@ -924,7 +926,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     }
 
     const parcelas = []
-    const vencimentoBase = new Date(form.data_previsao + 'T00:00:00')
+    const vencimentoBase = new Date(dataBase + 'T00:00:00')
     const totalParcelas = form.recorrencia === 'mensal' ? 12 : form.recorrencia === 'semanal' ? 4 : 1
 
     for (let i = 0; i < totalParcelas; i++) {
@@ -977,6 +979,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       descricao: '',
       valor: '',
       data_previsao: '',
+      data_vencimento: '',
       possui_fornecedor: false,
       observacoes: '',
       pagamento_antecipado: false,
@@ -1102,8 +1105,8 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                 <input style={input} type="number" step="0.01" min="0" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
               </div>
               <div>
-                <label style={label}>Data de Previsão *</label>
-                <input style={input} type="date" value={form.data_previsao} onChange={e => setForm(f => ({ ...f, data_previsao: e.target.value }))} />
+                <label style={label}>{form.tipo === 'pagar' ? 'Data de vencimento *' : 'Data de previsão *'}</label>
+                <input style={input} type="date" value={form.tipo === 'pagar' ? form.data_vencimento : form.data_previsao} onChange={e => form.tipo === 'pagar' ? setForm(f => ({ ...f, data_vencimento: e.target.value })) : setForm(f => ({ ...f, data_previsao: e.target.value }))} />
               </div>
             </div>
 
@@ -1296,8 +1299,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
             </thead>
             <tbody>
               {filtered.map(c => {
-                const dataPrevisao = c.data_previsao || c.data_vencimento
-                const venc = isVencido(dataPrevisao, c.status)
+                const dataReferencia = c.tipo === 'pagar' ? (c.data_vencimento || c.data_previsao) : (c.data_previsao || c.data_vencimento)
+                const dataPrevisao = dataReferencia
+                const venc = isVencido(dataReferencia, c.status)
                 const pago = c.status === 'Pago'
                 const aguardandoAprovacao = c.status === 'Aguardando aprovação'
                 

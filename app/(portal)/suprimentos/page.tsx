@@ -13,8 +13,8 @@ const button: React.CSSProperties = { border: 0, borderRadius: 4, background: C.
 const ghost: React.CSSProperties = { ...button, background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}` }
 const priorityColor: Record<string, string> = { Baixa: '#9CA3AF', Média: '#3B82F6', Alta: '#F59E0B', Urgente: '#EF4444' }
 
-type CardDraft = { id?: string; coluna_id: string; titulo: string; descricao: string; responsavel: string; prioridade: string; prazo: string; etiquetas: string }
-const emptyCard = (coluna_id = ''): CardDraft => ({ coluna_id, titulo: '', descricao: '', responsavel: '', prioridade: 'Média', prazo: '', etiquetas: '' })
+type CardDraft = { id?: string; coluna_id: string; titulo: string; descricao: string; responsavel: string; prioridade: string; prazo: string; etiquetas: string; anexos: Array<{ nome: string; url: string }> }
+const emptyCard = (coluna_id = ''): CardDraft => ({ coluna_id, titulo: '', descricao: '', responsavel: '', prioridade: 'Média', prazo: '', etiquetas: '', anexos: [] })
 
 export default function QuadrosPage() {
   const [boards, setBoards] = useState<Quadro[]>([])
@@ -25,13 +25,15 @@ export default function QuadrosPage() {
   const [loading, setLoading] = useState(true)
   const [showHistory, setShowHistory] = useState(false)
   const [draft, setDraft] = useState<CardDraft | null>(null)
+  const [draggingCard, setDraggingCard] = useState<string | null>(null)
+  const [attachment, setAttachment] = useState<File | null>(null)
 
   const loadBoards = useCallback(async () => {
     const { data, error } = await supabase.from('quadros').select('*').eq('arquivado', false).order('ordem')
     if (error) { toast('Entre com Supabase Auth para acessar os quadros.', 'error'); setLoading(false); return }
     const result = (data ?? []) as Quadro[]
     setBoards(result)
-    setBoardId(current => current || result[0]?.id || '')
+    setBoardId(current => current)
     setLoading(false)
   }, [])
 
@@ -108,11 +110,19 @@ export default function QuadrosPage() {
 
   async function saveCard(e: React.FormEvent) {
     e.preventDefault(); if (!draft?.titulo.trim()) return
-    const payload = { coluna_id: draft.coluna_id, titulo: draft.titulo.trim(), descricao: draft.descricao || null, responsavel: draft.responsavel || null, prioridade: draft.prioridade, prazo: draft.prazo || null, etiquetas: draft.etiquetas.split(',').map(x => x.trim()).filter(Boolean), updated_at: new Date().toISOString() }
+    let anexos = draft.anexos || []
+    if (attachment) {
+      const path = `quadros/${Date.now()}-${attachment.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`
+      const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, attachment, { upsert: false })
+      if (uploadError) return toast(`Não foi possível anexar a imagem: ${uploadError.message}`, 'error')
+      const { data: urlData } = supabase.storage.from('rdo-fotos').getPublicUrl(path)
+      anexos = [...anexos, { nome: attachment.name, url: urlData.publicUrl }]
+    }
+    const payload = { coluna_id: draft.coluna_id, titulo: draft.titulo.trim(), descricao: draft.descricao || null, responsavel: draft.responsavel || null, prioridade: draft.prioridade, prazo: draft.prazo || null, etiquetas: draft.etiquetas.split(',').map(x => x.trim()).filter(Boolean), anexos, updated_at: new Date().toISOString() }
     const query = draft.id ? supabase.from('quadro_cartoes').update(payload).eq('id', draft.id) : supabase.from('quadro_cartoes').insert({ ...payload, ordem: cardsByColumn[draft.coluna_id]?.length ?? 0 })
     const { error } = await query
     if (error) return toast(error.message, 'error')
-    setDraft(null); await loadBoard(); toast('Cartão salvo.', 'success')
+    setDraft(null); setAttachment(null); await loadBoard(); toast('Cartão salvo.', 'success')
   }
 
   async function moveCard(card: QuadroCartao, direction: number) {
@@ -121,6 +131,17 @@ export default function QuadrosPage() {
     setCards(v => v.map(c => c.id === card.id ? { ...c, coluna_id: target.id } : c))
     const { error } = await supabase.from('quadro_cartoes').update({ coluna_id: target.id, ordem: cardsByColumn[target.id]?.length ?? 0, updated_at: new Date().toISOString() }).eq('id', card.id)
     if (error) { toast(error.message, 'error'); loadBoard() }
+  }
+
+  async function dropCard(targetColumnId: string) {
+    if (!draggingCard) return
+    const card = cards.find(item => item.id === draggingCard)
+    if (!card || card.coluna_id === targetColumnId) return
+    const ordem = cards.filter(item => item.coluna_id === targetColumnId).length
+    setCards(items => items.map(item => item.id === card.id ? { ...item, coluna_id: targetColumnId, ordem } : item))
+    const { error } = await supabase.from('quadro_cartoes').update({ coluna_id: targetColumnId, ordem, updated_at: new Date().toISOString() }).eq('id', card.id)
+    if (error) { toast(error.message, 'error'); await loadBoard() }
+    setDraggingCard(null)
   }
 
   async function deleteCard(id: string) {
@@ -144,11 +165,13 @@ export default function QuadrosPage() {
       <button style={button} onClick={createBoard}><Plus size={14}/> Novo quadro</button>
       {selectedBoard && <><button style={ghost} onClick={renameBoard}>Renomear</button><button style={ghost} onClick={addColumn}><Plus size={14}/> Coluna</button><button style={ghost} onClick={openHistory}><History size={14}/> Histórico</button><button style={ghost} onClick={archiveBoard}><Archive size={14}/> Arquivar</button></>}
     </div>
-    {loading ? <p style={{ color: C.inkSoft }}>Carregando quadros…</p> : !selectedBoard ? <div style={{ border: `1px dashed ${C.border}`, padding: 36, color: C.inkSoft }}>Crie o primeiro quadro. Quadros, colunas e cartões são totalmente editáveis.</div> :
+    {loading ? <p style={{ color: C.inkSoft }}>Carregando quadros…</p> : !selectedBoard ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14 }}>
+      {boards.length === 0 ? <div style={{ border: `1px dashed ${C.border}`, padding: 36, color: C.inkSoft }}>Nenhum quadro criado. Use “Novo quadro” para começar.</div> : boards.map(board => <button key={board.id} onClick={() => setBoardId(board.id)} style={{ textAlign: 'left', minHeight: 130, padding: 18, borderRadius: 6, border: `1px solid ${C.border}`, borderTop: `4px solid ${board.cor || C.amber}`, background: C.bgCard, color: C.ink, cursor: 'pointer' }}><strong style={{ display: 'block', fontSize: 15 }}>{board.nome}</strong><span style={{ display: 'block', marginTop: 10, color: C.inkSoft, fontSize: 11 }}>{board.descricao || 'Quadro editável de projetos'}</span><span style={{ display: 'block', marginTop: 18, color: C.amber, fontSize: 10, fontWeight: 800 }}>ABRIR QUADRO →</span></button>)}
+    </div> :
       <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 18, alignItems: 'flex-start' }}>
-        {columns.map((col, index) => <section key={col.id} style={{ width: 300, minWidth: 300, background: '#11131A', border: `1px solid ${C.border}`, borderTop: `3px solid ${col.cor}`, borderRadius: 5, padding: 11 }}>
+        {columns.map((col, index) => <section key={col.id} onDragOver={e => e.preventDefault()} onDrop={() => void dropCard(col.id)} style={{ width: 300, minWidth: 300, background: '#11131A', border: `1px solid ${C.border}`, borderTop: `3px solid ${col.cor}`, borderRadius: 5, padding: 11 }}>
           <header style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}><strong style={{ flex: 1, fontSize: 12, textTransform: 'uppercase' }}>{col.titulo} <span style={{ color: C.inkSoft }}>({cardsByColumn[col.id]?.length || 0})</span></strong><button title="Mover para esquerda" style={iconButton} onClick={() => moveColumn(index, -1)}><ChevronLeft size={14}/></button><button title="Mover para direita" style={iconButton} onClick={() => moveColumn(index, 1)}><ChevronRight size={14}/></button><button title="Editar título" style={iconButton} onClick={() => editColumn(col)}><MoreHorizontal size={15}/></button><button title="Excluir coluna" style={iconButton} onClick={() => deleteColumn(col)}><Trash2 size={13}/></button></header>
-          <div style={{ display: 'grid', gap: 9, minHeight: 70 }}>{cardsByColumn[col.id]?.map(card => <article key={card.id} onClick={() => setDraft({ id: card.id, coluna_id: card.coluna_id, titulo: card.titulo, descricao: card.descricao || '', responsavel: card.responsavel || '', prioridade: card.prioridade, prazo: card.prazo || '', etiquetas: card.etiquetas.join(', ') })} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderLeft: `3px solid ${priorityColor[card.prioridade]}`, borderRadius: 4, padding: 11, cursor: 'pointer' }}>
+          <div style={{ display: 'grid', gap: 9, minHeight: 70 }}>{cardsByColumn[col.id]?.map(card => <article key={card.id} draggable onDragStart={e => { e.stopPropagation(); setDraggingCard(card.id) }} onDragEnd={() => setDraggingCard(null)} onClick={() => setDraft({ id: card.id, coluna_id: card.coluna_id, titulo: card.titulo, descricao: card.descricao || '', responsavel: card.responsavel || '', prioridade: card.prioridade, prazo: card.prazo || '', etiquetas: card.etiquetas.join(', '), anexos: card.anexos || [] })} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderLeft: `3px solid ${priorityColor[card.prioridade]}`, borderRadius: 4, padding: 11, cursor: 'grab', opacity: draggingCard === card.id ? .55 : 1 }}>
             <strong style={{ fontSize: 12 }}>{card.titulo}</strong>{card.descricao && <p style={{ color: C.inkSoft, fontSize: 11, lineHeight: 1.45, margin: '7px 0' }}>{card.descricao}</p>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{card.etiquetas.map(tag => <span key={tag} style={{ fontSize: 8, background: '#F59E0B18', color: C.amber, padding: '2px 5px' }}>{tag}</span>)}</div>
             <footer style={{ display: 'flex', marginTop: 9, alignItems: 'center', gap: 5, color: C.inkSoft, fontSize: 9 }}><span style={{ flex: 1 }}>{card.responsavel || 'Sem responsável'}</span>{card.prazo && <><Clock3 size={11}/>{new Date(card.prazo + 'T00:00:00').toLocaleDateString('pt-BR')}</>}<button style={iconButton} onClick={e => { e.stopPropagation(); moveCard(card, -1) }}><ChevronLeft size={13}/></button><button style={iconButton} onClick={e => { e.stopPropagation(); moveCard(card, 1) }}><ChevronRight size={13}/></button></footer>
@@ -157,7 +180,7 @@ export default function QuadrosPage() {
         </section>)}
         <button style={{ ...ghost, minWidth: 180, justifyContent: 'center' }} onClick={addColumn}><Plus size={14}/> Nova coluna</button>
       </div>}
-    {draft && <div style={overlay}><form onSubmit={saveCard} style={modal}><header style={modalHeader}><strong>{draft.id ? 'Editar cartão' : 'Novo cartão'}</strong><button type="button" style={iconButton} onClick={() => setDraft(null)}><X size={17}/></button></header><label style={label}>Título<input autoFocus style={field} value={draft.titulo} onChange={e => setDraft({ ...draft, titulo: e.target.value })}/></label><label style={label}>Descrição<textarea rows={5} style={field} value={draft.descricao} onChange={e => setDraft({ ...draft, descricao: e.target.value })}/></label><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><label style={label}>Responsável<input style={field} value={draft.responsavel} onChange={e => setDraft({ ...draft, responsavel: e.target.value })}/></label><label style={label}>Prioridade<select style={field} value={draft.prioridade} onChange={e => setDraft({ ...draft, prioridade: e.target.value })}>{['Baixa','Média','Alta','Urgente'].map(x => <option key={x}>{x}</option>)}</select></label></div><label style={label}>Prazo<input type="date" style={field} value={draft.prazo} onChange={e => setDraft({ ...draft, prazo: e.target.value })}/></label><label style={label}>Etiquetas separadas por vírgula<input style={field} value={draft.etiquetas} onChange={e => setDraft({ ...draft, etiquetas: e.target.value })}/></label><footer style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>{draft.id ? <button type="button" style={{ ...ghost, color: C.red }} onClick={() => deleteCard(draft.id!)}><Trash2 size={14}/> Excluir</button> : <span/>}<button style={button}><Save size={14}/> Salvar</button></footer></form></div>}
+    {draft && <div style={overlay}><form onSubmit={saveCard} style={modal}><header style={modalHeader}><strong>{draft.id ? 'Editar cartão' : 'Novo cartão'}</strong><button type="button" style={iconButton} onClick={() => setDraft(null)}><X size={17}/></button></header><label style={label}>Título<input autoFocus style={field} value={draft.titulo} onChange={e => setDraft({ ...draft, titulo: e.target.value })}/></label><label style={label}>Descrição<textarea rows={5} style={field} value={draft.descricao} onChange={e => setDraft({ ...draft, descricao: e.target.value })}/></label><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><label style={label}>Responsável<input style={field} value={draft.responsavel} onChange={e => setDraft({ ...draft, responsavel: e.target.value })}/></label><label style={label}>Prioridade<select style={field} value={draft.prioridade} onChange={e => setDraft({ ...draft, prioridade: e.target.value })}>{['Baixa','Média','Alta','Urgente'].map(x => <option key={x}>{x}</option>)}</select></label></div><label style={label}>Prazo<input type="date" style={field} value={draft.prazo} onChange={e => setDraft({ ...draft, prazo: e.target.value })}/></label><label style={label}>Etiquetas separadas por vírgula<input style={field} value={draft.etiquetas} onChange={e => setDraft({ ...draft, etiquetas: e.target.value })}/></label><label style={label}>Imagem/anexo<input type="file" accept="image/*" style={field} onChange={e => setAttachment(e.target.files?.[0] || null)}/>{draft.anexos?.map(anexo => <a key={anexo.url} href={anexo.url} target="_blank" rel="noreferrer" style={{ color: C.amber, fontSize: 10 }}>{anexo.nome}</a>)}</label><footer style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>{draft.id ? <button type="button" style={{ ...ghost, color: C.red }} onClick={() => deleteCard(draft.id!)}><Trash2 size={14}/> Excluir</button> : <span/>}<button style={button}><Save size={14}/> Salvar</button></footer></form></div>}
     {showHistory && <div style={overlay}><div style={{ ...modal, width: 650 }}><header style={modalHeader}><strong>Histórico de edição</strong><button style={iconButton} onClick={() => setShowHistory(false)}><X size={17}/></button></header><div style={{ maxHeight: '65vh', overflow: 'auto', display: 'grid', gap: 8 }}>{history.length ? history.map(h => <div key={h.id} style={{ border: `1px solid ${C.border}`, padding: 10 }}><strong style={{ fontSize: 11 }}>{h.acao} · {h.entidade}</strong><div style={{ color: C.inkSoft, fontSize: 10, marginTop: 4 }}>{h.usuario_nome} · {new Date(h.created_at).toLocaleString('pt-BR')}</div></div>) : <p style={{ color: C.inkSoft }}>Nenhuma alteração registrada.</p>}</div></div></div>}
   </>
 }

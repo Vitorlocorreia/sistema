@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Building2, FileText, Package, Camera, TrendingUp, Plus } from 'lucide-react'
+import { Building2, FileText, Camera, TrendingUp, Plus } from 'lucide-react'
 import { KpiCard } from '@/components/KpiCard'
 import { Panel } from '@/components/Panel'
 import { ApiBadge } from '@/components/ApiBadge'
@@ -11,12 +11,13 @@ import { supabase } from '@/lib/supabase'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { motion } from 'motion/react'
 
-type MetricType = 'obras' | 'rdos' | 'suprimentos' | 'fotos'
+type MetricType = 'obras' | 'rdos' | 'fotos'
 
 export default function Dashboard() {
   const router = useRouter()
   const [selectedMetric, setSelectedMetric] = useState<MetricType>('obras')
   const [loading, setLoading] = useState(true)
+  const [isAdminGeral, setIsAdminGeral] = useState(false)
 
   // Dynamic states
   const [obrasList, setObrasList] = useState<any[]>([])
@@ -25,6 +26,16 @@ export default function Dashboard() {
   const [fotosList, setFotosList] = useState<any[]>([])
 
   useEffect(() => {
+    const session = localStorage.getItem('colaborador_sessao')
+    let cargo = ''
+    try { cargo = session ? JSON.parse(session).cargo || '' : '' } catch { cargo = '' }
+    if (cargo !== 'admin_geral') {
+      router.replace('/rh')
+      setLoading(false)
+      return
+    }
+    setIsAdminGeral(true)
+
     async function loadData() {
       setLoading(true)
       const [
@@ -36,7 +47,7 @@ export default function Dashboard() {
         supabase.from('obras').select('id, nome, status, progresso').order('nome'),
         supabase.from('rdos').select('id, resumo, status, obra:obras(nome)').order('data', { ascending: false }),
         supabase.from('suprimentos').select('id, titulo, quantidade, unidade, status, obra:obras(nome)').order('created_at', { ascending: false }),
-        supabase.from('fotos').select('id, legenda, imagem_url, data_iso, obra:obras(nome)').order('created_at', { ascending: false })
+        supabase.from('fotos').select('id, legenda, imagem_url, data_iso, created_at, obra:obras(nome)').order('created_at', { ascending: false })
       ])
 
       setObrasList(ob ?? [])
@@ -46,13 +57,20 @@ export default function Dashboard() {
       setLoading(false)
     }
     loadData()
-  }, [])
+  }, [router])
+
+  const obrasAtivas = useMemo(() => obrasList.filter(obra => !['concluída', 'concluida', 'finalizada', 'arquivada'].includes(String(obra.status || '').toLowerCase())).length, [obrasList])
+  const rdosParaAssinar = useMemo(() => rdosList.filter(rdo => rdo.status !== 'Aprovado').length, [rdosList])
+  const fotosSemana = useMemo(() => {
+    const limite = Date.now() - 7 * 24 * 60 * 60 * 1000
+    return fotosList.filter(foto => new Date(foto.created_at || foto.data_iso || 0).getTime() >= limite).length
+  }, [fotosList])
 
   const metricConfig = useMemo(() => ({
     obras: {
       label: 'Obras ativas',
-      value: String(obrasList.length),
-      delta: '100% no cronograma',
+      value: String(obrasAtivas),
+      delta: 'Em andamento',
       positivo: true,
       icon: Building2,
       color: '#3B82F6',
@@ -61,35 +79,25 @@ export default function Dashboard() {
     },
     rdos: {
       label: 'Diários de Obra (RDO)',
-      value: String(rdosList.length),
-      delta: `${rdosList.filter(r => r.status === 'Aprovado').length} assinados`,
+      value: String(rdosParaAssinar),
+      delta: 'Aguardando assinatura',
       positivo: true,
       icon: FileText,
       color: C.amber,
       yAxisFormatter: (v: number) => `${v}`,
       tooltipFormatter: (v: number) => `${v} RDOs finalizados`
     },
-    suprimentos: {
-      label: 'Pedidos de Material',
-      value: String(suprimentosList.length),
-      delta: 'Suprimentos Nativo',
-      positivo: true,
-      icon: Package,
-      color: C.green,
-      yAxisFormatter: (v: number) => `${v}`,
-      tooltipFormatter: (v: number) => `${v} pedidos`
-    },
     fotos: {
-      label: 'Imagens de Campo',
-      value: String(fotosList.length),
-      delta: 'Sincronizado',
+      label: 'Imagens de campo novas (7 dias)',
+      value: String(fotosSemana),
+      delta: 'Última semana',
       positivo: true,
       icon: Camera,
       color: '#06B6D4',
       yAxisFormatter: (v: number) => `${v}`,
       tooltipFormatter: (v: number) => `${v} fotos`
     }
-  }), [obrasList, rdosList, suprimentosList, fotosList])
+  }), [obrasAtivas, rdosParaAssinar, fotosSemana])
 
   const currentConfig = metricConfig[selectedMetric]
 
@@ -121,16 +129,16 @@ export default function Dashboard() {
 
   // Historical data fallback
   const chartHistory = useMemo(() => [
-    { data: 'Jan', obras: 1, rdos: Math.max(0, rdosList.length - 4), suprimentos: Math.max(0, suprimentosList.length - 2), fotos: Math.max(0, fotosList.length - 3) },
-    { data: 'Fev', obras: 1, rdos: Math.max(0, rdosList.length - 3), suprimentos: Math.max(0, suprimentosList.length - 2), fotos: Math.max(0, fotosList.length - 2) },
-    { data: 'Mar', obras: 2, rdos: Math.max(0, rdosList.length - 2), suprimentos: Math.max(0, suprimentosList.length - 1), fotos: Math.max(0, fotosList.length - 2) },
-    { data: 'Abr', obras: 2, rdos: Math.max(0, rdosList.length - 1), suprimentos: Math.max(0, suprimentosList.length - 1), fotos: Math.max(0, fotosList.length - 1) },
-    { data: 'Mai', obras: 3, rdos: rdosList.length, suprimentos: suprimentosList.length, fotos: fotosList.length },
-    { data: 'Jun', obras: obrasList.length, rdos: rdosList.length, suprimentos: suprimentosList.length, fotos: fotosList.length },
-  ], [obrasList.length, rdosList.length, suprimentosList.length, fotosList.length])
+    { data: 'Jan', obras: 1, rdos: Math.max(0, rdosList.length - 4), fotos: Math.max(0, fotosList.length - 3) },
+    { data: 'Fev', obras: 1, rdos: Math.max(0, rdosList.length - 3), fotos: Math.max(0, fotosList.length - 2) },
+    { data: 'Mar', obras: 2, rdos: Math.max(0, rdosList.length - 2), fotos: Math.max(0, fotosList.length - 2) },
+    { data: 'Abr', obras: 2, rdos: Math.max(0, rdosList.length - 1), fotos: Math.max(0, fotosList.length - 1) },
+    { data: 'Mai', obras: 3, rdos: rdosList.length, fotos: fotosList.length },
+    { data: 'Jun', obras: obrasList.length, rdos: rdosList.length, fotos: fotosList.length },
+  ], [obrasList.length, rdosList.length, fotosList.length])
 
   return (
-    <>
+    <>{isAdminGeral && <>
       <PageTitle modulo="Painel Principal" titulo="Visão Geral" />
 
       {/* Quick Action Bar */}
@@ -387,6 +395,7 @@ export default function Dashboard() {
           </Panel>
         </>
       )}
+    </>}
     </>
   )
 }

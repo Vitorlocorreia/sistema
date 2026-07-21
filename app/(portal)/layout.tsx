@@ -196,12 +196,21 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   // Route guard: só redireciona se authChecked E apps carregados
   useEffect(() => {
     if (!authChecked || appsAutorizados.length === 0) return
+    if (pathname === '/' && colaborador?.cargo !== 'admin_geral') {
+      const fallback = appsAutorizados.includes('rh') || appsAutorizados.includes('ponto') ? '/rh'
+        : appsAutorizados.includes('obras') ? '/obras'
+        : appsAutorizados.includes('rdo') ? '/rdo'
+        : appsAutorizados.includes('suprimentos') ? '/suprimentos'
+        : '/financeiro'
+      router.replace(fallback)
+      return
+    }
     const appAcessado = defaultApps.find(app => pathname.startsWith(`/${app.id}`))
     const acessoHerdado = appAcessado?.id === 'rh' && appsAutorizados.includes('ponto')
     if (appAcessado && !appsAutorizados.includes(appAcessado.id) && !acessoHerdado) {
       router.replace('/')
     }
-  }, [pathname, authChecked, appsAutorizados, router])
+  }, [pathname, authChecked, appsAutorizados, colaborador, router])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -260,12 +269,12 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             <span className="text-[9px] text-[#9CA3AF] uppercase tracking-widest block">Portal Construtora</span>
           </div>
         </div>
-        <button
+        {colaborador?.cargo === 'admin_geral' && <button
           onClick={() => setMobileOpen(true)}
           className="p-2 -mr-2 text-[#9CA3AF] hover:text-[#F3F4F6] focus:outline-none"
         >
           <Menu size={22} />
-        </button>
+        </button>}
       </header>
 
       {/* ── BACKDROP ─────────────────────────────────────────────── */}
