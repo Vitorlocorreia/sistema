@@ -221,7 +221,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }
 
   const sortedApps = order
-    .filter(id => appsAutorizados.includes(id) || (id === 'rh' && appsAutorizados.includes('ponto')))
+    .filter(id => id !== 'obras' && (appsAutorizados.includes(id) || (id === 'rh' && appsAutorizados.includes('ponto'))))
     .map(id => defaultApps.find(a => a.id === id)!)
     .filter(Boolean)
 

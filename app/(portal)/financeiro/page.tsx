@@ -5,7 +5,7 @@ import {
   Building2, Users, FileText, CheckCircle, Clock, X,
   Search, RefreshCw, ArrowUpRight, ArrowDownRight, Calendar,
   Shield, Check, AlertTriangle, Paperclip, Eye, UserPlus, ToggleLeft, ToggleRight,
-  Edit3, Sliders
+  Edit3, Sliders, Camera
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
@@ -28,6 +28,7 @@ const isVencido = (d: string, status: string) =>
 
 // ─── NAV TABS ────────────────────────────────────────────────────────────────
 const TABS = [
+  { id: 'obras',      label: 'Obras & Metricas', icon: Building2 },
   { id: 'dashboard', label: 'Dashboard', icon: DollarSign },
   { id: 'empresas',  label: 'Empresas',  icon: Building2  },
   { id: 'fornecedores', label: 'Fornecedores', icon: Users },
@@ -152,8 +153,8 @@ export default function FinanceiroPage() {
 
   // Retorna a lista de abas visíveis de acordo com as permissões reais do cargo
   function getAbasPermitidas(cargo: string) {
-    if (cargo === 'admin_geral') return ['dashboard', 'empresas', 'fornecedores', 'contas', 'historico', 'permissoes']
-    if (cargo === 'admin_empresa') return ['dashboard', 'empresas', 'fornecedores', 'contas', 'historico', 'permissoes']
+    if (cargo === 'admin_geral') return ['dashboard', 'empresas', 'fornecedores', 'contas', 'historico', 'obras', 'permissoes']
+    if (cargo === 'admin_empresa') return ['dashboard', 'empresas', 'fornecedores', 'contas', 'historico', 'obras', 'permissoes']
     if (cargo === 'operador') return ['dashboard', 'fornecedores', 'contas', 'historico']
     return ['dashboard', 'fornecedores', 'historico']
   }
@@ -238,6 +239,7 @@ export default function FinanceiroPage() {
           permissaoAtiva={permissaoAtiva!} 
         />
       )}
+      {tab === 'obras' && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} />}
       {tab === 'permissoes' && (
         <PermissoesTab 
           colaboradorAtivo={colaboradorAtivo!} 
@@ -252,6 +254,42 @@ export default function FinanceiroPage() {
 // ════════════════════════════════════════════════════════
 //  TAB: DASHBOARD
 // ════════════════════════════════════════════════════════
+function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
+  const [obras, setObras] = useState<Obra[]>([])
+  const [obraId, setObraId] = useState('')
+  const [fotos, setFotos] = useState<any[]>([])
+  const [form, setForm] = useState({ nome: '', cliente: '', endereco: '', valor: '' })
+  const [legenda, setLegenda] = useState('')
+  const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
+  const load = useCallback(async () => {
+    const [{ data: o }, { data: f }] = await Promise.all([
+      supabase.from('obras').select('*').order('nome'),
+      supabase.from('fotos').select('*').not('obra_id', 'is', null).order('created_at', { ascending: false }).limit(60),
+    ])
+    setObras((o as Obra[]) || []); setFotos(f || []); if (!obraId && o?.[0]) setObraId(o[0].id)
+  }, [obraId])
+  useEffect(() => { void load() }, [load])
+  async function criarObra(e: React.FormEvent) {
+    e.preventDefault(); if (!form.nome.trim()) return toast('Informe o nome da obra.', 'error')
+    const { data, error } = await supabase.from('obras').insert({ nome: form.nome.trim(), cliente: form.cliente || null, endereco: form.endereco || null, valor_contrato: Number(form.valor) || 0, progresso: 0, status: 'Em dia' }).select().single()
+    if (error) return toast(error.message, 'error'); setForm({ nome: '', cliente: '', endereco: '', valor: '' }); setObraId(data.id); await load(); toast('Obra criada.', 'success')
+  }
+  async function anexarFoto(file: File) {
+    if (!obraId) return toast('Selecione uma obra primeiro.', 'error')
+    const path = `${obraId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`
+    const upload = await supabase.storage.from('comprovantes').upload(path, file)
+    if (upload.error) return toast(upload.error.message, 'error')
+    const { data: pub } = supabase.storage.from('comprovantes').getPublicUrl(path)
+    const { error } = await supabase.from('fotos').insert({ obra_id: obraId, imagem_url: pub.publicUrl, legenda: legenda || file.name, data_iso: new Date().toISOString().slice(0, 10) })
+    if (error) return toast(error.message, 'error'); setLegenda(''); await load(); toast('Foto anexada.', 'success')
+  }
+  const obra = obras.find(o => o.id === obraId); const fotosObra = fotos.filter(f => f.obra_id === obraId)
+  return <div style={{ display: 'grid', gap: 16 }}>
+    {podeGerenciar && <form onSubmit={criarObra} style={card}><h2 style={{ margin: '0 0 12px', fontSize: 16, color: C.ink }}>Nova obra</h2><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 9 }}><input style={input} placeholder="Nome da obra *" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /><input style={input} placeholder="Cliente" value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} /><input style={input} placeholder="Endereço" value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} /><input style={input} type="number" placeholder="Valor do contrato" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} /></div><button style={{ ...btn(C.amber), marginTop: 10 }}><Plus size={14} /> Criar obra</button></form>}
+    <div style={card}><h2 style={{ margin: '0 0 12px', fontSize: 16, color: C.ink }}>Métricas e fotos das obras</h2><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{obras.map(o => <button key={o.id} onClick={() => setObraId(o.id)} style={{ ...btnGhost, color: o.id === obraId ? C.amber : C.inkSoft }}>{o.nome}</button>)}</div>{obra ? <div style={{ marginTop: 14, display: 'grid', gap: 12 }}><div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}><span><b>Contrato:</b> {fmt(Number(obra.valor_contrato || 0))}</span><span><b>Progresso:</b> {obra.progresso}%</span><span><b>Fotos:</b> {fotosObra.length}</span></div>{podeGerenciar && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input style={{ ...input, maxWidth: 260 }} placeholder="Legenda da foto" value={legenda} onChange={e => setLegenda(e.target.value)} /><label style={{ ...btnGhost, cursor: 'pointer' }}><Camera size={14} /> Anexar foto<input hidden type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) void anexarFoto(f); e.currentTarget.value = '' }} /></label></div>}<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 9 }}>{fotosObra.map(f => <div key={f.id} style={{ border: `1px solid ${C.border}` }}><img src={f.imagem_url} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 110, objectFit: 'cover' }} /><div style={{ padding: 6, fontSize: 10, color: C.inkSoft }}>{f.legenda}</div></div>)}</div></div> : <p style={{ color: C.inkSoft }}>Nenhuma obra cadastrada.</p>}</div>
+  </div>
+}
+
 interface TabProps {
   colaboradorAtivo: Colaborador
   permissaoAtiva: ConfigPermissao
@@ -1412,7 +1450,6 @@ const ALL_APPS = [
   { id: 'financeiro',   nome: 'Financeiro' },
   { id: 'ponto',        nome: 'Ponto & RH' },
   { id: 'suprimentos',  nome: 'Suprimentos' },
-  { id: 'obras',        nome: 'Galeria de Obras' },
   { id: 'rdo',          nome: 'Diário de Obra' },
   { id: 'frota',        nome: 'Frota & GPS' },
 ]
