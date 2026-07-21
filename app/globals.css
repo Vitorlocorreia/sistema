@@ -46,6 +46,10 @@ div[style*="1.4fr 1.6fr 1fr 1.2fr"]::before {
   padding: 9px 8px;
   border-bottom: 1px solid var(--color-brand-border);
 }
+body[data-quadro-view="table"] div[style*="overflow-x: auto"],
+body[data-quadro-view="calendar"] div[style*="overflow-x: auto"] {
+  display: none !important;
+}
 
 /* Custom scrollbars for industrial tech feel */
 ::-webkit-scrollbar {

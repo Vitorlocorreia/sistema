@@ -11,6 +11,10 @@ import type { HistoricoEdicao, Quadro, QuadroCartao, QuadroColuna } from '@/lib/
 const field: React.CSSProperties = { width: '100%', background: '#0B0C0E', color: C.ink, border: `1px solid ${C.border}`, borderRadius: 4, padding: '9px 11px', outline: 'none', fontSize: 12 }
 const button: React.CSSProperties = { border: 0, borderRadius: 4, background: C.amber, color: '#090A0C', padding: '9px 13px', fontSize: 11, fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }
 const ghost: React.CSSProperties = { ...button, background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}` }
+const panel: React.CSSProperties = { background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 5, padding: 14 }
+const tableHead: React.CSSProperties = { background: '#16181C', color: C.inkSoft, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', padding: '9px 8px', borderBottom: `1px solid ${C.border}` }
+const tableCell: React.CSSProperties = { padding: '9px 8px', color: C.ink, borderBottom: `1px solid ${C.border}` }
+const calendarCard: React.CSSProperties = { display: 'grid', gap: 5, textAlign: 'left', padding: 13, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 5, cursor: 'pointer' }
 const priorityColor: Record<string, string> = { Baixa: '#9CA3AF', Média: '#3B82F6', Alta: '#F59E0B', Urgente: '#EF4444' }
 
 type CardDraft = { id?: string; coluna_id: string; titulo: string; descricao: string; responsavel: string; prioridade: string; prazo: string; etiquetas: string; anexos: Array<{ nome: string; url: string }> }
@@ -38,6 +42,7 @@ export default function QuadrosPage() {
   const [checklistText, setChecklistText] = useState('')
   const [customFields, setCustomFields] = useState<QuadroCampo[]>([])
   const [automations, setAutomations] = useState<QuadroAutomacao[]>([])
+  const [cardTimeline, setCardTimeline] = useState<HistoricoEdicao[]>([])
 
   const loadBoards = useCallback(async () => {
     const { data, error } = await supabase.from('quadros').select('*').eq('arquivado', false).order('ordem')
@@ -67,9 +72,19 @@ export default function QuadrosPage() {
   useEffect(() => { loadBoards() }, [loadBoards])
   useEffect(() => { loadBoard() }, [loadBoard])
   useEffect(() => {
-    if (!draft?.id) { setComments([]); return }
-    supabase.from('quadro_comentarios').select('*').eq('cartao_id', draft.id).order('created_at', { ascending: true }).then(({ data }) => setComments((data ?? []) as QuadroComentario[]))
+    if (!draft?.id) { setComments([]); setCardTimeline([]); return }
+    Promise.all([
+      supabase.from('quadro_comentarios').select('*').eq('cartao_id', draft.id).order('created_at', { ascending: true }),
+      supabase.from('historico_edicoes').select('*').eq('entidade_id', draft.id).order('created_at', { ascending: false }).limit(50),
+    ]).then(([commentsResult, timelineResult]) => {
+      setComments((commentsResult.data ?? []) as QuadroComentario[])
+      setCardTimeline((timelineResult.data ?? []) as HistoricoEdicao[])
+    })
   }, [draft?.id])
+  useEffect(() => {
+    document.body.dataset.quadroView = view
+    return () => { delete document.body.dataset.quadroView }
+  }, [view])
 
   const selectedBoard = boards.find(b => b.id === boardId)
   const filteredCards = useMemo(() => cards.filter(card => {
@@ -220,8 +235,14 @@ export default function QuadrosPage() {
     setHistory((data ?? []) as HistoricoEdicao[]); setShowHistory(true)
   }
 
-  return <>
+  const cardTimelinePanel = draft?.id ? <div style={{ ...overlay, zIndex: 120 }}><div style={{ ...modal, width: 'min(560px, 100%)' }}><header style={modalHeader}><strong>Linha do tempo do cartão</strong><button style={iconButton} onClick={() => setDraft(null)}><X size={17} /></button></header><div style={{ display: 'grid', gap: 9, maxHeight: '65vh', overflow: 'auto' }}>{cardTimeline.length ? cardTimeline.map(item => <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '10px 1fr', gap: 9, borderLeft: `2px solid ${C.amber}`, paddingLeft: 10 }}><span style={{ width: 7, height: 7, borderRadius: '50%', background: C.amber, marginLeft: -15, marginTop: 3 }} /><div><strong style={{ fontSize: 11 }}>{item.acao === 'UPDATE' ? 'Cartão atualizado' : item.acao === 'INSERT' ? 'Cartão criado' : 'Cartão removido'}</strong><div style={{ color: C.inkSoft, fontSize: 10, marginTop: 3 }}>{item.usuario_nome || 'Usuário'} · {new Date(item.created_at).toLocaleString('pt-BR')}</div></div></div>) : <p style={{ color: C.inkSoft, fontSize: 11 }}>Nenhuma alteração registrada ainda. As próximas movimentações aparecerão aqui.</p>}</div></div></div> : null
+
+  return <>{cardTimelinePanel}
     <PageTitle modulo="Gestão Visual" titulo="Quadros & Suprimentos" />
+    {selectedBoard && view !== 'board' && <div style={{ ...panel, marginBottom: 16, overflow: 'auto' }}>
+      {view === 'table' ? <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}><thead><tr>{['Cartão', 'Coluna', 'Responsável', 'Prioridade', 'Prazo', 'Etiquetas'].map(title => <th key={title} style={{ ...tableHead, textAlign: 'left' }}>{title}</th>)}</tr></thead><tbody>{filteredCards.map(card => { const column = columns.find(item => item.id === card.coluna_id); return <tr key={card.id} onClick={() => setDraft({ id: card.id, coluna_id: card.coluna_id, titulo: card.titulo, descricao: card.descricao || '', responsavel: card.responsavel || '', prioridade: card.prioridade, prazo: card.prazo || '', etiquetas: card.etiquetas.join(', '), anexos: card.anexos || [] })} style={{ cursor: 'pointer', borderBottom: `1px solid ${C.border}` }}><td style={tableCell}>{card.titulo}</td><td style={tableCell}>{column?.titulo || '—'}</td><td style={tableCell}>{card.responsavel || '—'}</td><td style={{ ...tableCell, color: priorityColor[card.prioridade] }}>{card.prioridade}</td><td style={tableCell}>{card.prazo ? new Date(card.prazo + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</td><td style={tableCell}>{card.etiquetas.join(', ') || '—'}</td></tr> })}</tbody></table> : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>{filteredCards.filter(card => card.prazo).sort((a, b) => String(a.prazo).localeCompare(String(b.prazo))).map(card => <button key={card.id} onClick={() => setDraft({ id: card.id, coluna_id: card.coluna_id, titulo: card.titulo, descricao: card.descricao || '', responsavel: card.responsavel || '', prioridade: card.prioridade, prazo: card.prazo || '', etiquetas: card.etiquetas.join(', '), anexos: card.anexos || [] })} style={{ ...calendarCard, borderLeft: `3px solid ${priorityColor[card.prioridade]}` }}><strong>{new Date(card.prazo + 'T00:00:00').toLocaleDateString('pt-BR')}</strong><span>{card.titulo}</span><small>{card.responsavel || 'Sem responsável'}</small></button>)}</div>}
+      {view === 'calendar' && filteredCards.every(card => !card.prazo) && <p style={{ color: C.inkSoft, fontSize: 12 }}>Nenhum cartão possui prazo definido.</p>}
+    </div>}
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
       <select style={{ ...field, width: 260 }} value={boardId} onChange={e => setBoardId(e.target.value)}><option value="">Selecione um quadro</option>{boards.map(b => <option key={b.id} value={b.id}>{b.nome}</option>)}</select>
       {selectedBoard && <><input style={{ ...field, width: 190 }} placeholder="Buscar cartões..." value={search} onChange={e => setSearch(e.target.value)} /><select style={{ ...field, width: 140 }} value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}><option value="todas">Todas prioridades</option>{['Baixa','Média','Alta','Urgente'].map(item => <option key={item}>{item}</option>)}</select><button style={ghost} onClick={() => setView('board')}>Quadro</button><button style={ghost} onClick={() => setView('table')}>Tabela</button><button style={ghost} onClick={() => setView('calendar')}>Calendário</button><button style={ghost} onClick={addCustomField}>+ Campo</button><button style={ghost} onClick={addAutomation}>⚡ Automação</button></>}
