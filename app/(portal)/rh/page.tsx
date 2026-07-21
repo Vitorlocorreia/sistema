@@ -230,6 +230,8 @@ export default function RhPage() {
 
   async function createInvite() {
     if (!inviteForm.nome.trim()) return toast('Informe o nome do candidato.', 'error')
+    const { data: authData } = await supabase.auth.getUser()
+    if (!authData.user) return toast('Sua sessão segura do Supabase não está ativa. Saia e entre novamente com um usuário Auth do RH.', 'error')
     const hours = Math.min(168, Math.max(1, Number(inviteForm.validade) || 72))
     setInviteSaving(true)
     const bytes = new Uint8Array(32)
