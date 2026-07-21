@@ -1417,13 +1417,6 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                       }}>
                         {c.status.toUpperCase()}
                       </span>
-                      {(podeAprovar || permissaoAtiva?.pode_lancar) && <select value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, marginTop: 6, padding: '4px 6px', fontSize: 10 }}>
-                        <option value="LanÃ§ado">LanÃ§ado</option>
-                        <option value="Aguardando aprovaÃ§Ã£o">Aguardando aprovaÃ§Ã£o</option>
-                        <option value="Liberado/OK">Liberado/OK</option>
-                        <option value="A pagar">A pagar</option>
-                        <option value="Pago">Pago</option>
-                      </select>}
                       {c.aprovado_por && (
                         <div style={{ fontSize: 9, color: '#34D399', marginTop: 4 }}>
                   ✓ Aprovado por: {c.aprovado_por}
@@ -1432,26 +1425,19 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                     </td>
                     <td style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', gap: 6 }}>
+                        {(podeAprovar || permissaoAtiva?.pode_lancar) && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, padding: '4px 6px', fontSize: 10 }}>
+                          <option value="Lançado">Lançado</option>
+                          <option value="Aguardando aprovação">Aguardando aprovação</option>
+                          <option value="Liberado/OK">Liberado/OK</option>
+                          <option value="A pagar">A pagar</option>
+                          <option value="Pago">Pago</option>
+                        </select>}
                         {aguardandoAprovacao && podeAprovar && (
                           <button onClick={() => aprovarLançamento(c.id)} title="Aprovar Lançamento" style={{ ...btn(), padding: '4px 8px', fontSize: 10 }}>
                             <Check size={11} /> Aprovar
                           </button>
                         )}
 
-                        {c.status === 'Lançado' && (
-                          <button onClick={() => avancarStatus(c)} style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}>Enviar aprovação</button>
-                        )}
-
-                        {c.status === 'Liberado/OK' && podePagar && (
-                          <button onClick={() => avancarStatus(c)} style={{ ...btnGhost, padding: '4px 8px', fontSize: 10 }}>A pagar</button>
-                        )}
-
-                        {c.status === 'A pagar' && podePagar && (
-                          <button onClick={() => marcarPago(c.id)} title="Marcar como Pago" style={{ ...btnGhost, padding: '4px 10px', fontSize: 10, color: '#34D399', borderColor: '#34D39944' }}>
-                            <CheckCircle size={11} /> Pago
-                          </button>
-                        )}
-                        
                         {podeDeletar && (
                           <button onClick={() => excluir(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}><X size={13} /></button>
                         )}
