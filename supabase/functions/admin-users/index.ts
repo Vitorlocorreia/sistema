@@ -3,6 +3,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+async function findAuthUserByEmail(email: string) {
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) throw error
+    const user = data.users.find(item => item.email?.toLowerCase() === email.toLowerCase())
+    if (user) return user
+    if (data.users.length < 1000) break
+  }
+  return null
+}
 
 async function isAdmin(request: Request) {
   const token = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '')
@@ -32,9 +42,9 @@ Deno.serve(async request => {
 
       // Auth e tabela de colaboradores sao fontes separadas: removemos os dois.
       if (collaborator.email) {
-        const { data: authUser } = await admin.auth.admin.getUserByEmail(collaborator.email)
-        if (authUser.user) {
-          const { error: deleteAuthError } = await admin.auth.admin.deleteUser(authUser.user.id)
+        const authUser = await findAuthUserByEmail(collaborator.email)
+        if (authUser) {
+          const { error: deleteAuthError } = await admin.auth.admin.deleteUser(authUser.id)
           if (deleteAuthError) return json({ error: deleteAuthError.message }, 400)
         }
       }
