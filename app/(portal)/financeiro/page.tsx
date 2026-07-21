@@ -1537,7 +1537,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   const criarColaborador = async () => {
     if (!colForm.nome.trim()) return
     if (!colForm.email.trim()) { alert('Informe um e-mail para o colaborador.'); return }
-    if (!colForm.senha.trim()) { alert('Defina uma senha de acesso para o colaborador.'); return }
+    if (colForm.senha.trim().length < 8) { alert('Defina uma senha de acesso com no mínimo 8 caracteres.'); return }
     setSavingCol(true)
     
     const empresaIdDestino = colaboradorAtivo.cargo === 'admin_empresa'
@@ -1549,7 +1549,15 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
     })
 
     if (error || result?.error) {
-      alert('Erro ao criar colaborador: ' + (result?.error || error?.message || 'não foi possível concluir'))
+      let detail = result?.error || error?.message || 'não foi possível concluir'
+      const response = (error as { context?: Response } | null)?.context
+      if (response) {
+        try {
+          const body = await response.clone().json() as { error?: string }
+          detail = body.error || detail
+        } catch { /* mantém a mensagem padrão */ }
+      }
+      alert('Erro ao criar colaborador: ' + detail)
     } else {
       setColForm({
         nome: '',
@@ -1835,7 +1843,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                   </div>
                   <div>
                     <label style={label}>Senha de Acesso *</label>
-                    <input style={input} type="password" value={colForm.senha} onChange={e => setColForm(c => ({ ...c, senha: e.target.value }))} placeholder="Mínimo 6 caracteres" />
+                    <input style={input} type="password" minLength={8} value={colForm.senha} onChange={e => setColForm(c => ({ ...c, senha: e.target.value }))} placeholder="Mínimo 8 caracteres" />
                   </div>
                   
                   {isGeral ? (
