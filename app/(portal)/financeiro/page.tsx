@@ -683,7 +683,11 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       empresa_id: form.empresa_id || null,
       prazo_pagamento: 0
     }
-    await supabase.from('fornecedores').insert(payload)
+    const { error } = await supabase.from('fornecedores').insert(payload)
+    if (error) {
+      setSaving(false)
+      return toast(`Não foi possível salvar o fornecedor: ${error.message}`, 'error')
+    }
     setForm({
       razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ',
       telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
@@ -691,7 +695,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     })
     setShowForm(false)
     setSaving(false)
-    load()
+    await load()
+    toast('Fornecedor cadastrado.', 'success')
   }
 
   const remove = async (id: string) => {
@@ -1259,7 +1264,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     const status = proximo[conta.status]
     if (!status) return
     await supabase.from('contas').update({ status }).eq('id', conta.id)
-    load()
+    await load()
+    toast('Fornecedor cadastrado.', 'success')
   }
 
   const alterarStatus = async (id: string, status: ContaComRelacoes['status']) => {
