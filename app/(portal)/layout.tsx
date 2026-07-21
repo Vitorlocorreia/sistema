@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutGrid, Wallet, DollarSign, Clock, Package,
-  Camera, FileText, Truck, ChevronRight, GripVertical, Settings, X, Menu, LogOut
+  Camera, FileText, Truck, ChevronRight, GripVertical, Settings, X, Menu, LogOut, Users
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import type { Colaborador } from '@/lib/types'
@@ -11,8 +11,9 @@ import { motion, AnimatePresence } from 'motion/react'
 
 const defaultApps = [
   { id: 'financeiro',   nome: 'Financeiro',       sub: 'Módulo Nativo',  status: 'novo',      icone: 'DollarSign' },
-  { id: 'ponto',        nome: 'Ponto & RH',       sub: 'FacePonto',      status: 'atalho',    icone: 'Clock',     url: 'https://faceponto.com.br' },
-  { id: 'suprimentos',  nome: 'Suprimentos',      sub: 'Portal Nativo',  status: 'novo',      icone: 'Package'    },
+  { id: 'rh',           nome: 'Gestão de RH',     sub: 'Portal Nativo',  status: 'novo',      icone: 'Users' },
+  { id: 'ponto',        nome: 'Controle de Ponto',sub: 'FacePonto',      status: 'atalho',    icone: 'Clock',     url: 'https://faceponto.com.br' },
+  { id: 'suprimentos',  nome: 'Quadros & Suprimentos', sub: 'Trello Editável', status: 'novo', icone: 'Package' },
   { id: 'obras',        nome: 'Galeria de Obras', sub: 'Google Drive',   status: 'integrado', icone: 'Camera'     },
   { id: 'rdo',          nome: 'Diário de Obra',   sub: 'Escout',         status: 'novo',      icone: 'FileText'   },
   { id: 'frota',        nome: 'Frota & GPS',      sub: 'Infleet',        status: 'atalho',    icone: 'Truck',     url: 'https://app.infleet.com.br' },
@@ -23,7 +24,7 @@ import { EmbeddedBrowser } from '@/components/EmbeddedBrowser'
 import { supabase } from '@/lib/supabase'
 
 const iconMap: Record<string, any> = {
-  DollarSign, Clock, Package, Camera, FileText, Truck
+  DollarSign, Clock, Package, Camera, FileText, Truck, Users
 }
 
 const STORAGE_KEY = 'sidebar_order'
@@ -75,6 +76,7 @@ function cargoLabel(cargo: string): string {
     admin_empresa: 'Admin da Empresa',
     operador:      'Operador',
     visualizador:  'Visualizador',
+    rh:            'RH / Admissões',
   }
   return labels[cargo] || cargo
 }
@@ -195,12 +197,14 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     if (!authChecked || appsAutorizados.length === 0) return
     const appAcessado = defaultApps.find(app => pathname.startsWith(`/${app.id}`))
-    if (appAcessado && !appsAutorizados.includes(appAcessado.id)) {
+    const acessoHerdado = appAcessado?.id === 'rh' && appsAutorizados.includes('ponto')
+    if (appAcessado && !appsAutorizados.includes(appAcessado.id) && !acessoHerdado) {
       router.replace('/')
     }
   }, [pathname, authChecked, appsAutorizados, router])
 
-  function handleLogout() {
+  async function handleLogout() {
+    await supabase.auth.signOut()
     localStorage.removeItem(SESSION_KEY)
     localStorage.removeItem('perfil_ativo')
     invalidateAppsCache()
@@ -208,7 +212,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   }
 
   const sortedApps = order
-    .filter(id => appsAutorizados.includes(id))
+    .filter(id => appsAutorizados.includes(id) || (id === 'rh' && appsAutorizados.includes('ponto')))
     .map(id => defaultApps.find(a => a.id === id)!)
     .filter(Boolean)
 

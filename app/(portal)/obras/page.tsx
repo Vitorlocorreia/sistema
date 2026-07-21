@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Image as ImageIcon, Calendar, Eye, Sliders, Zap, X, Plus, Trash2, Edit3, MapPin, User, DollarSign, Check } from 'lucide-react'
+import { Image as ImageIcon, Calendar, Eye, Sliders, Zap, X, Plus, Trash2, Edit3, MapPin, User, DollarSign, Check, Folder, ExternalLink, TrendingUp, TrendingDown, Receipt, Ruler, FilePlus2 } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { PageTitle } from '@/components/PageTitle'
 import { C } from '@/lib/tokens'
@@ -136,6 +136,13 @@ export default function Obras() {
   const [fotosList, setFotosList] = useState<any[]>([])
   const [obrasList, setObrasList] = useState<Obra[]>([])
   const [loading, setLoading] = useState(true)
+  const [pastas, setPastas] = useState<any[]>([])
+  const [medicoes, setMedicoes] = useState<any[]>([])
+  const [contas, setContas] = useState<any[]>([])
+  const [faturamentos, setFaturamentos] = useState<any[]>([])
+  const [pastaSelecionada, setPastaSelecionada] = useState('')
+  const [showMedicaoForm, setShowMedicaoForm] = useState(false)
+  const [medicaoForm, setMedicaoForm] = useState({ numero: '', periodo_inicio: '', periodo_fim: '', valor_medido: '', percentual: '', observacoes: '' })
 
   const [obraSelecionada, setObraSelecionada] = useState<string>('')
   const [filtroObra, setFiltroObra] = useState<string>('Todas')
@@ -174,15 +181,27 @@ export default function Obras() {
     setLoading(true)
     const [
       { data: f },
-      { data: o }
+      { data: o },
+      { data: p },
+      { data: m },
+      { data: c },
+      { data: fat }
     ] = await Promise.all([
       supabase.from('fotos').select('*, obra:obras(nome)').order('data_iso'),
-      supabase.from('obras').select('*').order('nome')
+      supabase.from('obras').select('*').order('nome'),
+      supabase.from('galeria_pastas').select('*, obra:obras(nome)').order('ordem'),
+      supabase.from('medicoes').select('*').order('periodo_fim', { ascending: false }),
+      supabase.from('contas').select('id,obra_id,tipo,valor,status,data_previsao'),
+      supabase.from('faturamentos').select('*').order('data_previsao', { ascending: false })
     ])
 
     const list = f ?? []
     setFotosList(list)
     setObrasList(o ?? [])
+    setPastas(p ?? [])
+    setMedicoes(m ?? [])
+    setContas(c ?? [])
+    setFaturamentos(fat ?? [])
 
     const obrasWithPhotos = [...new Set(list.map((item: any) => item.obra?.nome).filter(Boolean))] as string[]
     if (obrasWithPhotos.length > 0) {
@@ -301,10 +320,11 @@ export default function Obras() {
   }, [])
 
   const fotosFiltradas = useMemo(() => {
-    return filtroObra === 'Todas'
+    const porObra = filtroObra === 'Todas'
       ? fotosList
       : fotosList.filter((f) => f.obra?.nome === filtroObra)
-  }, [fotosList, filtroObra])
+    return pastaSelecionada ? porObra.filter(f => f.pasta_id === pastaSelecionada) : porObra
+  }, [fotosList, filtroObra, pastaSelecionada])
 
   // Calculate elapsed days
   const diasDecorridos = useMemo(() => {
@@ -324,6 +344,64 @@ export default function Obras() {
 
   // Apenas Administradores e Operadores podem gerenciar obras
   const podeGerenciar = colaboradorLogado?.cargo === 'admin_geral' || colaboradorLogado?.cargo === 'admin_empresa' || colaboradorLogado?.cargo === 'operador'
+
+  const criarPasta = async (parent_id: string | null = null) => {
+    const obra = obrasList.find(o => o.nome === obraSelecionada) || obrasList[0]
+    if (!obra) return toast('Cadastre uma obra primeiro.', 'error')
+    const nome = prompt(parent_id ? 'Nome da subpasta:' : 'Nome da pasta:')?.trim()
+    if (!nome) return
+    const drive_url = prompt('Link da pasta no Google Drive (opcional):')?.trim() || null
+    const { error } = await supabase.from('galeria_pastas').insert({ obra_id: obra.id, parent_id, nome, drive_url, ordem: pastas.length })
+    if (error) return toast('As pastas exigem uma sessão Supabase Auth.', 'error')
+    loadData()
+  }
+
+  const editarPasta = async (pasta: any) => {
+    const nome = prompt('Novo nome:', pasta.nome)?.trim(); if (!nome) return
+    const drive_url = prompt('Link do Google Drive:', pasta.drive_url || '')?.trim() || null
+    await supabase.from('galeria_pastas').update({ nome, drive_url, updated_at: new Date().toISOString() }).eq('id', pasta.id); loadData()
+  }
+
+  const excluirPasta = async (pasta: any) => {
+    if (!confirm(`Excluir “${pasta.nome}” e suas subpastas?`)) return
+    await supabase.from('galeria_pastas').delete().eq('id', pasta.id); if (pastaSelecionada === pasta.id) setPastaSelecionada(''); loadData()
+  }
+
+  const obraAtual = obrasList.find(o => o.nome === obraSelecionada) ?? obrasList[0]
+  const medicoesObra = obraAtual ? medicoes.filter(m => m.obra_id === obraAtual.id) : []
+  const contasObra = obraAtual ? contas.filter(c => c.obra_id === obraAtual.id) : []
+  const indicadores = useMemo(() => {
+    const custoPago = contasObra.filter(c => c.tipo === 'pagar' && c.status === 'Pago').reduce((s, c) => s + Number(c.valor), 0)
+    const custoAberto = contasObra.filter(c => c.tipo === 'pagar' && c.status !== 'Pago').reduce((s, c) => s + Number(c.valor), 0)
+    const receitaRecebida = contasObra.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + Number(c.valor), 0)
+    const valorMedido = medicoesObra.filter(m => m.status !== 'Rascunho').reduce((s, m) => s + Number(m.valor_medido), 0)
+    const ids = new Set(medicoesObra.map(m => m.id))
+    const valorFaturado = faturamentos.filter(f => ids.has(f.medicao_id)).reduce((s, f) => s + Number(f.valor), 0)
+    const contrato = Number(obraAtual?.valor_contrato || 0)
+    const custoProjetado = custoPago + custoAberto
+    const resultadoRealizado = receitaRecebida - custoPago
+    const lucroProjetado = contrato - custoProjetado
+    const margem = contrato > 0 ? (lucroProjetado / contrato) * 100 : 0
+    return { custoPago, custoAberto, receitaRecebida, valorMedido, valorFaturado, contrato, custoProjetado, resultadoRealizado, lucroProjetado, margem }
+  }, [contasObra, medicoesObra, faturamentos, obraAtual])
+
+  const salvarMedicao = async () => {
+    if (!obraAtual || !medicaoForm.periodo_inicio || !medicaoForm.periodo_fim || !medicaoForm.valor_medido) return toast('Preencha período e valor da medição.', 'error')
+    const numero = medicaoForm.numero.trim() || `BM-${String(medicoesObra.length + 1).padStart(2, '0')}`
+    const { error } = await supabase.from('medicoes').insert({ obra_id: obraAtual.id, numero, periodo_inicio: medicaoForm.periodo_inicio, periodo_fim: medicaoForm.periodo_fim, valor_medido: Number(medicaoForm.valor_medido), percentual: Number(medicaoForm.percentual) || 0, observacoes: medicaoForm.observacoes || null, status: 'Rascunho' })
+    if (error) return toast(error.message, 'error')
+    setMedicaoForm({ numero: '', periodo_inicio: '', periodo_fim: '', valor_medido: '', percentual: '', observacoes: '' }); setShowMedicaoForm(false); toast('Boletim de medição criado.', 'success'); loadData()
+  }
+
+  const avancarMedicao = async (medicao: any) => {
+    const proximo = medicao.status === 'Rascunho' ? 'Aprovada' : 'Faturada'
+    const { error } = await supabase.from('medicoes').update({ status: proximo, updated_at: new Date().toISOString() }).eq('id', medicao.id)
+    if (error) return toast(error.message, 'error')
+    if (proximo === 'Faturada' && !faturamentos.some(f => f.medicao_id === medicao.id)) await supabase.from('faturamentos').insert({ medicao_id: medicao.id, data_previsao: medicao.periodo_fim, valor: medicao.valor_medido, status: 'Previsto', observacoes: `Faturamento do boletim ${medicao.numero}` })
+    toast(proximo === 'Aprovada' ? 'Medição aprovada.' : 'Faturamento gerado.', 'success'); loadData()
+  }
+
+  const fmtMoney = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -345,6 +423,38 @@ export default function Obras() {
         <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando fotos e evoluções...</p>
       ) : (
         <>
+          <Panel title="Métricas, custos e medições da obra" action={podeGerenciar && <button style={btn()} onClick={() => setShowMedicaoForm(v => !v)}><FilePlus2 size={13}/>Nova medição</button>}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+              {obrasList.map(obra => <button key={obra.id} onClick={() => setObraSelecionada(obra.nome)} style={{ ...btnGhost, padding: '5px 10px', color: obraAtual?.id === obra.id ? C.amber : C.inkSoft, borderColor: obraAtual?.id === obra.id ? C.amber : C.border }}>{obra.nome}</button>)}
+            </div>
+            {obraAtual && <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(155px,1fr))', gap: 10 }}>
+                <MetricCard icon={DollarSign} label="Contrato" value={fmtMoney(indicadores.contrato)} color={C.ink}/>
+                <MetricCard icon={TrendingDown} label="Custo realizado" value={fmtMoney(indicadores.custoPago)} color={C.red}/>
+                <MetricCard icon={Receipt} label="Custo comprometido" value={fmtMoney(indicadores.custoAberto)} color={C.amber}/>
+                <MetricCard icon={Ruler} label="Valor medido" value={fmtMoney(indicadores.valorMedido)} color="#60A5FA"/>
+                <MetricCard icon={Check} label="Faturado" value={fmtMoney(indicadores.valorFaturado)} color={C.green}/>
+                <MetricCard icon={Receipt} label="Receita recebida" value={fmtMoney(indicadores.receitaRecebida)} color={C.green}/>
+                <MetricCard icon={indicadores.resultadoRealizado >= 0 ? TrendingUp : TrendingDown} label="Resultado realizado" value={fmtMoney(indicadores.resultadoRealizado)} color={indicadores.resultadoRealizado >= 0 ? C.green : C.red}/>
+                <MetricCard icon={TrendingUp} label="Lucro projetado" value={fmtMoney(indicadores.lucroProjetado)} color={indicadores.lucroProjetado >= 0 ? C.green : C.red} detail={`${indicadores.margem.toFixed(1)}% de margem`}/>
+              </div>
+              <div style={{ marginTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.inkSoft, marginBottom: 5 }}><span>Avanço físico informado</span><strong>{obraAtual.progresso}%</strong></div><div style={{ height: 7, background: '#0B0C0E', border: `1px solid ${C.border}` }}><div style={{ height: '100%', width: `${Math.min(100, obraAtual.progresso)}%`, background: C.amber }}/></div></div>
+              {showMedicaoForm && <div style={{ marginTop: 14, background: '#0B0C0E', border: `1px solid ${C.border}`, padding: 12 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 9 }}><input style={inputStyle} placeholder="Número (automático)" value={medicaoForm.numero} onChange={e => setMedicaoForm({...medicaoForm,numero:e.target.value})}/><input title="Início do período" style={inputStyle} type="date" value={medicaoForm.periodo_inicio} onChange={e => setMedicaoForm({...medicaoForm,periodo_inicio:e.target.value})}/><input title="Fim do período" style={inputStyle} type="date" value={medicaoForm.periodo_fim} onChange={e => setMedicaoForm({...medicaoForm,periodo_fim:e.target.value})}/><input style={inputStyle} type="number" placeholder="Valor medido" value={medicaoForm.valor_medido} onChange={e => setMedicaoForm({...medicaoForm,valor_medido:e.target.value})}/><input style={inputStyle} type="number" placeholder="% executado" value={medicaoForm.percentual} onChange={e => setMedicaoForm({...medicaoForm,percentual:e.target.value})}/><input style={inputStyle} placeholder="Observações" value={medicaoForm.observacoes} onChange={e => setMedicaoForm({...medicaoForm,observacoes:e.target.value})}/></div><button style={{ ...btn(), marginTop: 9 }} onClick={salvarMedicao}><Plus size={13}/>Salvar boletim</button>
+              </div>}
+              <div style={{ marginTop: 14, display: 'grid', gap: 7 }}>{medicoesObra.map(m => <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 10, background: C.bgCard, border: `1px solid ${C.border}`, padding: '9px 11px', fontSize: 11 }}><strong style={{ color: C.ink }}>{m.numero}</strong><span style={{ color: C.inkSoft }}>{fmtDate(m.periodo_inicio)} a {fmtDate(m.periodo_fim)}</span><span style={{ flex: 1, color: '#60A5FA', fontWeight: 800 }}>{fmtMoney(Number(m.valor_medido))}</span><span style={{ color: m.status === 'Faturada' ? C.green : m.status === 'Aprovada' ? '#60A5FA' : C.amber, fontWeight: 900, fontSize: 9 }}>{m.status.toUpperCase()}</span>{podeGerenciar && m.status !== 'Faturada' && <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 9 }} onClick={() => avancarMedicao(m)}>{m.status === 'Rascunho' ? 'Aprovar' : 'Faturar'}</button>}</div>)}{!medicoesObra.length && <p style={{ color: C.inkSoft, fontSize: 11 }}>Nenhum boletim de medição nesta obra.</p>}</div>
+            </>}
+          </Panel>
+          <Panel title="Pastas editáveis por obra">
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}><span style={{ color: C.inkSoft, fontSize: 11 }}>Organize quantas pastas e subpastas precisar e vincule cada uma ao Google Drive.</span>{podeGerenciar && <button style={btn()} onClick={() => criarPasta(null)}><Plus size={13}/>Nova pasta</button>}</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 9 }}>
+              {pastas.filter(p => !p.parent_id).map(p => <div key={p.id} style={{ background: C.bgCard, border: `1px solid ${pastaSelecionada === p.id ? C.amber : C.border}`, padding: 11 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><button onClick={() => setPastaSelecionada(p.id)} style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, flex: 1 }}><Folder size={16} color={C.amber}/><strong style={{ fontSize: 12 }}>{p.nome}</strong></button>{p.drive_url && <a href={p.drive_url} target="_blank" rel="noreferrer" style={{ color: C.green }}><ExternalLink size={13}/></a>}{podeGerenciar && <><button style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }} onClick={() => criarPasta(p.id)}><Plus size={13}/></button><button style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }} onClick={() => editarPasta(p)}><Edit3 size={12}/></button><button style={{ all: 'unset', cursor: 'pointer', color: C.red }} onClick={() => excluirPasta(p)}><Trash2 size={12}/></button></>}</div>
+                {pastas.filter(s => s.parent_id === p.id).map(s => <div key={s.id} style={{ margin:'8px 0 0 22px', display:'flex', gap:6, alignItems:'center', fontSize:10, color:C.inkSoft }}><Folder size={12}/><button onClick={() => setPastaSelecionada(s.id)} style={{ all:'unset',cursor:'pointer',flex:1,color:pastaSelecionada===s.id?C.amber:C.inkSoft }}>{s.nome}</button>{s.drive_url&&<a href={s.drive_url} target="_blank" rel="noreferrer" style={{color:C.green}}><ExternalLink size={11}/></a>}{podeGerenciar&&<button style={{all:'unset',cursor:'pointer'}} onClick={()=>editarPasta(s)}><Edit3 size={10}/></button>}</div>)}
+              </div>)}
+              {!pastas.length && <p style={{ color:C.inkSoft,fontSize:11 }}>Nenhuma pasta criada.</p>}
+            </div>
+          </Panel>
           {/* Before / After Progress Slider */}
           {obrasComFotos.length > 0 ? (
             <Panel
@@ -764,4 +874,8 @@ function Row({ label, value, color }: { label: string; value: string; color?: st
       <span style={{ color: color || C.ink, fontWeight: 800 }}>{value}</span>
     </div>
   )
+}
+
+function MetricCard({ icon: Icon, label, value, color, detail }: { icon: React.ElementType; label: string; value: string; color: string; detail?: string }) {
+  return <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}`, padding: 12 }}><div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.inkSoft, fontSize: 9, fontWeight: 900, textTransform: 'uppercase' }}><Icon size={13} color={color}/>{label}</div><div style={{ color, fontSize: 16, fontWeight: 900, marginTop: 7 }}>{value}</div>{detail && <div style={{ color: C.inkSoft, fontSize: 9, marginTop: 3 }}>{detail}</div>}</div>
 }

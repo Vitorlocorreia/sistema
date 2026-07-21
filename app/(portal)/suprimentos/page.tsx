@@ -1,921 +1,169 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { 
-  Plus, Layers, Calendar, User, DollarSign, Building, 
-  ArrowRight, ArrowLeft, Eye, Check, X, Truck, PackageCheck,
-  AlertCircle, ChevronRight, Edit3, ShoppingBag, ClipboardList, Clock,
-  Wrench, Shield, Hammer, Briefcase, Tag, Search
-} from 'lucide-react'
-import { Panel } from '@/components/Panel'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Archive, ChevronLeft, ChevronRight, Clock3, History, MoreHorizontal, Plus, Save, Trash2, X } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
-import { ConfirmModal } from '@/components/ConfirmModal'
 import { toast } from '@/components/Toast'
-import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
-import { motion, AnimatePresence } from 'motion/react'
-import type { Obra, Suprimento, Tarefa } from '@/lib/types'
+import { C } from '@/lib/tokens'
+import type { HistoricoEdicao, Quadro, QuadroCartao, QuadroColuna } from '@/lib/types'
 
-// ─── STYLES & HELPERS ────────────────────────────────────────────────────────
-const input: React.CSSProperties = {
-  background: '#0B0C0E',
-  border: `1px solid ${C.border}`,
-  borderRadius: 4,
-  color: C.ink,
-  padding: '8px 12px',
-  fontSize: 12,
-  width: '100%',
-  outline: 'none',
-}
+const field: React.CSSProperties = { width: '100%', background: '#0B0C0E', color: C.ink, border: `1px solid ${C.border}`, borderRadius: 4, padding: '9px 11px', outline: 'none', fontSize: 12 }
+const button: React.CSSProperties = { border: 0, borderRadius: 4, background: C.amber, color: '#090A0C', padding: '9px 13px', fontSize: 11, fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }
+const ghost: React.CSSProperties = { ...button, background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}` }
+const priorityColor: Record<string, string> = { Baixa: '#9CA3AF', Média: '#3B82F6', Alta: '#F59E0B', Urgente: '#EF4444' }
 
-const label: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  color: C.inkSoft,
-  textTransform: 'uppercase' as const,
-  display: 'block',
-  marginBottom: 4,
-}
+type CardDraft = { id?: string; coluna_id: string; titulo: string; descricao: string; responsavel: string; prioridade: string; prazo: string; etiquetas: string }
+const emptyCard = (coluna_id = ''): CardDraft => ({ coluna_id, titulo: '', descricao: '', responsavel: '', prioridade: 'Média', prazo: '', etiquetas: '' })
 
-const selectStyle: React.CSSProperties = {
-  ...input,
-  cursor: 'pointer',
-}
-
-const fmt = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
-
-const fmtDate = (d: string) =>
-  new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
-
-const btn = (accent = C.amber): React.CSSProperties => ({
-  background: accent, color: '#0B0C0E', border: 'none', borderRadius: 4,
-  padding: '8px 18px', fontSize: 11, fontWeight: 900, cursor: 'pointer',
-  display: 'flex', alignItems: 'center', gap: 6,
-  textTransform: 'uppercase' as const, letterSpacing: .4,
-})
-
-const btnGhost: React.CSSProperties = {
-  background: 'none', border: `1px solid ${C.border}`, borderRadius: 4,
-  padding: '8px 16px', fontSize: 11, fontWeight: 700, color: C.inkSoft, cursor: 'pointer',
-}
-
-// Colunas Kanban de Suprimentos
-const colunasSuprimentos = [
-  { id: 'Solicitado', label: '1. Solicitado', color: C.inkSoft },
-  { id: 'Em Cotação', label: '2. Em Cotação', color: '#3B82F6' },
-  { id: 'Aprovação',  label: '3. Aguardando Aprovação', color: C.amber },
-  { id: 'Em Trânsito', label: '4. Em Trânsito', color: C.green },
-  { id: 'Entregue',   label: '5. Entregue', color: '#6B7280' }
-] as const
-
-type StatusSuprimento = typeof colunasSuprimentos[number]['id']
-
-// ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
-export default function Suprimentos() {
-  const [supplies, setSupplies] = useState<(Suprimento & { obra?: Pick<Obra, 'nome'> })[]>([])
-  const [obras, setObras] = useState<Obra[]>([])
+export default function QuadrosPage() {
+  const [boards, setBoards] = useState<Quadro[]>([])
+  const [boardId, setBoardId] = useState('')
+  const [columns, setColumns] = useState<QuadroColuna[]>([])
+  const [cards, setCards] = useState<QuadroCartao[]>([])
+  const [history, setHistory] = useState<HistoricoEdicao[]>([])
   const [loading, setLoading] = useState(true)
+  const [showHistory, setShowHistory] = useState(false)
+  const [draft, setDraft] = useState<CardDraft | null>(null)
 
-  const [selectedItem, setSelectedItem] = useState<any | null>(null)
-  const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [confirmApproveItem, setConfirmApproveItem] = useState<any | null>(null)
-
-  // Filters
-  const [selectedObra, setSelectedObra] = useState('Todas')
-
-  // Form states
-  const [newMaterial, setNewMaterial] = useState('')
-  const [newQuantidade, setNewQuantidade] = useState('')
-  const [newUnidade, setNewUnidade] = useState('un')
-  const [newObraId, setNewObraId] = useState('')
-  const [newPrioridade, setNewPrioridade] = useState<'alta' | 'media' | 'baixa'>('media')
-  const [newValor, setNewValor] = useState('')
-  const [newFornecedor, setNewFornecedor] = useState('')
-
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    const [{ data: s }, { data: o }] = await Promise.all([
-      supabase.from('suprimentos').select('*, obra:obras(nome)').order('created_at', { ascending: false }),
-      supabase.from('obras').select('*').order('nome'),
-    ])
-    setSupplies(s ?? [])
-    setObras(o ?? [])
-    
-    if (o && o.length > 0) {
-      setNewObraId(prev => prev || o[0].id)
-    }
+  const loadBoards = useCallback(async () => {
+    const { data, error } = await supabase.from('quadros').select('*').eq('arquivado', false).order('ordem')
+    if (error) { toast('Entre com Supabase Auth para acessar os quadros.', 'error'); setLoading(false); return }
+    const result = (data ?? []) as Quadro[]
+    setBoards(result)
+    setBoardId(current => current || result[0]?.id || '')
     setLoading(false)
   }, [])
 
-  useEffect(() => { loadData() }, [loadData])
+  const loadBoard = useCallback(async () => {
+    if (!boardId) { setColumns([]); setCards([]); return }
+    const { data: cols } = await supabase.from('quadro_colunas').select('*').eq('quadro_id', boardId).order('ordem')
+    const typedCols = (cols ?? []) as QuadroColuna[]
+    setColumns(typedCols)
+    if (!typedCols.length) { setCards([]); return }
+    const { data: cs } = await supabase.from('quadro_cartoes').select('*').in('coluna_id', typedCols.map(c => c.id)).eq('arquivado', false).order('ordem')
+    setCards((cs ?? []) as QuadroCartao[])
+  }, [boardId])
 
-  const today = new Date().toISOString().split('T')[0]
-  const isOverdue = (item: Suprimento) =>
-    !!item.data_vencimento && item.data_vencimento < today && item.status !== 'Entregue'
+  useEffect(() => { loadBoards() }, [loadBoards])
+  useEffect(() => { loadBoard() }, [loadBoard])
 
-  const filteredSupplies = useMemo(() => {
-    return supplies.filter(s => selectedObra === 'Todas' || s.obra?.nome === selectedObra)
-  }, [supplies, selectedObra])
+  const selectedBoard = boards.find(b => b.id === boardId)
+  const cardsByColumn = useMemo(() => Object.fromEntries(columns.map(c => [c.id, cards.filter(x => x.coluna_id === c.id)])), [columns, cards])
 
-  const suppliesByStatus = useMemo(() => {
-    const map: Record<string, typeof supplies> = {
-      'Solicitado': [],
-      'Em Cotação': [],
-      'Aprovação': [],
-      'Em Trânsito': [],
-      'Entregue': []
-    }
-    filteredSupplies.forEach(s => {
-      if (map[s.status]) {
-        map[s.status].push(s)
-      }
-    })
-    return map
-  }, [filteredSupplies])
-
-  const moveItem = async (id: string, direction: 'forward' | 'backward') => {
-    const statusOrder: StatusSuprimento[] = ['Solicitado', 'Em Cotação', 'Aprovação', 'Em Trânsito', 'Entregue']
-    const item = supplies.find(s => s.id === id)
-    if (!item) return
-
-    const currentIndex = statusOrder.indexOf(item.status as StatusSuprimento)
-    const nextIndex = currentIndex + (direction === 'forward' ? 1 : -1)
-
-    if (nextIndex >= 0 && nextIndex < statusOrder.length) {
-      const nextStatus = statusOrder[nextIndex]
-      const { error } = await supabase.from('suprimentos').update({ status: nextStatus }).eq('id', id)
-      if (error) {
-        toast('Erro ao atualizar status', 'error')
-        return
-      }
-      toast(`Status alterado para ${nextStatus}`, 'success')
-      loadData()
-      if (selectedItem?.id === id) {
-        setSelectedItem({ ...selectedItem, status: nextStatus })
-      }
-    }
+  async function createBoard() {
+    const nome = prompt('Nome do novo quadro:')?.trim()
+    if (!nome) return
+    const { data, error } = await supabase.from('quadros').insert({ nome, ordem: boards.length }).select().single()
+    if (error) return toast(error.message, 'error')
+    setBoards(v => [...v, data as Quadro]); setBoardId(data.id); toast('Quadro criado.', 'success')
   }
 
-  const approvePurchase = async (id: string) => {
-    const { error } = await supabase
-      .from('suprimentos')
-      .update({ status: 'Em Trânsito', fornecedor: confirmApproveItem.fornecedor || 'Fornecedor Homologado' })
-      .eq('id', id)
-
-    if (error) {
-      toast('Erro ao aprovar pedido', 'error')
-      return
-    }
-
-    setConfirmApproveItem(null)
-    setSelectedItem(null)
-    toast('Compra aprovada! Material movido para Em Trânsito.', 'success')
-    loadData()
+  async function renameBoard() {
+    if (!selectedBoard) return
+    const nome = prompt('Novo nome do quadro:', selectedBoard.nome)?.trim()
+    if (!nome) return
+    const { error } = await supabase.from('quadros').update({ nome, updated_at: new Date().toISOString() }).eq('id', boardId)
+    if (error) return toast(error.message, 'error')
+    setBoards(v => v.map(b => b.id === boardId ? { ...b, nome } : b))
   }
 
-  const handleCreate = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newMaterial.trim()) return
-    const { error } = await supabase.from('suprimentos').insert({
-      titulo: newMaterial.trim(),
-      quantidade: newQuantidade || '1',
-      unidade: newUnidade,
-      obra_id: newObraId,
-      valor: parseFloat(newValor) || 0,
-      prioridade: newPrioridade,
-      status: 'Solicitado',
-      solicitante: 'Portal Corporativo',
-      fornecedor: newFornecedor.trim() || null
-    })
-    if (error) {
-      toast('Erro ao criar solicitação: ' + error.message, 'error')
-      return
-    }
-    setIsCreateOpen(false)
-    setNewMaterial('')
-    setNewQuantidade('')
-    setNewValor('')
-    setNewFornecedor('')
-    toast(`Solicitação de "${newMaterial}" criada com sucesso!`, 'success')
-    loadData()
+  async function archiveBoard() {
+    if (!selectedBoard || !confirm(`Arquivar o quadro “${selectedBoard.nome}”?`)) return
+    const { error } = await supabase.from('quadros').update({ arquivado: true }).eq('id', boardId)
+    if (error) return toast(error.message, 'error')
+    const next = boards.filter(b => b.id !== boardId); setBoards(next); setBoardId(next[0]?.id || '')
   }
 
-  // KPIs
-  const { totalAprovacao, countAprovacao, totalGeral } = useMemo(() => {
-    const aprovacao = filteredSupplies.filter(s => s.status === 'Aprovação')
-    return {
-      totalAprovacao: aprovacao.reduce((sum, item) => sum + Number(item.valor || 0), 0),
-      countAprovacao: aprovacao.length,
-      totalGeral: filteredSupplies.reduce((sum, item) => sum + Number(item.valor || 0), 0)
-    }
-  }, [filteredSupplies])
+  async function addColumn() {
+    const titulo = prompt('Título da coluna:')?.trim()
+    if (!titulo || !boardId) return
+    const { data, error } = await supabase.from('quadro_colunas').insert({ quadro_id: boardId, titulo, ordem: columns.length }).select().single()
+    if (error) return toast(error.message, 'error')
+    setColumns(v => [...v, data as QuadroColuna])
+  }
 
-  return (
-    <>
-      <PageTitle modulo="Portal Nativo" titulo="Gestão de Suprimentos" />
+  async function editColumn(col: QuadroColuna) {
+    const titulo = prompt('Título da coluna:', col.titulo)?.trim()
+    if (!titulo) return
+    const { error } = await supabase.from('quadro_colunas').update({ titulo, updated_at: new Date().toISOString() }).eq('id', col.id)
+    if (error) return toast(error.message, 'error')
+    setColumns(v => v.map(c => c.id === col.id ? { ...c, titulo } : c))
+  }
 
-      {/* Top Aggregations */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, padding: 16, borderRadius: 2 }}>
-          <div style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', marginBottom: 6 }}>Total Planejado/Gasto</div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, fontFamily: 'var(--font-display)' }}>
-            {fmt(totalGeral)}
-          </div>
-          <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>Volume acumulado de todos os pedidos</div>
-        </div>
+  async function deleteColumn(col: QuadroColuna) {
+    if (!confirm(`Excluir a coluna “${col.titulo}” e seus cartões?`)) return
+    const { error } = await supabase.from('quadro_colunas').delete().eq('id', col.id)
+    if (error) return toast(error.message, 'error')
+    setColumns(v => v.filter(c => c.id !== col.id)); setCards(v => v.filter(c => c.coluna_id !== col.id))
+  }
 
-        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, padding: 16, borderRadius: 2 }}>
-          <div style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', marginBottom: 6 }}>Aguardando Aprovação</div>
-          <div style={{ fontSize: 20, fontWeight: 900, color: C.amber, fontFamily: 'var(--font-display)', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span>{fmt(totalAprovacao)}</span>
-            <span style={{ fontSize: 11, background: C.amberDim, border: `1px solid ${C.amber}33`, color: C.amber, padding: '1px 6px', borderRadius: 2 }}>
-              {countAprovacao} itens
-            </span>
-          </div>
-          <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>Orçamentos pendentes de visto técnico</div>
-        </div>
+  async function moveColumn(index: number, delta: number) {
+    const target = index + delta
+    if (target < 0 || target >= columns.length) return
+    const reordered = [...columns]; [reordered[index], reordered[target]] = [reordered[target], reordered[index]]
+    setColumns(reordered)
+    await Promise.all(reordered.map((c, ordem) => supabase.from('quadro_colunas').update({ ordem }).eq('id', c.id)))
+  }
 
-        {/* Filter Obra */}
-        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, padding: 16, borderRadius: 2, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <label style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', marginBottom: 6 }}>Filtrar por Obra</label>
-          <select 
-            value={selectedObra}
-            onChange={e => setSelectedObra(e.target.value)}
-            style={selectStyle}
-          >
-            <option value="Todas">Todas as Obras</option>
-            {obras.map(o => <option key={o.id} value={o.nome}>{o.nome}</option>)}
-          </select>
-        </div>
+  async function saveCard(e: React.FormEvent) {
+    e.preventDefault(); if (!draft?.titulo.trim()) return
+    const payload = { coluna_id: draft.coluna_id, titulo: draft.titulo.trim(), descricao: draft.descricao || null, responsavel: draft.responsavel || null, prioridade: draft.prioridade, prazo: draft.prazo || null, etiquetas: draft.etiquetas.split(',').map(x => x.trim()).filter(Boolean), updated_at: new Date().toISOString() }
+    const query = draft.id ? supabase.from('quadro_cartoes').update(payload).eq('id', draft.id) : supabase.from('quadro_cartoes').insert({ ...payload, ordem: cardsByColumn[draft.coluna_id]?.length ?? 0 })
+    const { error } = await query
+    if (error) return toast(error.message, 'error')
+    setDraft(null); await loadBoard(); toast('Cartão salvo.', 'success')
+  }
 
-        {/* Action Button */}
-        <motion.button 
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setIsCreateOpen(true)}
-          style={{ 
-            all: 'unset',
-            cursor: 'pointer',
-            background: C.amber,
-            color: '#0B0C0E',
-            borderRadius: 2,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            fontSize: 12,
-            fontWeight: 900,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            padding: 16
-          }}
-        >
-          <Plus size={16} /> Solicitar Material
-        </motion.button>
-      </div>
+  async function moveCard(card: QuadroCartao, direction: number) {
+    const index = columns.findIndex(c => c.id === card.coluna_id); const target = columns[index + direction]
+    if (!target) return
+    setCards(v => v.map(c => c.id === card.id ? { ...c, coluna_id: target.id } : c))
+    const { error } = await supabase.from('quadro_cartoes').update({ coluna_id: target.id, ordem: cardsByColumn[target.id]?.length ?? 0, updated_at: new Date().toISOString() }).eq('id', card.id)
+    if (error) { toast(error.message, 'error'); loadBoard() }
+  }
 
-      {/* Kanban Board */}
-      {loading ? (
-        <p style={{ color: C.inkSoft, fontSize: 13, marginBottom: 28 }}>Carregando dados da nuvem...</p>
-      ) : (
-        <Panel title="Fluxo de Suprimentos da Construtora">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(260px, 1fr))', gap: 14, overflowX: 'auto', paddingBottom: 10 }}>
-            {colunasSuprimentos.map(col => {
-              const items = suppliesByStatus[col.id] || []
-              return (
-                <div 
-                  key={col.id}
-                  style={{ 
-                    background: '#0F1115', 
-                    padding: 12, 
-                    borderRadius: 2, 
-                    border: `1px solid ${C.border}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 12,
-                    minWidth: 220
-                  }}
-                >
-                  {/* Column Header */}
-                  <div style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    alignItems: 'center',
-                    borderBottom: `1px solid ${C.border}`,
-                    paddingBottom: 8,
-                  }}>
-                    <span style={{ 
-                      fontSize: 10, 
-                      fontWeight: 900, 
-                      color: C.ink, 
-                      textTransform: 'uppercase', 
-                      letterSpacing: 0.5,
-                      fontFamily: 'var(--font-display)'
-                    }}>{col.label}</span>
-                    <span style={{ 
-                      fontSize: 9, 
-                      fontWeight: 800, 
-                      color: col.color,
-                      background: `${col.color}15`,
-                      border: `1px solid ${col.color}33`,
-                      padding: '1px 5px',
-                      borderRadius: 2
-                    }}>{items.length}</span>
-                  </div>
+  async function deleteCard(id: string) {
+    if (!confirm('Excluir este cartão?')) return
+    const { error } = await supabase.from('quadro_cartoes').delete().eq('id', id)
+    if (error) return toast(error.message, 'error')
+    setCards(v => v.filter(c => c.id !== id)); setDraft(null)
+  }
 
-                  {/* Column Cards Container */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minHeight: 300 }}>
-                    {items.map((item) => (
-                      <div 
-                        key={item.id} 
-                        style={{ 
-                          padding: 12, 
-                          background: C.bgCard, 
-                          borderRadius: 2, 
-                          border: `1px solid ${isOverdue(item) ? '#EF444466' : item.prioridade === 'alta' ? `${C.red}33` : C.border}`,
-                          boxShadow: isOverdue(item) ? '0 0 0 1px #EF444422' : '0 2px 4px rgba(0,0,0,0.15)',
-                          position: 'relative',
-                        }}
-                      >
-                        {isOverdue(item) && (
-                          <div style={{
-                            display: 'flex', alignItems: 'center', gap: 4,
-                            background: '#EF444418', border: '1px solid #EF444444',
-                            borderRadius: 2, padding: '2px 6px',
-                            fontSize: 8, fontWeight: 900, color: '#EF4444',
-                            textTransform: 'uppercase', marginBottom: 6
-                          }}>
-                            <Clock size={8} /> Atrasado
-                          </div>
-                        )}
-                        <span style={{
-                          fontSize: 8,
-                          fontWeight: 900,
-                          textTransform: 'uppercase',
-                          padding: '1px 4px',
-                          borderRadius: 2,
-                          background: item.prioridade === 'alta' ? `${C.red}22` : item.prioridade === 'media' ? `${C.amber}22` : `${C.inkSoft}22`,
-                          color: item.prioridade === 'alta' ? C.red : item.prioridade === 'media' ? C.amber : C.inkSoft,
-                          border: `1px solid ${item.prioridade === 'alta' ? C.red : item.prioridade === 'media' ? C.amber : C.inkSoft}33`,
-                          display: 'inline-block',
-                          marginBottom: 6
-                        }}>
-                          {item.prioridade ?? 'média'}
-                        </span>
+  async function openHistory() {
+    if (!boardId) return
+    const cardIds = cards.map(c => c.id); const ids = [boardId, ...columns.map(c => c.id), ...cardIds]
+    const { data } = await supabase.from('historico_edicoes').select('*').in('entidade_id', ids).order('created_at', { ascending: false }).limit(100)
+    setHistory((data ?? []) as HistoricoEdicao[]); setShowHistory(true)
+  }
 
-                        <div style={{ fontSize: 12, fontWeight: 800, color: C.ink, marginBottom: 4 }}>
-                          {item.titulo}
-                        </div>
-                        
-                        <div style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, marginBottom: 8 }}>
-                          {item.quantidade} {item.unidade ?? 'un'}
-                        </div>
-
-                        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 10, color: C.inkSoft }}>{item.obra?.nome?.split(' ')[0] ?? 'N/A'}</span>
-                          <span style={{ fontSize: 11, fontWeight: 900, color: C.ink }}>{fmt(Number(item.valor || 0))}</span>
-                        </div>
-
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end', marginTop: 10, borderTop: `1px solid ${C.border}33`, paddingTop: 6 }}>
-                          <button 
-                            onClick={() => setSelectedItem(item)}
-                            style={{ all: 'unset', cursor: 'pointer', padding: 4, color: C.inkSoft }}
-                            title="Detalhes"
-                          >
-                            <Eye size={12} />
-                          </button>
-                          
-                          {item.status !== 'Solicitado' && (
-                            <button 
-                              onClick={() => moveItem(item.id, 'backward')}
-                              style={{ all: 'unset', cursor: 'pointer', padding: 4, color: C.inkSoft }}
-                            >
-                              <ArrowLeft size={12} />
-                            </button>
-                          )}
-
-                          {item.status !== 'Entregue' && (
-                            <button 
-                              onClick={() => moveItem(item.id, 'forward')}
-                              style={{ all: 'unset', cursor: 'pointer', padding: 4, color: C.amber }}
-                            >
-                              <ArrowRight size={12} />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-
-                    {items.length === 0 && (
-                      <div style={{ 
-                        padding: '40px 10px', 
-                        textAlign: 'center', 
-                        color: C.inkSoft, 
-                        fontSize: 11, 
-                        border: `1px dashed ${C.border}`,
-                        borderRadius: 2
-                      }}>
-                        Sem itens
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </Panel>
-      )}
-
-      {/* Detail Modal */}
-      <AnimatePresence>
-        {selectedItem && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 999,
-            background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(3px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
-          }}>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              style={{
-                background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 2,
-                width: '100%', maxWidth: 500, padding: 24, display: 'flex', flexDirection: 'column', gap: 16
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-                <div>
-                  <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, textTransform: 'uppercase' }}>Solicitação</span>
-                  <h3 style={{ fontSize: 15, fontWeight: 900, color: C.ink, margin: '2px 0 0' }}>{selectedItem.titulo}</h3>
-                </div>
-                <button onClick={() => setSelectedItem(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}>
-                  <X size={16} />
-                </button>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
-                <div style={{ background: C.bgCard, padding: 10, borderRadius: 2, border: `1px solid ${C.border}` }}>
-                  <span style={{ color: C.inkSoft, fontSize: 10, display: 'block', marginBottom: 2 }}>Quantidade</span>
-                  <span style={{ fontWeight: 800, color: C.ink }}>{selectedItem.quantidade} {selectedItem.unidade ?? 'un'}</span>
-                </div>
-                <div style={{ background: C.bgCard, padding: 10, borderRadius: 2, border: `1px solid ${C.border}` }}>
-                  <span style={{ color: C.inkSoft, fontSize: 10, display: 'block', marginBottom: 2 }}>Obra</span>
-                  <span style={{ fontWeight: 800, color: C.ink }}>{selectedItem.obra?.nome ?? 'Sem obra'}</span>
-                </div>
-                <div style={{ background: C.bgCard, padding: 10, borderRadius: 2, border: `1px solid ${C.border}` }}>
-                  <span style={{ color: C.inkSoft, fontSize: 10, display: 'block', marginBottom: 2 }}>Valor da Cotação</span>
-                  <span style={{ fontWeight: 800, color: C.amber }}>{fmt(Number(selectedItem.valor || 0))}</span>
-                </div>
-                <div style={{ background: C.bgCard, padding: 10, borderRadius: 2, border: `1px solid ${C.border}` }}>
-                  <span style={{ color: C.inkSoft, fontSize: 10, display: 'block', marginBottom: 2 }}>Solicitado por</span>
-                  <span style={{ fontWeight: 800, color: C.ink }}>{selectedItem.solicitante ?? 'Não informado'}</span>
-                </div>
-              </div>
-
-              {selectedItem.fornecedor && (
-                <div style={{ background: C.bgCard, padding: 12, borderRadius: 2, border: `1px solid ${C.border}`, fontSize: 12 }}>
-                  <span style={{ color: C.inkSoft, fontSize: 10, display: 'block', marginBottom: 2 }}>Fornecedor</span>
-                  <span style={{ fontWeight: 800, color: C.ink }}>{selectedItem.fornecedor}</span>
-                </div>
-              )}
-
-              {selectedItem.status === 'Aprovação' && (
-                <div style={{ background: `${C.amber}11`, border: `1px solid ${C.amber}44`, padding: 12, borderRadius: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <AlertCircle size={14} color={C.amber} />
-                    <span style={{ fontSize: 11, color: C.inkSoft, fontWeight: 700 }}>Aprovação Pendente</span>
-                  </div>
-                  <button 
-                    onClick={() => setConfirmApproveItem(selectedItem)}
-                    style={{
-                      background: C.amber, border: 'none', color: '#0B0C0E', fontSize: 10, fontWeight: 900,
-                      padding: '6px 12px', borderRadius: 2, cursor: 'pointer', textTransform: 'uppercase'
-                    }}
-                  >
-                    Aprovar Compra
-                  </button>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Create Modal */}
-      <AnimatePresence>
-        {isCreateOpen && (
-          <div style={{
-            position: 'fixed', inset: 0, zIndex: 999,
-            background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(3px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
-          }}>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              style={{
-                background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 2,
-                width: '100%', maxWidth: 440, padding: 24, display: 'flex', flexDirection: 'column', gap: 16
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-                <span style={{ fontSize: 12, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>Nova Solicitação de Material</span>
-                <button onClick={() => setIsCreateOpen(false)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}>
-                  <X size={16} />
-                </button>
-              </div>
-
-              <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={label}>Material/Insumo *</label>
-                  <input 
-                    type="text" required placeholder="Ex: Cimento CP-II"
-                    value={newMaterial} onChange={e => setNewMaterial(e.target.value)}
-                    style={input}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={label}>Quantidade *</label>
-                    <input 
-                      type="text" required placeholder="Ex: 200"
-                      value={newQuantidade} onChange={e => setNewQuantidade(e.target.value)}
-                      style={input}
-                    />
-                  </div>
-                  <div>
-                    <label style={label}>Unidade *</label>
-                    <input 
-                      type="text" required placeholder="Ex: sacos, un, kg"
-                      value={newUnidade} onChange={e => setNewUnidade(e.target.value)}
-                      style={input}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={label}>Orçamento Estimado (R$)</label>
-                    <input 
-                      type="number" placeholder="Ex: 6400"
-                      value={newValor} onChange={e => setNewValor(e.target.value)}
-                      style={input}
-                    />
-                  </div>
-                  <div>
-                    <label style={label}>Fornecedor Indicado</label>
-                    <input 
-                      type="text" placeholder="Ex: Gerdau S.A."
-                      value={newFornecedor} onChange={e => setNewFornecedor(e.target.value)}
-                      style={input}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={label}>Obra Destino *</label>
-                    <select 
-                      value={newObraId} onChange={e => setNewObraId(e.target.value)}
-                      style={selectStyle}
-                    >
-                      {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={label}>Prioridade</label>
-                    <select 
-                      value={newPrioridade} onChange={e => setNewPrioridade(e.target.value as any)}
-                      style={selectStyle}
-                    >
-                      <option value="baixa">Baixa</option>
-                      <option value="media">Média</option>
-                      <option value="alta">Alta</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
-                  <button 
-                    type="button" onClick={() => setIsCreateOpen(false)}
-                    style={btnGhost}
-                  >
-                    Cancelar
-                  </button>
-                  <button 
-                    type="submit"
-                    style={{
-                      ...btn(),
-                      fontSize: 10, padding: '8px 18px'
-                    }}
-                  >
-                    Enviar Solicitação
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Confirm Approval Modal */}
-      <ConfirmModal
-        open={!!confirmApproveItem}
-        title="Confirmar Aprovação"
-        description={`Você está prestes a autorizar a compra de "${confirmApproveItem?.titulo}" no valor de R$ ${confirmApproveItem?.valor?.toLocaleString('pt-BR')}. Esta ação não pode ser desfeita.`}
-        confirmLabel="Aprovar Compra"
-        confirmColor={C.amber}
-        onConfirm={() => confirmApproveItem && approvePurchase(confirmApproveItem.id)}
-        onCancel={() => setConfirmApproveItem(null)}
-      >
-        {confirmApproveItem && (
-          <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 2, padding: 12, fontSize: 12 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ color: C.inkSoft }}>Fornecedor:</span>
-              <span style={{ color: C.ink, fontWeight: 800 }}>{confirmApproveItem.fornecedor || 'Fornecedor Homologado'}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-              <span style={{ color: C.inkSoft }}>Obra destino:</span>
-              <span style={{ color: C.ink, fontWeight: 800 }}>{confirmApproveItem.obra?.nome ?? 'Sem obra'}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ color: C.inkSoft }}>Valor total:</span>
-              <span style={{ color: C.amber, fontWeight: 900 }}>{fmt(Number(confirmApproveItem.valor || 0))}</span>
-            </div>
-          </div>
-        )}
-      </ConfirmModal>
-
-      <QuadroTarefas obrasList={obras} />
-    </>
-  )
+  return <>
+    <PageTitle modulo="Gestão Visual" titulo="Quadros & Suprimentos" />
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
+      <select style={{ ...field, width: 260 }} value={boardId} onChange={e => setBoardId(e.target.value)}><option value="">Selecione um quadro</option>{boards.map(b => <option key={b.id} value={b.id}>{b.nome}</option>)}</select>
+      <button style={button} onClick={createBoard}><Plus size={14}/> Novo quadro</button>
+      {selectedBoard && <><button style={ghost} onClick={renameBoard}>Renomear</button><button style={ghost} onClick={addColumn}><Plus size={14}/> Coluna</button><button style={ghost} onClick={openHistory}><History size={14}/> Histórico</button><button style={ghost} onClick={archiveBoard}><Archive size={14}/> Arquivar</button></>}
+    </div>
+    {loading ? <p style={{ color: C.inkSoft }}>Carregando quadros…</p> : !selectedBoard ? <div style={{ border: `1px dashed ${C.border}`, padding: 36, color: C.inkSoft }}>Crie o primeiro quadro. Quadros, colunas e cartões são totalmente editáveis.</div> :
+      <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 18, alignItems: 'flex-start' }}>
+        {columns.map((col, index) => <section key={col.id} style={{ width: 300, minWidth: 300, background: '#11131A', border: `1px solid ${C.border}`, borderTop: `3px solid ${col.cor}`, borderRadius: 5, padding: 11 }}>
+          <header style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}><strong style={{ flex: 1, fontSize: 12, textTransform: 'uppercase' }}>{col.titulo} <span style={{ color: C.inkSoft }}>({cardsByColumn[col.id]?.length || 0})</span></strong><button title="Mover para esquerda" style={iconButton} onClick={() => moveColumn(index, -1)}><ChevronLeft size={14}/></button><button title="Mover para direita" style={iconButton} onClick={() => moveColumn(index, 1)}><ChevronRight size={14}/></button><button title="Editar título" style={iconButton} onClick={() => editColumn(col)}><MoreHorizontal size={15}/></button><button title="Excluir coluna" style={iconButton} onClick={() => deleteColumn(col)}><Trash2 size={13}/></button></header>
+          <div style={{ display: 'grid', gap: 9, minHeight: 70 }}>{cardsByColumn[col.id]?.map(card => <article key={card.id} onClick={() => setDraft({ id: card.id, coluna_id: card.coluna_id, titulo: card.titulo, descricao: card.descricao || '', responsavel: card.responsavel || '', prioridade: card.prioridade, prazo: card.prazo || '', etiquetas: card.etiquetas.join(', ') })} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderLeft: `3px solid ${priorityColor[card.prioridade]}`, borderRadius: 4, padding: 11, cursor: 'pointer' }}>
+            <strong style={{ fontSize: 12 }}>{card.titulo}</strong>{card.descricao && <p style={{ color: C.inkSoft, fontSize: 11, lineHeight: 1.45, margin: '7px 0' }}>{card.descricao}</p>}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{card.etiquetas.map(tag => <span key={tag} style={{ fontSize: 8, background: '#F59E0B18', color: C.amber, padding: '2px 5px' }}>{tag}</span>)}</div>
+            <footer style={{ display: 'flex', marginTop: 9, alignItems: 'center', gap: 5, color: C.inkSoft, fontSize: 9 }}><span style={{ flex: 1 }}>{card.responsavel || 'Sem responsável'}</span>{card.prazo && <><Clock3 size={11}/>{new Date(card.prazo + 'T00:00:00').toLocaleDateString('pt-BR')}</>}<button style={iconButton} onClick={e => { e.stopPropagation(); moveCard(card, -1) }}><ChevronLeft size={13}/></button><button style={iconButton} onClick={e => { e.stopPropagation(); moveCard(card, 1) }}><ChevronRight size={13}/></button></footer>
+          </article>)}</div>
+          <button style={{ ...ghost, width: '100%', justifyContent: 'center', marginTop: 10 }} onClick={() => setDraft(emptyCard(col.id))}><Plus size={13}/> Adicionar cartão</button>
+        </section>)}
+        <button style={{ ...ghost, minWidth: 180, justifyContent: 'center' }} onClick={addColumn}><Plus size={14}/> Nova coluna</button>
+      </div>}
+    {draft && <div style={overlay}><form onSubmit={saveCard} style={modal}><header style={modalHeader}><strong>{draft.id ? 'Editar cartão' : 'Novo cartão'}</strong><button type="button" style={iconButton} onClick={() => setDraft(null)}><X size={17}/></button></header><label style={label}>Título<input autoFocus style={field} value={draft.titulo} onChange={e => setDraft({ ...draft, titulo: e.target.value })}/></label><label style={label}>Descrição<textarea rows={5} style={field} value={draft.descricao} onChange={e => setDraft({ ...draft, descricao: e.target.value })}/></label><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><label style={label}>Responsável<input style={field} value={draft.responsavel} onChange={e => setDraft({ ...draft, responsavel: e.target.value })}/></label><label style={label}>Prioridade<select style={field} value={draft.prioridade} onChange={e => setDraft({ ...draft, prioridade: e.target.value })}>{['Baixa','Média','Alta','Urgente'].map(x => <option key={x}>{x}</option>)}</select></label></div><label style={label}>Prazo<input type="date" style={field} value={draft.prazo} onChange={e => setDraft({ ...draft, prazo: e.target.value })}/></label><label style={label}>Etiquetas separadas por vírgula<input style={field} value={draft.etiquetas} onChange={e => setDraft({ ...draft, etiquetas: e.target.value })}/></label><footer style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>{draft.id ? <button type="button" style={{ ...ghost, color: C.red }} onClick={() => deleteCard(draft.id!)}><Trash2 size={14}/> Excluir</button> : <span/>}<button style={button}><Save size={14}/> Salvar</button></footer></form></div>}
+    {showHistory && <div style={overlay}><div style={{ ...modal, width: 650 }}><header style={modalHeader}><strong>Histórico de edição</strong><button style={iconButton} onClick={() => setShowHistory(false)}><X size={17}/></button></header><div style={{ maxHeight: '65vh', overflow: 'auto', display: 'grid', gap: 8 }}>{history.length ? history.map(h => <div key={h.id} style={{ border: `1px solid ${C.border}`, padding: 10 }}><strong style={{ fontSize: 11 }}>{h.acao} · {h.entidade}</strong><div style={{ color: C.inkSoft, fontSize: 10, marginTop: 4 }}>{h.usuario_nome} · {new Date(h.created_at).toLocaleString('pt-BR')}</div></div>) : <p style={{ color: C.inkSoft }}>Nenhuma alteração registrada.</p>}</div></div></div>}
+  </>
 }
 
-// ════════════════════════════════════════════════════════
-//  QUADRO DE TAREFAS INTEGRADO
-// ════════════════════════════════════════════════════════
-type TarefaStatus = 'A Fazer' | 'Em Andamento' | 'Em Revisão' | 'Concluído'
-type TarefaCategoria = 'Manutenção' | 'Segurança' | 'Engenharia' | 'Administrativo' | 'Qualidade'
-
-const categoriaConfig: Record<TarefaCategoria, { label: string; color: string }> = {
-  'Manutenção':    { label: 'Manutenção',   color: '#F59E0B' },
-  'Segurança':     { label: 'Segurança',    color: '#EF4444' },
-  'Engenharia':    { label: 'Engenharia',   color: '#3B82F6' },
-  'Administrativo':{ label: 'Administrativo', color: '#8B5CF6' },
-  'Qualidade':     { label: 'Qualidade',    color: '#10B981' },
-}
-
-const colunasTarefas = [
-  { id: 'A Fazer',      label: 'A Fazer',      color: '#6B7280' },
-  { id: 'Em Andamento', label: 'Em Andamento', color: '#3B82F6' },
-  { id: 'Em Revisão',   label: 'Em Revisão',   color: '#F59E0B' },
-  { id: 'Concluído',    label: 'Concluído',    color: '#10B981' },
-] as const
-
-function QuadroTarefas({ obrasList }: { obrasList: Obra[] }) {
-  const [tarefas, setTarefas] = useState<(Tarefa & { obra?: Pick<Obra, 'nome'> })[]>([])
-  const [filtroTipo, setFiltroTipo] = useState<TarefaCategoria | 'todos'>('todos')
-  const [filtroObra, setFiltroObra] = useState('Todas')
-  const [isAddOpen, setIsAddOpen] = useState(false)
-  const [newTarefa, setNewTarefa] = useState<Partial<Tarefa>>({
-    categoria: 'Engenharia', status: 'A Fazer',
-    responsavel: ''
-  })
-
-  const load = useCallback(async () => {
-    const { data } = await supabase.from('tarefas').select('*, obra:obras(nome)').order('created_at')
-    setTarefas(data ?? [])
-  }, [])
-
-  useEffect(() => { load() }, [load])
-
-  const today = new Date().toISOString().split('T')[0]
-  const isPrazoVencido = (t: Tarefa) => !!t.prazo && t.prazo < today && t.status !== 'Concluído'
-
-  const tarefasFiltradas = tarefas.filter(t => {
-    const matchTipo = filtroTipo === 'todos' || t.categoria === filtroTipo
-    const matchObra = filtroObra === 'Todas' || t.obra?.nome === filtroObra
-    return matchTipo && matchObra
-  })
-
-  const moverTarefa = async (id: string, dir: 'forward' | 'backward') => {
-    const order: TarefaStatus[] = ['A Fazer', 'Em Andamento', 'Em Revisão', 'Concluído']
-    const t = tarefas.find(x => x.id === id)
-    if (!t) return
-
-    const idx = order.indexOf(t.status as TarefaStatus)
-    const next = idx + (dir === 'forward' ? 1 : -1)
-    if (next < 0 || next >= order.length) return
-
-    const { error } = await supabase.from('tarefas').update({ status: order[next] }).eq('id', id)
-    if (error) {
-      toast('Erro ao atualizar tarefa', 'error')
-      return
-    }
-    toast(`Tarefa movida para ${order[next]}`, 'success')
-    load()
-  }
-
-  const criarTarefa = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newTarefa.titulo?.trim()) return
-
-    const { error } = await supabase.from('tarefas').insert({
-      titulo: newTarefa.titulo,
-      descricao: newTarefa.descricao || '',
-      obra_id: newTarefa.obra_id || null,
-      responsavel: newTarefa.responsavel || 'Não definido',
-      categoria: newTarefa.categoria as TarefaCategoria,
-      status: 'A Fazer',
-      prazo: newTarefa.prazo || null
-    })
-
-    if (error) {
-      toast('Erro ao criar tarefa', 'error')
-      return
-    }
-
-    setIsAddOpen(false)
-    setNewTarefa({ categoria: 'Engenharia', status: 'A Fazer', responsavel: '' })
-    toast(`Tarefa "${newTarefa.titulo}" criada!`, 'success')
-    load()
-  }
-
-  return (
-    <Panel
-      title="Quadro de Tarefas — Operações Integradas"
-      action={
-        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
-          {/* Filtro tipo */}
-          <select
-            value={filtroTipo}
-            onChange={e => setFiltroTipo(e.target.value as any)}
-            style={{ ...selectStyle, width: 'auto', padding: '4px 8px' }}
-          >
-            <option value="todos">Todos os tipos</option>
-            {(Object.keys(categoriaConfig) as TarefaCategoria[]).map(k => (
-              <option key={k} value={k}>{categoriaConfig[k].label}</option>
-            ))}
-          </select>
-          {/* Filtro obra */}
-          <select
-            value={filtroObra}
-            onChange={e => setFiltroObra(e.target.value)}
-            style={{ ...selectStyle, width: 'auto', padding: '4px 8px' }}
-          >
-            <option value="Todas">Todas as Obras</option>
-            {obrasList.map(o => <option key={o.id} value={o.nome}>{o.nome}</option>)}
-          </select>
-          <motion.button
-            whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-            onClick={() => {
-              if (obrasList.length > 0) {
-                setNewTarefa(t => ({ ...t, obra_id: obrasList[0].id }))
-              }
-              setIsAddOpen(true)
-            }}
-            style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 2, background: C.amber, color: '#0B0C0E', fontSize: 10, fontWeight: 900, textTransform: 'uppercase' }}
-          >
-            <Plus size={11} /> Nova Tarefa
-          </motion.button>
-        </div>
-      }
-    >
-      {/* Legend */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
-        {(Object.entries(categoriaConfig) as [TarefaCategoria, typeof categoriaConfig[TarefaCategoria]][]).map(([key, cfg]) => (
-          <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, color: C.inkSoft }}>
-            <div style={{ width: 8, height: 8, borderRadius: '50%', background: cfg.color }} />
-            {cfg.label}
-          </div>
-        ))}
-      </div>
-
-      {/* Kanban Columns */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(260px, 1fr))', gap: 12, overflowX: 'auto', paddingBottom: 10 }}>
-        {colunasTarefas.map(col => {
-          const items = tarefasFiltradas.filter(t => t.status === col.id)
-          return (
-            <div key={col.id} style={{ background: '#0F1115', padding: 10, borderRadius: 2, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 200 }}>
-              {/* Column Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
-                <span style={{ fontSize: 10, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>{col.label}</span>
-                <span style={{ fontSize: 9, fontWeight: 800, color: col.color, background: `${col.color}18`, border: `1px solid ${col.color}33`, padding: '1px 5px', borderRadius: 2 }}>{items.length}</span>
-              </div>
-
-              {/* Column Cards */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, minHeight: 220 }}>
-                {items.map(t => {
-                  const cfg = categoriaConfig[t.categoria] || categoriaConfig['Engenharia']
-                  const venc = isPrazoVencido(t)
-                  return (
-                    <div
-                      key={t.id}
-                      style={{
-                        padding: 10, background: C.bgCard, borderRadius: 2,
-                        border: `1px solid ${venc ? '#EF444466' : C.border}`,
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-                      }}
-                    >
-                      {venc && (
-                        <div style={{ color: '#EF4444', fontSize: 8, fontWeight: 900, textTransform: 'uppercase', marginBottom: 4 }}>
-                          Prazo Vencido
-                        </div>
-                      )}
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: cfg.color }} />
-                        <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>{cfg.label}</span>
-                      </div>
-
-                      <div style={{ fontSize: 12, fontWeight: 800, color: C.ink, marginBottom: 4 }}>{t.titulo}</div>
-                      {t.descricao && <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 8, lineHeight: 1.3 }}>{t.descricao}</div>}
-
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `1px solid ${C.border}33`, paddingTop: 6, marginTop: 4 }}>
-                        <span style={{ fontSize: 9, color: C.inkSoft }}>{t.responsavel}</span>
-                        {t.prazo && <span style={{ fontSize: 9, color: venc ? '#EF4444' : C.inkSoft, fontWeight: 700 }}>Até {fmtDate(t.prazo)}</span>}
-                      </div>
-
-                      {/* Move controls */}
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6, marginTop: 8, borderTop: `1px solid ${C.border}33`, paddingTop: 4 }}>
-                        {t.status !== 'A Fazer' && (
-                          <button onClick={() => moverTarefa(t.id, 'backward')} style={{ all: 'unset', cursor: 'pointer', padding: 2, color: C.inkSoft }}>
-                            <ArrowLeft size={10} />
-                          </button>
-                        )}
-                        {t.status !== 'Concluído' && (
-                          <button onClick={() => moverTarefa(t.id, 'forward')} style={{ all: 'unset', cursor: 'pointer', padding: 2, color: C.amber }}>
-                            <ArrowRight size={10} />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-                {items.length === 0 && <div style={{ padding: '24px 8px', textAlign: 'center', color: C.inkSoft, fontSize: 10, border: `1px dashed ${C.border}`, borderRadius: 2 }}>Sem tarefas</div>}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Add Task Modal */}
-      <AnimatePresence>
-        {isAddOpen && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 2, width: '100%', maxWidth: 400, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-                <span style={{ fontSize: 11, fontWeight: 900, color: C.ink, textTransform: 'uppercase' }}>Nova Tarefa</span>
-                <button onClick={() => setIsAddOpen(false)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={15} /></button>
-              </div>
-
-              <form onSubmit={criarTarefa} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div>
-                  <label style={label}>Título *</label>
-                  <input type="text" required value={newTarefa.titulo || ''} onChange={e => setNewTarefa(t => ({ ...t, titulo: e.target.value }))} style={input} placeholder="O que precisa ser feito?" />
-                </div>
-                <div>
-                  <label style={label}>Descrição</label>
-                  <textarea value={newTarefa.descricao || ''} onChange={e => setNewTarefa(t => ({ ...t, descricao: e.target.value }))} style={{ ...input, height: 60, resize: 'none' }} placeholder="Detalhes da atividade" />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={label}>Obra Destino *</label>
-                    <select value={newTarefa.obra_id || ''} onChange={e => setNewTarefa(t => ({ ...t, obra_id: e.target.value }))} style={selectStyle}>
-                      {obrasList.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={label}>Categoria</label>
-                    <select value={newTarefa.categoria || 'Engenharia'} onChange={e => setNewTarefa(t => ({ ...t, categoria: e.target.value as any }))} style={selectStyle}>
-                      {Object.keys(categoriaConfig).map(k => <option key={k} value={k}>{k}</option>)}
-                    </select>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div>
-                    <label style={label}>Responsável</label>
-                    <input type="text" value={newTarefa.responsavel || ''} onChange={e => setNewTarefa(t => ({ ...t, responsavel: e.target.value }))} style={input} placeholder="Ex: Mestre Carlos" />
-                  </div>
-                  <div>
-                    <label style={label}>Prazo</label>
-                    <input type="date" value={newTarefa.prazo || ''} onChange={e => setNewTarefa(t => ({ ...t, prazo: e.target.value }))} style={input} />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
-                  <button type="button" onClick={() => setIsAddOpen(false)} style={btnGhost}>Cancelar</button>
-                  <button type="submit" style={{ ...btn(), fontSize: 10, padding: '8px 16px' }}>Criar Tarefa</button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-    </Panel>
-  )
-}
+const iconButton: React.CSSProperties = { background: 'transparent', border: 0, color: C.inkSoft, padding: 3, cursor: 'pointer', display: 'inline-flex' }
+const label: React.CSSProperties = { display: 'grid', gap: 5, color: C.inkSoft, fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }
+const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: '#000B', zIndex: 100, display: 'grid', placeItems: 'center', padding: 16 }
+const modal: React.CSSProperties = { width: 'min(520px, 100%)', maxHeight: '90vh', overflow: 'auto', background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: 18, display: 'grid', gap: 12 }
+const modalHeader: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15 }

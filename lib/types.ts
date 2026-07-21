@@ -94,6 +94,8 @@ export interface Rdo {
   efetivo_terceiros: number
   resumo: string | null
   ocorrencias: string | null
+  definicao_servico: string | null
+  liberacoes: string | null
   status: 'Rascunho' | 'Aprovado'
   assinatura_ip: string | null
   assinatura_at: string | null
@@ -156,6 +158,9 @@ export interface Foto {
   obra_id: string | null
   legenda: string | null
   imagem_url: string | null
+  pasta_id: string | null
+  rdo_id: string | null
+  drive_file_id: string | null
   data_iso: string
   created_at: string
 }
@@ -202,13 +207,71 @@ export interface Conta {
   descricao: string
   valor: number
   data_vencimento: string
-  status: 'Pendente' | 'Pago' | 'Vencido' | 'Aguardando Aprovação'
+  data_previsao: string | null
+  status: 'Lançado' | 'Aguardando aprovação' | 'Liberado/OK' | 'A pagar' | 'Pago'
+  observacoes: string | null
+  possui_fornecedor: boolean
+  pagamento_antecipado: boolean
+  tipo_antecipacao: 'Parcial' | 'Total' | null
+  valor_antecipado: number | null
+  data_antecipacao: string | null
+  justificativa_antecipacao: string | null
   recorrencia: 'unico' | 'mensal' | 'semanal'
   comprovante_url: string | null
   pago_em: string | null
   aprovado_por: string | null
   aprovado_em: string | null
   created_at: string
+}
+
+export interface Quadro { id: string; empresa_id: string | null; obra_id: string | null; nome: string; descricao: string | null; cor: string; ordem: number; arquivado: boolean; created_at: string; updated_at: string }
+export interface QuadroColuna { id: string; quadro_id: string; titulo: string; cor: string; ordem: number; limite_wip: number | null; created_at: string; updated_at: string }
+export interface QuadroCartao { id: string; coluna_id: string; titulo: string; descricao: string | null; responsavel: string | null; prioridade: 'Baixa' | 'Média' | 'Alta' | 'Urgente'; prazo: string | null; etiquetas: string[]; checklist: Array<{ texto: string; concluido: boolean }>; anexos: Array<{ nome: string; url: string }>; ordem: number; arquivado: boolean; created_at: string; updated_at: string }
+export interface HistoricoEdicao { id: number; entidade: string; entidade_id: string; acao: 'INSERT' | 'UPDATE' | 'DELETE'; dados_anteriores: Json; dados_novos: Json; usuario_nome: string; created_at: string }
+
+export interface RhModeloAdmissao {
+  id: string
+  codigo: string
+  ordem: number
+  nome: string
+  descricao: string
+  arquivo_nome: string
+  arquivo_url: string
+  tipo_arquivo: 'DOCX' | 'XLSX'
+  campos: string[]
+  ativo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface FuncionarioAdmissaoEtapa {
+  id: string
+  funcionario_id: string
+  modelo_id: string
+  status: 'Pendente' | 'Em preenchimento' | 'Aguardando conferência' | 'Concluída' | 'Dispensada'
+  dados: Json
+  arquivo_preenchido_url: string | null
+  observacoes: string | null
+  iniciado_em: string | null
+  concluido_em: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface FuncionarioDocumentoAnexo {
+  id: string
+  funcionario_id: string
+  tipo: string
+  nome: string
+  arquivo_url: string | null
+  validade: string | null
+  status: string
+  created_at: string
+  etapa_id: string | null
+  storage_path: string | null
+  tamanho_bytes: number | null
+  mime_type: string | null
+  observacoes: string | null
 }
 
 // ─── JOINED / EXTENDED ───────────────────────────────────────────────────────
@@ -256,6 +319,15 @@ export interface ConfigPermissao {
   pode_aprovar: boolean
   limite_valor: number
   apps: string
+}
+
+export interface CargoSistema {
+  codigo: string
+  nome: string
+  descricao: string | null
+  ativo: boolean
+  created_at?: string
+  updated_at?: string
 }
 
 export interface SolicitacaoAcesso {
