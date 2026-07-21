@@ -134,7 +134,7 @@ export default function FinanceiroPage() {
     if (logado) {
       setColaboradorAtivo(logado)
       const { data: perm } = await supabase.from('config_permissoes').select('*').eq('cargo', logado.cargo).single()
-      if (perm) setPermissaoAtiva(perm as ConfigPermissao)
+      if (perm) setPermissaoAtiva((logado.override_permissoes ? { ...perm, ...logado } : perm) as ConfigPermissao)
     }
 
     // Carrega lista de colaboradores para a aba de permissões (sem a coluna senha por segurança)
@@ -152,11 +152,16 @@ export default function FinanceiroPage() {
   }, [carregarSessaoColaborador])
 
   // Retorna a lista de abas visíveis de acordo com as permissões reais do cargo
-  function getAbasPermitidas(cargo: string) {
-    if (cargo === 'admin_geral') return ['dashboard', 'empresas', 'fornecedores', 'contas', 'historico', 'obras', 'permissoes']
-    if (cargo === 'admin_empresa') return ['dashboard', 'empresas', 'fornecedores', 'contas', 'historico', 'obras', 'permissoes']
-    if (cargo === 'operador') return ['dashboard', 'fornecedores', 'contas', 'historico']
-    return ['dashboard', 'fornecedores', 'historico']
+  function getAbasPermitidas() {
+    const apps = (colaboradorAtivo?.override_permissoes ? colaboradorAtivo.apps : permissaoAtiva?.apps) || ''
+    const tem = (app: string) => apps.split(',').map(item => item.trim()).includes(app)
+    const abas = ['dashboard', 'historico']
+    if (tem('financeiro')) abas.push('contas')
+    if (permissaoAtiva?.pode_empresas) abas.push('empresas')
+    if (permissaoAtiva?.pode_fornecedores) abas.push('fornecedores')
+    if (tem('obras') || colaboradorAtivo?.cargo === 'admin_geral') abas.push('obras')
+    if (colaboradorAtivo?.cargo === 'admin_geral') abas.push('permissoes')
+    return abas
   }
 
   if (loadingAcesso) {
@@ -164,7 +169,7 @@ export default function FinanceiroPage() {
   }
 
   const cargoNome = colaboradorAtivo ? NOMES_CARGOS[colaboradorAtivo.cargo] : '—'
-  const abasVisiveis = getAbasPermitidas(colaboradorAtivo?.cargo || 'visualizador')
+  const abasVisiveis = getAbasPermitidas()
 
   return (
     <div style={{ minHeight: '100%' }}>

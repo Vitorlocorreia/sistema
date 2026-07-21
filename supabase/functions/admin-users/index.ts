@@ -68,7 +68,7 @@ Deno.serve(async request => {
       if (authError || !authUser.user) return json({ error: authError?.message || 'Não foi possível criar o usuário Auth.' }, 400)
       authUserId = authUser.user.id
     }
-    const { data: config } = await admin.from('config_permissoes').select('apps').eq('cargo', cargo).maybeSingle()
+    const { data: config } = await admin.from('config_permissoes').select('apps,pode_empresas,pode_fornecedores,pode_lancar,pode_pagar,pode_aprovar,limite_valor').eq('cargo', cargo).maybeSingle()
     const isGlobalAdmin = cargo === 'admin_geral'
     const allApps = 'rh,ponto,financeiro,suprimentos,obras,rdo,frota,usuarios'
     const profile = {
@@ -79,12 +79,12 @@ Deno.serve(async request => {
       senha: null,
       override_permissoes: isGlobalAdmin,
       apps: isGlobalAdmin ? allApps : (config?.apps || cargo),
-      pode_empresas: isGlobalAdmin,
-      pode_fornecedores: isGlobalAdmin,
-      pode_lancar: isGlobalAdmin,
-      pode_pagar: isGlobalAdmin,
-      pode_aprovar: isGlobalAdmin,
-      limite_valor: isGlobalAdmin ? null : undefined
+      pode_empresas: isGlobalAdmin || Boolean(config?.pode_empresas),
+      pode_fornecedores: isGlobalAdmin || Boolean(config?.pode_fornecedores),
+      pode_lancar: isGlobalAdmin || Boolean(config?.pode_lancar),
+      pode_pagar: isGlobalAdmin || Boolean(config?.pode_pagar),
+      pode_aprovar: isGlobalAdmin || Boolean(config?.pode_aprovar),
+      limite_valor: isGlobalAdmin ? null : (config?.limite_valor ?? 0)
     }
     const { data: existing } = await admin.from('colaboradores').select('id').ilike('email', email).maybeSingle()
     const profileResult = existing ? await admin.from('colaboradores').update(profile).eq('id', existing.id) : await admin.from('colaboradores').insert(profile)
