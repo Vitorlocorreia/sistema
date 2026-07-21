@@ -1015,7 +1015,11 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       })
     }
 
-    await supabase.from('contas').insert(parcelas)
+    const { error: insertError } = await supabase.from('contas').insert(parcelas)
+    if (insertError) {
+      setSaving(false)
+      return toast(`Não foi possível lançar a conta: ${insertError.message}`, 'error')
+    }
 
     setSaving(false)
     setOk(true)
