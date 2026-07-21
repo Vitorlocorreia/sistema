@@ -15,6 +15,8 @@ import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'motion/react'
 import type { Obra, Rdo, RdoCompleto } from '@/lib/types'
 
+type EfetivoTerceiroForm = { empresa_nome: string; funcao: string; quantidade: string; observacoes: string; valor_diaria: string }
+
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
   background: '#0B0C0E',
@@ -61,6 +63,7 @@ export default function RDO() {
   const [newCondicaoSolo, setNewCondicaoSolo] = useState('Seco')
   const [newEfetivoProprio, setNewEfetivoProprio] = useState('10')
   const [newEfetivoTerceiros, setNewEfetivoTerceiros] = useState('5')
+  const [newTerceiros, setNewTerceiros] = useState<EfetivoTerceiroForm[]>([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
   const [newResumo, setNewResumo] = useState('')
   const [newOcorrencias, setNewOcorrencias] = useState('')
   const [newDefinicaoServico, setNewDefinicaoServico] = useState('')
@@ -82,7 +85,7 @@ export default function RDO() {
       { data: r },
       { data: o }
     ] = await Promise.all([
-      supabase.from('rdos').select('*, obra:obras(nome), atividades:rdo_atividades(*), equipamentos:rdo_equipamentos(*)').order('data', { ascending: false }),
+      supabase.from('rdos').select('*, obra:obras(nome), atividades:rdo_atividades(*), equipamentos:rdo_equipamentos(*), terceiros:rdo_efetivos_terceiros(*)').order('data', { ascending: false }),
       supabase.from('obras').select('*').order('nome')
     ])
 
@@ -170,6 +173,19 @@ export default function RDO() {
       )
     }
 
+    const validTerceiros = newTerceiros.filter(item => item.empresa_nome.trim() !== '')
+    if (validTerceiros.length > 0) {
+      await supabase.from('rdo_efetivos_terceiros').insert(validTerceiros.map(item => ({
+        rdo_id: rdoData.id,
+        empresa_nome: item.empresa_nome.trim(),
+        funcao: item.funcao.trim() || null,
+        quantidade: parseInt(item.quantidade) || 1,
+        observacoes: item.observacoes.trim() || null,
+        valor_diaria: item.valor_diaria ? parseFloat(item.valor_diaria) : null,
+        pagamento_status: 'pendente',
+      })))
+    }
+
     for (const foto of newFotos) {
       const path = `${newObraId}/${rdoData.id}/${crypto.randomUUID()}-${foto.name}`
       const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, foto)
@@ -182,6 +198,7 @@ export default function RDO() {
     // Reset form
     setActForm([''])
     setNewResumo(''); setNewOcorrencias(''); setNewDefinicaoServico(''); setNewLiberacoes(''); setNewFotos([])
+    setNewTerceiros([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
     setEquipForm([
       { nome: 'Retroescavadeira', status: 'OPERANDO' },
       { nome: 'Betoneira', status: 'OPERANDO' }
@@ -390,6 +407,11 @@ export default function RDO() {
                     </div>
                   </div>
 
+                  <div>
+                    <span style={labelStyle}>Efetivo terceirizado — log de empresas e pagamento</span>
+                    {(selectedRdo as any).terceiros?.length ? <div style={{ display: 'grid', gap: 7 }}>{(selectedRdo as any).terceiros.map((item: any) => <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 60px 110px 120px', gap: 8, alignItems: 'center', padding: '8px 10px', background: C.bgCard, border: `1px solid ${C.border}`, fontSize: 11 }}><strong>{item.empresa_nome}</strong><span>{item.funcao || '—'}</span><span>{item.quantidade} col.</span><span>{item.valor_diaria ? `R$ ${Number(item.valor_diaria).toFixed(2)}/dia` : 'Sem valor'}</span><span style={{ color: item.pagamento_status === 'pago' ? C.green : C.amber, fontWeight: 800 }}>{item.pagamento_status}</span>{item.observacoes && <small style={{ gridColumn: '1 / -1', color: C.inkSoft }}>{item.observacoes}</small>}</div>)}</div> : <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhuma empresa terceirizada detalhada neste RDO.</p>}
+                  </div>
+
                   {/* Comments */}
                   {(selectedRdo.definicao_servico || selectedRdo.liberacoes) && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div><span style={labelStyle}>Definição dos serviços</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.definicao_servico || '—'}</p></div>
@@ -527,6 +549,22 @@ export default function RDO() {
                       <div>
                         <label style={labelStyle}>Efetivo Terceirizado</label>
                         <input type="number" value={newEfetivoTerceiros} onChange={e => setNewEfetivoTerceiros(e.target.value)} style={inputStyle} />
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <label style={labelStyle}>Terceirizados por empresa — controle para conferência e pagamento</label>
+                        <button type="button" onClick={() => setNewTerceiros(items => [...items, { empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ EMPRESA</button>
+                      </div>
+                      <div style={{ display: 'grid', gap: 10 }}>
+                        {newTerceiros.map((item, index) => <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 80px 110px', gap: 8, alignItems: 'end' }}>
+                          <div><label style={labelStyle}>Empresa terceirizada *</label><input style={inputStyle} placeholder="Nome da empresa" value={item.empresa_nome} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, empresa_nome: e.target.value } : x))} /></div>
+                          <div><label style={labelStyle}>Função/serviço</label><input style={inputStyle} placeholder="Ex.: elétrica" value={item.funcao} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, funcao: e.target.value } : x))} /></div>
+                          <div><label style={labelStyle}>Qtd.</label><input type="number" min="1" style={inputStyle} value={item.quantidade} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, quantidade: e.target.value } : x))} /></div>
+                          <div><label style={labelStyle}>Diária (R$)</label><input type="number" step="0.01" style={inputStyle} placeholder="0,00" value={item.valor_diaria} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, valor_diaria: e.target.value } : x))} /></div>
+                          <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações para o log de pagamento</label><textarea rows={2} style={inputStyle} placeholder="Medição, frente, período ou informação para conferência" value={item.observacoes} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>
+                          {newTerceiros.length > 1 && <button type="button" onClick={() => setNewTerceiros(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover empresa</button>}
+                        </div>)}
                       </div>
                     </div>
                   </>

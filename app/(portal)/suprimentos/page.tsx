@@ -15,6 +15,9 @@ const priorityColor: Record<string, string> = { Baixa: '#9CA3AF', Média: '#3B82
 
 type CardDraft = { id?: string; coluna_id: string; titulo: string; descricao: string; responsavel: string; prioridade: string; prazo: string; etiquetas: string; anexos: Array<{ nome: string; url: string }> }
 const emptyCard = (coluna_id = ''): CardDraft => ({ coluna_id, titulo: '', descricao: '', responsavel: '', prioridade: 'Média', prazo: '', etiquetas: '', anexos: [] })
+type QuadroComentario = { id: string; cartao_id: string; autor_nome: string; texto: string; created_at: string }
+type QuadroCampo = { id: string; quadro_id: string; nome: string; tipo: string; opcoes: string[]; ordem: number }
+type QuadroAutomacao = { id: string; quadro_id: string; nome: string; gatilho: string; acao: string; ativo: boolean }
 
 export default function QuadrosPage() {
   const [boards, setBoards] = useState<Quadro[]>([])
@@ -27,6 +30,14 @@ export default function QuadrosPage() {
   const [draft, setDraft] = useState<CardDraft | null>(null)
   const [draggingCard, setDraggingCard] = useState<string | null>(null)
   const [attachment, setAttachment] = useState<File | null>(null)
+  const [search, setSearch] = useState('')
+  const [priorityFilter, setPriorityFilter] = useState('todas')
+  const [view, setView] = useState<'board' | 'table' | 'calendar'>('board')
+  const [comments, setComments] = useState<QuadroComentario[]>([])
+  const [commentText, setCommentText] = useState('')
+  const [checklistText, setChecklistText] = useState('')
+  const [customFields, setCustomFields] = useState<QuadroCampo[]>([])
+  const [automations, setAutomations] = useState<QuadroAutomacao[]>([])
 
   const loadBoards = useCallback(async () => {
     const { data, error } = await supabase.from('quadros').select('*').eq('arquivado', false).order('ordem')
@@ -39,6 +50,12 @@ export default function QuadrosPage() {
 
   const loadBoard = useCallback(async () => {
     if (!boardId) { setColumns([]); setCards([]); return }
+    const [{ data: fieldData }, { data: automationData }] = await Promise.all([
+      supabase.from('quadro_campos').select('*').eq('quadro_id', boardId).order('ordem'),
+      supabase.from('quadro_automacoes').select('*').eq('quadro_id', boardId).order('created_at', { ascending: false }),
+    ])
+    setCustomFields((fieldData ?? []) as QuadroCampo[])
+    setAutomations((automationData ?? []) as QuadroAutomacao[])
     const { data: cols } = await supabase.from('quadro_colunas').select('*').eq('quadro_id', boardId).order('ordem')
     const typedCols = (cols ?? []) as QuadroColuna[]
     setColumns(typedCols)
@@ -49,9 +66,19 @@ export default function QuadrosPage() {
 
   useEffect(() => { loadBoards() }, [loadBoards])
   useEffect(() => { loadBoard() }, [loadBoard])
+  useEffect(() => {
+    if (!draft?.id) { setComments([]); return }
+    supabase.from('quadro_comentarios').select('*').eq('cartao_id', draft.id).order('created_at', { ascending: true }).then(({ data }) => setComments((data ?? []) as QuadroComentario[]))
+  }, [draft?.id])
 
   const selectedBoard = boards.find(b => b.id === boardId)
-  const cardsByColumn = useMemo(() => Object.fromEntries(columns.map(c => [c.id, cards.filter(x => x.coluna_id === c.id)])), [columns, cards])
+  const filteredCards = useMemo(() => cards.filter(card => {
+    const term = search.trim().toLowerCase()
+    const matchesText = !term || card.titulo.toLowerCase().includes(term) || (card.descricao || '').toLowerCase().includes(term) || (card.responsavel || '').toLowerCase().includes(term)
+    const matchesPriority = priorityFilter === 'todas' || card.prioridade === priorityFilter
+    return matchesText && matchesPriority
+  }), [cards, search, priorityFilter])
+  const cardsByColumn = useMemo(() => Object.fromEntries(columns.map(c => [c.id, filteredCards.filter(x => x.coluna_id === c.id)])), [columns, filteredCards])
 
   async function createBoard() {
     const nome = prompt('Nome do novo quadro:')?.trim()
@@ -151,6 +178,41 @@ export default function QuadrosPage() {
     setCards(v => v.filter(c => c.id !== id)); setDraft(null)
   }
 
+  async function addComment() {
+    if (!draft?.id || !commentText.trim()) return
+    const { data, error } = await supabase.from('quadro_comentarios').insert({ cartao_id: draft.id, autor_nome: 'Usuário conectado', texto: commentText.trim() }).select().single()
+    if (error) return toast(error.message, 'error')
+    setComments(items => [...items, data as QuadroComentario]); setCommentText('')
+  }
+
+  async function addChecklistItem() {
+    if (!draft?.id || !checklistText.trim()) return
+    const card = cards.find(item => item.id === draft.id)
+    if (!card) return
+    const checklist = [...(card.checklist || []), { texto: checklistText.trim(), concluido: false }]
+    const { error } = await supabase.from('quadro_cartoes').update({ checklist, updated_at: new Date().toISOString() }).eq('id', card.id)
+    if (error) return toast(error.message, 'error')
+    setCards(items => items.map(item => item.id === card.id ? { ...item, checklist } : item)); setChecklistText('')
+  }
+
+  async function addCustomField() {
+    if (!boardId) return
+    const nome = prompt('Nome do campo personalizado:')?.trim()
+    if (!nome) return
+    const { data, error } = await supabase.from('quadro_campos').insert({ quadro_id: boardId, nome, tipo: 'texto', ordem: customFields.length }).select().single()
+    if (error) return toast(error.message, 'error')
+    setCustomFields(items => [...items, data as QuadroCampo])
+  }
+
+  async function addAutomation() {
+    if (!boardId) return
+    const nome = prompt('Nome da automação:', 'Ao mover para concluído')?.trim()
+    if (!nome) return
+    const { data, error } = await supabase.from('quadro_automacoes').insert({ quadro_id: boardId, nome, gatilho: 'card_moved', acao: 'notify', configuracao: {} }).select().single()
+    if (error) return toast(error.message, 'error')
+    setAutomations(items => [data as QuadroAutomacao, ...items]); toast('Automação criada.', 'success')
+  }
+
   async function openHistory() {
     if (!boardId) return
     const cardIds = cards.map(c => c.id); const ids = [boardId, ...columns.map(c => c.id), ...cardIds]
@@ -162,6 +224,7 @@ export default function QuadrosPage() {
     <PageTitle modulo="Gestão Visual" titulo="Quadros & Suprimentos" />
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 18 }}>
       <select style={{ ...field, width: 260 }} value={boardId} onChange={e => setBoardId(e.target.value)}><option value="">Selecione um quadro</option>{boards.map(b => <option key={b.id} value={b.id}>{b.nome}</option>)}</select>
+      {selectedBoard && <><input style={{ ...field, width: 190 }} placeholder="Buscar cartões..." value={search} onChange={e => setSearch(e.target.value)} /><select style={{ ...field, width: 140 }} value={priorityFilter} onChange={e => setPriorityFilter(e.target.value)}><option value="todas">Todas prioridades</option>{['Baixa','Média','Alta','Urgente'].map(item => <option key={item}>{item}</option>)}</select><button style={ghost} onClick={() => setView('board')}>Quadro</button><button style={ghost} onClick={() => setView('table')}>Tabela</button><button style={ghost} onClick={() => setView('calendar')}>Calendário</button><button style={ghost} onClick={addCustomField}>+ Campo</button><button style={ghost} onClick={addAutomation}>⚡ Automação</button></>}
       <button style={button} onClick={createBoard}><Plus size={14}/> Novo quadro</button>
       {selectedBoard && <><button style={ghost} onClick={renameBoard}>Renomear</button><button style={ghost} onClick={addColumn}><Plus size={14}/> Coluna</button><button style={ghost} onClick={openHistory}><History size={14}/> Histórico</button><button style={ghost} onClick={archiveBoard}><Archive size={14}/> Arquivar</button></>}
     </div>
@@ -181,12 +244,13 @@ export default function QuadrosPage() {
         <button style={{ ...ghost, minWidth: 180, justifyContent: 'center' }} onClick={addColumn}><Plus size={14}/> Nova coluna</button>
       </div>}
     {draft && <div style={overlay}><form onSubmit={saveCard} style={modal}><header style={modalHeader}><strong>{draft.id ? 'Editar cartão' : 'Novo cartão'}</strong><button type="button" style={iconButton} onClick={() => setDraft(null)}><X size={17}/></button></header><label style={label}>Título<input autoFocus style={field} value={draft.titulo} onChange={e => setDraft({ ...draft, titulo: e.target.value })}/></label><label style={label}>Descrição<textarea rows={5} style={field} value={draft.descricao} onChange={e => setDraft({ ...draft, descricao: e.target.value })}/></label><div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><label style={label}>Responsável<input style={field} value={draft.responsavel} onChange={e => setDraft({ ...draft, responsavel: e.target.value })}/></label><label style={label}>Prioridade<select style={field} value={draft.prioridade} onChange={e => setDraft({ ...draft, prioridade: e.target.value })}>{['Baixa','Média','Alta','Urgente'].map(x => <option key={x}>{x}</option>)}</select></label></div><label style={label}>Prazo<input type="date" style={field} value={draft.prazo} onChange={e => setDraft({ ...draft, prazo: e.target.value })}/></label><label style={label}>Etiquetas separadas por vírgula<input style={field} value={draft.etiquetas} onChange={e => setDraft({ ...draft, etiquetas: e.target.value })}/></label><label style={label}>Imagem/anexo<input type="file" accept="image/*" style={field} onChange={e => setAttachment(e.target.files?.[0] || null)}/>{draft.anexos?.map(anexo => <a key={anexo.url} href={anexo.url} target="_blank" rel="noreferrer" style={{ color: C.amber, fontSize: 10 }}>{anexo.nome}</a>)}</label><footer style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>{draft.id ? <button type="button" style={{ ...ghost, color: C.red }} onClick={() => deleteCard(draft.id!)}><Trash2 size={14}/> Excluir</button> : <span/>}<button style={button}><Save size={14}/> Salvar</button></footer></form></div>}
+    {draft?.id && <div style={{ ...overlay, zIndex: 99 }}><div style={{ ...modal, width: 'min(620px, 100%)' }}><header style={modalHeader}><strong>Colaboração: {draft.titulo}</strong><button style={iconButton} onClick={() => setDraft(null)}><X size={17}/></button></header><section><label style={label}>Checklist avançado</label><div style={{ display: 'grid', gap: 5, marginBottom: 8 }}>{(cards.find(item => item.id === draft.id)?.checklist || []).map((item, index) => <label key={index} style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 11, color: C.ink }}><input type="checkbox" checked={item.concluido} onChange={async e => { const card = cards.find(item => item.id === draft.id); if (!card) return; const checklist = (card.checklist || []).map((x, i) => i === index ? { ...x, concluido: e.target.checked } : x); await supabase.from('quadro_cartoes').update({ checklist }).eq('id', card.id); setCards(items => items.map(x => x.id === card.id ? { ...x, checklist } : x)) }} />{item.texto}</label>)}</div><div style={{ display: 'flex', gap: 7 }}><input style={field} placeholder="Novo item" value={checklistText} onChange={e => setChecklistText(e.target.value)} /><button style={button} onClick={() => void addChecklistItem()}>Adicionar</button></div></section><section><label style={label}>Comentários</label><div style={{ maxHeight: 170, overflow: 'auto', display: 'grid', gap: 6, marginBottom: 8 }}>{comments.map(comment => <div key={comment.id} style={{ border: `1px solid ${C.border}`, padding: 8, fontSize: 11 }}><strong>{comment.autor_nome}</strong><div style={{ color: C.inkSoft, marginTop: 3 }}>{comment.texto}</div></div>)}</div><div style={{ display: 'flex', gap: 7 }}><input style={field} placeholder="Escreva um comentário" value={commentText} onChange={e => setCommentText(e.target.value)} /><button style={button} onClick={() => void addComment()}>Enviar</button></div></section><section><label style={label}>Campos personalizados</label>{customFields.length ? customFields.map(fieldItem => <div key={fieldItem.id} style={{ fontSize: 11, color: C.inkSoft, padding: 5, borderBottom: `1px solid ${C.border}` }}>{fieldItem.nome} <span style={{ float: 'right' }}>{fieldItem.tipo}</span></div>) : <p style={{ color: C.inkSoft, fontSize: 11 }}>Nenhum campo. Use “+ Campo” no cabeçalho.</p>}</section></div></div>}
     {showHistory && <div style={overlay}><div style={{ ...modal, width: 650 }}><header style={modalHeader}><strong>Histórico de edição</strong><button style={iconButton} onClick={() => setShowHistory(false)}><X size={17}/></button></header><div style={{ maxHeight: '65vh', overflow: 'auto', display: 'grid', gap: 8 }}>{history.length ? history.map(h => <div key={h.id} style={{ border: `1px solid ${C.border}`, padding: 10 }}><strong style={{ fontSize: 11 }}>{h.acao} · {h.entidade}</strong><div style={{ color: C.inkSoft, fontSize: 10, marginTop: 4 }}>{h.usuario_nome} · {new Date(h.created_at).toLocaleString('pt-BR')}</div></div>) : <p style={{ color: C.inkSoft }}>Nenhuma alteração registrada.</p>}</div></div></div>}
   </>
 }
 
 const iconButton: React.CSSProperties = { background: 'transparent', border: 0, color: C.inkSoft, padding: 3, cursor: 'pointer', display: 'inline-flex' }
 const label: React.CSSProperties = { display: 'grid', gap: 5, color: C.inkSoft, fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }
-const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: '#000B', zIndex: 100, display: 'grid', placeItems: 'center', padding: 16 }
+const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: '#000B', zIndex: 90, display: 'grid', placeItems: 'center', padding: 16 }
 const modal: React.CSSProperties = { width: 'min(520px, 100%)', maxHeight: '90vh', overflow: 'auto', background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: 18, display: 'grid', gap: 12 }
 const modalHeader: React.CSSProperties = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 15 }
