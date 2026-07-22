@@ -497,16 +497,37 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
   useEffect(() => { load() }, [load])
 
-  // Se o colaborador for "Administrador por Empresa", restringe a visualização à empresa dele
+  // Restringe a visualização às empresas autorizadas do colaborador
+  const empresasPermitidas = useMemo(() => {
+    if (colaboradorAtivo.cargo === 'admin_geral') return empresas
+    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+    if (ids.length === 0) return empresas
+    return empresas.filter(e => ids.includes(e.id))
+  }, [empresas, colaboradorAtivo])
+
   useEffect(() => {
-    if (colaboradorAtivo.cargo === 'admin_empresa' && colaboradorAtivo.empresa_id) {
-      setSelected(colaboradorAtivo.empresa_id)
+    if (colaboradorAtivo.cargo === 'admin_empresa') {
+      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+      if (ids.length === 1) {
+        setSelected(ids[0])
+      } else {
+        setSelected('todas')
+      }
     } else {
       setSelected('todas')
     }
   }, [colaboradorAtivo])
 
-  const filtered = useMemo(() => selected === 'todas' ? contas : contas.filter(c => c.empresa_id === selected), [contas, selected])
+  const filtered = useMemo(() => {
+    if (selected === 'todas') {
+      if (colaboradorAtivo.cargo === 'admin_empresa') {
+        const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+        if (ids.length > 0) return contas.filter(c => ids.includes(c.empresa_id))
+      }
+      return contas
+    }
+    return contas.filter(c => c.empresa_id === selected)
+  }, [contas, selected, colaboradorAtivo])
 
   const { receitas, despesas, resultado } = useMemo(() => {
     const rec = filtered.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + c.valor, 0)
@@ -609,12 +630,12 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 700 }}>Filtrar Empresa:</span>
         <select
           value={selected}
-          disabled={colaboradorAtivo.cargo === 'admin_empresa'}
+          disabled={empresasPermitidas.length <= 1}
           onChange={e => setSelected(e.target.value)}
-          style={{ ...input, width: 220, padding: '7px 12px' }}
+          style={{ ...input, width: 240, padding: '7px 12px' }}
         >
-          {colaboradorAtivo.cargo !== 'admin_empresa' && <option value="todas">Todas as empresas (Consolidado)</option>}
-          {empresas.filter(e => colaboradorAtivo.cargo !== 'admin_empresa' || e.id === colaboradorAtivo.empresa_id).map((e: any) => (
+          {empresasPermitidas.length > 1 && <option value="todas">Todas as empresas vinculadas</option>}
+          {empresasPermitidas.map((e: any) => (
             <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
           ))}
         </select>
@@ -1670,6 +1691,70 @@ const ALL_APPS = [
   { id: 'frota',        nome: 'Frota & GPS' },
 ]
 
+function SeletorMultiEmpresas({
+  empresas,
+  selectedIds,
+  onChange
+}: {
+  empresas: Empresa[]
+  selectedIds: string[]
+  onChange: (newIds: string[]) => void
+}) {
+  const todasSelecionadas = empresas.length > 0 && empresas.every(e => selectedIds.includes(e.id))
+
+  const toggleAll = () => {
+    if (todasSelecionadas) {
+      onChange([])
+    } else {
+      onChange(empresas.map(e => e.id))
+    }
+  }
+
+  const toggleOne = (id: string) => {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter(x => x !== id))
+    } else {
+      onChange([...selectedIds, id])
+    }
+  }
+
+  return (
+    <div style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, marginTop: 6, width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft }}>
+          EMPRESAS VINCULADAS ({selectedIds.length}/{empresas.length})
+        </span>
+        <button
+          type="button"
+          onClick={toggleAll}
+          style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 10, fontWeight: 800, cursor: 'pointer' }}
+        >
+          {todasSelecionadas ? 'Desmarcar todas' : '✓ Selecionar todas'}
+        </button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 6, maxHeight: 130, overflowY: 'auto' }}>
+        {empresas.map(emp => {
+          const checked = selectedIds.includes(emp.id)
+          return (
+            <label key={emp.id} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B14' : '#FFFFFF05', padding: '5px 8px', borderRadius: 4, border: `1px solid ${checked ? '#F59E0B55' : 'transparent'}` }}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggleOne(emp.id)}
+                style={{ accentColor: C.amber, cursor: 'pointer' }}
+              />
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {emp.nome_fantasia ?? emp.razao_social}
+              </span>
+            </label>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: PermissoesTabProps) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [configPermissoes, setConfigPermissoes] = useState<ConfigPermissao[]>([])
@@ -1699,8 +1784,8 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   const [editColForm, setEditColForm] = useState<Colaborador | null>(null)
   const [savingEditCol, setSavingEditCol] = useState(false)
 
-  // State para overrides de cargo e empresa nas solicitações pendentes
-  const [solOverrides, setSolOverrides] = useState<Record<string, { cargo: string; empresa_id: string }>>({})
+  // State para overrides de cargo e empresas nas solicitações pendentes
+  const [solOverrides, setSolOverrides] = useState<Record<string, { cargo: string; empresas_ids: string[] }>>({})
 
   // Se o usuário ativo for admin por empresa, já pré-define o formulário para a empresa dele
   useEffect(() => {
@@ -1861,11 +1946,15 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
     setSavingEditCol(true)
 
     try {
+      const selectedEmpresasIds = editColForm.empresas_ids || (editColForm.empresa_id ? [editColForm.empresa_id] : [])
+      const mainEmpresaId = editColForm.cargo === 'admin_geral' ? null : (selectedEmpresasIds[0] || editColForm.empresa_id || null)
+
       const { error } = await supabase
         .from('colaboradores')
         .update({
           cargo: editColForm.cargo,
-          empresa_id: editColForm.cargo === 'admin_empresa' ? (editColForm.empresa_id || null) : (editColForm.cargo === 'admin_geral' ? null : editColForm.empresa_id),
+          empresa_id: mainEmpresaId,
+          empresas_ids: editColForm.cargo === 'admin_geral' ? null : selectedEmpresasIds,
           override_permissoes: editColForm.override_permissoes,
           pode_empresas: editColForm.pode_empresas,
           pode_fornecedores: editColForm.pode_fornecedores,
@@ -1891,9 +1980,12 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
 
   const alterarCargoColaborador = async (id: string, novoCargo: string) => {
     try {
-      const updateData: Record<string, string | null> = { cargo: novoCargo }
-      // Quando cargo muda para admin_geral limpa empresa vinculada
-      if (novoCargo === 'admin_geral') updateData.empresa_id = null
+      const updateData: Record<string, string | string[] | null> = { cargo: novoCargo }
+      // Quando cargo muda para admin_geral limpa empresas vinculadas
+      if (novoCargo === 'admin_geral') {
+        updateData.empresa_id = null
+        updateData.empresas_ids = []
+      }
       const { error } = await supabase
         .from('colaboradores')
         .update(updateData)
@@ -1908,18 +2000,21 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
     }
   }
 
-  const alterarEmpresaColaborador = async (id: string, novaEmpresaId: string) => {
+  const alterarEmpresasColaborador = async (id: string, novasEmpresasIds: string[]) => {
     try {
       const { error } = await supabase
         .from('colaboradores')
-        .update({ empresa_id: novaEmpresaId || null })
+        .update({
+          empresa_id: novasEmpresasIds[0] || null,
+          empresas_ids: novasEmpresasIds
+        })
         .eq('id', id)
       if (error) throw error
-      toast('Empresa vinculada com sucesso!', 'success')
+      toast('Empresas vinculadas com sucesso!', 'success')
       await loadData()
       onRefresh()
     } catch (err: any) {
-      toast('Erro ao vincular empresa: ' + (err?.message || err), 'error')
+      toast('Erro ao vincular empresas: ' + (err?.message || err), 'error')
     }
   }
 
@@ -2120,7 +2215,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                 {solicitacoes.map(sol => {
                   const currentOverride = solOverrides[sol.id]
                   const cargoSelecionado = currentOverride?.cargo || sol.cargo_solicitado
-                  const empresaIdSelecionada = currentOverride?.empresa_id !== undefined ? currentOverride.empresa_id : (sol.empresa_id || '')
+                  const empresaIdSelecionada = currentOverride?.empresas_ids?.[0] !== undefined ? currentOverride.empresas_ids[0] : (sol.empresa_id || '')
                   const empresaNome = empresas.find(e => e.id === empresaIdSelecionada)?.nome_fantasia || 'Sem empresa vinculada'
 
                   return (
@@ -2140,17 +2235,17 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                             </div>
                           )}
 
-                          {/* Seletor de Cargo e Empresa para o Adm aprovar */}
-                          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-                            <div>
-                              <span style={{ fontSize: 9, color: C.inkSoft, fontWeight: 800, display: 'block', marginBottom: 3 }}>CARGO DEFINIDO:</span>
+                          {/* Seletor de Cargo e Multi-Empresas para o Adm aprovar */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ fontSize: 9, color: C.inkSoft, fontWeight: 800 }}>CARGO DEFINIDO:</span>
                               <select
                                 value={cargoSelecionado}
                                 onChange={e => setSolOverrides(prev => ({
                                   ...prev,
-                                  [sol.id]: { cargo: e.target.value, empresa_id: e.target.value === 'admin_geral' ? '' : (prev[sol.id]?.empresa_id ?? (sol.empresa_id || '')) }
+                                  [sol.id]: { cargo: e.target.value, empresas_ids: e.target.value === 'admin_geral' ? [] : (prev[sol.id]?.empresas_ids || (sol.empresas_ids || (sol.empresa_id ? [sol.empresa_id] : []))) }
                                 }))}
-                                style={{ ...input, width: 170, padding: '4px 8px', fontSize: 11, height: 28, borderColor: C.amber + '88' }}
+                                style={{ ...input, width: 200, padding: '4px 8px', fontSize: 11, height: 28, borderColor: C.amber + '88' }}
                               >
                                 {cargos.map(cargo => (
                                   <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
@@ -2158,24 +2253,16 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                               </select>
                             </div>
 
-                            {/* Seletor de Empresa (só se for admin_geral alterando ou para definir empresa) */}
+                            {/* Seletor Multi-Empresas (para cargos nao-gerais) */}
                             {isGeral && cargoSelecionado !== 'admin_geral' && (
-                              <div>
-                                <span style={{ fontSize: 9, color: C.inkSoft, fontWeight: 800, display: 'block', marginBottom: 3 }}>EMPRESA VINCULADA:</span>
-                                <select
-                                  value={empresaIdSelecionada}
-                                  onChange={e => setSolOverrides(prev => ({
-                                    ...prev,
-                                    [sol.id]: { cargo: prev[sol.id]?.cargo || sol.cargo_solicitado, empresa_id: e.target.value }
-                                  }))}
-                                  style={{ ...input, width: 180, padding: '4px 8px', fontSize: 11, height: 28, borderColor: !empresaIdSelecionada && cargoSelecionado === 'admin_empresa' ? '#ef4444' : C.border }}
-                                >
-                                  <option value="">Selecione a empresa...</option>
-                                  {empresas.map(e => (
-                                    <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
-                                  ))}
-                                </select>
-                              </div>
+                              <SeletorMultiEmpresas
+                                empresas={empresas}
+                                selectedIds={currentOverride?.empresas_ids !== undefined ? currentOverride.empresas_ids : (sol.empresas_ids || (sol.empresa_id ? [sol.empresa_id] : []))}
+                                onChange={newIds => setSolOverrides(prev => ({
+                                  ...prev,
+                                  [sol.id]: { cargo: prev[sol.id]?.cargo || sol.cargo_solicitado, empresas_ids: newIds }
+                                }))}
+                              />
                             )}
                           </div>
                         </div>
@@ -2269,7 +2356,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {colaboradoresFiltrados.map(c => {
                 const isAtivo = c.id === colaboradorAtivo.id
-                const empresaNome = empresas.find(e => e.id === c.empresa_id)?.nome_fantasia || 'Administração Geral'
+                const linkedEmpresaIds = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
+                const empresaNome = linkedEmpresaIds.length > 0
+                  ? linkedEmpresaIds.map(id => empresas.find(e => e.id === id)?.nome_fantasia || empresas.find(e => e.id === id)?.razao_social).filter(Boolean).join(', ')
+                  : 'Administração Geral'
                 return (
                   <div key={c.id} style={{ ...card, borderColor: isAtivo ? C.amber : C.border, padding: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -2288,7 +2378,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                           )}
                         </div>
                         <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
-                          {cargos.find(cargo => cargo.codigo === c.cargo)?.nome || NOMES_CARGOS[c.cargo] || c.cargo} · Empresa: {empresaNome}
+                          {cargos.find(cargo => cargo.codigo === c.cargo)?.nome || NOMES_CARGOS[c.cargo] || c.cargo} · Empresas: {empresaNome}
                         </div>
                         {c.email && <div style={{ fontSize: 10, color: C.inkSoft }}>{c.email}</div>}
                       </div>
@@ -2329,7 +2419,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                             <select
                               value={c.empresa_id || ''}
                               disabled={isAtivo}
-                              onChange={e => void alterarEmpresaColaborador(c.id, e.target.value)}
+                              onChange={e => void alterarEmpresasColaborador(c.id, e.target.value ? [e.target.value] : [])}
                               style={{ ...input, width: 160, padding: '3px 6px', fontSize: 10, height: 26, borderColor: !c.empresa_id ? '#ef4444' : C.border }}
                               title="Vincular empresa ao admin"
                             >
@@ -2503,23 +2593,19 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                   </select>
                 </div>
 
-                {/* Empresa vinculada (só para admin_empresa) */}
-                {editColForm.cargo === 'admin_empresa' && (
+                {/* Empresas vinculadas (para cargos nao-gerais) */}
+                {editColForm.cargo !== 'admin_geral' && (
                   <div>
-                    <label style={label}>Empresa Vinculada *</label>
-                    <select
-                      style={{ ...input, borderColor: !editColForm.empresa_id ? '#ef4444' : C.border }}
-                      value={editColForm.empresa_id || ''}
-                      onChange={e => setEditColForm({ ...editColForm, empresa_id: e.target.value })}
-                    >
-                      <option value="">Selecione a empresa...</option>
-                      {empresas.map(emp => (
-                        <option key={emp.id} value={emp.id}>{emp.nome_fantasia ?? emp.razao_social}</option>
-                      ))}
-                    </select>
-                    <p style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>
-                      O administrador desta empresa só poderá gerenciar colaboradores e operações da empresa selecionada.
-                    </p>
+                    <label style={label}>Empresas Vinculadas *</label>
+                    <SeletorMultiEmpresas
+                      empresas={empresas}
+                      selectedIds={editColForm.empresas_ids || (editColForm.empresa_id ? [editColForm.empresa_id] : [])}
+                      onChange={newIds => setEditColForm({
+                        ...editColForm,
+                        empresas_ids: newIds,
+                        empresa_id: newIds[0] || null
+                      })}
+                    />
                   </div>
                 )}
 

@@ -302,6 +302,7 @@ export interface Colaborador {
   nome: string
   cargo: string
   empresa_id: string | null
+  empresas_ids?: string[] | null
   email: string | null
   senha?: string | null
   created_at?: string
@@ -341,6 +342,7 @@ export interface SolicitacaoAcesso {
   email: string
   cargo_solicitado: string
   empresa_id: string | null
+  empresas_ids?: string[] | null
   mensagem: string | null
   status: 'pendente' | 'aprovado' | 'rejeitado'
   aprovado_por: string | null
