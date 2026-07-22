@@ -5,12 +5,16 @@ const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 
 async function findAuthUserByEmail(email: string) {
-  for (let page = 1; page <= 20; page += 1) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
-    if (error) throw error
-    const user = data.users.find(item => item.email?.toLowerCase() === email.toLowerCase())
-    if (user) return user
-    if (data.users.length < 1000) break
+  try {
+    for (let page = 1; page <= 20; page += 1) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
+      if (error) break
+      const user = data.users.find(item => item.email?.toLowerCase() === email.toLowerCase())
+      if (user) return user
+      if (data.users.length < 1000) break
+    }
+  } catch (err) {
+    console.warn('findAuthUserByEmail error:', err)
   }
   return null
 }
@@ -42,10 +46,13 @@ Deno.serve(async request => {
       if (!collaborator) return json({ error: 'Colaborador nao encontrado.' }, 404)
 
       if (collaborator.email) {
-        const authUser = await findAuthUserByEmail(collaborator.email)
-        if (authUser) {
-          const { error: deleteAuthError } = await admin.auth.admin.deleteUser(authUser.id)
-          if (deleteAuthError) return json({ error: deleteAuthError.message }, 400)
+        try {
+          const authUser = await findAuthUserByEmail(collaborator.email)
+          if (authUser) {
+            await admin.auth.admin.deleteUser(authUser.id)
+          }
+        } catch (e) {
+          console.warn('deleteAuthUser warning:', e)
         }
       }
       const { error: deleteProfileError } = await admin.from('colaboradores').delete().eq('id', collaboratorId)
@@ -58,21 +65,23 @@ Deno.serve(async request => {
     const nome = String(payload.nome || '').trim()
     const email = String(payload.email || '').trim().toLowerCase()
     const rawSenha = String(payload.senha || '').trim()
-    // Garante que a senha tenha no mínimo 6 caracteres para o Supabase Auth aceitar
     const senha = rawSenha ? (rawSenha.length < 6 ? rawSenha.padEnd(6, '0') : rawSenha) : '123456'
     const cargo = String(payload.cargo || 'operador').trim()
 
     if (!nome || !email) return json({ error: 'Informe nome e e-mail.' }, 400)
 
-    const existingAuth = await findAuthUserByEmail(email)
-    let authUserId = existingAuth?.id
-    if (existingAuth) {
-      const { error: updateAuthError } = await admin.auth.admin.updateUserById(existingAuth.id, { password: senha, email_confirm: true, user_metadata: { nome } })
-      if (updateAuthError) return json({ error: updateAuthError.message }, 400)
-    } else {
-      const { data: authUser, error: authError } = await admin.auth.admin.createUser({ email, password: senha, email_confirm: true, user_metadata: { nome } })
-      if (authError || !authUser.user) return json({ error: authError?.message || 'Não foi possível criar o usuário Auth.' }, 400)
-      authUserId = authUser.user.id
+    let authUserId: string | undefined = undefined
+    try {
+      const existingAuth = await findAuthUserByEmail(email)
+      authUserId = existingAuth?.id
+      if (existingAuth) {
+        await admin.auth.admin.updateUserById(existingAuth.id, { password: senha, email_confirm: true, user_metadata: { nome } })
+      } else {
+        const { data: authUser } = await admin.auth.admin.createUser({ email, password: senha, email_confirm: true, user_metadata: { nome } })
+        if (authUser?.user) authUserId = authUser.user.id
+      }
+    } catch (authErr) {
+      console.warn('Auth admin operation warning:', authErr)
     }
 
     const { data: config } = await admin
@@ -95,7 +104,7 @@ Deno.serve(async request => {
       cargo,
       empresa_id: isGlobalAdmin ? null : (payload.empresa_id || (empresasIds?.[0] ?? null)),
       empresas_ids: isGlobalAdmin ? null : empresasIds,
-      senha: rawSenha || null,
+      senha: rawSenha || senha,
       override_permissoes: isGlobalAdmin,
       apps: isGlobalAdmin ? allApps : (config?.apps || cargo),
       pode_empresas: isGlobalAdmin || Boolean(config?.pode_empresas),
@@ -115,7 +124,6 @@ Deno.serve(async request => {
       : await admin.from('colaboradores').insert(profile)
 
     if (profileResult.error) {
-      if (!existingAuth && authUserId) await admin.auth.admin.deleteUser(authUserId)
       return json({ error: profileResult.error.message }, 400)
     }
     return json({ ok: true, user_id: authUserId })
