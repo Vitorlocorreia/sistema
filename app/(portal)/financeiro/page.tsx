@@ -1862,6 +1862,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
         .from('colaboradores')
         .update({
           cargo: editColForm.cargo,
+          empresa_id: editColForm.cargo === 'admin_empresa' ? (editColForm.empresa_id || null) : (editColForm.cargo === 'admin_geral' ? null : editColForm.empresa_id),
           override_permissoes: editColForm.override_permissoes,
           pode_empresas: editColForm.pode_empresas,
           pode_fornecedores: editColForm.pode_fornecedores,
@@ -1887,16 +1888,35 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
 
   const alterarCargoColaborador = async (id: string, novoCargo: string) => {
     try {
+      const updateData: Record<string, string | null> = { cargo: novoCargo }
+      // Quando cargo muda para admin_geral limpa empresa vinculada
+      if (novoCargo === 'admin_geral') updateData.empresa_id = null
       const { error } = await supabase
         .from('colaboradores')
-        .update({ cargo: novoCargo })
+        .update(updateData)
         .eq('id', id)
 
       if (error) throw error
       toast('Cargo alterado com sucesso!', 'success')
+      await loadData()
       onRefresh()
     } catch (err: any) {
       toast('Erro ao alterar cargo: ' + (err?.message || err), 'error')
+    }
+  }
+
+  const alterarEmpresaColaborador = async (id: string, novaEmpresaId: string) => {
+    try {
+      const { error } = await supabase
+        .from('colaboradores')
+        .update({ empresa_id: novaEmpresaId || null })
+        .eq('id', id)
+      if (error) throw error
+      toast('Empresa vinculada com sucesso!', 'success')
+      await loadData()
+      onRefresh()
+    } catch (err: any) {
+      toast('Erro ao vincular empresa: ' + (err?.message || err), 'error')
     }
   }
 
@@ -2230,34 +2250,52 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                         {c.email && <div style={{ fontSize: 10, color: C.inkSoft }}>{c.email}</div>}
                       </div>
 
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
                         {isGeral && (
-                          <select
-                            value={c.cargo}
-                            disabled={isAtivo}
-                            onChange={e => void alterarCargoColaborador(c.id, e.target.value)}
-                            style={{ ...input, width: 145, padding: '3px 6px', fontSize: 10, height: 26 }}
-                            title="Alterar cargo do colaborador"
-                          >
-                            {cargos.map(cargo => (
-                              <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
-                            ))}
-                          </select>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <select
+                              value={c.cargo}
+                              disabled={isAtivo}
+                              onChange={e => void alterarCargoColaborador(c.id, e.target.value)}
+                              style={{ ...input, width: 145, padding: '3px 6px', fontSize: 10, height: 26 }}
+                              title="Alterar cargo do colaborador"
+                            >
+                              {cargos.map(cargo => (
+                                <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
+                              ))}
+                            </select>
+                            {/* Botão editar permissões individuais */}
+                            <button
+                              onClick={() => setEditColForm(c)}
+                              title="Editar Acessos desta Pessoa"
+                              style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}
+                            >
+                              <Edit3 size={14} />
+                            </button>
+                            {!isAtivo && (
+                              <button onClick={() => excluirColaborador(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
                         )}
-                        {/* Apenas o Admin Geral pode editar permissões individuais das pessoas */}
-                        {isGeral && (
-                          <button 
-                            onClick={() => setEditColForm(c)}
-                            title="Editar Acessos desta Pessoa"
-                            style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}
-                          >
-                            <Edit3 size={14} />
-                          </button>
-                        )}
-                        {!isAtivo && (
-                          <button onClick={() => excluirColaborador(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                            <X size={13} />
-                          </button>
+                        {/* Quando cargo é admin_empresa, admin_geral pode vincular empresa */}
+                        {isGeral && c.cargo === 'admin_empresa' && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 9, color: C.inkSoft, fontWeight: 700 }}>EMPRESA:</span>
+                            <select
+                              value={c.empresa_id || ''}
+                              disabled={isAtivo}
+                              onChange={e => void alterarEmpresaColaborador(c.id, e.target.value)}
+                              style={{ ...input, width: 160, padding: '3px 6px', fontSize: 10, height: 26, borderColor: !c.empresa_id ? '#ef4444' : C.border }}
+                              title="Vincular empresa ao admin"
+                            >
+                              <option value="">Selecione a empresa...</option>
+                              {empresas.map(e => (
+                                <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
+                              ))}
+                            </select>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2421,6 +2459,26 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                     ))}
                   </select>
                 </div>
+
+                {/* Empresa vinculada (só para admin_empresa) */}
+                {editColForm.cargo === 'admin_empresa' && (
+                  <div>
+                    <label style={label}>Empresa Vinculada *</label>
+                    <select
+                      style={{ ...input, borderColor: !editColForm.empresa_id ? '#ef4444' : C.border }}
+                      value={editColForm.empresa_id || ''}
+                      onChange={e => setEditColForm({ ...editColForm, empresa_id: e.target.value })}
+                    >
+                      <option value="">Selecione a empresa...</option>
+                      {empresas.map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.nome_fantasia ?? emp.razao_social}</option>
+                      ))}
+                    </select>
+                    <p style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>
+                      O administrador desta empresa só poderá gerenciar colaboradores e operações da empresa selecionada.
+                    </p>
+                  </div>
+                )}
 
                 <div style={{ background: '#12141C', border: `1px solid ${C.border}`, padding: 12, borderRadius: 6 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 12, fontWeight: 800, color: C.ink }}>
