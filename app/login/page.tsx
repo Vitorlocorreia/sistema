@@ -128,7 +128,7 @@ export default function LoginPage() {
           email: emailSol.trim().toLowerCase(),
           senha_provisoria: senhaSol,
           cargo_solicitado: cargoSol,
-          empresa_id: cargoSol !== 'admin_geral' && empresaSol ? empresaSol : null,
+          empresa_id: null,
           mensagem: mensagemSol.trim() || null,
           status: 'pendente'
         })
@@ -371,7 +371,7 @@ export default function LoginPage() {
                   Solicitação Enviada!
                 </h3>
                 <p style={{ fontSize: 13, color: '#9CA3AF', lineHeight: 1.5, margin: '0 0 24px 0' }}>
-                  Sua solicitação de cadastro foi registrada com sucesso. Ela está pendente de aprovação pelo Administrador Geral ou pelo Administrador da Empresa correspondente.
+                  Sua solicitação de cadastro foi registrada com sucesso. Ela está pendente de aprovação e definição de perfil pelo Administrador Geral.
                 </p>
                 <button
                   onClick={() => {
@@ -514,42 +514,7 @@ export default function LoginPage() {
 
                 {/* Cargo removido conforme solicitado: padrão operador, o adm define */}
 
-                {/* Empresa (Se não for Admin Geral) */}
-                {cargoSol !== 'admin_geral' && (
-                  <div style={{ marginBottom: 14 }}>
-                    <label style={{
-                      display: 'block', fontSize: 11, fontWeight: 800,
-                      color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6,
-                    }}>Sua Empresa / Filial *</label>
-                    <div style={{ position: 'relative' }}>
-                      <Building2 size={15} color="#4B5563" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-                      <select
-                        value={empresaSol}
-                        onChange={e => setEmpresaSol(e.target.value)}
-                        required={cargoSol !== 'admin_geral'}
-                        style={{
-                          width: '100%',
-                          background: '#0B0C0E',
-                          border: '1px solid #1E2230',
-                          borderRadius: 8,
-                          padding: '10px 14px 10px 42px',
-                          color: '#F3F4F6',
-                          fontSize: 13.5,
-                          outline: 'none',
-                          boxSizing: 'border-box',
-                          appearance: 'none',
-                        }}
-                      >
-                        <option value="">Selecione a empresa...</option>
-                        {empresas.map(emp => (
-                          <option key={emp.id} value={emp.id}>
-                            {emp.nome_fantasia ?? emp.razao_social}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                )}
+                {/* Empresa não é selecionada no cadastro; o Adm Geral vincula posteriormente */}
 
                 {/* Mensagem / Justificativa */}
                 <div style={{ marginBottom: 20 }}>
