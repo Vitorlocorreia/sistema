@@ -16,7 +16,6 @@ async function findAuthUserByEmail(email: string) {
 }
 
 // Verifica se o admin_id enviado no payload é um admin_geral na tabela colaboradores
-// (compatível com a arquitetura de sessão customizada do sistema)
 async function isAdmin(payload: Record<string, unknown>) {
   const adminId = String(payload.admin_id || '').trim()
   if (!adminId) return false
@@ -58,9 +57,12 @@ Deno.serve(async request => {
 
     const nome = String(payload.nome || '').trim()
     const email = String(payload.email || '').trim().toLowerCase()
-    const senha = String(payload.senha || '')
+    const rawSenha = String(payload.senha || '').trim()
+    // Garante que a senha tenha no mínimo 6 caracteres para o Supabase Auth aceitar
+    const senha = rawSenha ? (rawSenha.length < 6 ? rawSenha.padEnd(6, '0') : rawSenha) : '123456'
     const cargo = String(payload.cargo || 'operador').trim()
-    if (!nome || !email || senha.length < 8) return json({ error: 'Informe nome, e-mail e uma senha com no mínimo 8 caracteres.' }, 400)
+
+    if (!nome || !email) return json({ error: 'Informe nome e e-mail.' }, 400)
 
     const existingAuth = await findAuthUserByEmail(email)
     let authUserId = existingAuth?.id
@@ -93,7 +95,7 @@ Deno.serve(async request => {
       cargo,
       empresa_id: isGlobalAdmin ? null : (payload.empresa_id || (empresasIds?.[0] ?? null)),
       empresas_ids: isGlobalAdmin ? null : empresasIds,
-      senha: null,
+      senha: rawSenha || null,
       override_permissoes: isGlobalAdmin,
       apps: isGlobalAdmin ? allApps : (config?.apps || cargo),
       pode_empresas: isGlobalAdmin || Boolean(config?.pode_empresas),

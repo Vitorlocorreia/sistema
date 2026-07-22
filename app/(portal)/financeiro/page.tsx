@@ -2103,7 +2103,15 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
       })
 
       if (functionError || result?.error) {
-        alert('Erro ao criar colaborador a partir da solicitação: ' + (result?.error || functionError?.message))
+        let detail = result?.error || functionError?.message || 'não foi possível criar o colaborador'
+        const response = (functionError as { context?: Response } | null)?.context
+        if (response) {
+          try {
+            const body = await response.clone().json() as { error?: string }
+            detail = body.error || detail
+          } catch { /* mantem mensagem padrao */ }
+        }
+        alert('Erro ao criar colaborador a partir da solicitação: ' + detail)
         setLoading(false)
         return
       }
