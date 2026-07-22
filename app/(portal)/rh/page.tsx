@@ -264,7 +264,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
       <nav style={{ display: 'grid', gap: 6, padding: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5 }}>
         {modelos.filter(m => m.ordem <= 3).slice().sort((a, b) => a.ordem - b.ordem).map(modelo => (
           <button key={modelo.id} onClick={() => setActiveFolder(modelo.ordem)} style={{ ...outlineBtn, width: '100%', justifyContent: 'flex-start', padding: '9px 10px', fontSize: 9, color: activeFolder === modelo.ordem ? C.amber : C.inkSoft, borderColor: activeFolder === modelo.ordem ? C.amber : C.border }}>
-            📁 Etapa {modelo.ordem}<span style={{ marginLeft: 'auto', fontSize: 8 }}>{modelo.checklist.length}</span>
+            📁 Etapa {modelo.ordem}<span style={{ marginLeft: 'auto', fontSize: 8 }}>{modelo.ordem === 2 || modelo.ordem === 3 ? 1 : modelo.checklist.length}</span>
           </button>
         ))}
       </nav>
@@ -274,16 +274,38 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
           <div style={tableHead}>Arquivo recebido</div>
           <div style={tableHead}>Status</div>
           <div style={tableHead}>Ações</div>
-          {modelos.filter(modelo => modelo.ordem === activeFolder).flatMap(modelo => modelo.checklist.map(item => ({ modelo, item }))).map(({ modelo, item }) => {
-            const docs = invite.documentos.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
-            const doc = docs[docs.length - 1]
+          {modelos.filter(modelo => modelo.ordem === activeFolder).flatMap(modelo => {
+            // Nas Etapas 2 e 3: Apenas 1 linha (1 documento preenchido)
+            if (modelo.ordem === 2 || modelo.ordem === 3) {
+              const itemUnico = modelo.checklist[0] || { id: `etapa_${modelo.ordem}`, label: modelo.nome, obrigatorio: true }
+              const docs = invite.documentos.filter(d => d.modelo_id === modelo.id)
+              const doc = docs[docs.length - 1]
+              return [{
+                key: `${modelo.id}-unico`,
+                modelo,
+                label: `Documento Preenchido: ${modelo.nome}`,
+                doc,
+              }]
+            }
+            // Na Etapa 1: Renderiza cada item da checklist (incluindo PIX)
+            return modelo.checklist.map(item => {
+              const docs = invite.documentos.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
+              const doc = docs[docs.length - 1]
+              return {
+                key: `${modelo.id}-${item.id}`,
+                modelo,
+                label: item.label + (item.obrigatorio ? ' *' : ''),
+                doc,
+              }
+            })
+          }).map(({ key, modelo, label, doc }) => {
             return (
-              <div key={`${modelo.id}-${item.id}`} style={{ display: 'contents' }}>
+              <div key={key} style={{ display: 'contents' }}>
                 <div style={tableCell}>
                   <span style={{ color: C.amber, fontWeight: 900 }}>ETAPA {modelo.ordem}</span>
                   <small style={{ display: 'block', color: C.inkSoft, marginTop: 3 }}>{modelo.nome}</small>
                 </div>
-                <div style={tableCell}>{item.label}{item.obrigatorio ? ' *' : ''}</div>
+                <div style={tableCell}>{label}</div>
                 <div style={tableCell}>{doc ? <button onClick={() => onOpen(doc)} style={linkButton}>↗ {doc.nome}</button> : <span style={{ color: C.inkSoft }}>Ainda não enviado</span>}</div>
                 <div style={tableCell}>
                   <span style={{ color: doc?.status === 'aprovado' ? '#4ADE80' : doc?.status === 'devolvido' ? '#F87171' : doc ? C.amber : C.inkSoft, fontWeight: 800 }}>
