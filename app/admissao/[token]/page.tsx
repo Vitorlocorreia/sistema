@@ -1,13 +1,13 @@
 'use client'
 
 import { use, useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Clock3, FileCheck2, FileUp, ShieldCheck } from 'lucide-react'
+import { CheckCircle2, Clock3, FileCheck2, FileUp, ShieldCheck, ClipboardList } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
 
 type ChecklistItem = { id: string; label: string; obrigatorio: boolean }
 type Modelo = { id: string; codigo: string; ordem: number; nome: string; descricao: string; tipo_arquivo: string; arquivo_nome: string | null; arquivo_url: string | null; checklist: ChecklistItem[] }
-type Documento = { id: string; modelo_id: string; item_id: string; nome: string; tamanho_bytes: number; status: string; observacao_rh: string | null; enviado_em: string | null }
+type Documento = { id: string; modelo_id: string; item_id: string; nome: string; tamanho_bytes: number; status: string; observacao_rh: string | null; enviado_em: string | null; storage_path?: string }
 type Convite = { nome_destinatario: string; email_destinatario: string | null; telefone_destinatario: string | null; cargo: string | null; obra: string | null; expires_at: string; status: string; justificativa_devolucao: string | null }
 type Fluxo = { convite: Convite; modelos: Modelo[]; documentos: Documento[]; progresso: { etapa_atual: number; completo: boolean; etapas: Array<{ modelo_id: string; concluida: boolean; enviados: number; obrigatorios: number }> } }
 
@@ -75,7 +75,11 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
   }
 
   const enviados = fluxo?.documentos.filter(documento => ['enviado', 'aprovado'].includes(documento.status)).length ?? 0
-  const totalObrigatorios = useMemo(() => fluxo?.modelos.reduce((total, modelo) => total + modelo.checklist.filter(item => item.obrigatorio).length, 0) ?? 0, [fluxo])
+  const totalObrigatorios = useMemo(() => fluxo?.modelos.reduce((total, modelo) => {
+    // Etapa 1 (checklist) e Etapa 4 (guia RH) não exigem upload do candidato
+    if (modelo.ordem === 1 || modelo.ordem === 4) return total
+    return total + modelo.checklist.filter(item => item.obrigatorio).length
+  }, 0) ?? 0, [fluxo])
 
   return <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, padding: '28px 16px' }}>
     <section style={{ width: '100%', maxWidth: 900, margin: '0 auto' }}>
@@ -88,7 +92,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
         <section style={{ ...card, marginBottom: 14 }}>
           <strong style={{ fontSize: 13 }}>{fluxo.convite.nome_destinatario}</strong>
           <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5 }}>{fluxo.convite.cargo || 'Cargo não informado'}{fluxo.convite.obra ? ` · ${fluxo.convite.obra}` : ''}{fluxo.convite.telefone_destinatario ? ` · ${fluxo.convite.telefone_destinatario}` : ''}</div>
-          <p style={{ color: C.inkSoft, fontSize: 11, lineHeight: 1.6, margin: '12px 0 0' }}>O RH já realizou seu pré-cadastro. Você precisa apenas enviar os documentos solicitados abaixo. Fotografe em local iluminado, sem cortes e com todos os dados legíveis.</p>
+          <p style={{ color: C.inkSoft, fontSize: 11, lineHeight: 1.6, margin: '12px 0 0' }}>O RH já realizou seu pré-cadastro. Siga as etapas abaixo para concluir sua admissão.</p>
           {fluxo.convite.status === 'devolvido' && <div style={{ marginTop: 12, padding: 10, borderRadius: 5, border: '1px solid #EF444466', background: '#EF444412', color: '#FCA5A5', fontSize: 10 }}><strong>Documentação devolvida pelo RH</strong><div style={{ marginTop: 4 }}>{fluxo.convite.justificativa_devolucao || 'Revise os itens marcados e envie novamente.'}</div></div>}
           <div style={{ marginTop: 12, height: 7, borderRadius: 99, background: '#FFFFFF0D', overflow: 'hidden' }}><div style={{ width: `${totalObrigatorios ? Math.min(100, Math.round((enviados / totalObrigatorios) * 100)) : 0}%`, height: '100%', background: C.amber }} /></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', color: C.inkSoft, fontSize: 9, marginTop: 5 }}><span>{enviados} documento(s) enviados</span><span>Etapa atual: {fluxo.progresso.etapa_atual} de 4</span></div>
@@ -97,20 +101,160 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
         <div style={{ display: 'grid', gap: 12 }}>
           {fluxo.modelos.map(modelo => {
             const etapa = fluxo.progresso.etapas.find(item => item.modelo_id === modelo.id)
-            return <article key={modelo.id} style={{ ...card, borderColor: etapa?.concluida ? '#22C55E66' : C.border }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}><div><span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA {modelo.ordem} DE 4</span><h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2><p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>{modelo.arquivo_url && <a href={modelo.arquivo_url} download style={{ color: C.amber, display: 'inline-block', fontSize: 9, marginTop: 7 }}>↓ Baixar modelo {modelo.arquivo_nome || modelo.tipo_arquivo}</a>}</div>{etapa?.concluida && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Completa</span>}</div>
-              <div style={{ display: 'grid', gap: 7, marginTop: 13 }}>
-                {modelo.checklist.map(item => {
-                  const docs = fluxo.documentos.filter(documento => documento.modelo_id === modelo.id && documento.item_id === item.id)
-                  const accepted = docs.find(documento => ['enviado', 'aprovado'].includes(documento.status))
-                  const pending = docs.find(documento => documento.status === 'devolvido')
-                  const id = `${modelo.id}:${item.id}`
-                  return <div key={item.id} style={{ padding: 10, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}><div><strong style={{ fontSize: 10 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>{accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>✓ {accepted.nome}</div>}{pending && <div style={{ color: '#F87171', fontSize: 9, marginTop: 4 }}>Pendência: {pending.observacao_rh || 'envie novamente com melhor qualidade'}</div>}</div><label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1 }}><FileUp size={12} />{enviando === id ? 'Enviando…' : accepted ? 'Substituir' : 'Anexar'}<input hidden type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => void enviarArquivo(modelo, item, event.target.files?.[0])} /></label></div>
+
+            // ── ETAPA 1: Apenas checklist escrito, sem upload ──────────────────
+            if (modelo.ordem === 1) {
+              return (
+                <article key={modelo.id} style={{ ...card, borderColor: etapa?.concluida ? '#22C55E66' : C.border }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
+                    <div>
+                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 1 DE 4</span>
+                      <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
+                      <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
+                    </div>
+                    {etapa?.concluida && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Completa</span>}
                   </div>
-                })}
-              </div>
-            </article>
+                  <div style={{ marginTop: 14, padding: 12, background: '#0B0C0E', borderRadius: 5, border: `1px solid ${C.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
+                      <ClipboardList size={14} color={C.amber} />
+                      <strong style={{ fontSize: 11 }}>Documentos necessários para a admissão</strong>
+                    </div>
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {modelo.checklist.map(item => (
+                        <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', background: '#FFFFFF05', borderRadius: 4 }}>
+                          <span style={{ color: C.amber, fontWeight: 900, fontSize: 13, lineHeight: 1 }}>·</span>
+                          <span style={{ fontSize: 11, lineHeight: 1.5, color: C.ink }}>
+                            {item.label}
+                            {item.obrigatorio && <span style={{ color: '#F87171', marginLeft: 4, fontSize: 9, fontWeight: 800 }}>OBRIGATÓRIO</span>}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p style={{ fontSize: 10, color: C.inkSoft, marginTop: 12, lineHeight: 1.5 }}>
+                      Separe todos os documentos acima antes de prosseguir. O RH irá conferir na chegada.
+                    </p>
+                  </div>
+                </article>
+              )
+            }
+
+            // ── ETAPA 4: Guia de Exame Admissional (Baixar guia do RH + Anexar laudo médico) ──────
+            if (modelo.ordem === 4) {
+              const guiaRH = fluxo.documentos.find(d => d.modelo_id === modelo.id && d.item_id === '__guia_rh__')
+              const laudoCandidato = fluxo.documentos.find(d => d.modelo_id === modelo.id && d.item_id === '__laudo_candidato__')
+              const uploadId = `${modelo.id}:__laudo_candidato__`
+
+              return (
+                <article key={modelo.id} style={{ ...card, borderColor: laudoCandidato ? '#22C55E66' : C.border }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
+                    <div>
+                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 4 DE 4</span>
+                      <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
+                      <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>
+                        Baixe sua guia médica personalizada, realize os exames na clínica informada e anexe o laudo/resultado de retorno abaixo.
+                      </p>
+                    </div>
+                    {laudoCandidato && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Laudo Enviado</span>}
+                  </div>
+
+                  <div style={{ marginTop: 12, padding: 12, background: '#0B0C0E', borderRadius: 5, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {/* Bloco 1: Download da Guia do RH */}
+                    <div>
+                      <strong style={{ fontSize: 11, color: C.ink, display: 'block', marginBottom: 4 }}>1. Sua Guia Médica Personalizada</strong>
+                      {guiaRH ? (
+                        <a
+                          href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/rh-documentos/${guiaRH.storage_path || guiaRH.nome}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: C.amber, color: '#0B0C0E', fontWeight: 900, fontSize: 10, borderRadius: 4, textDecoration: 'none', marginTop: 4 }}
+                        >
+                          <FileCheck2 size={13} /> Baixar Guia Médica ({guiaRH.nome})
+                        </a>
+                      ) : (
+                        <p style={{ fontSize: 10, color: C.inkSoft, margin: 0 }}>
+                          ⏳ O RH ainda está preenchendo sua guia de exame. Ela estará disponível aqui em breve.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Bloco 2: Upload do Laudo pelo Candidato */}
+                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                        <div>
+                          <strong style={{ fontSize: 11, color: C.ink }}>2. Resultado / Laudo do Exame Admissional *</strong>
+                          {laudoCandidato && (
+                            <div style={{ color: laudoCandidato.status === 'aprovado' ? '#4ADE80' : laudoCandidato.status === 'devolvido' ? '#F87171' : C.amber, fontSize: 9, marginTop: 4 }}>
+                              {laudoCandidato.status === 'aprovado' ? '✓ Aprovado pelo RH' : laudoCandidato.status === 'devolvido' ? `Pendência: ${laudoCandidato.observacao_rh || 'Reenvie com melhor qualidade'}` : `✓ Enviado: ${laudoCandidato.nome}`}
+                            </div>
+                          )}
+                          {!laudoCandidato && (
+                            <div style={{ color: C.inkSoft, fontSize: 9, marginTop: 2 }}>Anexe a folha de laudo/ASO entregue pelo médico após a consulta.</div>
+                          )}
+                        </div>
+
+                        <label style={{ ...uploadButton, opacity: enviando === uploadId ? 0.6 : 1 }}>
+                          <FileUp size={12} />{enviando === uploadId ? 'Enviando…' : laudoCandidato ? 'Substituir Laudo' : 'Anexar Laudo'}
+                          <input
+                            hidden
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                            disabled={!!enviando}
+                            onChange={event => {
+                              const dummyItem = { id: '__laudo_candidato__', label: 'Laudo / ASO Admissional', obrigatorio: true }
+                              void enviarArquivo(modelo, dummyItem, event.target.files?.[0])
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              )
+            }
+
+            // ── ETAPA 2 e 3: Upload do candidato (apenas 1 item por vez) ───────
+            return (
+              <article key={modelo.id} style={{ ...card, borderColor: etapa?.concluida ? '#22C55E66' : C.border }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
+                  <div>
+                    <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA {modelo.ordem} DE 4</span>
+                    <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
+                    <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
+                    {modelo.arquivo_url && (
+                      <a href={modelo.arquivo_url} download style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, marginTop: 8, fontWeight: 800 }}>
+                        ↓ Baixar modelo {modelo.arquivo_nome || modelo.tipo_arquivo}
+                      </a>
+                    )}
+                  </div>
+                  {etapa?.concluida && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Completa</span>}
+                </div>
+
+                {/* Um único bloco de upload (documento preenchido pelo candidato) */}
+                <div style={{ marginTop: 13 }}>
+                  {modelo.checklist.map(item => {
+                    const docs = fluxo.documentos.filter(documento => documento.modelo_id === modelo.id && documento.item_id === item.id)
+                    const accepted = docs.find(documento => ['enviado', 'aprovado'].includes(documento.status))
+                    const pending = docs.find(documento => documento.status === 'devolvido')
+                    const id = `${modelo.id}:${item.id}`
+                    return (
+                      <div key={item.id} style={{ padding: 12, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5, marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                          <div>
+                            <strong style={{ fontSize: 11 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
+                            {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>✓ {accepted.nome}</div>}
+                            {pending && <div style={{ color: '#F87171', fontSize: 9, marginTop: 4 }}>Pendência: {pending.observacao_rh || 'envie novamente com melhor qualidade'}</div>}
+                          </div>
+                          <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1 }}>
+                            <FileUp size={12} />{enviando === id ? 'Enviando…' : accepted ? 'Substituir' : 'Anexar'}
+                            <input hidden type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => void enviarArquivo(modelo, item, event.target.files?.[0])} />
+                          </label>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </article>
+            )
           })}
         </div>
         {erro && <p style={{ color: '#F87171', fontSize: 11 }}>{erro}</p>}

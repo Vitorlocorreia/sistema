@@ -12,6 +12,7 @@ import {
   Plus,
   RotateCcw,
   Stethoscope,
+  Stethoscope as MedIcon,
   Trash2,
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
@@ -129,14 +130,179 @@ function ArchivePanel({ person, details, onBack, onDelete, onOpen }: { person: F
   </div>
 }
 
-function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke, onRegenerate, onCopy, onDelete }: { invite: Convite; modelos: ModeloAdmissao[]; onOpen: (documento: DocumentoCadastro) => void; onReview: (documento: DocumentoCadastro, status: 'aprovado' | 'devolvido') => void; onApprove: () => void; onRevoke: () => void; onRegenerate: () => void; onCopy: () => void; onDelete: () => void }) {
+// item_id especial usado para a guia que o RH envia ao candidato (distingue da devolucao)
+const GUIA_ITEM_ID = '__guia_rh__'
+const LAUDO_ITEM_ID = '__laudo_candidato__'
+
+function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke, onRegenerate, onCopy, onDelete, onRefresh }: {
+  invite: Convite
+  modelos: ModeloAdmissao[]
+  onOpen: (documento: DocumentoCadastro) => void
+  onReview: (documento: DocumentoCadastro, status: 'aprovado' | 'devolvido') => void
+  onApprove: () => void
+  onRevoke: () => void
+  onRegenerate: () => void
+  onCopy: () => void
+  onDelete: () => void
+  onRefresh?: () => Promise<void> | void
+}) {
   const [activeFolder, setActiveFolder] = useState(1)
+  const [uploadingGuia, setUploadingGuia] = useState(false)
+
+  const modeloEtapa4 = modelos.find(m => m.ordem === 4)
+  // Guia enviada pelo RH
+  const guiaRH = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && d.item_id === GUIA_ITEM_ID) : null
+  // Laudo de retorno enviado pelo candidato
+  const laudoCandidato = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && d.item_id === LAUDO_ITEM_ID) : null
+
+  async function uploadGuiaMedica(file: File | undefined) {
+    if (!file || !modeloEtapa4) return
+    setUploadingGuia(true)
+    try {
+      const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
+      const path = `guias/${invite.id}-${Date.now()}-${safeName}`
+      const { error: uploadError } = await supabase.storage.from('rh-documentos').upload(path, file, { contentType: file.type, upsert: true })
+      if (uploadError) throw uploadError
+      // Remove guia anterior se existir
+      if (guiaRH) {
+        await supabase.from('rh_admissao_documentos').delete().eq('id', guiaRH.id)
+      }
+      const { error: rowError } = await supabase.from('rh_admissao_documentos').insert({
+        convite_id: invite.id,
+        modelo_id: modeloEtapa4.id,
+        item_id: GUIA_ITEM_ID,
+        nome: file.name,
+        storage_path: path,
+        tamanho_bytes: file.size,
+        mime_type: file.type,
+        status: 'enviado',
+      })
+      if (rowError) throw rowError
+      toast('Guia médica enviada ao candidato!', 'success')
+      await onRefresh?.()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao enviar guia'
+      toast('Erro: ' + msg, 'error')
+    } finally {
+      setUploadingGuia(false)
+    }
+  }
+
   return <div>
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start', marginBottom: 13 }}><div><strong style={{ fontSize: 13 }}>{invite.nome_destinatario}</strong><p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>Perfil temporário · {invite.cpf || 'CPF não informado'} · {invite.cargo || 'Cargo não informado'}</p><button style={{ ...linkButton, marginTop: 6 }} onClick={onCopy}>Copiar código/link do convite</button></div><div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><button style={outlineBtn} onClick={onRegenerate}>Novo link</button><button style={outlineBtn} onClick={onRevoke}>Revogar</button><button style={{ ...outlineBtn, color: '#F87171' }} onClick={onDelete}><Trash2 size={12} />Excluir</button>{invite.status === 'aguardando_aprovacao' && <button style={btn} onClick={onApprove}><CheckCircle2 size={12} />Aprovar cadastro</button>}</div></div>
-    <div style={{ display: 'grid', gridTemplateColumns: '145px minmax(0,1fr)', gap: 12, alignItems: 'start' }}><nav style={{ display: 'grid', gap: 6, padding: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5 }}>{modelos.slice().sort((a, b) => a.ordem - b.ordem).map(modelo => <button key={modelo.id} onClick={() => setActiveFolder(modelo.ordem)} style={{ ...outlineBtn, width: '100%', justifyContent: 'flex-start', padding: '9px 10px', fontSize: 9, color: activeFolder === modelo.ordem ? C.amber : C.inkSoft, borderColor: activeFolder === modelo.ordem ? C.amber : C.border }}>📁 Etapa {modelo.ordem}<span style={{ marginLeft: 'auto', fontSize: 8 }}>{modelo.checklist.length}</span></button>)}</nav><div>
-    <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1fr 1.2fr', gap: 0, border: `1px solid ${C.border}`, borderRadius: 5, overflow: 'hidden' }}><div style={tableHead}>Documento obrigatório</div><div style={tableHead}>Arquivo recebido</div><div style={tableHead}>Status</div><div style={tableHead}>Ações</div>
-      {modelos.filter(modelo => modelo.ordem === activeFolder).flatMap(modelo => modelo.checklist.map(item => ({ modelo, item }))).map(({ modelo, item }) => { const docs = invite.documentos.filter(documento => documento.modelo_id === modelo.id && documento.item_id === item.id); const doc = docs[docs.length - 1]; return <div key={`${modelo.id}-${item.id}`} style={{ display: 'contents' }}><div style={tableCell}><span style={{ color: C.amber, fontWeight: 900 }}>ETAPA {modelo.ordem}</span><small style={{ display: 'block', color: C.inkSoft, marginTop: 3 }}>{modelo.nome}</small></div><div style={tableCell}>{item.label}{item.obrigatorio ? ' *' : ''}</div><div style={tableCell}>{doc ? <button onClick={() => onOpen(doc)} style={linkButton}>↗ {doc.nome}</button> : <span style={{ color: C.inkSoft }}>Ainda não enviado</span>}</div><div style={tableCell}><span style={{ color: doc?.status === 'aprovado' ? '#4ADE80' : doc?.status === 'devolvido' ? '#F87171' : doc ? C.amber : C.inkSoft, fontWeight: 800 }}>{doc?.status === 'aprovado' ? 'Aprovado' : doc?.status === 'devolvido' ? 'Devolvido' : doc ? 'Aguardando análise' : 'Pendente'}</span>{doc?.observacao_rh && <small style={{ display: 'block', color: '#F87171', marginTop: 4 }}>{doc.observacao_rh}</small>}</div><div style={{ ...tableCell, display: 'flex', gap: 5, flexWrap: 'wrap' }}>{doc ? <><button style={{ ...outlineBtn, padding: '5px 7px', fontSize: 8 }} onClick={() => onReview(doc, 'aprovado')}>Aprovar</button><button style={{ ...outlineBtn, padding: '5px 7px', fontSize: 8, color: '#F87171' }} onClick={() => onReview(doc, 'devolvido')}>Negar</button></> : <span style={{ color: C.inkSoft, fontSize: 9 }}>Aguardando envio</span>}</div></div> })}
-    </div></div></div>
+    {/* Cabeçalho com ações do convite */}
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start', marginBottom: 13 }}>
+      <div>
+        <strong style={{ fontSize: 13 }}>{invite.nome_destinatario}</strong>
+        <p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>Perfil temporário · {invite.cpf || 'CPF não informado'} · {invite.cargo || 'Cargo não informado'}</p>
+        <button style={{ ...linkButton, marginTop: 6 }} onClick={onCopy}>Copiar link do candidato</button>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button style={outlineBtn} onClick={onRegenerate}>Novo link</button>
+        <button style={outlineBtn} onClick={onRevoke}>Revogar</button>
+        <button style={{ ...outlineBtn, color: '#F87171' }} onClick={onDelete}><Trash2 size={12} />Excluir</button>
+        {invite.status === 'aguardando_aprovacao' && <button style={btn} onClick={onApprove}><CheckCircle2 size={12} />Aprovar cadastro</button>}
+      </div>
+    </div>
+
+    {/* ETAPA 4 — GUIA MÉDICA BIDIRECIONAL */}
+    {modeloEtapa4 && (
+      <div style={{ marginBottom: 14, background: '#0B0C0E', border: `1px solid ${laudoCandidato?.status === 'aprovado' ? '#22C55E55' : guiaRH ? C.amber + '44' : C.border}`, borderRadius: 6, padding: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
+          <MedIcon size={14} color={C.amber} />
+          <strong style={{ fontSize: 11, color: C.amber }}>ETAPA 4 — GUIA DE EXAME ADMISSIONAL</strong>
+        </div>
+
+        {/* FASE 1: RH envia a guia preenchida */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+          <div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: C.ink }}>1. Guia preenchida pelo RH</span>
+            <p style={{ fontSize: 9, color: C.inkSoft, margin: '3px 0 0' }}>
+              {guiaRH ? `✓ ${guiaRH.nome} — o candidato já pode baixar no link` : 'Preencha a guia com os dados do candidato e anexe aqui.'}
+            </p>
+            {guiaRH && (
+              <button onClick={() => onOpen(guiaRH)} style={{ ...linkButton, display: 'block', marginTop: 5, fontSize: 9 }}>↗ Abrir guia enviada</button>
+            )}
+          </div>
+          <label style={{ ...outlineBtn, cursor: uploadingGuia ? 'wait' : 'pointer', opacity: uploadingGuia ? 0.6 : 1, borderColor: C.amber, color: C.amber, fontSize: 9, padding: '7px 10px' }}>
+            <FileUp size={12} />{uploadingGuia ? 'Enviando...' : guiaRH ? 'Substituir guia' : 'Enviar guia preenchida'}
+            <input hidden type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" disabled={uploadingGuia} onChange={e => void uploadGuiaMedica(e.target.files?.[0])} />
+          </label>
+        </div>
+
+        {/* FASE 2: Candidato retorna o laudo */}
+        <div style={{ paddingTop: 10 }}>
+          <span style={{ fontSize: 10, fontWeight: 800, color: C.ink }}>2. Laudo/Resultado retornado pelo candidato</span>
+          {laudoCandidato ? (
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <button onClick={() => onOpen(laudoCandidato)} style={{ ...linkButton, fontSize: 9 }}>↗ {laudoCandidato.nome}</button>
+                <span style={{ fontSize: 9, fontWeight: 800, color: laudoCandidato.status === 'aprovado' ? '#4ADE80' : laudoCandidato.status === 'devolvido' ? '#F87171' : C.amber }}>
+                  {laudoCandidato.status === 'aprovado' ? '✓ Aprovado' : laudoCandidato.status === 'devolvido' ? 'Devolvido' : 'Aguardando análise'}
+                </span>
+              </div>
+              {laudoCandidato.status !== 'aprovado' && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button style={{ ...outlineBtn, padding: '5px 8px', fontSize: 9 }} onClick={() => onReview(laudoCandidato, 'aprovado')}>✓ Aprovar laudo</button>
+                  <button style={{ ...outlineBtn, padding: '5px 8px', fontSize: 9, color: '#F87171' }} onClick={() => onReview(laudoCandidato, 'devolvido')}>Solicitar reenvio</button>
+                </div>
+              )}
+              {laudoCandidato.observacao_rh && (
+                <p style={{ fontSize: 9, color: '#F87171', marginTop: 5 }}>{laudoCandidato.observacao_rh}</p>
+              )}
+            </div>
+          ) : (
+            <p style={{ fontSize: 9, color: C.inkSoft, margin: '5px 0 0' }}>
+              {guiaRH ? '⏳ Aguardando o candidato retornar com o laudo médico.' : '⚠️ Envie a guia ao candidato primeiro.'}
+            </p>
+          )}
+        </div>
+      </div>
+    )}
+
+    {/* Abas das etapas 1–3 */}
+    <div style={{ display: 'grid', gridTemplateColumns: '145px minmax(0,1fr)', gap: 12, alignItems: 'start' }}>
+      <nav style={{ display: 'grid', gap: 6, padding: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5 }}>
+        {modelos.filter(m => m.ordem <= 3).slice().sort((a, b) => a.ordem - b.ordem).map(modelo => (
+          <button key={modelo.id} onClick={() => setActiveFolder(modelo.ordem)} style={{ ...outlineBtn, width: '100%', justifyContent: 'flex-start', padding: '9px 10px', fontSize: 9, color: activeFolder === modelo.ordem ? C.amber : C.inkSoft, borderColor: activeFolder === modelo.ordem ? C.amber : C.border }}>
+            📁 Etapa {modelo.ordem}<span style={{ marginLeft: 'auto', fontSize: 8 }}>{modelo.checklist.length}</span>
+          </button>
+        ))}
+      </nav>
+      <div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1.6fr 1fr 1.2fr', gap: 0, border: `1px solid ${C.border}`, borderRadius: 5, overflow: 'hidden' }}>
+          <div style={tableHead}>Documento obrigatório</div>
+          <div style={tableHead}>Arquivo recebido</div>
+          <div style={tableHead}>Status</div>
+          <div style={tableHead}>Ações</div>
+          {modelos.filter(modelo => modelo.ordem === activeFolder).flatMap(modelo => modelo.checklist.map(item => ({ modelo, item }))).map(({ modelo, item }) => {
+            const docs = invite.documentos.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
+            const doc = docs[docs.length - 1]
+            return (
+              <div key={`${modelo.id}-${item.id}`} style={{ display: 'contents' }}>
+                <div style={tableCell}>
+                  <span style={{ color: C.amber, fontWeight: 900 }}>ETAPA {modelo.ordem}</span>
+                  <small style={{ display: 'block', color: C.inkSoft, marginTop: 3 }}>{modelo.nome}</small>
+                </div>
+                <div style={tableCell}>{item.label}{item.obrigatorio ? ' *' : ''}</div>
+                <div style={tableCell}>{doc ? <button onClick={() => onOpen(doc)} style={linkButton}>↗ {doc.nome}</button> : <span style={{ color: C.inkSoft }}>Ainda não enviado</span>}</div>
+                <div style={tableCell}>
+                  <span style={{ color: doc?.status === 'aprovado' ? '#4ADE80' : doc?.status === 'devolvido' ? '#F87171' : doc ? C.amber : C.inkSoft, fontWeight: 800 }}>
+                    {doc?.status === 'aprovado' ? 'Aprovado' : doc?.status === 'devolvido' ? 'Devolvido' : doc ? 'Aguardando análise' : 'Pendente'}
+                  </span>
+                  {doc?.observacao_rh && <small style={{ display: 'block', color: '#F87171', marginTop: 4 }}>{doc.observacao_rh}</small>}
+                </div>
+                <div style={{ ...tableCell, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+                  {doc ? <>
+                    <button style={{ ...outlineBtn, padding: '5px 7px', fontSize: 8 }} onClick={() => onReview(doc, 'aprovado')}>Aprovar</button>
+                    <button style={{ ...outlineBtn, padding: '5px 7px', fontSize: 8, color: '#F87171' }} onClick={() => onReview(doc, 'devolvido')}>Negar</button>
+                  </> : <span style={{ color: C.inkSoft, fontSize: 9 }}>Aguardando envio</span>}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
   </div>
 }
 
@@ -495,7 +661,7 @@ export default function RhPage() {
 
       {convites.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 14, alignItems: 'start' }}>
         <section style={card}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><strong style={{ fontSize: 12 }}>Em cadastro</strong><span style={{ color: C.inkSoft, fontSize: 10 }}>{convites.length}</span></div><div style={{ display: 'grid', gap: 8 }}>{convites.map(invite => { const expired = new Date(invite.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(invite.status); const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link gerado'; return <button key={invite.id} onClick={() => setSelectedInvite(invite)} style={{ textAlign: 'left', padding: '12px 13px', background: selectedInvite?.id === invite.id ? '#F59E0B18' : '#0B0C0E', color: C.ink, border: `1px solid ${selectedInvite?.id === invite.id ? '#F59E0B66' : C.border}`, borderRadius: 5, cursor: 'pointer', minHeight: 78 }}><strong style={{ fontSize: 12, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invite.nome_destinatario}</strong><div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5 }}>{invite.cargo || 'Cargo não informado'}</div><div style={{ color: invite.status === 'devolvido' || expired ? '#F87171' : C.amber, fontSize: 10, fontWeight: 800, marginTop: 7 }}>{label}</div>{invite.status === 'devolvido' && invite.justificativa_devolucao && <div style={{ color: '#FCA5A5', fontSize: 9, marginTop: 4, lineHeight: 1.35 }}>{invite.justificativa_devolucao}</div>}</button> })}</div></section>
-        <section style={card}>{selectedInvite ? <CadastroTable invite={selectedInvite} modelos={modelos} onOpen={documento => void openCadastroDocument(documento)} onReview={(documento, status) => void reviewCadastroDocument(selectedInvite, documento, status)} onApprove={() => void approveInvite(selectedInvite)} onRevoke={() => void revokeInvite(selectedInvite)} onRegenerate={() => void regenerateInvite(selectedInvite)} onCopy={() => void copyInviteCode(selectedInvite)} onDelete={() => void deleteInvite(selectedInvite)} /> : <p style={{ color: C.inkSoft, fontSize: 11 }}>Selecione um cadastro para revisar documentos, copiar o código do convite e acompanhar as quatro etapas.</p>}</section>
+        <section style={card}>{selectedInvite ? <CadastroTable invite={selectedInvite} modelos={modelos} onOpen={documento => void openCadastroDocument(documento)} onReview={(documento, status) => void reviewCadastroDocument(selectedInvite, documento, status)} onApprove={() => void approveInvite(selectedInvite)} onRevoke={() => void revokeInvite(selectedInvite)} onRegenerate={() => void regenerateInvite(selectedInvite)} onCopy={() => void copyInviteCode(selectedInvite)} onDelete={() => void deleteInvite(selectedInvite)} onRefresh={() => load()} /> : <p style={{ color: C.inkSoft, fontSize: 11 }}>Selecione um cadastro para revisar documentos, copiar o código do convite e acompanhar as quatro etapas.</p>}</section>
       </div>}
 
       {false && selectedInviteForRender && (
