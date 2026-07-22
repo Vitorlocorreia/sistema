@@ -223,6 +223,7 @@ export interface Conta {
   pago_em: string | null
   aprovado_por: string | null
   aprovado_em: string | null
+  criado_por?: string | null
   created_at: string
 }
 

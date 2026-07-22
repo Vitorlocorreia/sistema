@@ -1224,6 +1224,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         obra_id: form.obra_id || null,
         categoria: form.categoria || null,
         comprovante_url: comprovanteUrl,
+        criado_por: colaboradorAtivo.nome,
       })
     }
 
@@ -1618,7 +1619,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                           </a>
                         )}
                       </div>
-                      {c.categoria && <div style={{ fontSize: 10, color: C.inkSoft }}>{c.categoria}</div>}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 3 }}>
+                        {c.categoria && <span style={{ fontSize: 10, color: C.inkSoft }}>{c.categoria}</span>}
+                        {c.criado_por && (
+                          <span style={{ fontSize: 9, color: C.amber, background: C.amber + '15', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>
+                            Por: {c.criado_por}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td style={{ padding: '12px 14px', color: C.inkSoft }}>
                       <span style={{ borderLeft: `2px solid ${c.empresa?.cor ?? '#fff'}`, paddingLeft: 6 }}>
@@ -1641,8 +1649,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                       }}>
                         {c.status.toUpperCase()}
                       </span>
+                      {c.criado_por && (
+                        <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
+                          👤 Lançado por: {c.criado_por}
+                        </div>
+                      )}
                       {c.aprovado_por && (
-                        <div style={{ fontSize: 9, color: '#34D399', marginTop: 4 }}>
+                        <div style={{ fontSize: 9, color: '#34D399', marginTop: 2 }}>
                           ✓ Aprovado por: {c.aprovado_por}
                         </div>
                       )}
