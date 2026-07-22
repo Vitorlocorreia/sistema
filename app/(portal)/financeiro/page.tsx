@@ -154,6 +154,19 @@ export default function FinanceiroPage() {
   // Retorna a lista de abas visíveis de acordo com as permissões reais do cargo
   function getAbasPermitidas() {
     const isAdminGeral = colaboradorAtivo?.cargo === 'admin_geral'
+
+    // Se o cargo/usuário tem abas_financeiro configurado, usa ele
+    const abasConfig = (colaboradorAtivo?.override_permissoes
+      ? colaboradorAtivo.abas_financeiro
+      : permissaoAtiva?.abas_financeiro) || null
+
+    if (abasConfig) {
+      const abas = abasConfig.split(',').map(a => a.trim()).filter(Boolean)
+      if (isAdminGeral) abas.push('permissoes')
+      return abas
+    }
+
+    // Fallback legado baseado nas permissões individuais
     const apps = (colaboradorAtivo?.override_permissoes ? colaboradorAtivo.apps : permissaoAtiva?.apps) || ''
     const tem = (app: string) => apps.split(',').map(item => item.trim()).includes(app)
     const abas: string[] = []
@@ -1515,9 +1528,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const totalRecebido = filtered.filter(c => c.status === 'Pago' && c.tipo === 'receber').reduce((s, c) => s + c.valor, 0)
 
   // Permissões dinâmicas
-  const podePagar = permissaoAtiva?.pode_pagar
-  const podeAprovar = permissaoAtiva?.pode_aprovar
-  const podeDeletar = colaboradorAtivo.cargo === 'admin_geral' || colaboradorAtivo.cargo === 'admin_empresa'
+  const isAdminGeral = colaboradorAtivo.cargo === 'admin_geral'
+  const podePagar = permissaoAtiva?.pode_pagar || isAdminGeral
+  const podeAprovar = permissaoAtiva?.pode_aprovar || isAdminGeral
+  const podeAlterarStatus = permissaoAtiva?.pode_alterar_status !== false || isAdminGeral // default true
+  const podeDeletar = (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
 
   return (
     <div>
@@ -1639,7 +1654,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                     </td>
                     <td style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        {(podeAprovar || permissaoAtiva?.pode_lancar) && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, padding: '4px 6px', fontSize: 10 }}>
+                        {podeAlterarStatus && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, padding: '4px 6px', fontSize: 10 }}>
                           <option value="Lançado">Lançado</option>
                           <option value="Aguardando aprovação">Aguardando aprovação</option>
                           <option value="Liberado/OK">Liberado/OK</option>
@@ -1873,7 +1888,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
       pode_pagar: config.pode_pagar,
       pode_aprovar: config.pode_aprovar,
       limite_valor: Number(config.limite_valor),
-      apps: config.apps
+      apps: config.apps,
+      abas_financeiro: config.abas_financeiro || null,
+      pode_alterar_status: config.pode_alterar_status ?? true,
+      pode_excluir_lancamento: config.pode_excluir_lancamento ?? false,
     }).eq('cargo', cargo)
     
     await loadData()
@@ -2003,7 +2021,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
           pode_pagar: editColForm.pode_pagar,
           pode_aprovar: editColForm.pode_aprovar,
           limite_valor: Number(editColForm.limite_valor),
-          apps: editColForm.apps
+          apps: editColForm.apps,
+          abas_financeiro: editColForm.abas_financeiro || null,
+          pode_alterar_status: editColForm.pode_alterar_status ?? true,
+          pode_excluir_lancamento: editColForm.pode_excluir_lancamento ?? false,
         })
         .eq('id', editColForm.id)
 
@@ -2022,7 +2043,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   const alterarCargoColaborador = async (id: string, novoCargo: string) => {
     try {
       const updateData: Record<string, string | string[] | null> = { cargo: novoCargo }
-      // Quando cargo muda para admin_geral limpa empresas vinculadas
       if (novoCargo === 'admin_geral') {
         updateData.empresa_id = null
         updateData.empresas_ids = []
@@ -2062,32 +2082,32 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   // Aprovar solicitação de acesso
   const aprovarSolicitacao = async (sol: SolicitacaoAcesso) => {
     if (!confirm(`Aprovar a conta de "${sol.nome}" como "${NOMES_CARGOS[sol.cargo_solicitado]}"?`)) return
-    
+
     setLoading(true)
     try {
-      // 1. Cria colaborador
+      const empresasIds = Array.isArray(sol.empresas_ids) && sol.empresas_ids.length > 0
+        ? sol.empresas_ids
+        : sol.empresa_id ? [sol.empresa_id] : []
+
       const { data: result, error: functionError } = await supabase.functions.invoke('admin-users', {
-        body: { action: 'create_user', nome: sol.nome, email: sol.email, senha: sol.senha_provisoria, cargo: sol.cargo_solicitado, empresa_id: sol.cargo_solicitado === 'admin_geral' ? null : sol.empresa_id }
-      })
-      /* const { error: errCol } = await supabase.from('colaboradores').insert({
-        nome: sol.nome,
-        email: sol.email,
-        senha: sol.senha_provisoria,
-        cargo: sol.cargo_solicitado,
-        empresa_id: sol.cargo_solicitado === 'admin_geral' ? null : sol.empresa_id,
-        override_permissoes: false,
-        apps: 'financeiro'
+        body: {
+          action: 'create_user',
+          admin_id: colaboradorAtivo.id,
+          nome: sol.nome,
+          email: sol.email,
+          senha: sol.senha_provisoria,
+          cargo: sol.cargo_solicitado,
+          empresa_id: sol.cargo_solicitado === 'admin_geral' ? null : (empresasIds[0] ?? null),
+          empresas_ids: sol.cargo_solicitado === 'admin_geral' ? null : (empresasIds.length > 0 ? empresasIds : null),
+        }
       })
 
-      */
-      const errCol = { message: result?.error || functionError?.message || 'não foi possível criar a conta Auth.' }
       if (functionError || result?.error) {
-        alert('Erro ao criar colaborador a partir da solicitação: ' + errCol.message)
+        alert('Erro ao criar colaborador a partir da solicitação: ' + (result?.error || functionError?.message))
         setLoading(false)
         return
       }
 
-      // 2. Atualiza status da solicitação
       await supabase.from('solicitacoes_acesso').update({
         status: 'aprovado',
         aprovado_por: colaboradorAtivo.id,
@@ -2134,7 +2154,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
     setSavingCol(true)
     try {
       const { data: result, error } = await supabase.functions.invoke('admin-users', {
-        body: { action: 'delete_user', collaborator_id: id }
+        body: { action: 'delete_user', admin_id: colaboradorAtivo.id, collaborator_id: id }
       })
       if (error || result?.error) {
         let detail = result?.error || error?.message || 'nao foi possivel excluir'
@@ -2196,6 +2216,30 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
       ...editColForm,
       apps: newAppsList.join(',')
     })
+  }
+
+  // Toggle de aba do financeiro para um cargo
+  const handleToggleAbaFinanceiro = (cargo: string, abaId: string) => {
+    setConfigPermissoes(prev => prev.map(c => {
+      if (c.cargo === cargo) {
+        const abasList = c.abas_financeiro ? c.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+        const newAbasList = abasList.includes(abaId)
+          ? abasList.filter((x: string) => x !== abaId)
+          : [...abasList, abaId]
+        return { ...c, abas_financeiro: newAbasList.join(',') }
+      }
+      return c
+    }))
+  }
+
+  // Toggle de aba do financeiro para colaborador individual
+  const handleToggleAbaFinanceiroColaborador = (abaId: string) => {
+    if (!editColForm) return
+    const abasList = editColForm.abas_financeiro ? editColForm.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+    const newAbasList = abasList.includes(abaId)
+      ? abasList.filter((x: string) => x !== abaId)
+      : [...abasList, abaId]
+    setEditColForm({ ...editColForm, abas_financeiro: newAbasList.join(',') })
   }
 
   const handleLimiteChange = (cargo: string, valor: string) => {
@@ -2622,6 +2666,83 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                             })}
                           </div>
                         </div>
+
+                        {/* ABAS VISÍVEIS NO FINANCEIRO */}
+                        {cfg.cargo !== 'admin_geral' && (
+                          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>Abas Visíveis no Financeiro</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const ALL_ABAS_IDS = ['dashboard','historico','contas','empresas','fornecedores','obras']
+                                  const abasList = cfg.abas_financeiro ? cfg.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                                  const todasMarcadas = ALL_ABAS_IDS.every(a => abasList.includes(a))
+                                  setConfigPermissoes(prev => prev.map(c => c.cargo === cfg.cargo
+                                    ? { ...c, abas_financeiro: todasMarcadas ? '' : ALL_ABAS_IDS.join(',') }
+                                    : c
+                                  ))
+                                }}
+                                style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                              >
+                                {(() => {
+                                  const ALL_ABAS_IDS = ['dashboard','historico','contas','empresas','fornecedores','obras']
+                                  const abasList = cfg.abas_financeiro ? cfg.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                                  return ALL_ABAS_IDS.every(a => abasList.includes(a)) ? 'Desmarcar todas' : '✓ Selecionar todas'
+                                })()}
+                              </button>
+                            </div>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                              {([
+                                ['dashboard',    '📊 Dashboard'],
+                                ['historico',    '📋 Histórico & Fluxo'],
+                                ['contas',       '➕ Lançar Conta'],
+                                ['empresas',     '🏢 Empresas'],
+                                ['fornecedores', '👥 Fornecedores'],
+                                ['obras',        '🏗️ Obras & Métricas'],
+                              ] as const).map(([abaId, abaLabel]) => {
+                                const abasList = cfg.abas_financeiro ? cfg.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                                const checked = abasList.includes(abaId)
+                                return (
+                                  <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={checked}
+                                      onChange={() => handleToggleAbaFinanceiro(cfg.cargo, abaId)}
+                                      style={{ accentColor: C.amber, cursor: 'pointer' }}
+                                    />
+                                    {abaLabel}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* AÇÕES NO HISTÓRICO & FLUXO */}
+                        {cfg.cargo !== 'admin_geral' && (
+                          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Ações no Histórico & Fluxo</span>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {([
+                                ['pode_alterar_status',      'Alterar status dos lançamentos'],
+                                ['pode_aprovar',             'Aprovar lançamentos pendentes'],
+                                ['pode_pagar',               'Marcar como pago'],
+                                ['pode_excluir_lancamento',  'Excluir lançamentos'],
+                              ] as const).map(([campo, desc]) => {
+                                const valorCheck = cfg[campo as keyof ConfigPermissao] as boolean
+                                return (
+                                  <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: C.ink }}>
+                                    <button type="button" onClick={() => handleToggle(cfg.cargo, campo as keyof ConfigPermissao)} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                      {valorCheck ? <ToggleRight size={22} color={C.amber} /> : <ToggleLeft size={22} color={C.border} />}
+                                    </button>
+                                    {desc}
+                                  </label>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )
@@ -2747,6 +2868,73 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                             </label>
                           )
                         })}
+                      </div>
+                    </div>
+
+                    {/* ABAS VISÍVEIS NO FINANCEIRO (individual) */}
+                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>Abas Visíveis no Financeiro</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ALL_ABAS_IDS = ['dashboard','historico','contas','empresas','fornecedores','obras']
+                            const abasList = editColForm.abas_financeiro ? editColForm.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                            const todasMarcadas = ALL_ABAS_IDS.every(a => abasList.includes(a))
+                            setEditColForm({ ...editColForm, abas_financeiro: todasMarcadas ? '' : ALL_ABAS_IDS.join(',') })
+                          }}
+                          style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+                        >
+                          {(() => {
+                            const ALL_ABAS_IDS = ['dashboard','historico','contas','empresas','fornecedores','obras']
+                            const abasList = editColForm.abas_financeiro ? editColForm.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                            return ALL_ABAS_IDS.every(a => abasList.includes(a)) ? 'Desmarcar todas' : '✓ Selecionar todas'
+                          })()}
+                        </button>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        {([
+                          ['dashboard',    '📊 Dashboard'],
+                          ['historico',    '📋 Histórico & Fluxo'],
+                          ['contas',       '➕ Lançar Conta'],
+                          ['empresas',     '🏢 Empresas'],
+                          ['fornecedores', '👥 Fornecedores'],
+                          ['obras',        '🏗️ Obras & Métricas'],
+                        ] as const).map(([abaId, abaLabel]) => {
+                          const abasList = editColForm.abas_financeiro ? editColForm.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                          const checked = abasList.includes(abaId)
+                          return (
+                            <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4 }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => handleToggleAbaFinanceiroColaborador(abaId)}
+                                style={{ accentColor: C.amber, cursor: 'pointer' }}
+                              />
+                              {abaLabel}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* AÇÕES NO HISTÓRICO & FLUXO (individual) */}
+                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Ações no Histórico & Fluxo</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {([
+                          ['pode_alterar_status',     'Alterar status dos lançamentos'] as const,
+                          ['pode_aprovar',            'Aprovar lançamentos pendentes'] as const,
+                          ['pode_pagar',              'Marcar como pago'] as const,
+                          ['pode_excluir_lancamento', 'Excluir lançamentos'] as const,
+                        ]).map(([campo, desc]) => (
+                          <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: C.ink }}>
+                            <button type="button" onClick={() => setEditColForm({ ...editColForm, [campo]: !editColForm[campo as keyof typeof editColForm] })} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                              {editColForm[campo as keyof typeof editColForm] ? <ToggleRight size={22} color={C.amber} /> : <ToggleLeft size={22} color={C.border} />}
+                            </button>
+                            {desc}
+                          </label>
+                        ))}
                       </div>
                     </div>
                   </div>

@@ -314,6 +314,9 @@ export interface Colaborador {
   pode_aprovar: boolean
   limite_valor: number
   apps: string
+  abas_financeiro?: string | null
+  pode_alterar_status?: boolean | null
+  pode_excluir_lancamento?: boolean | null
 }
 
 export interface ConfigPermissao {
@@ -325,6 +328,9 @@ export interface ConfigPermissao {
   pode_aprovar: boolean
   limite_valor: number
   apps: string
+  abas_financeiro?: string | null
+  pode_alterar_status?: boolean | null
+  pode_excluir_lancamento?: boolean | null
 }
 
 export interface CargoSistema {
