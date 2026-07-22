@@ -150,6 +150,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
                       <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 1 DE 4</span>
+                      <span style={{ fontSize: 8, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Preenchido pelo Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
                     </div>
@@ -227,6 +228,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
                       <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA {modelo.ordem} DE 4</span>
+                      <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Modelo da Empresa · Assinatura do Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
                       {modelo.arquivo_url && (
@@ -269,6 +271,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
                       <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 4 DE 4</span>
+                      <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Guia do RH · Laudo do Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>
                         Baixe sua guia médica personalizada, realize os exames na clínica informada e anexe o laudo/resultado de retorno abaixo.

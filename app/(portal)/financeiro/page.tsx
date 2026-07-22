@@ -23,6 +23,8 @@ const fmtDate = (d: string) => {
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 
+export const CATEGORIAS = ['Material de Construção', 'Serviço Terceirizado', 'Equipamento', 'Locação', 'Imposto', 'Mão de Obra / CLT', 'Energia / Água', 'Escritório', 'Reembolso', 'Medição Recebida', 'Outros']
+
 const isVencido = (d: string, status: string) => {
   if (status === 'Pago') return false;
   const hoje = new Date();
@@ -1335,8 +1337,6 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     }
   }
 
-  const CATEGORIAS = ['Material de Construção', 'Serviço Terceirizado', 'Equipamento', 'Locação', 'Imposto', 'Mão de Obra / CLT', 'Energia / Água', 'Escritório', 'Medição Recebida', 'Outros']
-
   const podeRegistrar = permissaoAtiva?.pode_lancar
 
   return (
@@ -1608,7 +1608,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
   function iniciarEdicao(c: ContaComRelacoes) {
     setEditandoConta(c)
-    setFormEdicao({ descricao: c.descricao, valor: c.valor, data_previsao: c.data_previsao, data_vencimento: c.data_vencimento, status: c.status })
+    setFormEdicao({ descricao: c.descricao, valor: c.valor, data_previsao: c.data_previsao, data_vencimento: c.data_vencimento, status: c.status, categoria: c.categoria || '' })
   }
 
   async function salvarEdicaoConta() {
@@ -1618,7 +1618,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       valor: Number(formEdicao.valor),
       data_previsao: formEdicao.data_previsao,
       data_vencimento: formEdicao.data_vencimento,
-      status: formEdicao.status
+      status: formEdicao.status,
+      categoria: formEdicao.categoria || null
     }).eq('id', editandoConta.id)
     if (error) return toast(error.message, 'error')
     setEditandoConta(null)
@@ -1696,7 +1697,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#0B0C0E' }}>
-                {['Tipo','Descrição','Empresa','Vínculo','Previsão','Valor','Status','Ações'].map(h => (
+                {['Tipo','Descrição','Empresa','Fornecedor','Vencimento','Valor','Status','Ações'].map(h => (
                   <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: .6, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -1716,29 +1717,28 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                         {c.tipo === 'receber' ? <ArrowUpRight size={13} color="#34D399" /> : <ArrowDownRight size={13} color="#F87171" />}
                       </div>
                     </td>
-                    <td style={{ padding: '12px 14px', color: C.ink, fontWeight: 600, maxWidth: 220 }}>
-                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        {c.descricao}
+                    <td style={{ padding: '12px 14px', color: C.ink, fontWeight: 600, maxWidth: 260 }}>
+                      <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                        <span>{c.descricao}</span>
                         {c.comprovante_url && (
                           <a
                             href={c.comprovante_url}
                             target="_blank"
                             rel="noopener noreferrer"
                             title="Ver comprovante"
-                            style={{ color: C.amber, display: 'inline-flex', alignItems: 'center' }}
+                            style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', marginTop: 2, flexShrink: 0 }}
                           >
                             <Eye size={12} />
                           </a>
                         )}
                       </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 3 }}>
-                        {c.categoria && <span style={{ fontSize: 10, color: C.inkSoft }}>{c.categoria}</span>}
-                        {c.criado_por && (
-                          <span style={{ fontSize: 9, color: C.amber, background: C.amber + '15', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>
-                            Por: {c.criado_por}
+                      {c.categoria && (
+                        <div style={{ marginTop: 4 }}>
+                          <span style={{ fontSize: 10, color: C.inkSoft, background: '#ffffff0a', padding: '1px 6px', borderRadius: 3 }}>
+                            {c.categoria}
                           </span>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </td>
                     <td style={{ padding: '12px 14px', color: C.inkSoft }}>
                       <span style={{ borderLeft: `2px solid ${c.empresa?.cor ?? '#fff'}`, paddingLeft: 6 }}>
@@ -1753,7 +1753,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                         Bc: {c.fornecedor.banco} {c.fornecedor.agencia ? `Ag: ${c.fornecedor.agencia}` : ''} {c.fornecedor.conta ? `Cc: ${c.fornecedor.conta}` : ''}
                       </div>}
                     </td>
-                    <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>PREVISÃO ATRASADA</div>}</td>
+                    <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
                     <td style={{ padding: '12px 14px', fontWeight: 900, color: c.tipo === 'receber' ? '#34D399' : '#F87171', whiteSpace: 'nowrap' }}>
                       {c.tipo === 'receber' ? '+' : '-'}{fmt(c.valor)}
                     </td>
@@ -1839,8 +1839,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={label}>Previsão</label>
-                  <input style={input} type="date" value={formEdicao.data_previsao || ''} onChange={e => setFormEdicao(f => ({ ...f, data_previsao: e.target.value }))} />
+                  <label style={label}>Categoria</label>
+                  <select style={input} value={formEdicao.categoria || ''} onChange={e => setFormEdicao(f => ({ ...f, categoria: e.target.value }))}>
+                    <option value="">Selecione a categoria</option>
+                    {CATEGORIAS.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                  </select>
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={label}>Vencimento</label>

@@ -215,7 +215,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
         {/* FASE 1: RH envia a guia preenchida */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
           <div>
-            <span style={{ fontSize: 10, fontWeight: 800, color: C.ink }}>1. Guia preenchida pelo RH</span>
+            <span style={{ fontSize: 10, fontWeight: 800, color: C.ink }}>1. Guia preenchida pelo RH <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Empresa / RH]</span></span>
             <p style={{ fontSize: 9, color: C.inkSoft, margin: '3px 0 0' }}>
               {guiaRH ? `✓ ${guiaRH.nome} — o candidato já pode baixar no link` : 'Preencha a guia com os dados do candidato e anexe aqui.'}
             </p>
@@ -231,7 +231,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
 
         {/* FASE 2: Candidato retorna o laudo */}
         <div style={{ paddingTop: 10 }}>
-          <span style={{ fontSize: 10, fontWeight: 800, color: C.ink }}>2. Laudo/Resultado retornado pelo candidato</span>
+          <span style={{ fontSize: 10, fontWeight: 800, color: C.ink }}>2. Laudo/Resultado retornado pelo candidato <span style={{ fontSize: 8, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Funcionário]</span></span>
           {laudoCandidato ? (
             <div style={{ marginTop: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
