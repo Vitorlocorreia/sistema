@@ -77,6 +77,8 @@ export interface Obra {
   data_fim: string | null
   valor_contrato: number | null
   endereco: string | null
+  bm_atual?: string | null
+  medido_acumulado?: number | null
   created_at: string
 }
 
@@ -198,6 +200,17 @@ export interface Fornecedor {
   created_at: string
 }
 
+export interface ItemNegociacao {
+  id: string
+  data: string
+  autor: string
+  tipo: 'pagamento_parcial' | 'desconto' | 'prorrogacao' | 'observacao'
+  descricao: string
+  valor_pago?: number
+  valor_novo?: number
+  nova_data?: string
+}
+
 export interface Conta {
   id: string
   empresa_id: string
@@ -207,6 +220,7 @@ export interface Conta {
   categoria: string | null
   descricao: string
   valor: number
+  valor_original?: number | null
   data_vencimento: string
   data_previsao: string | null
   status: 'Lançado' | 'Aguardando aprovação' | 'Liberado/OK' | 'A pagar' | 'Pago' | 'Negado'
@@ -224,6 +238,7 @@ export interface Conta {
   aprovado_por: string | null
   aprovado_em: string | null
   criado_por?: string | null
+  historico_negociacao?: ItemNegociacao[] | null
   created_at: string
 }
 
@@ -290,7 +305,7 @@ export type RdoCompleto = Rdo & {
 
 export type ContaComRelacoes = Conta & {
   empresa?: Pick<Empresa, 'nome_fantasia' | 'razao_social' | 'cor'>
-  fornecedor?: Pick<Fornecedor, 'razao_social' | 'nome_fantasia'>
+  fornecedor?: Pick<Fornecedor, 'razao_social' | 'nome_fantasia' | 'banco' | 'agencia' | 'conta' | 'pix'>
   obra?: Pick<Obra, 'nome'>
 }
 

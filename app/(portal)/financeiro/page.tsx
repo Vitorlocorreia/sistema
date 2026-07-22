@@ -23,8 +23,13 @@ const fmtDate = (d: string) => {
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 
-const isVencido = (d: string, status: string) =>
-  status !== 'Pago' && new Date(d + 'T00:00:00') < new Date()
+const isVencido = (d: string, status: string) => {
+  if (status === 'Pago') return false;
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const vencimento = new Date(d + 'T00:00:00');
+  return vencimento < hoje;
+}
 
 // ─── NAV TABS ────────────────────────────────────────────────────────────────
 const TABS = [
@@ -290,6 +295,7 @@ function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
   const [form, setForm] = useState({ nome: '', cliente: '', endereco: '', valor: '' })
   const [legenda, setLegenda] = useState('')
   const [showForm, setShowForm] = useState(false)
+  const [metricasForm, setMetricasForm] = useState({ bm_atual: '', medido_acumulado: '' })
   
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
   
@@ -317,6 +323,18 @@ function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
     const { data: pub } = supabase.storage.from('comprovantes').getPublicUrl(path)
     const { error } = await supabase.from('fotos').insert({ obra_id: obraId, imagem_url: pub.publicUrl, legenda: legenda || file.name, data_iso: new Date().toISOString().slice(0, 10) })
     if (error) return toast(error.message, 'error'); setLegenda(''); await load(); toast('Foto anexada.', 'success')
+  }
+
+  async function salvarMetricasObra(id: string) {
+    if (!metricasForm.medido_acumulado) return toast('Informe o Medido Acumulado', 'error')
+    const medido = Number(metricasForm.medido_acumulado) || 0
+    const { error } = await supabase.from('obras').update({
+      bm_atual: metricasForm.bm_atual,
+      medido_acumulado: medido
+    }).eq('id', id)
+    if (error) return toast(error.message, 'error')
+    await load()
+    toast('Métricas atualizadas.', 'success')
   }
   
   async function excluirObra(id: string, nome: string) {
@@ -429,7 +447,7 @@ function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
       {obraId !== 'todas' && obraSelecionada && (
         <div style={{ ...card, padding: 24 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
-            <button onClick={() => setObraId('todas')} style={{ ...btnGhost, color: C.inkSoft, padding: '6px 10px' }}>← Visão Geral</button>
+            <button onClick={() => { setObraId('todas'); setMetricasForm({ bm_atual: '', medido_acumulado: '' }) }} style={{ ...btnGhost, color: C.inkSoft, padding: '6px 10px' }}>← Visão Geral</button>
             <div style={{ width: 1, height: 24, background: C.border }} />
             <h2 style={{ margin: 0, fontSize: 18, color: C.ink }}>{obraSelecionada.nome}</h2>
             {podeGerenciar && (
@@ -444,6 +462,42 @@ function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
               <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Contrato</span><strong style={{ fontSize: 14, color: C.ink }}>{fmt(Number(obraSelecionada.valor_contrato || 0))}</strong></div>
               <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Progresso</span><strong style={{ fontSize: 14, color: C.amber }}>{obraSelecionada.progresso}%</strong></div>
               <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Fotos do Financeiro</span><strong style={{ fontSize: 14, color: C.ink }}>{fotosObra.length}</strong></div>
+            </div>
+            
+            {/* Medições e BM (NOVO) */}
+            <div style={{ background: '#12141C', padding: 16, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 14, color: C.ink }}>Métricas de Medição</h3>
+                {podeGerenciar && (
+                  <button onClick={() => salvarMetricasObra(obraSelecionada.id)} style={{ ...btn(C.amber), padding: '6px 12px' }}>
+                    Salvar Métricas
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+                <div>
+                  <label style={{ fontSize: 11, color: C.inkSoft, display: 'block', marginBottom: 4 }}>BM Atual (Referência)</label>
+                  {podeGerenciar ? (
+                    <input style={input} placeholder={obraSelecionada.bm_atual || 'Ex: BM-004'} value={metricasForm.bm_atual} onChange={e => setMetricasForm({ ...metricasForm, bm_atual: e.target.value })} />
+                  ) : (
+                    <div style={{ fontSize: 14, color: C.ink, fontWeight: 600, padding: '8px 0' }}>{obraSelecionada.bm_atual || '—'}</div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.inkSoft, display: 'block', marginBottom: 4 }}>Medido Acumulado</label>
+                  {podeGerenciar ? (
+                    <input style={input} type="number" placeholder={String(obraSelecionada.medido_acumulado || 0)} value={metricasForm.medido_acumulado} onChange={e => setMetricasForm({ ...metricasForm, medido_acumulado: e.target.value })} />
+                  ) : (
+                    <div style={{ fontSize: 14, color: C.ink, fontWeight: 600, padding: '8px 0' }}>{fmt(Number(obraSelecionada.medido_acumulado || 0))}</div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ fontSize: 11, color: C.inkSoft, display: 'block', marginBottom: 4 }}>Saldo a Medir</label>
+                  <div style={{ fontSize: 14, color: '#34D399', fontWeight: 800, padding: '8px 0' }}>
+                    {fmt(Number(obraSelecionada.valor_contrato || 0) - Number(obraSelecionada.medido_acumulado || 0))}
+                  </div>
+                </div>
+              </div>
             </div>
             
             {/* Anexos */}
@@ -922,13 +976,23 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     load()
   }
 
+  const empresasIds = colaboradorAtivo.empresas_ids?.length ? colaboradorAtivo.empresas_ids : (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+
   const filtered = useMemo(() =>
-    fornecedores.filter(f =>
-      f.razao_social.toLowerCase().includes(search.toLowerCase()) ||
-      (f.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (f.categoria ?? '').toLowerCase().includes(search.toLowerCase())
-    )
-  , [fornecedores, search])
+    fornecedores.filter(f => {
+      // Regra de Permissões: se for admin_empresa, filtra pela empresa do usuário
+      if (colaboradorAtivo.cargo === 'admin_empresa') {
+        if (f.empresa_id && !empresasIds.includes(f.empresa_id)) {
+          return false
+        }
+      }
+      return (
+        f.razao_social.toLowerCase().includes(search.toLowerCase()) ||
+        (f.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        (f.categoria ?? '').toLowerCase().includes(search.toLowerCase())
+      )
+    })
+  , [fornecedores, search, colaboradorAtivo, empresasIds])
 
   // Indexador O(1): pré-computa totais de contas por fornecedor uma única vez
   const contasResumoMap = useMemo(() => {
@@ -973,16 +1037,18 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         <div style={{ ...card, marginBottom: 20, borderColor: C.amber + '44' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14, marginBottom: 14 }}>
             <div>
-              <label style={label}>Razão Social *</label>
-              <input style={input} value={form.razao_social} onChange={e => setForm(prev => ({ ...prev, razao_social: e.target.value }))} placeholder="Ex: Cimento & Cia Ltda" />
+              <label style={label}>{form.tipo === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}</label>
+              <input style={input} value={form.razao_social} onChange={e => setForm(prev => ({ ...prev, razao_social: e.target.value }))} placeholder={form.tipo === 'PJ' ? "Ex: Cimento & Cia Ltda" : "Ex: João da Silva"} />
             </div>
+            {form.tipo === 'PJ' && (
+              <div>
+                <label style={label}>Nome Fantasia</label>
+                <input style={input} value={form.nome_fantasia} onChange={e => setForm(prev => ({ ...prev, nome_fantasia: e.target.value }))} placeholder="Ex: Cimento Bela Vista" />
+              </div>
+            )}
             <div>
-              <label style={label}>Nome Fantasia</label>
-              <input style={input} value={form.nome_fantasia} onChange={e => setForm(prev => ({ ...prev, nome_fantasia: e.target.value }))} placeholder="Ex: Cimento Bela Vista" />
-            </div>
-            <div>
-              <label style={label}>CNPJ / CPF</label>
-              <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: e.target.value }))} placeholder="Ex: 00.000.000/0000-00" />
+              <label style={label}>{form.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
+              <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: e.target.value }))} placeholder={form.tipo === 'PJ' ? "Ex: 00.000.000/0000-00" : "Ex: 000.000.000-00"} />
             </div>
             <div>
               <label style={label}>Telefone</label>
@@ -1168,9 +1234,10 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     if (anexoFile) {
       const ext = anexoFile.name.split('.').pop()
       const fileName = `comprovante_${Date.now()}.${ext}`
+      const uploadPath = form.empresa_id ? `${form.empresa_id}/${fileName}` : fileName
       const { data: uploadData, error: uploadErr } = await supabase.storage
         .from('comprovantes')
-        .upload(fileName, anexoFile, { upsert: true })
+        .upload(uploadPath, anexoFile, { upsert: true })
       if (uploadErr) {
         toast('Erro ao enviar o comprovante. Verifique o bucket "comprovantes" no Supabase.', 'error')
         setSaving(false)
@@ -1441,17 +1508,21 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [search, setSearch]           = useState('')
+  const [editandoConta, setEditandoConta] = useState<ContaComRelacoes | null>(null)
+  const [formEdicao, setFormEdicao] = useState<Partial<ContaComRelacoes>>({})
 
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: c }, { data: e }] = await Promise.all([
-      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao', { ascending: false }),
+      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix), obra:obras(nome)').order('data_previsao', { ascending: false }),
       supabase.from('empresas').select('*').order('razao_social'),
     ])
     setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
     setLoading(false)
   }, [])
+
+  const podeLancar = permissaoAtiva?.pode_lancar;
 
   useEffect(() => { load() }, [load])
 
@@ -1512,6 +1583,47 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     if (!confirm('Deseja realmente excluir este lançamento financeiro?')) return
     await supabase.from('contas').delete().eq('id', id)
     load()
+  }
+
+  async function anexarComprovantePosterior(contaId: string, empresaId: string, file: File) {
+    if (!file) return
+    const ext = file.name.split('.').pop()
+    const fileName = `comprovante_posterior_${Date.now()}.${ext}`
+    const uploadPath = empresaId ? `${empresaId}/${fileName}` : fileName
+    
+    const { data: uploadData, error: uploadErr } = await supabase.storage
+      .from('comprovantes')
+      .upload(uploadPath, file, { upsert: true })
+      
+    if (uploadErr) return toast('Erro ao enviar anexo.', 'error')
+    
+    const { data: { publicUrl } } = supabase.storage.from('comprovantes').getPublicUrl(uploadData.path)
+    
+    const { error } = await supabase.from('contas').update({ comprovante_url: publicUrl }).eq('id', contaId)
+    if (error) return toast(error.message, 'error')
+    
+    toast('Comprovante anexado com sucesso.', 'success')
+    void load()
+  }
+
+  function iniciarEdicao(c: ContaComRelacoes) {
+    setEditandoConta(c)
+    setFormEdicao({ descricao: c.descricao, valor: c.valor, data_previsao: c.data_previsao, data_vencimento: c.data_vencimento, status: c.status })
+  }
+
+  async function salvarEdicaoConta() {
+    if (!editandoConta) return
+    const { error } = await supabase.from('contas').update({
+      descricao: formEdicao.descricao,
+      valor: Number(formEdicao.valor),
+      data_previsao: formEdicao.data_previsao,
+      data_vencimento: formEdicao.data_vencimento,
+      status: formEdicao.status
+    }).eq('id', editandoConta.id)
+    if (error) return toast(error.message, 'error')
+    setEditandoConta(null)
+    toast('Lançamento atualizado', 'success')
+    void load()
   }
 
   const filtered = contas.filter(c => {
@@ -1636,6 +1748,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                     <td style={{ padding: '12px 14px', color: C.inkSoft }}>
                       <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.nome_fantasia ?? c.fornecedor?.razao_social ?? 'Geral'}</div>
                       {c.obra && <div style={{ fontSize: 10, color: C.amber }}>Obra: {c.obra.nome}</div>}
+                      {c.fornecedor?.pix && <div style={{ fontSize: 10, color: '#34D399', marginTop: 2 }}>PIX: {c.fornecedor.pix}</div>}
+                      {(c.fornecedor?.banco) && <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
+                        Bc: {c.fornecedor.banco} {c.fornecedor.agencia ? `Ag: ${c.fornecedor.agencia}` : ''} {c.fornecedor.conta ? `Cc: ${c.fornecedor.conta}` : ''}
+                      </div>}
                     </td>
                     <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>PREVISÃO ATRASADA</div>}</td>
                     <td style={{ padding: '12px 14px', fontWeight: 900, color: c.tipo === 'receber' ? '#34D399' : '#F87171', whiteSpace: 'nowrap' }}>
@@ -1681,6 +1797,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                           </button>
                         )}
 
+                        {podeLancar && (
+                           <button onClick={() => iniciarEdicao(c)} title="Editar Lançamento" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
+                             <Edit3 size={13} />
+                           </button>
+                        )}
+                        <label title="Anexar Comprovante Posterior" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
+                          <Paperclip size={13} />
+                          <input hidden type="file" accept="image/*,application/pdf" onChange={e => { const f = e.target.files?.[0]; if(f) void anexarComprovantePosterior(c.id, c.empresa_id, f); e.currentTarget.value = '' }} />
+                        </label>
                         {podeDeletar && (
                           <button onClick={() => excluir(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}><X size={13} /></button>
                         )}
@@ -1696,6 +1821,42 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
           </table>
         </div>
       )}
+      
+      {/* Modal de Edição de Conta */}
+      {editandoConta && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ ...card, padding: 24, width: '100%', maxWidth: 500 }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 16, color: C.ink }}>Editar Lançamento</h3>
+            
+            <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
+              <div>
+                <label style={label}>Descrição</label>
+                <input style={input} value={formEdicao.descricao || ''} onChange={e => setFormEdicao(f => ({ ...f, descricao: e.target.value }))} />
+              </div>
+              <div>
+                <label style={label}>Valor</label>
+                <input style={input} type="number" step="0.01" value={formEdicao.valor || ''} onChange={e => setFormEdicao(f => ({ ...f, valor: Number(e.target.value) }))} />
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={label}>Previsão</label>
+                  <input style={input} type="date" value={formEdicao.data_previsao || ''} onChange={e => setFormEdicao(f => ({ ...f, data_previsao: e.target.value }))} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={label}>Vencimento</label>
+                  <input style={input} type="date" value={formEdicao.data_vencimento || ''} onChange={e => setFormEdicao(f => ({ ...f, data_vencimento: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button onClick={() => setEditandoConta(null)} style={{ ...btnGhost, color: C.inkSoft }}>Cancelar</button>
+              <button onClick={() => void salvarEdicaoConta()} style={btn(C.amber)}>Salvar Alterações</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
