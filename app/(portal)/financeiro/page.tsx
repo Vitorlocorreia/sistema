@@ -1699,6 +1699,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   const [editColForm, setEditColForm] = useState<Colaborador | null>(null)
   const [savingEditCol, setSavingEditCol] = useState(false)
 
+  // State para overrides de cargo e empresa nas solicitações pendentes
+  const [solOverrides, setSolOverrides] = useState<Record<string, { cargo: string; empresa_id: string }>>({})
+
   // Se o usuário ativo for admin por empresa, já pré-define o formulário para a empresa dele
   useEffect(() => {
     if (colaboradorAtivo.cargo === 'admin_empresa' && colaboradorAtivo.empresa_id) {
@@ -2115,40 +2118,80 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {solicitacoes.map(sol => {
-                  const empresaNome = empresas.find(e => e.id === sol.empresa_id)?.nome_fantasia || 'Administração Geral'
+                  const currentOverride = solOverrides[sol.id]
+                  const cargoSelecionado = currentOverride?.cargo || sol.cargo_solicitado
+                  const empresaIdSelecionada = currentOverride?.empresa_id !== undefined ? currentOverride.empresa_id : (sol.empresa_id || '')
+                  const empresaNome = empresas.find(e => e.id === empresaIdSelecionada)?.nome_fantasia || 'Sem empresa vinculada'
+
                   return (
                     <div key={sol.id} style={{ ...card, borderColor: C.amber, padding: 16, background: '#171410' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 240 }}>
                           <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{sol.nome}</div>
                           <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>
-                            Pediu: <strong style={{ color: C.amber }}>{NOMES_CARGOS[sol.cargo_solicitado]}</strong> em <strong>{empresaNome}</strong>
+                            Solicitou acesso em: <strong>{new Date(sol.created_at).toLocaleDateString('pt-BR')}</strong>
                           </div>
-                          <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic', marginTop: 6 }}>
+                          <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic', marginTop: 4 }}>
                             E-mail: {sol.email}
                           </div>
                           {sol.mensagem && (
-                            <div style={{ fontSize: 11, background: '#0B0C0E77', borderLeft: `2px solid ${C.amber}`, padding: '6px 10px', marginTop: 10, color: C.ink, borderRadius: '0 4px 4px 0' }}>
+                            <div style={{ fontSize: 11, background: '#0B0C0E77', borderLeft: `2px solid ${C.amber}`, padding: '6px 10px', marginTop: 8, color: C.ink, borderRadius: '0 4px 4px 0' }}>
                               &ldquo;{sol.mensagem}&rdquo;
                             </div>
                           )}
-                          <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 8 }}>
-                            Recebida em: {new Date(sol.created_at).toLocaleDateString('pt-BR')} às {new Date(sol.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+
+                          {/* Seletor de Cargo e Empresa para o Adm aprovar */}
+                          <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <div>
+                              <span style={{ fontSize: 9, color: C.inkSoft, fontWeight: 800, display: 'block', marginBottom: 3 }}>CARGO DEFINIDO:</span>
+                              <select
+                                value={cargoSelecionado}
+                                onChange={e => setSolOverrides(prev => ({
+                                  ...prev,
+                                  [sol.id]: { cargo: e.target.value, empresa_id: e.target.value === 'admin_geral' ? '' : (prev[sol.id]?.empresa_id ?? (sol.empresa_id || '')) }
+                                }))}
+                                style={{ ...input, width: 170, padding: '4px 8px', fontSize: 11, height: 28, borderColor: C.amber + '88' }}
+                              >
+                                {cargos.map(cargo => (
+                                  <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Seletor de Empresa (só se for admin_geral alterando ou para definir empresa) */}
+                            {isGeral && cargoSelecionado !== 'admin_geral' && (
+                              <div>
+                                <span style={{ fontSize: 9, color: C.inkSoft, fontWeight: 800, display: 'block', marginBottom: 3 }}>EMPRESA VINCULADA:</span>
+                                <select
+                                  value={empresaIdSelecionada}
+                                  onChange={e => setSolOverrides(prev => ({
+                                    ...prev,
+                                    [sol.id]: { cargo: prev[sol.id]?.cargo || sol.cargo_solicitado, empresa_id: e.target.value }
+                                  }))}
+                                  style={{ ...input, width: 180, padding: '4px 8px', fontSize: 11, height: 28, borderColor: !empresaIdSelecionada && cargoSelecionado === 'admin_empresa' ? '#ef4444' : C.border }}
+                                >
+                                  <option value="">Selecione a empresa...</option>
+                                  {empresas.map(e => (
+                                    <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 12 }}>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginTop: 4 }}>
                           <button
                             onClick={() => aprovarSolicitacao(sol)}
-                            style={{ ...btn('#10B981'), padding: '6px 12px', fontSize: 10 }}
+                            style={{ ...btn('#10B981'), padding: '7px 14px', fontSize: 11 }}
                           >
-                            <Check size={12} /> Aprovar
+                            <Check size={13} /> Aprovar Acesso
                           </button>
                           <button
                             onClick={() => rejeitarSolicitacao(sol.id)}
-                            style={{ ...btnGhost, borderColor: '#EF444455', color: '#EF4444', padding: '6px 12px', fontSize: 10 }}
+                            style={{ ...btnGhost, borderColor: '#EF444455', color: '#EF4444', padding: '7px 12px', fontSize: 11 }}
                           >
-                            <X size={12} /> Recusar
+                            <X size={13} /> Recusar
                           </button>
                         </div>
                       </div>
