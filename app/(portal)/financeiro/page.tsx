@@ -1828,6 +1828,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
       const { error } = await supabase
         .from('colaboradores')
         .update({
+          cargo: editColForm.cargo,
           override_permissoes: editColForm.override_permissoes,
           pode_empresas: editColForm.pode_empresas,
           pode_fornecedores: editColForm.pode_fornecedores,
@@ -1848,6 +1849,21 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
       alert('Erro ao salvar permissões da pessoa: ' + err.message)
     } finally {
       setSavingEditCol(false)
+    }
+  }
+
+  const alterarCargoColaborador = async (id: string, novoCargo: string) => {
+    try {
+      const { error } = await supabase
+        .from('colaboradores')
+        .update({ cargo: novoCargo })
+        .eq('id', id)
+
+      if (error) throw error
+      toast('Cargo alterado com sucesso!', 'success')
+      onRefresh()
+    } catch (err: any) {
+      toast('Erro ao alterar cargo: ' + (err?.message || err), 'error')
     }
   }
 
@@ -2182,6 +2198,19 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                       </div>
 
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {isGeral && (
+                          <select
+                            value={c.cargo}
+                            disabled={isAtivo}
+                            onChange={e => void alterarCargoColaborador(c.id, e.target.value)}
+                            style={{ ...input, width: 145, padding: '3px 6px', fontSize: 10, height: 26 }}
+                            title="Alterar cargo do colaborador"
+                          >
+                            {Object.entries(NOMES_CARGOS).map(([val, label]) => (
+                              <option key={val} value={val}>{label}</option>
+                            ))}
+                          </select>
+                        )}
                         {/* Apenas o Admin Geral pode editar permissões individuais das pessoas */}
                         {isGeral && (
                           <button 
@@ -2316,6 +2345,19 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
               </div>
 
               <form onSubmit={handleSaveColaboradorPerms} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div>
+                  <label style={label}>Cargo / Nível de Acesso</label>
+                  <select
+                    style={input}
+                    value={editColForm.cargo}
+                    onChange={e => setEditColForm({ ...editColForm, cargo: e.target.value })}
+                  >
+                    {Object.entries(NOMES_CARGOS).map(([val, label]) => (
+                      <option key={val} value={val}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
                 <div style={{ background: '#12141C', border: `1px solid ${C.border}`, padding: 12, borderRadius: 6 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 12, fontWeight: 800, color: C.ink }}>
                     <button type="button" onClick={() => setEditColForm({ ...editColForm, override_permissoes: !editColForm.override_permissoes })} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
