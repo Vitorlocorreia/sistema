@@ -2081,14 +2081,15 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
 
   // Aprovar solicitação de acesso
   const aprovarSolicitacao = async (sol: SolicitacaoAcesso) => {
-    if (!confirm(`Aprovar a conta de "${sol.nome}" como "${NOMES_CARGOS[sol.cargo_solicitado]}"?`)) return
+    // Aplica o cargo e empresas selecionados pelo admin no painel (ou usa os padrões da solicitação)
+    const override = solOverrides[sol.id]
+    const cargoDefinido = override?.cargo || sol.cargo_solicitado
+    const empresasIdsDefinidas = override?.empresas_ids !== undefined
+      ? override.empresas_ids
+      : (sol.empresas_ids || (sol.empresa_id ? [sol.empresa_id] : []))
 
     setLoading(true)
     try {
-      const empresasIds = Array.isArray(sol.empresas_ids) && sol.empresas_ids.length > 0
-        ? sol.empresas_ids
-        : sol.empresa_id ? [sol.empresa_id] : []
-
       const { data: result, error: functionError } = await supabase.functions.invoke('admin-users', {
         body: {
           action: 'create_user',
@@ -2096,9 +2097,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
           nome: sol.nome,
           email: sol.email,
           senha: sol.senha_provisoria,
-          cargo: sol.cargo_solicitado,
-          empresa_id: sol.cargo_solicitado === 'admin_geral' ? null : (empresasIds[0] ?? null),
-          empresas_ids: sol.cargo_solicitado === 'admin_geral' ? null : (empresasIds.length > 0 ? empresasIds : null),
+          cargo: cargoDefinido,
+          empresa_id: cargoDefinido === 'admin_geral' ? null : (empresasIdsDefinidas[0] ?? null),
+          empresas_ids: cargoDefinido === 'admin_geral' ? null : (empresasIdsDefinidas.length > 0 ? empresasIdsDefinidas : null),
         }
       })
 
@@ -2111,7 +2112,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
             detail = body.error || detail
           } catch { /* mantem mensagem padrao */ }
         }
-        alert('Erro ao criar colaborador a partir da solicitação: ' + detail)
+        toast('Erro ao criar colaborador: ' + detail, 'error')
         setLoading(false)
         return
       }
@@ -2122,11 +2123,11 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
         aprovado_em: new Date().toISOString()
       }).eq('id', sol.id)
 
-      alert(`Acesso aprovado e conta criada para ${sol.nome}.`)
+      toast(`Acesso aprovado e conta criada para ${sol.nome}!`, 'success')
       onRefresh()
       await loadData()
-    } catch (err) {
-      alert('Erro inesperado na aprovação.')
+    } catch (err: any) {
+      toast('Erro inesperado na aprovação: ' + (err?.message || err), 'error')
     } finally {
       setLoading(false)
     }
@@ -2134,8 +2135,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
 
   // Rejeitar solicitação de acesso
   const rejeitarSolicitacao = async (id: string) => {
-    if (!confirm('Deseja rejeitar esta solicitação de acesso?')) return
-    
     setLoading(true)
     try {
       await supabase.from('solicitacoes_acesso').update({
@@ -2144,10 +2143,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
         aprovado_em: new Date().toISOString()
       }).eq('id', id)
 
-      alert('Solicitação de acesso rejeitada.')
+      toast('Solicitação de acesso rejeitada.', 'info')
       await loadData()
-    } catch (err) {
-      alert('Erro inesperado na rejeição.')
+    } catch (err: any) {
+      toast('Erro inesperado na rejeição: ' + (err?.message || err), 'error')
     } finally {
       setLoading(false)
     }
@@ -2155,10 +2154,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
 
   const excluirColaborador = async (id: string) => {
     if (id === colaboradorAtivo.id) {
-      alert('Você não pode excluir o usuário que está ativamente conectado no momento.')
+      toast('Você não pode excluir o usuário conectado.', 'error')
       return
     }
-    if (!confirm('Deseja excluir definitivamente este colaborador? O acesso Auth e o perfil serao removidos.')) return
     setSavingCol(true)
     try {
       const { data: result, error } = await supabase.functions.invoke('admin-users', {
@@ -2171,13 +2169,16 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
           try {
             const body = await response.clone().json() as { error?: string }
             detail = body.error || detail
-          } catch { /* mantÃ©m a mensagem padrÃ£o */ }
+          } catch { /* mantem */ }
         }
-        alert('Erro ao excluir colaborador: ' + detail)
+        toast('Erro ao excluir colaborador: ' + detail, 'error')
         return
       }
-      alert('Colaborador excluido do sistema e do Supabase Auth.')
+      toast('Colaborador excluído com sucesso.', 'success')
       onRefresh()
+      await loadData()
+    } catch (err: any) {
+      toast('Erro ao excluir: ' + (err?.message || err), 'error')
     } finally {
       setSavingCol(false)
     }
