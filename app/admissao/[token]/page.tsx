@@ -1,7 +1,7 @@
 'use client'
 
 import { use, useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Clock3, FileCheck2, FileUp, ShieldCheck, ClipboardList } from 'lucide-react'
+import { CheckCircle2, Clock3, FileCheck2, FileUp, ShieldCheck, CreditCard, Download } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
 
@@ -17,6 +17,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState('')
+  const [pixInput, setPixInput] = useState('')
   const [finalizado, setFinalizado] = useState(false)
   const endpoint = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/rh-admissao`
 
@@ -27,6 +28,11 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || 'Convite inválido.')
       setFluxo(body)
+      // Carrega valor do PIX salvo previamente se existir
+      const docPix = (body.documentos as Documento[] | undefined)?.find(d => d.item_id === 'pix')
+      if (docPix?.nome?.startsWith('Chave PIX:')) {
+        setPixInput(docPix.nome.replace('Chave PIX:', '').trim())
+      }
       setErro('')
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Não foi possível validar o convite.')
@@ -59,6 +65,41 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     }
   }
 
+  async function salvarChavePix(modelo: Modelo, item: ChecklistItem) {
+    if (!pixInput.trim()) return
+    const uploadId = `${modelo.id}:${item.id}`
+    setEnviando(uploadId)
+    setErro('')
+    try {
+      const request = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request_upload',
+          token,
+          modelo_id: modelo.id,
+          item_id: item.id,
+          nome: `Chave PIX: ${pixInput.trim()}`,
+          mime_type: 'text/plain',
+          tamanho_bytes: pixInput.trim().length,
+        }),
+      })
+      const prepared = await request.json()
+      if (!request.ok) throw new Error(prepared.error || 'Não foi possível preparar o salvamento.')
+      const confirm = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm_upload', token, document_id: prepared.document_id }),
+      })
+      if (!confirm.ok) throw new Error('Não foi possível confirmar a chave PIX.')
+      await carregar()
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Falha ao salvar PIX.')
+    } finally {
+      setEnviando('')
+    }
+  }
+
   async function finalizar() {
     setEnviando('finalizar')
     setErro('')
@@ -76,8 +117,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
   const enviados = fluxo?.documentos.filter(documento => ['enviado', 'aprovado'].includes(documento.status)).length ?? 0
   const totalObrigatorios = useMemo(() => fluxo?.modelos.reduce((total, modelo) => {
-    // Etapa 1 (checklist) e Etapa 4 (guia RH) não exigem upload do candidato
-    if (modelo.ordem === 1 || modelo.ordem === 4) return total
+    if (modelo.ordem === 2 || modelo.ordem === 3) return total + 1
+    if (modelo.ordem === 4) return total
     return total + modelo.checklist.filter(item => item.obrigatorio).length
   }, 0) ?? 0, [fluxo])
 
@@ -102,7 +143,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           {fluxo.modelos.map(modelo => {
             const etapa = fluxo.progresso.etapas.find(item => item.modelo_id === modelo.id)
 
-            // ── ETAPA 1: Apenas checklist escrito, sem upload ──────────────────
+            // ── ETAPA 1: Caixas de upload normais + Input de texto na última box (Chave PIX) ──────
             if (modelo.ordem === 1) {
               return (
                 <article key={modelo.id} style={{ ...card, borderColor: etapa?.concluida ? '#22C55E66' : C.border }}>
@@ -114,25 +155,104 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                     </div>
                     {etapa?.concluida && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Completa</span>}
                   </div>
-                  <div style={{ marginTop: 14, padding: 12, background: '#0B0C0E', borderRadius: 5, border: `1px solid ${C.border}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 }}>
-                      <ClipboardList size={14} color={C.amber} />
-                      <strong style={{ fontSize: 11 }}>Documentos necessários para a admissão</strong>
-                    </div>
-                    <div style={{ display: 'grid', gap: 8 }}>
-                      {modelo.checklist.map(item => (
-                        <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '8px 10px', background: '#FFFFFF05', borderRadius: 4 }}>
-                          <span style={{ color: C.amber, fontWeight: 900, fontSize: 13, lineHeight: 1 }}>·</span>
-                          <span style={{ fontSize: 11, lineHeight: 1.5, color: C.ink }}>
-                            {item.label}
-                            {item.obrigatorio && <span style={{ color: '#F87171', marginLeft: 4, fontSize: 9, fontWeight: 800 }}>OBRIGATÓRIO</span>}
-                          </span>
+
+                  <div style={{ display: 'grid', gap: 7, marginTop: 13 }}>
+                    {modelo.checklist.map(item => {
+                      const docs = fluxo.documentos.filter(documento => documento.modelo_id === modelo.id && documento.item_id === item.id)
+                      const accepted = docs.find(documento => ['enviado', 'aprovado'].includes(documento.status))
+                      const pending = docs.find(documento => documento.status === 'devolvido')
+                      const id = `${modelo.id}:${item.id}`
+                      const isPix = item.id === 'pix' || item.label.toLowerCase().includes('pix')
+
+                      // Última box: Campo de texto para digitar Chave PIX
+                      if (isPix) {
+                        return (
+                          <div key={item.id} style={{ padding: 12, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : C.border}`, borderRadius: 5 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                              <CreditCard size={14} color={C.amber} />
+                              <strong style={{ fontSize: 11 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
+                            </div>
+                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                              <input
+                                style={{ flex: 1, minWidth: 200, background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                                placeholder="Digite sua Chave PIX e Banco (ex: CPF / Banco Itaú)"
+                                value={pixInput}
+                                onChange={e => setPixInput(e.target.value)}
+                              />
+                              <button
+                                disabled={enviando === id || !pixInput.trim()}
+                                onClick={() => void salvarChavePix(modelo, item)}
+                                style={{ padding: '7px 14px', background: C.amber, color: '#0B0C0E', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: pixInput.trim() ? 1 : 0.5 }}
+                              >
+                                {enviando === id ? 'Salvando...' : accepted ? 'Atualizar PIX' : 'Salvar PIX'}
+                              </button>
+                            </div>
+                            {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 6 }}>✓ {accepted.nome}</div>}
+                          </div>
+                        )
+                      }
+
+                      // Demais boxes: Upload normal de arquivo
+                      return (
+                        <div key={item.id} style={{ padding: 10, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                            <div>
+                              <strong style={{ fontSize: 10 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
+                              {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>✓ {accepted.nome}</div>}
+                              {pending && <div style={{ color: '#F87171', fontSize: 9, marginTop: 4 }}>Pendência: {pending.observacao_rh || 'envie novamente com melhor qualidade'}</div>}
+                            </div>
+                            <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1 }}>
+                              <FileUp size={12} />{enviando === id ? 'Enviando…' : accepted ? 'Substituir' : 'Anexar'}
+                              <input hidden type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => void enviarArquivo(modelo, item, event.target.files?.[0])} />
+                            </label>
+                          </div>
                         </div>
-                      ))}
+                      )
+                    })}
+                  </div>
+                </article>
+              )
+            }
+
+            // ── ETAPA 2 (Autodeclaração) & ETAPA 3 (Ficha de Registro): Apenas 1 box de upload ────
+            if (modelo.ordem === 2 || modelo.ordem === 3) {
+              const itemUnico = modelo.checklist[0] || { id: `etapa_${modelo.ordem}`, label: modelo.nome, obrigatorio: true }
+              const docs = fluxo.documentos.filter(documento => documento.modelo_id === modelo.id)
+              const accepted = docs.find(documento => ['enviado', 'aprovado'].includes(documento.status))
+              const pending = docs.find(documento => documento.status === 'devolvido')
+              const id = `${modelo.id}:${itemUnico.id}`
+
+              return (
+                <article key={modelo.id} style={{ ...card, borderColor: accepted ? '#22C55E66' : C.border }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
+                    <div>
+                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA {modelo.ordem} DE 4</span>
+                      <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
+                      <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
+                      {modelo.arquivo_url && (
+                        <a href={modelo.arquivo_url} download style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, marginTop: 8, fontWeight: 800 }}>
+                          <Download size={12} /> Baixar modelo {modelo.arquivo_nome || modelo.tipo_arquivo}
+                        </a>
+                      )}
                     </div>
-                    <p style={{ fontSize: 10, color: C.inkSoft, marginTop: 12, lineHeight: 1.5 }}>
-                      Separe todos os documentos acima antes de prosseguir. O RH irá conferir na chegada.
-                    </p>
+                    {accepted && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Anexado</span>}
+                  </div>
+
+                  {/* Única box de upload do modelo preenchido */}
+                  <div style={{ marginTop: 13, padding: 12, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                      <div>
+                        <strong style={{ fontSize: 11 }}>Anexar {modelo.nome} Preenchida *</strong>
+                        {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>✓ Arquivo enviado: {accepted.nome}</div>}
+                        {pending && <div style={{ color: '#F87171', fontSize: 9, marginTop: 4 }}>Pendência: {pending.observacao_rh || 'envie novamente com melhor qualidade'}</div>}
+                        {!accepted && <div style={{ color: C.inkSoft, fontSize: 9, marginTop: 2 }}>Baixe o modelo acima, preencha, assine e anexe o arquivo final aqui.</div>}
+                      </div>
+
+                      <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1 }}>
+                        <FileUp size={12} />{enviando === id ? 'Enviando…' : accepted ? 'Substituir' : 'Anexar Arquivo'}
+                        <input hidden type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => void enviarArquivo(modelo, itemUnico, event.target.files?.[0])} />
+                      </label>
+                    </div>
                   </div>
                 </article>
               )
@@ -212,49 +332,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
               )
             }
 
-            // ── ETAPA 2 e 3: Upload do candidato (apenas 1 item por vez) ───────
-            return (
-              <article key={modelo.id} style={{ ...card, borderColor: etapa?.concluida ? '#22C55E66' : C.border }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
-                  <div>
-                    <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA {modelo.ordem} DE 4</span>
-                    <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
-                    <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
-                    {modelo.arquivo_url && (
-                      <a href={modelo.arquivo_url} download style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 9, marginTop: 8, fontWeight: 800 }}>
-                        ↓ Baixar modelo {modelo.arquivo_nome || modelo.tipo_arquivo}
-                      </a>
-                    )}
-                  </div>
-                  {etapa?.concluida && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Completa</span>}
-                </div>
-
-                {/* Um único bloco de upload (documento preenchido pelo candidato) */}
-                <div style={{ marginTop: 13 }}>
-                  {modelo.checklist.map(item => {
-                    const docs = fluxo.documentos.filter(documento => documento.modelo_id === modelo.id && documento.item_id === item.id)
-                    const accepted = docs.find(documento => ['enviado', 'aprovado'].includes(documento.status))
-                    const pending = docs.find(documento => documento.status === 'devolvido')
-                    const id = `${modelo.id}:${item.id}`
-                    return (
-                      <div key={item.id} style={{ padding: 12, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5, marginBottom: 8 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                          <div>
-                            <strong style={{ fontSize: 11 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
-                            {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>✓ {accepted.nome}</div>}
-                            {pending && <div style={{ color: '#F87171', fontSize: 9, marginTop: 4 }}>Pendência: {pending.observacao_rh || 'envie novamente com melhor qualidade'}</div>}
-                          </div>
-                          <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1 }}>
-                            <FileUp size={12} />{enviando === id ? 'Enviando…' : accepted ? 'Substituir' : 'Anexar'}
-                            <input hidden type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => void enviarArquivo(modelo, item, event.target.files?.[0])} />
-                          </label>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </article>
-            )
+            return null
           })}
         </div>
         {erro && <p style={{ color: '#F87171', fontSize: 11 }}>{erro}</p>}
