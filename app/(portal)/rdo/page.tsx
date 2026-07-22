@@ -821,7 +821,7 @@ export default function RDO() {
             {/* Header */}
             <div className="print-header">
               <div className="print-header-left">
-                <h1 className="print-company-title">VITORLO CORREIA | ENGENHARIA</h1>
+                <h1 className="print-company-title">JWA ENGENHARIA</h1>
                 <h2 className="print-obra-title">OBRA: {rdo.obra?.nome || 'OBRA NÃO INFORMADA'}</h2>
               </div>
               <div className="print-header-right">
@@ -993,7 +993,7 @@ export default function RDO() {
             <div className="print-signature-section">
               {rdo.status === 'Aprovado' && rdo.assinatura_at ? (
                 <div className="print-stamp-box">
-                  <div className="print-stamp-title">✓ ASSINADO DIGITALMENTE VIA SISTEMA VITORLO CORREIA</div>
+                  <div className="print-stamp-title">✓ ASSINADO DIGITALMENTE VIA SISTEMA JWA</div>
                   <div className="print-stamp-details">
                     <span><strong>Engenheiro Responsável:</strong> {rdo.responsavel}</span>
                     <span><strong>Assinado por:</strong> {rdo.assinado_por || rdo.responsavel}</span>
