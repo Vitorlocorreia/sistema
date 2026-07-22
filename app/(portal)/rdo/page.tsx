@@ -66,7 +66,8 @@ export default function RDO() {
   const [newClimaTarde, setNewClimaTarde] = useState('Sol')
   const [newCondicaoSolo, setNewCondicaoSolo] = useState('Seco')
   const [newEfetivoProprio, setNewEfetivoProprio] = useState('10')
-  const [newEfetivoTerceiros, setNewEfetivoTerceiros] = useState('5')
+  const [newEfetivoTerceiros, setNewEfetivoTerceiros] = useState('0')
+  const [temTerceirizados, setTemTerceirizados] = useState(false)
   const [newTerceiros, setNewTerceiros] = useState<EfetivoTerceiroForm[]>([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
   const [newPlanejadoExecutado, setNewPlanejadoExecutado] = useState<PlanejadoExecutadoForm[]>([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
   const [newResumo, setNewResumo] = useState('')
@@ -196,7 +197,7 @@ export default function RDO() {
       clima_tarde: newClimaTarde,
       condicao_solo: newCondicaoSolo,
       efetivo_proprio: parseInt(newEfetivoProprio) || 0,
-      efetivo_terceiros: parseInt(newEfetivoTerceiros) || 0,
+      efetivo_terceiros: temTerceirizados ? (parseInt(newEfetivoTerceiros) || 0) : 0,
       status: 'Rascunho',
       resumo: newResumo || `Diário preenchido por ${newResponsavel}.`,
       ocorrencias: newOcorrencias || null,
@@ -225,17 +226,19 @@ export default function RDO() {
       )
     }
 
-    const validTerceiros = newTerceiros.filter(item => item.empresa_nome.trim() !== '')
-    if (validTerceiros.length > 0) {
-      await supabase.from('rdo_efetivos_terceiros').insert(validTerceiros.map(item => ({
-        rdo_id: rdoData.id,
-        empresa_nome: item.empresa_nome.trim(),
-        funcao: item.funcao.trim() || null,
-        quantidade: parseInt(item.quantidade) || 1,
-        observacoes: item.observacoes.trim() || null,
-        valor_diaria: item.valor_diaria ? parseFloat(item.valor_diaria) : null,
-        pagamento_status: 'pendente',
-      })))
+    if (temTerceirizados) {
+      const validTerceiros = newTerceiros.filter(item => item.empresa_nome.trim() !== '')
+      if (validTerceiros.length > 0) {
+        await supabase.from('rdo_efetivos_terceiros').insert(validTerceiros.map(item => ({
+          rdo_id: rdoData.id,
+          empresa_nome: item.empresa_nome.trim(),
+          funcao: item.funcao.trim() || null,
+          quantidade: parseInt(item.quantidade) || 1,
+          observacoes: item.observacoes.trim() || null,
+          valor_diaria: item.valor_diaria ? parseFloat(item.valor_diaria) : null,
+          pagamento_status: 'pendente'
+        })))
+      }
     }
 
     const validPlanejamento = newPlanejadoExecutado.filter(item => item.servico.trim() !== '')
@@ -262,6 +265,8 @@ export default function RDO() {
     // Reset form
     setActForm([''])
     setNewResumo(''); setNewOcorrencias(''); setNewDefinicaoServico(''); setNewLiberacoes(''); setNewFotos([])
+    setTemTerceirizados(false)
+    setNewEfetivoTerceiros('0')
     setNewTerceiros([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
     setNewPlanejadoExecutado([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
     setEquipForm([
@@ -709,32 +714,60 @@ export default function RDO() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: temTerceirizados ? '1fr 1fr' : '1fr', gap: 10 }}>
                       <div>
-                        <label style={labelStyle}>Efetivo Próprio</label>
+                        <label style={labelStyle}>Efetivo Próprio *</label>
                         <input type="number" value={newEfetivoProprio} onChange={e => setNewEfetivoProprio(e.target.value)} style={inputStyle} />
                       </div>
-                      <div>
-                        <label style={labelStyle}>Efetivo Terceirizado</label>
-                        <input type="number" value={newEfetivoTerceiros} onChange={e => setNewEfetivoTerceiros(e.target.value)} style={inputStyle} />
-                      </div>
+                      {temTerceirizados && (
+                        <div>
+                          <label style={labelStyle}>Efetivo Terceirizado (Qtd total)</label>
+                          <input type="number" value={newEfetivoTerceiros} onChange={e => setNewEfetivoTerceiros(e.target.value)} style={inputStyle} />
+                        </div>
+                      )}
                     </div>
-                    <div style={{ marginTop: 14, border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <label style={labelStyle}>Terceirizados por empresa — controle para conferência e pagamento</label>
-                        <button type="button" onClick={() => setNewTerceiros(items => [...items, { empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ EMPRESA</button>
-                      </div>
-                      <div style={{ display: 'grid', gap: 10 }}>
-                        {newTerceiros.map((item, index) => <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 80px 110px', gap: 8, alignItems: 'end' }}>
-                          <div><label style={labelStyle}>Empresa terceirizada *</label><input style={inputStyle} placeholder="Nome da empresa" value={item.empresa_nome} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, empresa_nome: e.target.value } : x))} /></div>
-                          <div><label style={labelStyle}>Função/serviço</label><input style={inputStyle} placeholder="Ex.: elétrica" value={item.funcao} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, funcao: e.target.value } : x))} /></div>
-                          <div><label style={labelStyle}>Qtd.</label><input type="number" min="1" style={inputStyle} value={item.quantidade} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, quantidade: e.target.value } : x))} /></div>
-                          <div><label style={labelStyle}>Diária (R$)</label><input type="number" step="0.01" style={inputStyle} placeholder="0,00" value={item.valor_diaria} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, valor_diaria: e.target.value } : x))} /></div>
-                          <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações</label><textarea rows={2} style={inputStyle} placeholder="Medição, frente, período ou informação para conferência" value={item.observacoes} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>
-                          {newTerceiros.length > 1 && <button type="button" onClick={() => setNewTerceiros(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover empresa</button>}
-                        </div>)}
-                      </div>
+
+                    {/* Toggle Terceirizados */}
+                    <div style={{ background: '#0F1115', border: `1px solid ${C.border}`, borderRadius: 5, padding: '10px 12px', marginTop: 12 }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                        <input
+                          type="checkbox"
+                          checked={temTerceirizados}
+                          onChange={e => {
+                            setTemTerceirizados(e.target.checked)
+                            if (!e.target.checked) {
+                              setNewEfetivoTerceiros('0')
+                            } else if (newEfetivoTerceiros === '0') {
+                              setNewEfetivoTerceiros('1')
+                            }
+                          }}
+                          style={{ width: 16, height: 16, cursor: 'pointer', accentColor: C.amber }}
+                        />
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>Possui equipe ou empresa terceirizada nesta data?</div>
+                          <div style={{ fontSize: 10, color: C.inkSoft }}>Marque apenas se houver terceirizados atuando no canteiro.</div>
+                        </div>
+                      </label>
                     </div>
+
+                    {temTerceirizados && (
+                      <div style={{ marginTop: 12, border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                          <label style={labelStyle}>Terceirizados por empresa — controle para conferência</label>
+                          <button type="button" onClick={() => setNewTerceiros(items => [...items, { empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ EMPRESA</button>
+                        </div>
+                        <div style={{ display: 'grid', gap: 10 }}>
+                          {newTerceiros.map((item, index) => <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 80px 110px', gap: 8, alignItems: 'end' }}>
+                            <div><label style={labelStyle}>Empresa terceirizada *</label><input style={inputStyle} placeholder="Nome da empresa" value={item.empresa_nome} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, empresa_nome: e.target.value } : x))} /></div>
+                            <div><label style={labelStyle}>Função/serviço</label><input style={inputStyle} placeholder="Ex.: elétrica" value={item.funcao} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, funcao: e.target.value } : x))} /></div>
+                            <div><label style={labelStyle}>Qtd.</label><input type="number" min="1" style={inputStyle} value={item.quantidade} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, quantidade: e.target.value } : x))} /></div>
+                            <div><label style={labelStyle}>Diária (R$)</label><input type="number" step="0.01" style={inputStyle} placeholder="0,00" value={item.valor_diaria} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, valor_diaria: e.target.value } : x))} /></div>
+                            <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações</label><textarea rows={2} style={inputStyle} placeholder="Medição, frente, período ou informação para conferência" value={item.observacoes} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>
+                            {newTerceiros.length > 1 && <button type="button" onClick={() => setNewTerceiros(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover empresa</button>}
+                          </div>)}
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
 
