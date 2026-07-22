@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus,
   Building2, Users, FileText, CheckCircle, Clock, X,
@@ -1511,10 +1511,51 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [editandoConta, setEditandoConta] = useState<ContaComRelacoes | null>(null)
   const [formEdicao, setFormEdicao] = useState<Partial<ContaComRelacoes>>({})
 
+  const [expandedContaId, setExpandedContaId] = useState<string | null>(null)
+  const [formNegociacao, setFormNegociacao] = useState({
+    tipo: 'observacao' as 'pagamento_parcial' | 'desconto' | 'prorrogacao' | 'observacao',
+    descricao: '',
+    valor_pago: '',
+    valor_novo: '',
+    nova_data: ''
+  })
+  const [savingNegociacao, setSavingNegociacao] = useState(false)
+
+  const salvarNegociacao = async (conta: ContaComRelacoes) => {
+    if (colaboradorAtivo.cargo !== 'admin_geral') return
+    if (!formNegociacao.descricao) return toast('Informe uma descrição/observação.', 'error')
+
+    setSavingNegociacao(true)
+    const novoItem = {
+      id: crypto.randomUUID(),
+      data: new Date().toISOString(),
+      autor: colaboradorAtivo.nome,
+      tipo: formNegociacao.tipo,
+      descricao: formNegociacao.descricao,
+      valor_pago: formNegociacao.tipo === 'pagamento_parcial' ? Number(formNegociacao.valor_pago) : undefined,
+      valor_novo: formNegociacao.tipo === 'desconto' ? Number(formNegociacao.valor_novo) : undefined,
+      nova_data: formNegociacao.tipo === 'prorrogacao' ? formNegociacao.nova_data : undefined
+    }
+
+    const historicoAtual = conta.historico_negociacao || []
+    const novoHistorico = [...historicoAtual, novoItem]
+
+    const { error } = await supabase.from('contas').update({
+      historico_negociacao: novoHistorico
+    }).eq('id', conta.id)
+
+    setSavingNegociacao(false)
+    if (error) return toast('Erro ao salvar negociação: ' + error.message, 'error')
+    
+    toast('Negociação/Acordo salvo com sucesso!', 'success')
+    setFormNegociacao({ tipo: 'observacao', descricao: '', valor_pago: '', valor_novo: '', nova_data: '' })
+    void load()
+  }
+
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: c }, { data: e }] = await Promise.all([
-      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix), obra:obras(nome)').order('data_previsao', { ascending: false }),
+      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false }),
       supabase.from('empresas').select('*').order('razao_social'),
     ])
     setContas((c as ContaComRelacoes[]) ?? [])
@@ -1710,108 +1751,262 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                 const pago = c.status === 'Pago'
                 const aguardandoAprovacao = c.status === 'Aguardando aprovação'
                 
-                return (
-                  <tr key={c.id} style={{ borderBottom: `1px solid ${C.border}`, background: aguardandoAprovacao ? '#3B82F605' : 'none' }}>
-                    <td style={{ padding: '12px 14px' }}>
-                      <div style={{ width: 28, height: 28, borderRadius: 6, background: c.tipo === 'receber' ? '#34D39918' : '#F8717118', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {c.tipo === 'receber' ? <ArrowUpRight size={13} color="#34D399" /> : <ArrowDownRight size={13} color="#F87171" />}
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 14px', color: C.ink, fontWeight: 600, maxWidth: 260 }}>
-                      <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                        <span>{c.descricao}</span>
-                        {c.comprovante_url && (
-                          <a
-                            href={c.comprovante_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="Ver comprovante"
-                            style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', marginTop: 2, flexShrink: 0 }}
-                          >
-                            <Eye size={12} />
-                          </a>
-                        )}
-                      </div>
-                      {c.categoria && (
-                        <div style={{ marginTop: 4 }}>
-                          <span style={{ fontSize: 10, color: C.inkSoft, background: '#ffffff0a', padding: '1px 6px', borderRadius: 3 }}>
-                            {c.categoria}
-                          </span>
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '12px 14px', color: C.inkSoft }}>
-                      <span style={{ borderLeft: `2px solid ${c.empresa?.cor ?? '#fff'}`, paddingLeft: 6 }}>
-                        {c.empresa?.nome_fantasia ?? c.empresa?.razao_social ?? '—'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 14px', color: C.inkSoft }}>
-                      <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.nome_fantasia ?? c.fornecedor?.razao_social ?? 'Geral'}</div>
-                      {c.obra && <div style={{ fontSize: 10, color: C.amber }}>Obra: {c.obra.nome}</div>}
-                      {c.fornecedor?.pix && <div style={{ fontSize: 10, color: '#34D399', marginTop: 2 }}>PIX: {c.fornecedor.pix}</div>}
-                      {(c.fornecedor?.banco) && <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
-                        Bc: {c.fornecedor.banco} {c.fornecedor.agencia ? `Ag: ${c.fornecedor.agencia}` : ''} {c.fornecedor.conta ? `Cc: ${c.fornecedor.conta}` : ''}
-                      </div>}
-                    </td>
-                    <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
-                    <td style={{ padding: '12px 14px', fontWeight: 900, color: c.tipo === 'receber' ? '#34D399' : '#F87171', whiteSpace: 'nowrap' }}>
-                      {c.tipo === 'receber' ? '+' : '-'}{fmt(c.valor)}
-                    </td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <span style={{
-                        fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-                        background: c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : aguardandoAprovacao ? '#3B82F620' : venc ? '#F8717120' : C.amber + '20',
-                        color: c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : aguardandoAprovacao ? '#3B82F6' : venc ? '#F87171' : C.amber,
-                      }}>
-                        {c.status.toUpperCase()}
-                      </span>
-                      {c.criado_por && (
-                        <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
-                          👤 Lançado por: {c.criado_por}
-                        </div>
-                      )}
-                      {c.aprovado_por && (
-                        <div style={{ fontSize: 9, color: '#34D399', marginTop: 2 }}>
-                          ✓ Aprovado por: {c.aprovado_por}
-                        </div>
-                      )}
-                      {c.status === 'Negado' && c.justificativa_negacao && (
-                        <div style={{ fontSize: 9, color: '#F87171', marginTop: 4, maxWidth: 160, whiteSpace: 'normal' }}>
-                          <b style={{ fontWeight: 800 }}>Motivo:</b> {c.justificativa_negacao}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: '12px 14px' }}>
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        {podeAlterarStatus && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, padding: '4px 6px', fontSize: 10 }}>
-                          <option value="Lançado">Lançado</option>
-                          <option value="Aguardando aprovação">Aguardando aprovação</option>
-                          <option value="Liberado/OK">Liberado/OK</option>
-                          <option value="A pagar">A pagar</option>
-                          <option value="Pago">Pago</option>
-                          <option value="Negado">Negado</option>
-                        </select>}
-                        {aguardandoAprovacao && podeAprovar && (
-                          <button onClick={() => aprovarLançamento(c.id)} title="Aprovar Lançamento" style={{ ...btn(), padding: '4px 8px', fontSize: 10 }}>
-                            <Check size={11} /> Aprovar
-                          </button>
-                        )}
+                const isExpanded = expandedContaId === c.id
 
-                        {podeLancar && (
-                           <button onClick={() => iniciarEdicao(c)} title="Editar Lançamento" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                             <Edit3 size={13} />
-                           </button>
+                return (
+                  <Fragment key={c.id}>
+                    <tr 
+                      onClick={() => setExpandedContaId(isExpanded ? null : c.id)}
+                      style={{ 
+                        borderBottom: isExpanded ? 'none' : `1px solid ${C.border}`, 
+                        background: aguardandoAprovacao ? '#3B82F605' : (isExpanded ? '#12141C' : 'none'),
+                        cursor: 'pointer',
+                        transition: 'background 0.2s'
+                      }}
+                    >
+                      <td style={{ padding: '12px 14px' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 6, background: c.tipo === 'receber' ? '#34D39918' : '#F8717118', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {c.tipo === 'receber' ? <ArrowUpRight size={13} color="#34D399" /> : <ArrowDownRight size={13} color="#F87171" />}
+                        </div>
+                      </td>
+                      <td style={{ padding: '12px 14px', color: C.ink, fontWeight: 600, maxWidth: 260 }}>
+                        <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                          <span>{c.descricao}</span>
+                          {c.comprovante_url && (
+                            <a
+                              href={c.comprovante_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="Ver comprovante"
+                              onClick={e => e.stopPropagation()}
+                              style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', marginTop: 2, flexShrink: 0 }}
+                            >
+                              <Eye size={12} />
+                            </a>
+                          )}
+                        </div>
+                        {c.categoria && (
+                          <div style={{ marginTop: 4 }}>
+                            <span style={{ fontSize: 10, color: C.inkSoft, background: '#ffffff0a', padding: '1px 6px', borderRadius: 3 }}>
+                              {c.categoria}
+                            </span>
+                          </div>
                         )}
-                        <label title="Anexar Comprovante Posterior" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
-                          <Paperclip size={13} />
-                          <input hidden type="file" accept="image/*,application/pdf" onChange={e => { const f = e.target.files?.[0]; if(f) void anexarComprovantePosterior(c.id, c.empresa_id, f); e.currentTarget.value = '' }} />
-                        </label>
-                        {podeDeletar && (
-                          <button onClick={() => excluir(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}><X size={13} /></button>
+                      </td>
+                      <td style={{ padding: '12px 14px', color: C.inkSoft }}>
+                        <span style={{ borderLeft: `2px solid ${c.empresa?.cor ?? '#fff'}`, paddingLeft: 6 }}>
+                          {c.empresa?.nome_fantasia ?? c.empresa?.razao_social ?? '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 14px', color: C.inkSoft }}>
+                        <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.nome_fantasia ?? c.fornecedor?.razao_social ?? 'Geral'}</div>
+                        {c.obra && <div style={{ fontSize: 10, color: C.amber }}>Obra: {c.obra.nome}</div>}
+                        {c.fornecedor?.pix && <div style={{ fontSize: 10, color: '#34D399', marginTop: 2 }}>PIX: {c.fornecedor.pix}</div>}
+                        {(c.fornecedor?.banco) && <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
+                          Bc: {c.fornecedor.banco} {c.fornecedor.agencia ? `Ag: ${c.fornecedor.agencia}` : ''} {c.fornecedor.conta ? `Cc: ${c.fornecedor.conta}` : ''}
+                        </div>}
+                      </td>
+                      <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
+                      <td style={{ padding: '12px 14px', fontWeight: 900, color: c.tipo === 'receber' ? '#34D399' : '#F87171', whiteSpace: 'nowrap' }}>
+                        {c.tipo === 'receber' ? '+' : '-'}{fmt(c.valor)}
+                      </td>
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{
+                          fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
+                          background: c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : aguardandoAprovacao ? '#3B82F620' : venc ? '#F8717120' : C.amber + '20',
+                          color: c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : aguardandoAprovacao ? '#3B82F6' : venc ? '#F87171' : C.amber,
+                        }}>
+                          {c.status.toUpperCase()}
+                        </span>
+                        {c.criado_por && (
+                          <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
+                            👤 Lançado por: {c.criado_por}
+                          </div>
                         )}
-                      </div>
-                    </td>
-                  </tr>
+                        {c.aprovado_por && (
+                          <div style={{ fontSize: 9, color: '#34D399', marginTop: 2 }}>
+                            ✓ Aprovado por: {c.aprovado_por}
+                          </div>
+                        )}
+                        {c.status === 'Negado' && c.justificativa_negacao && (
+                          <div style={{ fontSize: 9, color: '#F87171', marginTop: 4, maxWidth: 160, whiteSpace: 'normal' }}>
+                            <b style={{ fontWeight: 800 }}>Motivo:</b> {c.justificativa_negacao}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '12px 14px' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          {podeAlterarStatus && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, padding: '4px 6px', fontSize: 10 }}>
+                            <option value="Lançado">Lançado</option>
+                            <option value="Aguardando aprovação">Aguardando aprovação</option>
+                            <option value="Liberado/OK">Liberado/OK</option>
+                            <option value="A pagar">A pagar</option>
+                            <option value="Pago">Pago</option>
+                            <option value="Negado">Negado</option>
+                          </select>}
+                          {aguardandoAprovacao && podeAprovar && (
+                            <button onClick={() => aprovarLançamento(c.id)} title="Aprovar Lançamento" style={{ ...btn(), padding: '4px 8px', fontSize: 10 }}>
+                              <Check size={11} /> Aprovar
+                            </button>
+                          )}
+
+                          {podeLancar && (
+                             <button onClick={() => iniciarEdicao(c)} title="Editar Lançamento" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
+                               <Edit3 size={13} />
+                             </button>
+                          )}
+                          <label title="Anexar Comprovante Posterior" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
+                            <Paperclip size={13} />
+                            <input hidden type="file" accept="image/*,application/pdf" onChange={e => { const f = e.target.files?.[0]; if(f) void anexarComprovantePosterior(c.id, c.empresa_id, f); e.currentTarget.value = '' }} />
+                          </label>
+                          {podeDeletar && (
+                            <button onClick={() => excluir(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}><X size={13} /></button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    {/* Expansion Row */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#12141C' }}>
+                          <td colSpan={8} style={{ padding: 0 }}>
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              style={{ overflow: 'hidden' }}
+                            >
+                              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+                                
+                                {/* Standard Details */}
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Fornecedor</div>
+                                    <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>{c.fornecedor?.razao_social || c.fornecedor?.nome_fantasia || 'N/A'}</div>
+                                    {c.fornecedor?.cnpj && <div style={{ fontSize: 11, color: C.inkSoft }}>CNPJ: {c.fornecedor.cnpj}</div>}
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Observações do Lançamento</div>
+                                    <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>{c.observacoes || 'Nenhuma observação'}</div>
+                                  </div>
+                                  {c.pagamento_antecipado && (
+                                    <div>
+                                      <div style={{ fontSize: 10, color: C.amber, textTransform: 'uppercase', fontWeight: 800 }}>Pagamento Antecipado</div>
+                                      <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>Tipo: {c.tipo_antecipacao} | Data: {fmtDate(c.data_antecipacao || '')}</div>
+                                      <div style={{ fontSize: 11, color: C.inkSoft }}>Valor: {fmt(c.valor_antecipado || 0)}</div>
+                                      <div style={{ fontSize: 11, color: C.inkSoft }}>Justificativa: {c.justificativa_antecipacao}</div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Negotiation Panel - Only for ADM-Geral */}
+                                {isAdminGeral && (
+                                  <div style={{ background: '#0B0C0E', border: `1px solid ${C.amber}40`, borderRadius: 8, padding: 16 }}>
+                                    <h3 style={{ margin: '0 0 16px', fontSize: 14, color: C.amber, display: 'flex', alignItems: 'center', gap: 8 }}>
+                                      <Shield size={16} /> Gestão de Negociação & Acordos (Acesso Restrito)
+                                    </h3>
+                                    
+                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
+                                      
+                                      {/* Left: Nova Negociação */}
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Registrar Nova Negociação</div>
+                                        
+                                        <select 
+                                          style={input} 
+                                          value={formNegociacao.tipo} 
+                                          onChange={e => setFormNegociacao(f => ({ ...f, tipo: e.target.value as any, valor_pago: '', valor_novo: '', nova_data: '' }))}
+                                        >
+                                          <option value="observacao">Apenas Observação / Registro</option>
+                                          <option value="desconto">Acordo de Desconto</option>
+                                          <option value="pagamento_parcial">Pagamento Parcial (Amortização)</option>
+                                          <option value="prorrogacao">Prorrogação de Vencimento</option>
+                                        </select>
+
+                                        {formNegociacao.tipo === 'desconto' && (
+                                          <input style={input} type="number" step="0.01" placeholder="Novo Valor Acordado (R$)" value={formNegociacao.valor_novo} onChange={e => setFormNegociacao(f => ({ ...f, valor_novo: e.target.value }))} />
+                                        )}
+
+                                        {formNegociacao.tipo === 'pagamento_parcial' && (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                            <input style={input} type="number" step="0.01" placeholder="Valor Pago Agora (R$)" value={formNegociacao.valor_pago} onChange={e => setFormNegociacao(f => ({ ...f, valor_pago: e.target.value }))} />
+                                            {formNegociacao.valor_pago && (
+                                              <div style={{ fontSize: 11, color: '#34D399', fontWeight: 600 }}>
+                                                Saldo Devedor Calculado: {fmt(c.valor - Number(formNegociacao.valor_pago))}
+                                              </div>
+                                            )}
+                                          </div>
+                                        )}
+
+                                        {formNegociacao.tipo === 'prorrogacao' && (
+                                          <input style={input} type="date" placeholder="Nova Data" value={formNegociacao.nova_data} onChange={e => setFormNegociacao(f => ({ ...f, nova_data: e.target.value }))} />
+                                        )}
+
+                                        <textarea 
+                                          style={{ ...input, resize: 'vertical', minHeight: 60 }} 
+                                          placeholder="Histórico, justificativa ou observações do acordo..." 
+                                          value={formNegociacao.descricao} 
+                                          onChange={e => setFormNegociacao(f => ({ ...f, descricao: e.target.value }))} 
+                                        />
+
+                                        <button 
+                                          onClick={() => void salvarNegociacao(c)} 
+                                          disabled={savingNegociacao}
+                                          style={{ ...btn(C.amber), alignSelf: 'flex-start' }}
+                                        >
+                                          {savingNegociacao ? 'Salvando...' : 'Salvar Registro'}
+                                        </button>
+                                      </div>
+
+                                      {/* Right: Histórico */}
+                                      <div>
+                                        <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 12 }}>Histórico da Conta</div>
+                                        {(!c.historico_negociacao || c.historico_negociacao.length === 0) ? (
+                                          <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic', padding: 12, background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
+                                            Nenhum acordo ou negociação registrado.
+                                          </div>
+                                        ) : (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto', paddingRight: 8 }}>
+                                            {[...c.historico_negociacao].reverse().map(hist => (
+                                              <div key={hist.id} style={{ background: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, borderLeft: `2px solid ${C.amber}` }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                  <strong style={{ fontSize: 11, color: C.amber }}>
+                                                    {hist.tipo === 'desconto' ? 'Desconto' : hist.tipo === 'pagamento_parcial' ? 'Pgto Parcial' : hist.tipo === 'prorrogacao' ? 'Prorrogação' : 'Observação'}
+                                                  </strong>
+                                                  <span style={{ fontSize: 10, color: C.inkSoft }}>
+                                                    {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                  </span>
+                                                </div>
+                                                <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Por: {hist.autor}</div>
+                                                <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>{hist.descricao}</div>
+                                                
+                                                {/* Detalhes específicos de cada tipo */}
+                                                {hist.tipo === 'desconto' && hist.valor_novo && (
+                                                  <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Novo Valor: {fmt(hist.valor_novo)}</div>
+                                                )}
+                                                {hist.tipo === 'pagamento_parcial' && hist.valor_pago && (
+                                                  <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Pago: {fmt(hist.valor_pago)}</div>
+                                                )}
+                                                {hist.tipo === 'prorrogacao' && hist.nova_data && (
+                                                  <div style={{ marginTop: 4, fontSize: 11, color: C.amber, fontWeight: 600 }}>Nova Data: {fmtDate(hist.nova_data)}</div>
+                                                )}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+
+                              </div>
+                            </motion.div>
+                          </td>
+                        </tr>
+                      )}
+                    </AnimatePresence>
+                  </Fragment>
                 )
               })}
               {filtered.length === 0 && (

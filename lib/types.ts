@@ -305,7 +305,7 @@ export type RdoCompleto = Rdo & {
 
 export type ContaComRelacoes = Conta & {
   empresa?: Pick<Empresa, 'nome_fantasia' | 'razao_social' | 'cor'>
-  fornecedor?: Pick<Fornecedor, 'razao_social' | 'nome_fantasia' | 'banco' | 'agencia' | 'conta' | 'pix'>
+  fornecedor?: Pick<Fornecedor, 'razao_social' | 'nome_fantasia' | 'banco' | 'agencia' | 'conta' | 'pix' | 'cnpj'>
   obra?: Pick<Obra, 'nome'>
 }
 
