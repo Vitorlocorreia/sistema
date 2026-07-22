@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { 
-  Plus, FileText, Calendar, Building, Sun, CloudRain, Cloud, 
-  UserCheck, AlertTriangle, Hammer, CheckCircle2, FileUp, 
+import {
+  Plus, FileText, Calendar, Building, Sun, CloudRain, Cloud,
+  UserCheck, AlertTriangle, Hammer, CheckCircle2, FileUp,
   Search, X, Check, Eye, Printer, Award, Clock
 } from 'lucide-react'
 import { Panel } from '@/components/Panel'
@@ -48,16 +48,19 @@ export default function RDO() {
   const [formTab, setFormTab] = useState<'geral' | 'recursos' | 'atividades'>('geral')
   const [loading, setLoading] = useState(true)
 
-  // Search/Filter states
+  // Search/Filter & Selection states
   const [search, setSearch] = useState('')
   const [filterObra, setFilterObra] = useState('Todas')
   const [filterStatus, setFilterStatus] = useState('Todos')
+  const [selectedRdoIds, setSelectedRdoIds] = useState<string[]>([])
+  const [overridePrintRdos, setOverridePrintRdos] = useState<RdoCompleto[] | null>(null)
 
   // Form states
   const [newObraId, setNewObraId] = useState('')
   const [newData, setNewData] = useState(new Date().toISOString().split('T')[0])
-  const [newResponsavel, setNewResponsavel] = useState('Eng. Supervisor')
-  const [newCargo, setNewCargo] = useState('Gerente de Obra')
+  const [newResponsavel, setNewResponsavel] = useState('')
+  const [newCargo, setNewCargo] = useState('')
+  const [colaboradorAtivo, setColaboradorAtivo] = useState<any>(null)
   const [newCrea, setNewCrea] = useState('CREA-SP 999999')
   const [newClimaManha, setNewClimaManha] = useState('Sol')
   const [newClimaTarde, setNewClimaTarde] = useState('Sol')
@@ -71,7 +74,7 @@ export default function RDO() {
   const [newDefinicaoServico, setNewDefinicaoServico] = useState('')
   const [newLiberacoes, setNewLiberacoes] = useState('')
   const [newFotos, setNewFotos] = useState<File[]>([])
-  
+
   // Equipments state in form
   const [equipForm, setEquipForm] = useState<{ nome: string; status: 'OPERANDO' | 'PARADO' | 'MANUTENÇÃO' }[]>([
     { nome: 'Retroescavadeira', status: 'OPERANDO' },
@@ -83,18 +86,29 @@ export default function RDO() {
 
   const loadData = useCallback(async () => {
     setLoading(true)
+    const session = localStorage.getItem('colaborador_sessao')
+    let colab = null
+    try { 
+      colab = session ? JSON.parse(session) : null
+      if (colab) {
+        setColaboradorAtivo(colab)
+        if (!newResponsavel) setNewResponsavel(colab.nome || '')
+        if (!newCargo) setNewCargo(colab.cargo || '')
+      }
+    } catch { }
+
     const [
       { data: r },
       { data: o }
     ] = await Promise.all([
-      supabase.from('rdos').select('*, obra:obras(nome), atividades:rdo_atividades(*), equipamentos:rdo_equipamentos(*), terceiros:rdo_efetivos_terceiros(*), planejado_executado:rdo_planejado_executado(*)').order('data', { ascending: false }),
+      supabase.from('rdos').select('*, obra:obras(nome), atividades:rdo_atividades(*), equipamentos:rdo_equipamentos(*), terceiros:rdo_efetivos_terceiros(*), planejado_executado:rdo_planejado_executado(*), fotos(*)').order('data', { ascending: false }),
       supabase.from('obras').select('*').order('nome')
     ])
 
     const rdosList = (r as RdoCompleto[]) ?? []
     setRdos(rdosList)
     setObras(o ?? [])
-    
+
     if (o && o.length > 0) {
       setNewObraId(prev => prev || o[0].id)
     }
@@ -109,8 +123,8 @@ export default function RDO() {
 
   const filteredRdos = useMemo(() => {
     return rdos.filter(r => {
-      const matchesSearch = 
-        r.responsavel.toLowerCase().includes(search.toLowerCase()) || 
+      const matchesSearch =
+        r.responsavel.toLowerCase().includes(search.toLowerCase()) ||
         (r.resumo ?? '').toLowerCase().includes(search.toLowerCase())
       const matchesObra = filterObra === 'Todas' || r.obra?.nome === filterObra
       const matchesStatus = filterStatus === 'Todos' || r.status === filterStatus
@@ -118,15 +132,51 @@ export default function RDO() {
     })
   }, [rdos, search, filterObra, filterStatus])
 
+  const toggleSelectRdo = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedRdoIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
+  const toggleSelectAllFiltered = () => {
+    if (selectedRdoIds.length === filteredRdos.length && filteredRdos.length > 0) {
+      setSelectedRdoIds([])
+    } else {
+      setSelectedRdoIds(filteredRdos.map(r => r.id))
+    }
+  }
+
+  const rdosToPrint = useMemo(() => {
+    if (overridePrintRdos) return overridePrintRdos
+    if (selectedRdoIds.length > 0) return rdos.filter(r => selectedRdoIds.includes(r.id))
+    return selectedRdo ? [selectedRdo] : []
+  }, [overridePrintRdos, selectedRdoIds, rdos, selectedRdo])
+
+  const triggerPrintSingle = (rdo: RdoCompleto) => {
+    setOverridePrintRdos([rdo])
+    setTimeout(() => {
+      window.print()
+      setOverridePrintRdos(null)
+    }, 50)
+  }
+
+  const triggerPrintBatch = () => {
+    setOverridePrintRdos(null)
+    setTimeout(() => {
+      window.print()
+    }, 50)
+  }
+
   const getWeatherIcon = (weather: string) => {
     switch (weather.toLowerCase()) {
       case 'sol':
-      case 'ensolarado': 
+      case 'ensolarado':
         return <Sun size={16} color={C.amber} />
       case 'chuva':
-      case 'chuvoso': 
+      case 'chuvoso':
         return <CloudRain size={16} color="#3B82F6" />
-      default: 
+      default:
         return <Cloud size={16} color={C.inkSoft} />
     }
   }
@@ -208,7 +258,7 @@ export default function RDO() {
 
     setIsCreateOpen(false)
     toast('Diário de Obra criado com sucesso!', 'success')
-    
+
     // Reset form
     setActForm([''])
     setNewResumo(''); setNewOcorrencias(''); setNewDefinicaoServico(''); setNewLiberacoes(''); setNewFotos([])
@@ -218,17 +268,19 @@ export default function RDO() {
       { nome: 'Retroescavadeira', status: 'OPERANDO' },
       { nome: 'Betoneira', status: 'OPERANDO' }
     ])
-    
+
     // Refresh
     loadData()
   }
 
   const handleSignDigital = async (id: string) => {
     const ip = '177.85.122.9' // Simulated IP
+    const nomeAssinatura = colaboradorAtivo?.nome || newResponsavel || 'Desconhecido'
     const { error } = await supabase.from('rdos').update({
       status: 'Aprovado',
       assinatura_ip: ip,
-      assinatura_at: new Date().toISOString()
+      assinatura_at: new Date().toISOString(),
+      assinado_por: nomeAssinatura
     }).eq('id', id)
 
     if (error) {
@@ -243,7 +295,8 @@ export default function RDO() {
         ...prev,
         status: 'Aprovado',
         assinatura_ip: ip,
-        assinatura_at: new Date().toISOString()
+        assinatura_at: new Date().toISOString(),
+        assinado_por: nomeAssinatura
       } : null)
     }
   }
@@ -309,30 +362,80 @@ export default function RDO() {
                 </div>
               </div>
 
+              {/* Selection Bar for Batch Actions */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, padding: '8px 10px', background: '#0F1115', border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: C.inkSoft, cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={filteredRdos.length > 0 && selectedRdoIds.length === filteredRdos.length}
+                    onChange={toggleSelectAllFiltered}
+                    style={{ cursor: 'pointer' }}
+                  />
+                  <span>Selecionar todos ({filteredRdos.length})</span>
+                </label>
+                {selectedRdoIds.length > 0 && (
+                  <button
+                    onClick={triggerPrintBatch}
+                    style={{
+                      background: C.amber,
+                      color: '#0B0C0E',
+                      border: 'none',
+                      borderRadius: 3,
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Printer size={13} /> Imprimir ({selectedRdoIds.length})
+                  </button>
+                )}
+              </div>
+
               {/* RDO List */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 460, overflowY: 'auto' }}>
                 {filteredRdos.map(r => {
                   const active = selectedRdo?.id === r.id
+                  const isChecked = selectedRdoIds.includes(r.id)
                   return (
                     <div
                       key={r.id}
-                      onClick={() => setSelectedRdo(r)}
                       style={{
-                        padding: 12, borderRadius: 2, cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '10px 12px',
+                        borderRadius: 2,
                         background: active ? `${C.amber}0a` : C.bgCard,
                         border: `1px solid ${active ? C.amber : C.border}`,
                         transition: 'all 0.15s'
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 10, fontWeight: 900, color: C.amber }}>RDO-DIGITAL</span>
-                        <span style={{ fontSize: 10, color: C.inkSoft }}>{new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={() => {}}
+                        onClick={(e) => toggleSelectRdo(r.id, e)}
+                        style={{ cursor: 'pointer', width: 15, height: 15 }}
+                      />
+                      <div
+                        onClick={() => setSelectedRdo(r)}
+                        style={{ flex: 1, cursor: 'pointer' }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 10, fontWeight: 900, color: C.amber }}>RDO-DIGITAL</span>
+                          <span style={{ fontSize: 10, color: C.inkSoft }}>{new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 4 }}>{r.obra?.nome ?? 'Sem Obra'}</div>
+                        <div style={{ fontSize: 11, color: C.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.resumo}</div>
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 4 }}>{r.obra?.nome ?? 'Sem Obra'}</div>
-                      <div style={{ fontSize: 11, color: C.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.resumo}</div>
                     </div>
-                  )})}
-                  {filteredRdos.length === 0 && <p style={{ color: C.inkSoft, fontSize: 12 }}>Nenhum diário encontrado.</p>}
+                  )
+                })}
+                {filteredRdos.length === 0 && <p style={{ color: C.inkSoft, fontSize: 12 }}>Nenhum diário encontrado.</p>}
               </div>
             </Panel>
           </div>
@@ -345,10 +448,10 @@ export default function RDO() {
                 action={
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
-                      onClick={() => window.print()}
+                      onClick={() => triggerPrintSingle(selectedRdo)}
                       style={{ ...inputStyle, background: 'none', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
                     >
-                      <Printer size={13} /> Imprimir
+                      <Printer size={13} /> Imprimir Este
                     </button>
                     {selectedRdo.status !== 'Aprovado' && (
                       <button
@@ -363,7 +466,7 @@ export default function RDO() {
               >
                 {/* RDO Doc Render */}
                 <div style={{ padding: 16, background: '#0F1115', border: `1px solid ${C.border}`, borderRadius: 2, display: 'flex', flexDirection: 'column', gap: 20 }}>
-                  
+
                   {/* Doc Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
                     <div>
@@ -453,7 +556,8 @@ export default function RDO() {
                         <Award size={18} color="#10B981" />
                         <div>
                           <div style={{ fontSize: 11, fontWeight: 900, color: '#10B981' }}>ASSINADO DIGITALMENTE</div>
-                          <div style={{ fontSize: 10, color: C.inkSoft }}>Resp: {selectedRdo.responsavel} · IP: {selectedRdo.assinatura_ip} · Data/Hora: {new Date(selectedRdo.assinatura_at).toLocaleString('pt-BR')}</div>
+                          <div style={{ fontSize: 10, color: C.inkSoft }}>Resp. Relatório: {selectedRdo.responsavel} · IP: {selectedRdo.assinatura_ip} · Data/Hora: {new Date(selectedRdo.assinatura_at).toLocaleString('pt-BR')}</div>
+                          {selectedRdo.assinado_por && <div style={{ fontSize: 10, color: '#10B981', marginTop: 2 }}>✓ Assinado por: {selectedRdo.assinado_por}</div>}
                         </div>
                       </div>
                     ) : (
@@ -483,7 +587,7 @@ export default function RDO() {
               </div>
 
               <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
-                {(['geral','recursos','atividades'] as const).map(tab => (
+                {(['geral', 'recursos', 'atividades'] as const).map(tab => (
                   <button
                     key={tab}
                     onClick={() => setFormTab(tab)}
@@ -582,7 +686,7 @@ export default function RDO() {
                           <div><label style={labelStyle}>Função/serviço</label><input style={inputStyle} placeholder="Ex.: elétrica" value={item.funcao} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, funcao: e.target.value } : x))} /></div>
                           <div><label style={labelStyle}>Qtd.</label><input type="number" min="1" style={inputStyle} value={item.quantidade} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, quantidade: e.target.value } : x))} /></div>
                           <div><label style={labelStyle}>Diária (R$)</label><input type="number" step="0.01" style={inputStyle} placeholder="0,00" value={item.valor_diaria} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, valor_diaria: e.target.value } : x))} /></div>
-                          <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações para o log de pagamento</label><textarea rows={2} style={inputStyle} placeholder="Medição, frente, período ou informação para conferência" value={item.observacoes} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>
+                          <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações</label><textarea rows={2} style={inputStyle} placeholder="Medição, frente, período ou informação para conferência" value={item.observacoes} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>
                           {newTerceiros.length > 1 && <button type="button" onClick={() => setNewTerceiros(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover empresa</button>}
                         </div>)}
                       </div>
@@ -616,7 +720,7 @@ export default function RDO() {
                     </div>
                     <div><label style={labelStyle}>Definição dos serviços</label><textarea rows={2} style={inputStyle} value={newDefinicaoServico} onChange={e => setNewDefinicaoServico(e.target.value)} /></div>
                     <div><label style={labelStyle}>Liberações</label><textarea rows={2} style={inputStyle} value={newLiberacoes} onChange={e => setNewLiberacoes(e.target.value)} placeholder="Frentes, áreas, projetos ou serviços liberados" /></div>
-                    <div><label style={labelStyle}>Fotos do RDO</label><input type="file" multiple accept="image/jpeg,image/png,image/webp" style={inputStyle} onChange={e => setNewFotos(Array.from(e.target.files || []))}/>{newFotos.length > 0 && <small style={{ color: C.green }}>{newFotos.length} foto(s) selecionada(s)</small>}</div>
+                    <div><label style={labelStyle}>Fotos do RDO</label><input type="file" multiple accept="image/jpeg,image/png,image/webp" style={inputStyle} onChange={e => setNewFotos(Array.from(e.target.files || []))} />{newFotos.length > 0 && <small style={{ color: C.green }}>{newFotos.length} foto(s) selecionada(s)</small>}</div>
                   </>
                 )}
 
@@ -629,6 +733,479 @@ export default function RDO() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Printable Area (Only visible when window.print() is called) */}
+      <div id="rdo-printable-area" className="rdo-print-only">
+        {rdosToPrint.map((rdo, index) => (
+          <div
+            key={rdo.id}
+            className={`rdo-print-sheet ${index < rdosToPrint.length - 1 ? 'rdo-page-break' : ''}`}
+          >
+            {/* Header */}
+            <div className="print-header">
+              <div className="print-header-left">
+                <h1 className="print-company-title">VITORLO CORREIA | ENGENHARIA</h1>
+                <h2 className="print-obra-title">OBRA: {rdo.obra?.nome || 'OBRA NÃO INFORMADA'}</h2>
+              </div>
+              <div className="print-header-right">
+                <div className="print-doc-badge">RELATÓRIO DIÁRIO DE OBRA</div>
+                <div className="print-doc-date">Data: <strong>{new Date(rdo.data + 'T00:00:00').toLocaleDateString('pt-BR')}</strong></div>
+                <div className="print-doc-status">Status: <strong>{rdo.status.toUpperCase()}</strong></div>
+              </div>
+            </div>
+
+            {/* General Information Grid */}
+            <table className="print-table print-meta-table">
+              <tbody>
+                <tr>
+                  <td><strong>Responsável Técnico:</strong> {rdo.responsavel}</td>
+                  <td><strong>Cargo:</strong> {rdo.cargo || '—'}</td>
+                  <td><strong>CREA:</strong> {rdo.crea || '—'}</td>
+                </tr>
+                <tr>
+                  <td><strong>Clima (M / T):</strong> {rdo.clima_manha} / {rdo.clima_tarde}</td>
+                  <td><strong>Condição do Solo:</strong> {rdo.condicao_solo}</td>
+                  <td><strong>Efetivo Total:</strong> {Number(rdo.efetivo_proprio || 0) + Number(rdo.efetivo_terceiros || 0)} colab. ({rdo.efetivo_proprio || 0} próprios, {rdo.efetivo_terceiros || 0} terc.)</td>
+                </tr>
+              </tbody>
+            </table>
+
+            {/* Resumo */}
+            {rdo.resumo && (
+              <div className="print-section">
+                <h3 className="print-section-title">1. Resumo do Dia</h3>
+                <p className="print-text-block">{rdo.resumo}</p>
+              </div>
+            )}
+
+            {/* Atividades */}
+            <div className="print-section">
+              <h3 className="print-section-title">2. Atividades Realizadas</h3>
+              {rdo.atividades && rdo.atividades.length > 0 ? (
+                <ul className="print-list">
+                  {rdo.atividades.map((at, i) => (
+                    <li key={i}>{at.descricao}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="print-empty">Nenhuma atividade registrada.</p>
+              )}
+            </div>
+
+            {/* Equipamentos */}
+            <div className="print-section">
+              <h3 className="print-section-title">3. Equipamentos em Canteiro</h3>
+              {rdo.equipamentos && rdo.equipamentos.length > 0 ? (
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th>Equipamento</th>
+                      <th>Status Operacional</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rdo.equipamentos.map((eq, i) => (
+                      <tr key={i}>
+                        <td>{eq.nome}</td>
+                        <td><strong>{eq.status}</strong></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="print-empty">Nenhum equipamento registrado.</p>
+              )}
+            </div>
+
+            {/* Terceirizados */}
+            {rdo.terceiros && rdo.terceiros.length > 0 && (
+              <div className="print-section">
+                <h3 className="print-section-title">4. Efetivo Terceirizado</h3>
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th>Empresa</th>
+                      <th>Função</th>
+                      <th>Qtd</th>
+                      <th>Diária</th>
+                      <th>Status Pgto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rdo.terceiros.map((item: any) => (
+                      <tr key={item.id}>
+                        <td><strong>{item.empresa_nome}</strong></td>
+                        <td>{item.funcao || '—'}</td>
+                        <td>{item.quantidade} col.</td>
+                        <td>{item.valor_diaria ? `R$ ${Number(item.valor_diaria).toFixed(2)}` : '—'}</td>
+                        <td>{item.pagamento_status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Planejado vs Executado */}
+            {rdo.planejado_executado && rdo.planejado_executado.length > 0 && (
+              <div className="print-section">
+                <h3 className="print-section-title">5. Serviços Planejados vs Executados</h3>
+                <table className="print-table">
+                  <thead>
+                    <tr>
+                      <th>Serviço</th>
+                      <th>Planejado</th>
+                      <th>Executado</th>
+                      <th>Aproveitamento</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rdo.planejado_executado.map((item: any) => {
+                      const p = Number(item.quantidade_planejada) || 0
+                      const e = Number(item.quantidade_executada) || 0
+                      const perc = p > 0 ? ((e / p) * 100).toFixed(1) : '0.0'
+                      return (
+                        <tr key={item.id}>
+                          <td><strong>{item.servico}</strong></td>
+                          <td>{p} {item.unidade}</td>
+                          <td>{e} {item.unidade}</td>
+                          <td><strong>{perc}%</strong></td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Definições / Liberações / Ocorrências */}
+            {(rdo.definicao_servico || rdo.liberacoes || rdo.ocorrencias) && (
+              <div className="print-section">
+                <h3 className="print-section-title">6. Ocorrências e Definições</h3>
+                {rdo.definicao_servico && <p className="print-text-block"><strong>Definição dos Serviços:</strong> {rdo.definicao_servico}</p>}
+                {rdo.liberacoes && <p className="print-text-block" style={{ marginTop: 4 }}><strong>Liberações:</strong> {rdo.liberacoes}</p>}
+                {rdo.ocorrencias && (
+                  <div className="print-alert-box">
+                    <strong>⚠️ Ocorrências do Dia:</strong> {rdo.ocorrencias}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Fotos anexadas */}
+            {rdo.fotos && rdo.fotos.length > 0 && (
+              <div className="print-section">
+                <h3 className="print-section-title">7. Registro Fotográfico de Campo</h3>
+                <div className="print-photos-grid">
+                  {rdo.fotos.map(foto => {
+                    const url = foto.imagem_url?.startsWith('http')
+                      ? foto.imagem_url
+                      : supabase.storage.from('rdo-fotos').getPublicUrl(foto.imagem_url).data.publicUrl
+                    return (
+                      <div key={foto.id} className="print-photo-item">
+                        <img src={url} alt={foto.legenda || 'Foto do RDO'} />
+                        <span className="print-photo-caption">{foto.legenda || 'Sem legenda'}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Signatures & Stamp */}
+            <div className="print-signature-section">
+              {rdo.status === 'Aprovado' && rdo.assinatura_at ? (
+                <div className="print-stamp-box">
+                  <div className="print-stamp-title">✓ ASSINADO DIGITALMENTE VIA SISTEMA VITORLO CORREIA</div>
+                  <div className="print-stamp-details">
+                    <span><strong>Engenheiro Responsável:</strong> {rdo.responsavel}</span>
+                    <span><strong>Assinado por:</strong> {rdo.assinado_por || rdo.responsavel}</span>
+                    <span><strong>IP de Origem:</strong> {rdo.assinatura_ip}</span>
+                    <span><strong>Data/Hora de Autenticação:</strong> {new Date(rdo.assinatura_at).toLocaleString('pt-BR')}</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="print-pending-box">
+                  <span>DOCUMENTO EM RASCUNHO — PENDENTE DE ASSINATURA DIGITAL</span>
+                </div>
+              )}
+
+              <div className="print-signatures-lines">
+                <div className="print-sig-line">
+                  <div className="line"></div>
+                  <span>Engenheiro Responsável</span>
+                  <small>{rdo.responsavel}</small>
+                </div>
+                <div className="print-sig-line">
+                  <div className="line"></div>
+                  <span>Fiscalização da Obra / Cliente</span>
+                  <small>{rdo.obra?.nome}</small>
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <style jsx global>{`
+        .rdo-print-only {
+          display: none;
+        }
+
+        @media print {
+          body * {
+            visibility: hidden !important;
+          }
+          
+          #rdo-printable-area, #rdo-printable-area * {
+            visibility: visible !important;
+          }
+
+          #rdo-printable-area {
+            display: block !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            background: #ffffff !important;
+            color: #111827 !important;
+            font-family: Arial, Helvetica, sans-serif !important;
+          }
+
+          .rdo-page-break {
+            page-break-after: always !important;
+            break-after: page !important;
+          }
+
+          .rdo-print-sheet {
+            padding: 24px !important;
+            box-sizing: border-box !important;
+            background: #ffffff !important;
+            color: #111827 !important;
+          }
+
+          .print-header {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: flex-start !important;
+            border-bottom: 3px solid #1e293b !important;
+            padding-bottom: 12px !important;
+            margin-bottom: 16px !important;
+          }
+
+          .print-company-title {
+            font-size: 16px !important;
+            font-weight: 900 !important;
+            color: #0f172a !important;
+            margin: 0 0 4px 0 !important;
+            letter-spacing: 0.5px !important;
+          }
+
+          .print-obra-title {
+            font-size: 13px !important;
+            font-weight: 700 !important;
+            color: #334155 !important;
+            margin: 0 !important;
+          }
+
+          .print-header-right {
+            text-align: right !important;
+          }
+
+          .print-doc-badge {
+            display: inline-block !important;
+            background: #0f172a !important;
+            color: #ffffff !important;
+            font-size: 10px !important;
+            font-weight: 900 !important;
+            padding: 3px 8px !important;
+            border-radius: 2px !important;
+            margin-bottom: 4px !important;
+            letter-spacing: 0.5px !important;
+          }
+
+          .print-doc-date, .print-doc-status {
+            font-size: 11px !important;
+            color: #475569 !important;
+          }
+
+          .print-table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+            font-size: 11px !important;
+            margin-bottom: 14px !important;
+          }
+
+          .print-table th, .print-table td {
+            border: 1px solid #cbd5e1 !important;
+            padding: 6px 10px !important;
+            text-align: left !important;
+            color: #1e293b !important;
+          }
+
+          .print-table th {
+            background: #f1f5f9 !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+            text-transform: uppercase !important;
+            font-size: 10px !important;
+          }
+
+          .print-meta-table td {
+            background: #f8fafc !important;
+            font-size: 11px !important;
+          }
+
+          .print-section {
+            margin-bottom: 16px !important;
+          }
+
+          .print-section-title {
+            font-size: 12px !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+            border-bottom: 1.5px solid #cbd5e1 !important;
+            padding-bottom: 4px !important;
+            margin: 0 0 8px 0 !important;
+            text-transform: uppercase !important;
+          }
+
+          .print-text-block {
+            font-size: 11px !important;
+            line-height: 1.5 !important;
+            color: #334155 !important;
+            margin: 0 !important;
+          }
+
+          .print-list {
+            margin: 0 !important;
+            padding-left: 18px !important;
+            font-size: 11px !important;
+            color: #1e293b !important;
+          }
+
+          .print-list li {
+            margin-bottom: 4px !important;
+          }
+
+          .print-empty {
+            font-size: 10px !important;
+            color: #64748b !important;
+            font-style: italic !important;
+            margin: 0 !important;
+          }
+
+          .print-alert-box {
+            background: #fef2f2 !important;
+            border: 1px solid #fca5a5 !important;
+            color: #991b1b !important;
+            padding: 8px 12px !important;
+            border-radius: 4px !important;
+            font-size: 11px !important;
+            margin-top: 6px !important;
+          }
+
+          .print-photos-grid {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 12px !important;
+            margin-top: 8px !important;
+          }
+
+          .print-photo-item {
+            border: 1px solid #cbd5e1 !important;
+            padding: 6px !important;
+            border-radius: 4px !important;
+            background: #f8fafc !important;
+            text-align: center !important;
+          }
+
+          .print-photo-item img {
+            max-width: 100% !important;
+            max-height: 180px !important;
+            object-fit: cover !important;
+            border-radius: 2px !important;
+          }
+
+          .print-photo-caption {
+            display: block !important;
+            font-size: 9px !important;
+            color: #475569 !important;
+            margin-top: 4px !important;
+          }
+
+          .print-signature-section {
+            margin-top: 24px !important;
+            border-top: 2px solid #0f172a !important;
+            padding-top: 14px !important;
+            page-break-inside: avoid !important;
+          }
+
+          .print-stamp-box {
+            background: #f0fdf4 !important;
+            border: 1.5px solid #86efac !important;
+            border-radius: 4px !important;
+            padding: 10px 14px !important;
+            margin-bottom: 24px !important;
+          }
+
+          .print-stamp-title {
+            font-size: 11px !important;
+            font-weight: 900 !important;
+            color: #166534 !important;
+            margin-bottom: 6px !important;
+          }
+
+          .print-stamp-details {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            gap: 4px 12px !important;
+            font-size: 10px !important;
+            color: #15803d !important;
+          }
+
+          .print-pending-box {
+            background: #fffbeb !important;
+            border: 1.5px solid #fde68a !important;
+            color: #b45309 !important;
+            padding: 8px 12px !important;
+            font-size: 10px !important;
+            font-weight: 800 !important;
+            border-radius: 4px !important;
+            margin-bottom: 24px !important;
+            text-align: center !important;
+          }
+
+          .print-signatures-lines {
+            display: flex !important;
+            justify-content: space-around !important;
+            margin-top: 36px !important;
+          }
+
+          .print-sig-line {
+            text-align: center !important;
+            width: 200px !important;
+          }
+
+          .print-sig-line .line {
+            border-bottom: 1px solid #334155 !important;
+            margin-bottom: 6px !important;
+          }
+
+          .print-sig-line span {
+            display: block !important;
+            font-size: 10px !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+          }
+
+          .print-sig-line small {
+            display: block !important;
+            font-size: 9px !important;
+            color: #64748b !important;
+          }
+        }
+      `}</style>
     </>
   )
 }

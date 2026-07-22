@@ -5,7 +5,7 @@ import {
   Building2, Users, FileText, CheckCircle, Clock, X,
   Search, RefreshCw, ArrowUpRight, ArrowDownRight, Calendar,
   Shield, Check, AlertTriangle, Paperclip, Eye, UserPlus, ToggleLeft, ToggleRight,
-  Edit3, Sliders, Camera
+  Edit3, Sliders, Camera, Trash2
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
@@ -261,26 +261,32 @@ export default function FinanceiroPage() {
 // ════════════════════════════════════════════════════════
 function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
   const [obras, setObras] = useState<Obra[]>([])
-  const [obraId, setObraId] = useState('')
+  const [obraId, setObraId] = useState<string>('todas')
   const [fotos, setFotos] = useState<any[]>([])
   const [form, setForm] = useState({ nome: '', cliente: '', endereco: '', valor: '' })
   const [legenda, setLegenda] = useState('')
+  const [showForm, setShowForm] = useState(false)
+  
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
+  
   const load = useCallback(async () => {
     const [{ data: o }, { data: f }] = await Promise.all([
       supabase.from('obras').select('*').order('nome'),
       supabase.from('fotos').select('*').not('obra_id', 'is', null).order('created_at', { ascending: false }).limit(60),
     ])
-    setObras((o as Obra[]) || []); setFotos(f || []); if (!obraId && o?.[0]) setObraId(o[0].id)
-  }, [obraId])
+    setObras((o as Obra[]) || []); setFotos(f || []);
+  }, [])
+  
   useEffect(() => { void load() }, [load])
+  
   async function criarObra(e: React.FormEvent) {
     e.preventDefault(); if (!form.nome.trim()) return toast('Informe o nome da obra.', 'error')
     const { data, error } = await supabase.from('obras').insert({ nome: form.nome.trim(), cliente: form.cliente || null, endereco: form.endereco || null, valor_contrato: Number(form.valor) || 0, progresso: 0, status: 'Em dia' }).select().single()
-    if (error) return toast(error.message, 'error'); setForm({ nome: '', cliente: '', endereco: '', valor: '' }); setObraId(data.id); await load(); toast('Obra criada.', 'success')
+    if (error) return toast(error.message, 'error'); setForm({ nome: '', cliente: '', endereco: '', valor: '' }); setShowForm(false); setObraId(data.id); await load(); toast('Obra criada.', 'success')
   }
+  
   async function anexarFoto(file: File) {
-    if (!obraId) return toast('Selecione uma obra primeiro.', 'error')
+    if (!obraId || obraId === 'todas') return toast('Selecione uma obra primeiro.', 'error')
     const path = `${obraId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`
     const upload = await supabase.storage.from('comprovantes').upload(path, file)
     if (upload.error) return toast(upload.error.message, 'error')
@@ -288,11 +294,172 @@ function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
     const { error } = await supabase.from('fotos').insert({ obra_id: obraId, imagem_url: pub.publicUrl, legenda: legenda || file.name, data_iso: new Date().toISOString().slice(0, 10) })
     if (error) return toast(error.message, 'error'); setLegenda(''); await load(); toast('Foto anexada.', 'success')
   }
-  const obra = obras.find(o => o.id === obraId); const fotosObra = fotos.filter(f => f.obra_id === obraId)
-  return <div style={{ display: 'grid', gap: 16 }}>
-    {podeGerenciar && <form onSubmit={criarObra} style={card}><h2 style={{ margin: '0 0 12px', fontSize: 16, color: C.ink }}>Nova obra</h2><div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 9 }}><input style={input} placeholder="Nome da obra *" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} /><input style={input} placeholder="Cliente" value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} /><input style={input} placeholder="Endereço" value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} /><input style={input} type="number" placeholder="Valor do contrato" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} /></div><button style={{ ...btn(C.amber), marginTop: 10 }}><Plus size={14} /> Criar obra</button></form>}
-    <div style={card}><h2 style={{ margin: '0 0 12px', fontSize: 16, color: C.ink }}>Métricas e fotos das obras</h2><div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>{obras.map(o => <button key={o.id} onClick={() => setObraId(o.id)} style={{ ...btnGhost, color: o.id === obraId ? C.amber : C.inkSoft }}>{o.nome}</button>)}</div>{obra ? <div style={{ marginTop: 14, display: 'grid', gap: 12 }}><div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}><span><b>Contrato:</b> {fmt(Number(obra.valor_contrato || 0))}</span><span><b>Progresso:</b> {obra.progresso}%</span><span><b>Fotos:</b> {fotosObra.length}</span></div>{podeGerenciar && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}><input style={{ ...input, maxWidth: 260 }} placeholder="Legenda da foto" value={legenda} onChange={e => setLegenda(e.target.value)} /><label style={{ ...btnGhost, cursor: 'pointer' }}><Camera size={14} /> Anexar foto<input hidden type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) void anexarFoto(f); e.currentTarget.value = '' }} /></label></div>}<div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(150px,1fr))', gap: 9 }}>{fotosObra.map(f => <div key={f.id} style={{ border: `1px solid ${C.border}` }}><img src={f.imagem_url} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 110, objectFit: 'cover' }} /><div style={{ padding: 6, fontSize: 10, color: C.inkSoft }}>{f.legenda}</div></div>)}</div></div> : <p style={{ color: C.inkSoft }}>Nenhuma obra cadastrada.</p>}</div>
-  </div>
+  
+  async function excluirObra(id: string, nome: string) {
+    if (!confirm(`Deseja realmente excluir a obra "${nome}"? Isso removerá os dados vinculados.`)) return
+    const { error } = await supabase.from('obras').delete().eq('id', id)
+    if (error) return toast(error.message, 'error')
+    if (obraId === id) setObraId('todas'); 
+    await load(); toast('Obra excluída.', 'success')
+  }
+  
+  const obraSelecionada = obras.find(o => o.id === obraId)
+  const fotosObra = fotos.filter(f => f.obra_id === obraId)
+  
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      
+      {/* Visão Geral */}
+      {obraId === 'todas' && (
+        <div style={{ ...card, padding: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 800, color: C.ink }}>Visão Geral das Obras</h2>
+              <p style={{ margin: 0, fontSize: 12, color: C.inkSoft }}>Acompanhe o andamento de todos os projetos em andamento.</p>
+            </div>
+            {podeGerenciar && (
+              <button onClick={() => setShowForm(!showForm)} style={btn(showForm ? '#EF4444' : C.amber)}>
+                {showForm ? <X size={14} /> : <Plus size={14} />} {showForm ? 'Cancelar Cadastro' : 'Nova Obra'}
+              </button>
+            )}
+          </div>
+          
+          {/* Formulário Retrátil */}
+          <AnimatePresence>
+            {showForm && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
+                <form onSubmit={criarObra} style={{ background: '#12141C', padding: 16, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 20 }}>
+                  <h3 style={{ margin: '0 0 12px', fontSize: 14, color: C.ink }}>Dados da Nova Obra</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
+                    <input style={input} placeholder="Nome da obra *" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} required />
+                    <input style={input} placeholder="Cliente" value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} />
+                    <input style={input} placeholder="Endereço" value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} />
+                    <input style={input} type="number" placeholder="Valor do contrato (Opcional)" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} />
+                  </div>
+                  <button style={{ ...btn(C.amber), marginTop: 12 }}><Plus size={14} /> Salvar e Criar Obra</button>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
+          
+          {/* Grid de Obras */}
+          {obras.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft }}>Nenhuma obra cadastrada ainda.</div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+              {obras.map(o => (
+                <div key={o.id} style={{ background: '#12141C', borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  {/* Card Header */}
+                  <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: C.ink }}>{o.nome}</h3>
+                        <p style={{ margin: 0, fontSize: 11, color: C.inkSoft }}>{o.cliente || 'Sem cliente vinculado'}</p>
+                      </div>
+                      <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: o.status === 'Em dia' ? `${C.green}15` : `${C.amber}15`, color: o.status === 'Em dia' ? C.green : C.amber, border: `1px solid ${o.status === 'Em dia' ? C.green : C.amber}33` }}>
+                        {o.status || 'Em dia'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  {/* Card Body */}
+                  <div style={{ padding: '16px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    {o.endereco && <div style={{ fontSize: 11, color: C.inkSoft }}><b style={{ color: C.ink }}>📍 Local:</b> {o.endereco}</div>}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                      <span style={{ color: C.inkSoft }}>Progresso Físico</span>
+                      <strong style={{ color: C.amber }}>{o.progresso || 0}%</strong>
+                    </div>
+                    <div style={{ width: '100%', height: 6, background: '#0B0C0E', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${Math.min(100, Math.max(0, o.progresso || 0))}%`, height: '100%', background: C.amber, borderRadius: 3 }} />
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: 16, marginTop: 'auto', paddingTop: 12, borderTop: `1px dashed ${C.border}` }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 10, color: C.inkSoft }}>Contrato</span>
+                        <strong style={{ fontSize: 12, color: C.ink }}>{fmt(Number(o.valor_contrato || 0))}</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 10, color: C.inkSoft }}>Fotos Anexas</span>
+                        <strong style={{ fontSize: 12, color: C.ink }}>{fotos.filter(f => f.obra_id === o.id).length}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Card Footer */}
+                  <div style={{ padding: '12px 20px', background: 'rgba(0,0,0,0.2)', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <button onClick={() => setObraId(o.id)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}>Ver Detalhes <ArrowUpRight size={14} /></button>
+                    {podeGerenciar && (
+                      <button onClick={() => excluirObra(o.id, o.nome)} style={{ all: 'unset', cursor: 'pointer', padding: 6, color: C.inkSoft, opacity: 0.6 }} title="Excluir obra">
+                        <Trash2 size={15} color="#EF4444" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Detalhes da Obra Selecionada */}
+      {obraId !== 'todas' && obraSelecionada && (
+        <div style={{ ...card, padding: 24 }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
+            <button onClick={() => setObraId('todas')} style={{ ...btnGhost, color: C.inkSoft, padding: '6px 10px' }}>← Visão Geral</button>
+            <div style={{ width: 1, height: 24, background: C.border }} />
+            <h2 style={{ margin: 0, fontSize: 18, color: C.ink }}>{obraSelecionada.nome}</h2>
+            {podeGerenciar && (
+               <button onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)} style={{ ...btnGhost, color: '#EF4444', marginLeft: 'auto', padding: '6px 10px' }}><Trash2 size={14}/> Excluir Obra</button>
+            )}
+          </div>
+          
+          <div style={{ display: 'grid', gap: 20 }}>
+            {/* Metricas Rapidas */}
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', background: '#12141C', padding: 16, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Cliente</span><strong style={{ fontSize: 14, color: C.ink }}>{obraSelecionada.cliente || '—'}</strong></div>
+              <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Contrato</span><strong style={{ fontSize: 14, color: C.ink }}>{fmt(Number(obraSelecionada.valor_contrato || 0))}</strong></div>
+              <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Progresso</span><strong style={{ fontSize: 14, color: C.amber }}>{obraSelecionada.progresso}%</strong></div>
+              <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Fotos do Financeiro</span><strong style={{ fontSize: 14, color: C.ink }}>{fotosObra.length}</strong></div>
+            </div>
+            
+            {/* Anexos */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <h3 style={{ margin: 0, fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}><Camera size={16}/> Galeria de Fotos e Comprovantes</h3>
+                {podeGerenciar && (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input style={{ ...input, width: 220 }} placeholder="Legenda da nova foto..." value={legenda} onChange={e => setLegenda(e.target.value)} />
+                    <label style={{ ...btn(C.amber), cursor: 'pointer', padding: '0 12px' }}>
+                      <Plus size={14} /> Anexar
+                      <input hidden type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) void anexarFoto(f); e.currentTarget.value = '' }} />
+                    </label>
+                  </div>
+                )}
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+                {fotosObra.map(f => (
+                  <div key={f.id} style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden', background: '#12141C' }}>
+                    <img src={f.imagem_url} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
+                    <div style={{ padding: '8px 10px' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda'}</div>
+                      <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>{new Date(f.data_iso).toLocaleDateString('pt-BR')}</div>
+                    </div>
+                  </div>
+                ))}
+                {fotosObra.length === 0 && (
+                  <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', color: C.inkSoft, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
+                    Nenhuma foto anexada a esta obra pelo Financeiro.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+    </div>
+  )
 }
 
 interface TabProps {
@@ -1224,7 +1391,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [loading, setLoading]   = useState(true)
   const [filtEmpresa, setFiltEmpresa] = useState('')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
-  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago'>('todos')
+  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [search, setSearch]           = useState('')
@@ -1281,6 +1448,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     const payload: Record<string, string | null> = { status }
     if (status === 'Pago') payload.pago_em = new Date().toISOString()
     if (status !== 'Pago') payload.pago_em = null
+    
+    if (status === 'Negado') {
+      const justificativa = window.prompt('O lançamento será marcado como Negado. Qual a justificativa?')
+      if (!justificativa) return // Cancela a operação se não houver justificativa
+      payload.justificativa_negacao = justificativa
+    } else {
+      payload.justificativa_negacao = null
+    }
+
     const { error } = await supabase.from('contas').update(payload).eq('id', id)
     if (error) return toast(error.message, 'error')
     await load()
@@ -1347,6 +1523,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
           <option value="Liberado/OK">Liberado/OK</option>
           <option value="A pagar">A pagar</option>
           <option value="Pago">Pago</option>
+          <option value="Negado">Negado</option>
         </select>
         <input title="Previsão inicial" aria-label="Previsão inicial" style={{ ...input, width: 145 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
         <input title="Previsão final" aria-label="Previsão final" style={{ ...input, width: 145 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
@@ -1412,14 +1589,19 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                     <td style={{ padding: '12px 14px' }}>
                       <span style={{
                         fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-                        background: pago ? '#34D39920' : aguardandoAprovacao ? '#3B82F620' : venc ? '#F8717120' : C.amber + '20',
-                        color: pago ? '#34D399' : aguardandoAprovacao ? '#3B82F6' : venc ? '#F87171' : C.amber,
+                        background: c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : aguardandoAprovacao ? '#3B82F620' : venc ? '#F8717120' : C.amber + '20',
+                        color: c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : aguardandoAprovacao ? '#3B82F6' : venc ? '#F87171' : C.amber,
                       }}>
                         {c.status.toUpperCase()}
                       </span>
                       {c.aprovado_por && (
                         <div style={{ fontSize: 9, color: '#34D399', marginTop: 4 }}>
-                  ✓ Aprovado por: {c.aprovado_por}
+                          ✓ Aprovado por: {c.aprovado_por}
+                        </div>
+                      )}
+                      {c.status === 'Negado' && c.justificativa_negacao && (
+                        <div style={{ fontSize: 9, color: '#F87171', marginTop: 4, maxWidth: 160, whiteSpace: 'normal' }}>
+                          <b style={{ fontWeight: 800 }}>Motivo:</b> {c.justificativa_negacao}
                         </div>
                       )}
                     </td>
@@ -1431,6 +1613,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                           <option value="Liberado/OK">Liberado/OK</option>
                           <option value="A pagar">A pagar</option>
                           <option value="Pago">Pago</option>
+                          <option value="Negado">Negado</option>
                         </select>}
                         {aguardandoAprovacao && podeAprovar && (
                           <button onClick={() => aprovarLançamento(c.id)} title="Aprovar Lançamento" style={{ ...btn(), padding: '4px 8px', fontSize: 10 }}>

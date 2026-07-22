@@ -512,37 +512,7 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                {/* Cargo */}
-                <div style={{ marginBottom: 14 }}>
-                  <label style={{
-                    display: 'block', fontSize: 11, fontWeight: 800,
-                    color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6,
-                  }}>Cargo Solicitado</label>
-                  <div style={{ position: 'relative' }}>
-                    <Briefcase size={15} color="#4B5563" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-                    <select
-                      value={cargoSol}
-                      onChange={e => setCargoSol(e.target.value)}
-                      style={{
-                        width: '100%',
-                        background: '#0B0C0E',
-                        border: '1px solid #1E2230',
-                        borderRadius: 8,
-                        padding: '10px 14px 10px 42px',
-                        color: '#F3F4F6',
-                        fontSize: 13.5,
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                        appearance: 'none',
-                      }}
-                    >
-                      <option value="operador">Operador Financeiro</option>
-                      <option value="admin_empresa">Administrador por Empresa</option>
-                      <option value="visualizador">Visualizador</option>
-                      <option value="admin_geral">Administrador Geral</option>
-                    </select>
-                  </div>
-                </div>
+                {/* Cargo removido conforme solicitado: padrão operador, o adm define */}
 
                 {/* Empresa (Se não for Admin Geral) */}
                 {cargoSol !== 'admin_geral' && (

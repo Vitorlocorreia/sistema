@@ -99,6 +99,7 @@ export interface Rdo {
   status: 'Rascunho' | 'Aprovado'
   assinatura_ip: string | null
   assinatura_at: string | null
+  assinado_por: string | null
   created_at: string
 }
 
@@ -208,7 +209,7 @@ export interface Conta {
   valor: number
   data_vencimento: string
   data_previsao: string | null
-  status: 'Lançado' | 'Aguardando aprovação' | 'Liberado/OK' | 'A pagar' | 'Pago'
+  status: 'Lançado' | 'Aguardando aprovação' | 'Liberado/OK' | 'A pagar' | 'Pago' | 'Negado'
   observacoes: string | null
   possui_fornecedor: boolean
   pagamento_antecipado: boolean
@@ -216,6 +217,7 @@ export interface Conta {
   valor_antecipado: number | null
   data_antecipacao: string | null
   justificativa_antecipacao: string | null
+  justificativa_negacao: string | null
   recorrencia: 'unico' | 'mensal' | 'semanal'
   comprovante_url: string | null
   pago_em: string | null
@@ -280,6 +282,9 @@ export type RdoCompleto = Rdo & {
   obra?: Pick<Obra, 'nome'>
   atividades?: RdoAtividade[]
   equipamentos?: RdoEquipamento[]
+  terceiros?: any[]
+  planejado_executado?: any[]
+  fotos?: Foto[]
 }
 
 export type ContaComRelacoes = Conta & {

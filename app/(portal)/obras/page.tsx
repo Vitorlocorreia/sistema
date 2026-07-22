@@ -411,6 +411,11 @@ export default function Obras() {
         
         {podeGerenciar && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {obraAtual && (
+              <button onClick={() => handleDeleteObra(obraAtual.id, obraAtual.nome)} style={{ ...btnGhost, gap: 6, color: '#EF4444' }}>
+                <Trash2 size={14} /> Excluir obra selecionada
+              </button>
+            )}
             <button onClick={() => { setIsGerenciarOpen(true); setShowFormNova(true); setFormObra({ id: '', nome: '', cliente: '', endereco: '', valor_contrato: '', data_inicio: '', data_fim: '', progresso: 0, status: 'Em dia' }) }} style={{ ...btn(C.amber), gap: 6 }}>
               <Plus size={14} /> Nova obra
             </button>
