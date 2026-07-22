@@ -2581,11 +2581,27 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#0B0C0E33', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, height: 'fit-content' }}>
                             <label style={label}>Limite de Autoliberação (R$)</label>
                             <div style={{ fontSize: 10, color: C.inkSoft, marginBottom: 8 }}>Valores acima deste exigirão visto de um Administrador.</div>
-                            {cfg.cargo === 'admin_geral' || cfg.cargo === 'admin_empresa' ? (
-                              <div style={{ fontSize: 12, color: '#34D399', fontWeight: 800 }}>Sem limite (Aprovação Automática)</div>
-                            ) : (
-                              <input type="number" style={{ ...input, padding: '6px 10px', fontSize: 12 }} value={cfg.limite_valor} onChange={e => handleLimiteChange(cfg.cargo, e.target.value)} placeholder="Ex: 5000" />
-                            )}
+                            
+                            <input
+                              type="number"
+                              disabled={cfg.limite_valor === 0}
+                              style={{ ...input, padding: '6px 10px', fontSize: 12, opacity: cfg.limite_valor === 0 ? 0.4 : 1 }}
+                              value={cfg.limite_valor === 0 ? '' : cfg.limite_valor}
+                              onChange={e => handleLimiteChange(cfg.cargo, e.target.value)}
+                              placeholder={cfg.limite_valor === 0 ? 'Sem limite ativado' : 'Ex: 5000'}
+                            />
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, fontSize: 11, color: C.ink, cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={cfg.limite_valor === 0}
+                                onChange={e => handleLimiteChange(cfg.cargo, e.target.checked ? '0' : '5000')}
+                                style={{ accentColor: C.amber, cursor: 'pointer' }}
+                              />
+                              <span style={{ fontWeight: cfg.limite_valor === 0 ? 800 : 400, color: cfg.limite_valor === 0 ? '#34D399' : C.ink }}>
+                                Sem limite (Aprovação Automática)
+                              </span>
+                            </label>
                           </div>
                         </div>
 
@@ -2695,7 +2711,25 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
 
                     <div>
                       <label style={label}>Limite de Autoliberação (R$)</label>
-                      <input type="number" style={input} value={editColForm.limite_valor} onChange={e => setEditColForm({ ...editColForm, limite_valor: parseFloat(e.target.value) || 0 })} placeholder="Ex: 5000" />
+                      <input
+                        type="number"
+                        disabled={editColForm.limite_valor === 0}
+                        style={{ ...input, opacity: editColForm.limite_valor === 0 ? 0.4 : 1 }}
+                        value={editColForm.limite_valor === 0 ? '' : editColForm.limite_valor}
+                        onChange={e => setEditColForm({ ...editColForm, limite_valor: parseFloat(e.target.value) || 0 })}
+                        placeholder={editColForm.limite_valor === 0 ? 'Sem limite ativado' : 'Ex: 5000'}
+                      />
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, fontSize: 11, color: C.ink, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={editColForm.limite_valor === 0}
+                          onChange={e => setEditColForm({ ...editColForm, limite_valor: e.target.checked ? 0 : 5000 })}
+                          style={{ accentColor: C.amber, cursor: 'pointer' }}
+                        />
+                        <span style={{ fontWeight: editColForm.limite_valor === 0 ? 800 : 400, color: editColForm.limite_valor === 0 ? '#34D399' : C.ink }}>
+                          Sem limite (Aprovação Automática)
+                        </span>
+                      </label>
                     </div>
 
                     <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
