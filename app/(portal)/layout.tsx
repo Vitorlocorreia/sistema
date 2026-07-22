@@ -84,7 +84,7 @@ function cargoLabel(cargo: string): string {
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
-  const [order, setOrder] = useState<string[]>(() => defaultApps.map(a => a.id))
+  const [order, setOrder] = useState<string[]>(loadOrder)
   const [editMode, setEditMode] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const dragItem = useRef<number | null>(null)
@@ -188,9 +188,6 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     return () => window.removeEventListener('storage', onStorage)
   }, [router])
 
-  // Hydrate sidebar order after mount
-  useEffect(() => { setOrder(loadOrder()) }, [])
-  useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(order)) }, [order])
   useEffect(() => { setMobileOpen(false) }, [pathname])
 
   // Route guard: só redireciona se authChecked E apps carregados
@@ -231,10 +228,25 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const handleDragEnd = () => {
     if (dragItem.current === null || dragOver.current === null) return
     if (dragItem.current === dragOver.current) { dragItem.current = null; dragOver.current = null; return }
-    const next = [...order]
-    const [moved] = next.splice(dragItem.current, 1)
-    next.splice(dragOver.current, 0, moved)
-    setOrder(next)
+    
+    const sourceApp = sortedApps[dragItem.current]
+    const targetApp = sortedApps[dragOver.current]
+    
+    if (sourceApp && targetApp) {
+      const next = [...order]
+      const fromIndex = next.indexOf(sourceApp.id)
+      const toIndex = next.indexOf(targetApp.id)
+
+      if (fromIndex !== -1 && toIndex !== -1) {
+        const [moved] = next.splice(fromIndex, 1)
+        next.splice(toIndex, 0, moved)
+        setOrder(next)
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+        } catch { }
+      }
+    }
+
     dragItem.current = null
     dragOver.current = null
   }
