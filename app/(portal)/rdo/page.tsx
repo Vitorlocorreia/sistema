@@ -338,7 +338,7 @@ export default function RDO() {
           </div>
 
           {/* Details Section (7 Cols) */}
-          <div className="lg:col-span-7">
+          <div className="lg:col-span-7 rdo-detail-scroll">
             {selectedRdo ? (
               <Panel
                 title={`Detalhes do Diário de Obra`}

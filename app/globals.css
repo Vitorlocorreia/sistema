@@ -21,6 +21,21 @@ body {
   font-family: var(--font-sans);
 }
 
+/* RDO details scroll inside the opened document so the list/sidebar and the
+   portal page do not move while a long daily report is being reviewed. */
+@media (min-width: 1024px) {
+  .rdo-detail-scroll {
+    min-width: 0;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    touch-action: pan-y;
+  }
+}
+
 /* RH admission review: keep the stage selector above the checklist and keep
    the five document columns aligned even on compact screens. */
 div[style*="145px minmax"] {
