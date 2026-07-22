@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, FileText, Calendar, Building, Sun, CloudRain, Cloud,
   UserCheck, AlertTriangle, Hammer, CheckCircle2, FileUp,
-  Search, X, Check, Eye, Printer, Award, Clock
+  Search, X, Check, Eye, Printer, Award, Clock, Trash2
 } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { PageTitle } from '@/components/PageTitle'
@@ -301,6 +301,36 @@ export default function RDO() {
     }
   }
 
+  const handleDeleteRdo = async (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    if (!confirm('Deseja realmente excluir este Diário de Obra (RDO)? Esta ação não pode ser desfeita.')) return
+
+    try {
+      await Promise.all([
+        supabase.from('rdo_atividades').delete().eq('rdo_id', id),
+        supabase.from('rdo_equipamentos').delete().eq('rdo_id', id),
+        supabase.from('rdo_efetivos_terceiros').delete().eq('rdo_id', id),
+        supabase.from('rdo_planejado_executado').delete().eq('rdo_id', id),
+        supabase.from('fotos').delete().eq('rdo_id', id),
+      ])
+
+      const { error } = await supabase.from('rdos').delete().eq('id', id)
+      if (error) {
+        toast('Erro ao excluir RDO: ' + error.message, 'error')
+        return
+      }
+
+      toast('Diário de Obra excluído com sucesso!', 'success')
+      if (selectedRdo?.id === id) {
+        setSelectedRdo(null)
+      }
+      setSelectedRdoIds(prev => prev.filter(item => item !== id))
+      loadData()
+    } catch {
+      toast('Erro ao excluir RDO', 'error')
+    }
+  }
+
   return (
     <>
       <PageTitle modulo="Escout" titulo="Diário de Obra Digital" />
@@ -432,6 +462,13 @@ export default function RDO() {
                         <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 4 }}>{r.obra?.nome ?? 'Sem Obra'}</div>
                         <div style={{ fontSize: 11, color: C.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.resumo}</div>
                       </div>
+                      <button
+                        onClick={(e) => handleDeleteRdo(r.id, e)}
+                        title="Excluir RDO"
+                        style={{ all: 'unset', cursor: 'pointer', color: '#F87171aa', padding: 4, display: 'flex', alignItems: 'center' }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   )
                 })}
@@ -452,6 +489,13 @@ export default function RDO() {
                       style={{ ...inputStyle, background: 'none', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
                     >
                       <Printer size={13} /> Imprimir Este
+                    </button>
+                    <button
+                      onClick={(e) => handleDeleteRdo(selectedRdo.id, e)}
+                      title="Excluir Diário de Obra"
+                      style={{ ...inputStyle, background: 'none', border: `1px solid #F8717155`, color: '#F87171', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      <Trash2 size={13} /> Excluir
                     </button>
                     {selectedRdo.status !== 'Aprovado' && (
                       <button
