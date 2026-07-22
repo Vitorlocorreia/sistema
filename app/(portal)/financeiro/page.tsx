@@ -2225,7 +2225,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                           )}
                         </div>
                         <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
-                          {NOMES_CARGOS[c.cargo]} · Empresa: {empresaNome}
+                          {cargos.find(cargo => cargo.codigo === c.cargo)?.nome || NOMES_CARGOS[c.cargo] || c.cargo} · Empresa: {empresaNome}
                         </div>
                         {c.email && <div style={{ fontSize: 10, color: C.inkSoft }}>{c.email}</div>}
                       </div>
@@ -2239,8 +2239,8 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                             style={{ ...input, width: 145, padding: '3px 6px', fontSize: 10, height: 26 }}
                             title="Alterar cargo do colaborador"
                           >
-                            {Object.entries(NOMES_CARGOS).map(([val, label]) => (
-                              <option key={val} value={val}>{label}</option>
+                            {cargos.map(cargo => (
+                              <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
                             ))}
                           </select>
                         )}
@@ -2416,8 +2416,8 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                     value={editColForm.cargo}
                     onChange={e => setEditColForm({ ...editColForm, cargo: e.target.value })}
                   >
-                    {Object.entries(NOMES_CARGOS).map(([val, label]) => (
-                      <option key={val} value={val}>{label}</option>
+                    {cargos.map(cargo => (
+                      <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
                     ))}
                   </select>
                 </div>
