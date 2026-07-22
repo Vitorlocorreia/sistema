@@ -977,7 +977,7 @@ export default function RDO() {
                   {rdo.fotos.map(foto => {
                     const url = foto.imagem_url?.startsWith('http')
                       ? foto.imagem_url
-                      : supabase.storage.from('rdo-fotos').getPublicUrl(foto.imagem_url).data.publicUrl
+                      : foto.imagem_url ? supabase.storage.from('rdo-fotos').getPublicUrl(foto.imagem_url).data.publicUrl : ''
                     return (
                       <div key={foto.id} className="print-photo-item">
                         <img src={url} alt={foto.legenda || 'Foto do RDO'} />
