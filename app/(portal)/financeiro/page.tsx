@@ -107,7 +107,7 @@ const btnGhost: React.CSSProperties = {
 }
 
 export default function FinanceiroPage() {
-  const [tab, setTab] = useState<Tab>('dashboard')
+  const [tab, setTab] = useState<Tab>('historico')
   
   // Colaborador atualmente conectado neste navegador/dispositivo
   const [colaboradorAtivo, setColaboradorAtivo] = useState<Colaborador | null>(null)
@@ -153,16 +153,27 @@ export default function FinanceiroPage() {
 
   // Retorna a lista de abas visíveis de acordo com as permissões reais do cargo
   function getAbasPermitidas() {
+    const isAdminGeral = colaboradorAtivo?.cargo === 'admin_geral'
     const apps = (colaboradorAtivo?.override_permissoes ? colaboradorAtivo.apps : permissaoAtiva?.apps) || ''
     const tem = (app: string) => apps.split(',').map(item => item.trim()).includes(app)
-    const abas = ['dashboard', 'historico']
+    const abas: string[] = []
+    if (isAdminGeral) abas.push('dashboard')
+    abas.push('historico')
     if (tem('financeiro')) abas.push('contas')
     if (permissaoAtiva?.pode_empresas) abas.push('empresas')
     if (permissaoAtiva?.pode_fornecedores) abas.push('fornecedores')
-    if (tem('obras') || colaboradorAtivo?.cargo === 'admin_geral') abas.push('obras')
-    if (colaboradorAtivo?.cargo === 'admin_geral') abas.push('permissoes')
+    if (tem('obras') || isAdminGeral) abas.push('obras')
+    if (isAdminGeral) abas.push('permissoes')
     return abas
   }
+
+  // Garante que o tab ativo seja sempre válido
+  useEffect(() => {
+    if (colaboradorAtivo && !getAbasPermitidas().includes(tab)) {
+      setTab('historico')
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [colaboradorAtivo?.cargo])
 
   if (loadingAcesso) {
     return <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando permissões...</p>
@@ -1666,6 +1677,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoAcesso[]>([])
   const [loading, setLoading] = useState(true)
   const [savingPerms, setSavingPerms] = useState<string | null>(null)
+  const [editingCargoNome, setEditingCargoNome] = useState<string | null>(null) // codigo do cargo em edicao
+  const [editingCargoNomeValue, setEditingCargoNomeValue] = useState('')
+  const [savingCargoNome, setSavingCargoNome] = useState(false)
   
   // States do Novo Colaborador
   const [showColForm, setShowColForm] = useState(false)
@@ -1777,6 +1791,25 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
     await loadData()
     setSavingPerms(null)
     onRefresh() // Atualiza sessao
+  }
+
+  const salvarNomeCargo = async (codigo: string) => {
+    if (!editingCargoNomeValue.trim()) return
+    setSavingCargoNome(true)
+    try {
+      const { error } = await supabase
+        .from('cargos_sistema')
+        .update({ nome: editingCargoNomeValue.trim() })
+        .eq('codigo', codigo)
+      if (error) throw error
+      toast('Nome do cargo atualizado!', 'success')
+      setEditingCargoNome(null)
+      await loadData()
+    } catch (err: any) {
+      toast('Erro ao atualizar nome: ' + (err?.message || err), 'error')
+    } finally {
+      setSavingCargoNome(false)
+    }
   }
 
   // Cadastrar novo colaborador
@@ -2252,7 +2285,38 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                   return (
                     <div key={cfg.cargo} style={{ ...card, padding: 18 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8, marginBottom: 12 }}>
-                        <span style={{ fontWeight: 900, fontSize: 14, color: C.amber }}>{labelCargo}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {editingCargoNome === cfg.cargo ? (
+                            <>
+                              <input
+                                value={editingCargoNomeValue}
+                                onChange={e => setEditingCargoNomeValue(e.target.value)}
+                                style={{ ...input, width: 160, padding: '2px 8px', fontSize: 13, fontWeight: 800, color: C.amber }}
+                                onKeyDown={e => { if (e.key === 'Enter') salvarNomeCargo(cfg.cargo); if (e.key === 'Escape') setEditingCargoNome(null) }}
+                                autoFocus
+                              />
+                              <button onClick={() => salvarNomeCargo(cfg.cargo)} disabled={savingCargoNome} style={{ ...btn(), padding: '2px 8px', fontSize: 10 }}>
+                                {savingCargoNome ? '...' : 'OK'}
+                              </button>
+                              <button onClick={() => setEditingCargoNome(null)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 2 }}>
+                                <X size={13} />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <span style={{ fontWeight: 900, fontSize: 14, color: C.amber }}>{cargos.find(c => c.codigo === cfg.cargo)?.nome || labelCargo}</span>
+                              {cfg.cargo !== 'admin_geral' && (
+                                <button
+                                  title="Editar nome do cargo"
+                                  onClick={() => { setEditingCargoNome(cfg.cargo); setEditingCargoNomeValue(cargos.find(c => c.codigo === cfg.cargo)?.nome || labelCargo) }}
+                                  style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                                >
+                                  <Edit3 size={12} />
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                         {cfg.cargo !== 'admin_geral' && (
                           <button 
                             style={{ ...btn(), padding: '4px 10px', fontSize: 10 }}
