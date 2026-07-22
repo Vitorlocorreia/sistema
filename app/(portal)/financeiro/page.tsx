@@ -1900,6 +1900,47 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
     }
   }
 
+  // Excluir cargo do sistema
+  const excluirCargo = async (codigo: string) => {
+    if (['admin_geral', 'admin_empresa'].includes(codigo)) {
+      return alert('Não é possível excluir cargos nativos do sistema.')
+    }
+
+    const cargoObj = cargos.find(c => c.codigo === codigo)
+    const nomeCargo = cargoObj?.nome || NOMES_CARGOS[codigo] || codigo
+
+    const colsAfetados = colaboradores.filter(c => c.cargo === codigo)
+    if (colsAfetados.length > 0) {
+      if (!confirm(`Existem ${colsAfetados.length} colaborador(es) com o cargo "${nomeCargo}". Ao excluir, o cargo deles será alterado para "Operador". Deseja continuar?`)) {
+        return
+      }
+    } else {
+      if (!confirm(`Tem certeza que deseja excluir o cargo "${nomeCargo}"?`)) return
+    }
+
+    try {
+      setLoading(true)
+
+      if (colsAfetados.length > 0) {
+        await supabase
+          .from('colaboradores')
+          .update({ cargo: 'operador' })
+          .eq('cargo', codigo)
+      }
+
+      await supabase.from('config_permissoes').delete().eq('cargo', codigo)
+      await supabase.from('cargos_sistema').delete().eq('codigo', codigo)
+
+      toast(`Cargo "${nomeCargo}" excluído!`, 'success')
+      onRefresh()
+      await loadData()
+    } catch (err: any) {
+      alert('Erro ao excluir cargo: ' + (err?.message || err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Cadastrar novo colaborador
   const criarColaborador = async () => {
     if (!colForm.nome.trim()) return
@@ -2489,13 +2530,24 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
                           )}
                         </div>
                         {cfg.cargo !== 'admin_geral' && (
-                          <button 
-                            style={{ ...btn(), padding: '4px 10px', fontSize: 10 }}
-                            onClick={() => salvarConfigCargo(cfg.cargo, cfg)}
-                            disabled={saving}
-                          >
-                            {saving ? 'Gravando...' : 'Salvar Regras'}
-                          </button>
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <button 
+                              style={{ ...btn(), padding: '4px 10px', fontSize: 10 }}
+                              onClick={() => salvarConfigCargo(cfg.cargo, cfg)}
+                              disabled={saving}
+                            >
+                              {saving ? 'Gravando...' : 'Salvar Regras'}
+                            </button>
+                            {cfg.cargo !== 'admin_empresa' && (
+                              <button
+                                style={{ ...btnGhost, borderColor: '#EF444455', color: '#EF4444', padding: '4px 8px', fontSize: 10 }}
+                                onClick={() => excluirCargo(cfg.cargo)}
+                                title="Excluir este cargo"
+                              >
+                                <Trash2 size={12} /> Excluir
+                              </button>
+                            )}
+                          </div>
                         )}
                         {cfg.cargo === 'admin_geral' && (
                           <span style={{ fontSize: 9, color: C.inkSoft, fontStyle: 'italic' }}>Administrador Geral (Acesso Irrestrito)</span>
