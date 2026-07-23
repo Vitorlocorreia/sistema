@@ -204,7 +204,7 @@ export interface ItemNegociacao {
   id: string
   data: string
   autor: string
-  tipo: 'pagamento_parcial' | 'desconto' | 'prorrogacao' | 'observacao'
+  tipo: 'pagamento_parcial' | 'desconto' | 'prorrogacao' | 'observacao' | 'alteracao_status'
   descricao: string
   valor_pago?: number
   valor_novo?: number

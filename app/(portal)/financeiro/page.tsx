@@ -1524,6 +1524,13 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         categoria: form.categoria || null,
         comprovante_url: comprovanteUrl,
         criado_por: colaboradorAtivo.nome,
+        historico_negociacao: [{
+          id: Date.now().toString(),
+          data: new Date().toISOString(),
+          autor: colaboradorAtivo.nome || 'Usuário',
+          tipo: 'alteracao_status',
+          descricao: `Lançamento cadastrado no sistema com status "${statusInicial}"`
+        }]
       })
     }
 
@@ -1853,12 +1860,35 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   }
 
   const aprovarLançamento = async (id: string) => {
-    const nomeAprovador = colaboradorAtivo.nome
+    const conta = contas.find(c => c.id === id)
+    if (!conta) return
+
+    const nomeAprovador = colaboradorAtivo.nome || 'Administrador'
+    const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
+    const novoLogItem: ItemNegociacao = {
+      id: Date.now().toString(),
+      data: new Date().toISOString(),
+      autor: nomeAprovador,
+      tipo: 'alteracao_status',
+      descricao: `Aprovou o lançamento (Status alterado de "${conta.status}" para "Liberado/OK")`
+    }
+
     await supabase.from('contas').update({
       status: 'Liberado/OK',
       aprovado_por: nomeAprovador,
-      aprovado_em: new Date().toISOString()
+      aprovado_em: new Date().toISOString(),
+      historico_negociacao: [...historicoAtual, novoLogItem]
     }).eq('id', id)
+
+    await supabase.from('historico_edicoes').insert({
+      entidade: 'contas',
+      entidade_id: id,
+      acao: 'UPDATE',
+      dados_anteriores: { status: conta.status },
+      dados_novos: { status: 'Liberado/OK', aprovado_por: nomeAprovador },
+      usuario_nome: nomeAprovador
+    }).catch(() => {})
+
     load()
   }
 
@@ -1869,16 +1899,34 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     }
     const status = proximo[conta.status]
     if (!status) return
-    await supabase.from('contas').update({ status }).eq('id', conta.id)
+    
+    const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
+    const novoLogItem: ItemNegociacao = {
+      id: Date.now().toString(),
+      data: new Date().toISOString(),
+      autor: colaboradorAtivo.nome || 'Usuário',
+      tipo: 'alteracao_status',
+      descricao: `Avançou status de "${conta.status}" para "${status}"`
+    }
+
+    await supabase.from('contas').update({ 
+      status, 
+      historico_negociacao: [...historicoAtual, novoLogItem] 
+    }).eq('id', conta.id)
     await load()
-    toast('Fornecedor cadastrado.', 'success')
+    toast('Status alterado.', 'success')
   }
 
   const alterarStatus = async (id: string, status: ContaComRelacoes['status']) => {
-    const payload: Record<string, string | null> = { status }
+    const conta = contas.find(c => c.id === id)
+    if (!conta) return
+
+    const payload: Record<string, any> = { status }
     if (status === 'Pago') payload.pago_em = new Date().toISOString()
     if (status !== 'Pago') payload.pago_em = null
     
+    let descLog = `Status alterado de "${conta.status}" para "${status}"`
+
     if (status === 'Negado') {
       const justificativa = await prompt?.(
         'Justificativa de Negação',
@@ -1890,12 +1938,33 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       )
       if (!justificativa) return
       payload.justificativa_negacao = justificativa
+      descLog += `. Motivo: ${justificativa}`
     } else {
       payload.justificativa_negacao = null
     }
 
+    const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
+    const novoLogItem: ItemNegociacao = {
+      id: Date.now().toString(),
+      data: new Date().toISOString(),
+      autor: colaboradorAtivo.nome || 'Usuário',
+      tipo: 'alteracao_status',
+      descricao: descLog
+    }
+    payload.historico_negociacao = [...historicoAtual, novoLogItem]
+
     const { error } = await supabase.from('contas').update(payload).eq('id', id)
     if (error) return toast(error.message, 'error')
+
+    await supabase.from('historico_edicoes').insert({
+      entidade: 'contas',
+      entidade_id: id,
+      acao: 'UPDATE',
+      dados_anteriores: { status: conta.status },
+      dados_novos: { status, justificativa: payload.justificativa_negacao },
+      usuario_nome: colaboradorAtivo.nome || 'Usuário'
+    }).catch(() => {})
+
     await load()
   }
 
@@ -1942,15 +2011,46 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
   async function salvarEdicaoConta() {
     if (!editandoConta) return
+
+    const mudancas: string[] = []
+    if (editandoConta.status !== formEdicao.status) mudancas.push(`status de "${editandoConta.status}" para "${formEdicao.status}"`)
+    if (editandoConta.descricao !== formEdicao.descricao) mudancas.push(`descrição para "${formEdicao.descricao}"`)
+    if (editandoConta.valor !== Number(formEdicao.valor)) mudancas.push(`valor para R$ ${formEdicao.valor}`)
+    if (editandoConta.data_vencimento !== formEdicao.data_vencimento) mudancas.push(`vencimento para ${formEdicao.data_vencimento}`)
+
+    const historicoAtual = Array.isArray(editandoConta.historico_negociacao) ? editandoConta.historico_negociacao : []
+    let novoHistorico = historicoAtual
+    if (mudancas.length > 0) {
+      const novoLogItem: ItemNegociacao = {
+        id: Date.now().toString(),
+        data: new Date().toISOString(),
+        autor: colaboradorAtivo.nome || 'Usuário',
+        tipo: 'alteracao_status',
+        descricao: `Edição manual: alterou ${mudancas.join(', ')}`
+      }
+      novoHistorico = [...historicoAtual, novoLogItem]
+    }
+
     const { error } = await supabase.from('contas').update({
       descricao: formEdicao.descricao,
       valor: Number(formEdicao.valor),
       data_previsao: formEdicao.data_previsao,
       data_vencimento: formEdicao.data_vencimento,
       status: formEdicao.status,
-      categoria: formEdicao.categoria || null
+      categoria: formEdicao.categoria || null,
+      historico_negociacao: novoHistorico
     }).eq('id', editandoConta.id)
     if (error) return toast(error.message, 'error')
+
+    await supabase.from('historico_edicoes').insert({
+      entidade: 'contas',
+      entidade_id: editandoConta.id,
+      acao: 'UPDATE',
+      dados_anteriores: { status: editandoConta.status, valor: editandoConta.valor, descricao: editandoConta.descricao },
+      dados_novos: { status: formEdicao.status, valor: Number(formEdicao.valor), descricao: formEdicao.descricao },
+      usuario_nome: colaboradorAtivo.nome || 'Usuário'
+    }).catch(() => {})
+
     setEditandoConta(null)
     toast('Lançamento atualizado', 'success')
     void load()
@@ -2388,31 +2488,35 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                           </div>
                                         ) : (
                                           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto', paddingRight: 8 }}>
-                                            {[...c.historico_negociacao].reverse().map(hist => (
-                                              <div key={hist.id} style={{ background: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, borderLeft: `2px solid ${C.amber}` }}>
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                                                  <strong style={{ fontSize: 11, color: C.amber }}>
-                                                    {hist.tipo === 'desconto' ? 'Desconto' : hist.tipo === 'pagamento_parcial' ? 'Pgto Parcial' : hist.tipo === 'prorrogacao' ? 'Prorrogação' : 'Observação'}
-                                                  </strong>
-                                                  <span style={{ fontSize: 10, color: C.inkSoft }}>
-                                                    {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                  </span>
+                                            {[...c.historico_negociacao].reverse().map(hist => {
+                                              const isStatus = hist.tipo === 'alteracao_status'
+                                              const borderColor = isStatus ? '#3B82F6' : hist.tipo === 'desconto' ? '#10B981' : hist.tipo === 'pagamento_parcial' ? '#34D399' : C.amber
+                                              const tipoTitulo = isStatus ? 'Alteração / Status' : hist.tipo === 'desconto' ? 'Desconto' : hist.tipo === 'pagamento_parcial' ? 'Pgto Parcial' : hist.tipo === 'prorrogacao' ? 'Prorrogação' : 'Observação'
+                                              return (
+                                                <div key={hist.id} style={{ background: isStatus ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, borderLeft: `3px solid ${borderColor}` }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                    <strong style={{ fontSize: 11, color: borderColor }}>
+                                                      {tipoTitulo}
+                                                    </strong>
+                                                    <span style={{ fontSize: 10, color: C.inkSoft }}>
+                                                      {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                    </span>
+                                                  </div>
+                                                  <div style={{ fontSize: 11, color: C.amber, fontWeight: 600, marginBottom: 4 }}>👤 Por: {hist.autor || 'Usuário'}</div>
+                                                  <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>{hist.descricao}</div>
+                                                  
+                                                  {hist.tipo === 'desconto' && hist.valor_novo && (
+                                                    <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Novo Valor: {fmt(hist.valor_novo)}</div>
+                                                  )}
+                                                  {hist.tipo === 'pagamento_parcial' && hist.valor_pago && (
+                                                    <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Pago: {fmt(hist.valor_pago)}</div>
+                                                  )}
+                                                  {hist.tipo === 'prorrogacao' && hist.nova_data && (
+                                                    <div style={{ marginTop: 4, fontSize: 11, color: C.amber, fontWeight: 600 }}>Nova Data: {fmtDate(hist.nova_data)}</div>
+                                                  )}
                                                 </div>
-                                                <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Por: {hist.autor}</div>
-                                                <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>{hist.descricao}</div>
-                                                
-                                                {/* Detalhes específicos de cada tipo */}
-                                                {hist.tipo === 'desconto' && hist.valor_novo && (
-                                                  <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Novo Valor: {fmt(hist.valor_novo)}</div>
-                                                )}
-                                                {hist.tipo === 'pagamento_parcial' && hist.valor_pago && (
-                                                  <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Pago: {fmt(hist.valor_pago)}</div>
-                                                )}
-                                                {hist.tipo === 'prorrogacao' && hist.nova_data && (
-                                                  <div style={{ marginTop: 4, fontSize: 11, color: C.amber, fontWeight: 600 }}>Nova Data: {fmtDate(hist.nova_data)}</div>
-                                                )}
-                                              </div>
-                                            ))}
+                                              )
+                                            })}
                                           </div>
                                         )}
                                       </div>
