@@ -2215,10 +2215,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 const isExpanded = expandedContaId === c.id
 
                 const historico = c.historico_negociacao || []
-                const totalPago = historico.filter(h => h.tipo === 'pagamento_parcial' && h.valor_pago).reduce((acc, h) => acc + (h.valor_pago || 0), 0)
+                const totalPagoHistorico = historico.filter(h => h.tipo === 'pagamento_parcial' && h.valor_pago).reduce((acc, h) => acc + (h.valor_pago || 0), 0)
+                const totalPago = totalPagoHistorico + (c.pagamento_antecipado ? (c.valor_antecipado || 0) : 0)
                 const valorDesconto = historico.filter(h => h.tipo === 'desconto' && h.valor_novo).slice(-1)[0]?.valor_novo
                 const valorBase = valorDesconto !== undefined ? valorDesconto : c.valor
-                const saldoDevedor = valorBase - totalPago
+                const saldoDevedor = Math.max(0, valorBase - totalPago)
 
                 return (
                   <Fragment key={c.id}>
@@ -2275,13 +2276,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       </td>
                       <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
                       <td style={{ padding: '12px 14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
-                        <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171' }}>
+                        <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13 }}>
                           {fmt(c.valor)}
                         </div>
                         {totalPago > 0 && (
-                          <div style={{ marginTop: 4 }}>
-                            <div style={{ fontSize: 9, color: '#34D399' }}>Pago: {fmt(totalPago)}</div>
-                            <div style={{ fontSize: 9, color: C.amber }}>Falta: {fmt(saldoDevedor)}</div>
+                          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            <div style={{ fontSize: 9, color: '#34D399', fontWeight: 700 }}>✓ Pago: {fmt(totalPago)}</div>
+                            <div style={{ fontSize: 10, color: C.amber, fontWeight: 800 }}>
+                              {c.tipo === 'receber' ? 'A receber: ' : 'A pagar: '}{fmt(saldoDevedor)}
+                            </div>
                           </div>
                         )}
                       </td>
@@ -2401,8 +2404,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                   <div style={{ background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: `1px solid rgba(255,255,255,0.05)` }}>
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 8 }}>Resumo Financeiro</div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.inkSoft, marginBottom: 4 }}>
-                                      <span>Valor Original:</span>
-                                      <span>{fmt(c.valor)}</span>
+                                      <span>Valor Cheio (Original):</span>
+                                      <span style={{ fontWeight: 700, color: C.ink }}>{fmt(c.valor)}</span>
                                     </div>
                                     {valorDesconto !== undefined && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#34D399', marginBottom: 4 }}>
@@ -2412,10 +2415,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                     )}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#34D399', marginBottom: 4 }}>
                                       <span>Total Pago (Amortizado):</span>
-                                      <span>{fmt(totalPago)}</span>
+                                      <span style={{ fontWeight: 700 }}>{fmt(totalPago)}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.amber, fontWeight: 700, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                                      <span>Saldo Pendente:</span>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.amber, fontWeight: 800, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                                      <span>{c.tipo === 'receber' ? 'A Receber:' : 'A Pagar:'}</span>
                                       <span>{fmt(saldoDevedor)}</span>
                                     </div>
                                   </div>
