@@ -1987,7 +1987,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const podeEditar = (permissaoAtiva?.pode_lancar === true) || (permissaoAtiva?.pode_alterar_status === true) || (permissaoAtiva?.pode_pagar === true) || (permissaoAtiva?.pode_aprovar === true) || (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
 
   const activeFiltrosCount = [filtEmpresa, filtFornecedor, filtTipo !== 'todos' ? filtTipo : '', filtStatus !== 'todos' ? filtStatus : '', filtDataInicio, filtDataFim, filtOrdem !== 'novo' ? filtOrdem : ''].filter(Boolean).length
-  const clearFiltros = () => { setFiltEmpresa(colaboradorAtivo.cargo === 'admin_empresa' ? colaboradorAtivo.empresa_id || '' : ''); setFiltFornecedor(initialFornecedorId || ''); setFiltTipo('todos'); setFiltStatus('todos'); setFiltDataInicio(''); setFiltDataFim(''); setFiltOrdem('novo') }
+  const clearFiltros = () => { setFiltEmpresa(colaboradorAtivo.cargo === 'admin_empresa' ? colaboradorAtivo.empresa_id || '' : ''); setFiltFornecedor(''); setFiltTipo('todos'); setFiltStatus('todos'); setFiltDataInicio(''); setFiltDataFim(''); setFiltOrdem('novo') }
 
   return (
     <div>
