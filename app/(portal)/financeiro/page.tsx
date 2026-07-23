@@ -3558,24 +3558,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                             )}
                           </div>
                         )}
-                        {/* Quando cargo é admin_empresa, admin_geral pode vincular empresa */}
-                        {isGeral && c.cargo === 'admin_empresa' && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <span style={{ fontSize: 9, color: C.inkSoft, fontWeight: 700 }}>EMPRESA:</span>
-                            <select
-                              value={c.empresa_id || ''}
-                              disabled={isAtivo}
-                              onChange={e => void alterarEmpresasColaborador(c.id, e.target.value ? [e.target.value] : [])}
-                              style={{ ...input, width: 160, padding: '3px 6px', fontSize: 10, height: 26, borderColor: !c.empresa_id ? '#ef4444' : C.border }}
-                              title="Vincular empresa ao admin"
-                            >
-                              <option value="">Selecione a empresa...</option>
-                              {empresas.map(e => (
-                                <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
                       </div>
                     </div>
                   </div>
