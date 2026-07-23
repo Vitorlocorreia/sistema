@@ -23,6 +23,20 @@ const fmtDate = (d: string) => {
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
 }
 
+const parseCurrency = (val: string | number | undefined | null): number => {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val
+  if (!val) return 0
+  const str = String(val).trim()
+  if (!str) return 0
+  if (str.includes(',')) {
+    const cleanStr = str.replace(/\./g, '').replace(',', '.')
+    const num = parseFloat(cleanStr)
+    return isNaN(num) ? 0 : num
+  }
+  const num = parseFloat(str.replace(/\./g, ''))
+  return isNaN(num) ? 0 : num
+}
+
 export const CATEGORIAS = ['Material de Construção', 'Serviço Terceirizado', 'Equipamento', 'Locação', 'Imposto', 'Mão de Obra / CLT', 'Energia / Água', 'Escritório', 'Reembolso', 'Medição Recebida', 'Outros']
 
 const isVencido = (d: string, status: string) => {
@@ -1478,13 +1492,13 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       comprovanteUrl = publicUrl
     }
 
-    const valorNum = parseFloat(form.valor)
+    const valorNum = parseCurrency(form.valor)
     
     // Limite fixo de autoliberação: R$ 30.000
     const limiteAprovacao = 30000
     
     let statusInicial: 'Lançado' | 'Bloqueado' = 'Lançado'
-    if (form.tipo === 'pagar' && valorNum > limiteAprovacao && !permissaoAtiva?.pode_aprovar) {
+    if (form.tipo === 'pagar' && valorNum > limiteAprovacao) {
       statusInicial = 'Bloqueado'
     }
 
@@ -1516,7 +1530,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         observacoes: form.observacoes || null,
         pagamento_antecipado: form.pagamento_antecipado,
         tipo_antecipacao: form.pagamento_antecipado ? form.tipo_antecipacao : null,
-        valor_antecipado: form.pagamento_antecipado ? (parseFloat(form.valor_antecipado) || null) : null,
+        valor_antecipado: form.pagamento_antecipado ? (parseCurrency(form.valor_antecipado) || null) : null,
         data_antecipacao: form.pagamento_antecipado ? (form.data_antecipacao || null) : null,
         justificativa_antecipacao: form.pagamento_antecipado ? (form.justificativa_antecipacao || null) : null,
         obra_id: form.obra_id || null,
@@ -2015,10 +2029,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   async function salvarEdicaoConta() {
     if (!editandoConta) return
 
+    const valorEditadoNum = parseCurrency(formEdicao.valor)
     const mudancas: string[] = []
     if (editandoConta.status !== formEdicao.status) mudancas.push(`status de "${editandoConta.status}" para "${formEdicao.status}"`)
     if (editandoConta.descricao !== formEdicao.descricao) mudancas.push(`descrição para "${formEdicao.descricao}"`)
-    if (editandoConta.valor !== Number(formEdicao.valor)) mudancas.push(`valor para R$ ${formEdicao.valor}`)
+    if (editandoConta.valor !== valorEditadoNum) mudancas.push(`valor para ${fmt(valorEditadoNum)}`)
     if (editandoConta.data_vencimento !== formEdicao.data_vencimento) mudancas.push(`vencimento para ${formEdicao.data_vencimento}`)
 
     const historicoAtual = Array.isArray(editandoConta.historico_negociacao) ? editandoConta.historico_negociacao : []
@@ -2036,7 +2051,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
     const { error } = await supabase.from('contas').update({
       descricao: formEdicao.descricao,
-      valor: Number(formEdicao.valor),
+      valor: valorEditadoNum,
       data_previsao: formEdicao.data_previsao,
       data_vencimento: formEdicao.data_vencimento,
       status: formEdicao.status,
