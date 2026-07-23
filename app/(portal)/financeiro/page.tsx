@@ -2294,11 +2294,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13 }}>
                           {fmt(c.valor)}
                         </div>
-                        {totalPago > 0 && (
-                          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                            <div style={{ fontSize: 9, color: '#34D399', fontWeight: 700 }}>✓ Pago: {fmt(totalPago)}</div>
+                        {(totalPago > 0 || saldoDevedor !== c.valor) && (
+                          <div style={{ marginTop: 4 }}>
                             <div style={{ fontSize: 10, color: C.amber, fontWeight: 800 }}>
-                              {c.tipo === 'receber' ? 'A receber: ' : 'A pagar: '}{fmt(saldoDevedor)}
+                              {c.tipo === 'receber' ? 'A receber (hoje): ' : 'A pagar (hoje): '}{fmt(saldoDevedor)}
                             </div>
                           </div>
                         )}
