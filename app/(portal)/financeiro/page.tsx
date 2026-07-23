@@ -384,6 +384,8 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
   const [legenda, setLegenda] = useState('')
   const [showForm, setShowForm] = useState(false)
   const [metricasForm, setMetricasForm] = useState({ bm_atual: '', medido_acumulado: '', observacao: '' })
+  const [editandoMedicaoId, setEditandoMedicaoId] = useState<string | null>(null)
+  const [editMedicaoForm, setEditMedicaoForm] = useState({ bm: '', medido_acumulado: '', observacao: '' })
   
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
   
@@ -447,6 +449,48 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
     if (error) return toast(error.message, 'error')
     if (obraId === id) setObraId('todas'); 
     await load(); toast('Obra excluída.', 'success')
+  }
+
+  async function excluirMedicao(obraIdAlvo: string, medicaoId: string) {
+    if (!(await confirm('Excluir Medição', 'Deseja excluir este registro de medição do histórico?', { confirmLabel: 'Excluir', confirmColor: C.red }))) return
+    const obra = obras.find(o => o.id === obraIdAlvo)
+    const historico: ItemMedicao[] = Array.isArray(obra?.historico_medicoes) ? obra!.historico_medicoes as ItemMedicao[] : []
+    const novoHistorico = historico.filter(h => h.id !== medicaoId)
+    // recalc bm_atual e medido_acumulado pelo último item restante
+    const ultimo = novoHistorico[novoHistorico.length - 1]
+    const { error } = await supabase.from('obras').update({
+      historico_medicoes: novoHistorico,
+      bm_atual: ultimo?.bm ?? null,
+      medido_acumulado: ultimo?.medido_acumulado ?? 0
+    }).eq('id', obraIdAlvo)
+    if (error) return toast(error.message, 'error')
+    await load(); toast('Medição excluída.', 'success')
+  }
+
+  async function salvarEdicaoMedicao(obraIdAlvo: string, medicaoId: string) {
+    if (!editMedicaoForm.bm.trim()) return toast('Informe o BM.', 'error')
+    if (!editMedicaoForm.medido_acumulado) return toast('Informe o Medido Acumulado.', 'error')
+    const obra = obras.find(o => o.id === obraIdAlvo)
+    const historico: ItemMedicao[] = Array.isArray(obra?.historico_medicoes) ? obra!.historico_medicoes as ItemMedicao[] : []
+    const medido = parseCurrency(editMedicaoForm.medido_acumulado)
+    const saldo = Math.max(0, Number(obra?.valor_contrato || 0) - medido)
+    const novoHistorico = historico.map(h => h.id !== medicaoId ? h : {
+      ...h,
+      bm: editMedicaoForm.bm.trim(),
+      medido_acumulado: medido,
+      saldo_a_medir: saldo,
+      observacao: editMedicaoForm.observacao.trim() || undefined
+    })
+    // recalc bm_atual e medido_acumulado pelo último item do histórico
+    const ultimo = novoHistorico[novoHistorico.length - 1]
+    const { error } = await supabase.from('obras').update({
+      historico_medicoes: novoHistorico,
+      bm_atual: ultimo?.bm ?? null,
+      medido_acumulado: ultimo?.medido_acumulado ?? 0
+    }).eq('id', obraIdAlvo)
+    if (error) return toast(error.message, 'error')
+    setEditandoMedicaoId(null)
+    await load(); toast('Medição atualizada.', 'success')
   }
   
   const obraSelecionada = obras.find(o => o.id === obraId)
@@ -633,16 +677,58 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                           )}
                         </div>
                         <div style={{ flex: 1, paddingBottom: 16 }}>
-                          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
-                            <span style={{ fontSize: 11, fontWeight: 800, color: idx === 0 ? C.amber : C.ink, background: idx === 0 ? C.amber + '18' : 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 4 }}>{item.bm}</span>
-                            <span style={{ fontSize: 10, color: C.inkSoft }}>{new Date(item.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                            <span style={{ fontSize: 10, color: C.inkSoft }}>👤 {item.autor}</span>
-                          </div>
-                          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                            <div><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Medido Acum.</span><div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{fmt(item.medido_acumulado)}</div></div>
-                            <div><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Saldo a Medir</span><div style={{ fontSize: 13, fontWeight: 700, color: '#34D399' }}>{fmt(item.saldo_a_medir)}</div></div>
-                            {item.observacao && <div style={{ flex: '1 1 200px' }}><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Obs.</span><div style={{ fontSize: 12, color: C.inkSoft, fontStyle: 'italic' }}>{item.observacao}</div></div>}
-                          </div>
+                          {editandoMedicaoId === item.id ? (
+                            // ─── Modo edição inline ───
+                            <div style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.amber}44`, borderRadius: 6, padding: 12 }}>
+                              <div style={{ fontSize: 10, color: C.amber, fontWeight: 800, textTransform: 'uppercase', marginBottom: 10 }}>✏️ Editando Medição</div>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 10 }}>
+                                <div>
+                                  <label style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginBottom: 3, fontWeight: 700, textTransform: 'uppercase' }}>BM *</label>
+                                  <input style={input} value={editMedicaoForm.bm} onChange={e => setEditMedicaoForm(f => ({ ...f, bm: e.target.value }))} />
+                                </div>
+                                <div>
+                                  <label style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginBottom: 3, fontWeight: 700, textTransform: 'uppercase' }}>Medido Acumulado (R$) *</label>
+                                  <input style={input} type="number" step="0.01" value={editMedicaoForm.medido_acumulado} onChange={e => setEditMedicaoForm(f => ({ ...f, medido_acumulado: e.target.value }))} />
+                                </div>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                  <label style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginBottom: 3, fontWeight: 700, textTransform: 'uppercase' }}>Observação</label>
+                                  <input style={input} value={editMedicaoForm.observacao} onChange={e => setEditMedicaoForm(f => ({ ...f, observacao: e.target.value }))} />
+                                </div>
+                              </div>
+                              <div style={{ display: 'flex', gap: 8 }}>
+                                <button onClick={() => salvarEdicaoMedicao(obraSelecionada.id, item.id)} style={{ ...btn(C.amber), padding: '5px 14px', fontSize: 11 }}>Salvar</button>
+                                <button onClick={() => setEditandoMedicaoId(null)} style={{ ...btnGhost, padding: '5px 14px', fontSize: 11 }}>Cancelar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            // ─── Modo exibição ───
+                            <>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: idx === 0 ? C.amber : C.ink, background: idx === 0 ? C.amber + '18' : 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 4 }}>{item.bm}</span>
+                                <span style={{ fontSize: 10, color: C.inkSoft }}>{new Date(item.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                <span style={{ fontSize: 10, color: C.inkSoft }}>👤 {item.autor}</span>
+                                {podeGerenciar && (
+                                  <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+                                    <button
+                                      onClick={() => { setEditandoMedicaoId(item.id); setEditMedicaoForm({ bm: item.bm, medido_acumulado: String(item.medido_acumulado), observacao: item.observacao || '' }) }}
+                                      style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 10 }}
+                                      title="Editar"
+                                    ><Edit3 size={11} /></button>
+                                    <button
+                                      onClick={() => excluirMedicao(obraSelecionada.id, item.id)}
+                                      style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 10 }}
+                                      title="Excluir"
+                                    ><Trash2 size={11} /></button>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                                <div><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Medido Acum.</span><div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{fmt(item.medido_acumulado)}</div></div>
+                                <div><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Saldo a Medir</span><div style={{ fontSize: 13, fontWeight: 700, color: '#34D399' }}>{fmt(item.saldo_a_medir)}</div></div>
+                                {item.observacao && <div style={{ flex: '1 1 200px' }}><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Obs.</span><div style={{ fontSize: 12, color: C.inkSoft, fontStyle: 'italic' }}>{item.observacao}</div></div>}
+                              </div>
+                            </>
+                          )}
                         </div>
                       </div>
                     ))}
