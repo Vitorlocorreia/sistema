@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import type { Obra, Rdo, RdoCompleto } from '@/lib/types'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
-type EfetivoTerceiroForm = { empresa_nome: string; funcao: string; quantidade: string; observacoes: string; valor_diaria: string }
+type EfetivoTerceiroForm = { empresa_nome: string; funcao: string; quantidade: string; observacoes: string }
 type PlanejadoExecutadoForm = { servico: string; unidade: string; planejada: string; executada: string; observacoes: string }
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ export default function RDO() {
   const [newEfetivoProprio, setNewEfetivoProprio] = useState('10')
   const [newEfetivoTerceiros, setNewEfetivoTerceiros] = useState('0')
   const [temTerceirizados, setTemTerceirizados] = useState(false)
-  const [newTerceiros, setNewTerceiros] = useState<EfetivoTerceiroForm[]>([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
+  const [newTerceiros, setNewTerceiros] = useState<EfetivoTerceiroForm[]>([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '' }])
   const [newPlanejadoExecutado, setNewPlanejadoExecutado] = useState<PlanejadoExecutadoForm[]>([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
   const [newResumo, setNewResumo] = useState('')
   const [newOcorrencias, setNewOcorrencias] = useState('')
@@ -247,7 +247,6 @@ export default function RDO() {
           funcao: item.funcao.trim() || null,
           quantidade: parseInt(item.quantidade) || 1,
           observacoes: item.observacoes.trim() || null,
-          valor_diaria: item.valor_diaria ? parseFloat(item.valor_diaria) : null,
           pagamento_status: 'pendente'
         })))
       }
@@ -279,7 +278,7 @@ export default function RDO() {
     setNewResumo(''); setNewOcorrencias(''); setNewDefinicaoServico(''); setNewLiberacoes(''); setNewFotos([])
     setTemTerceirizados(false)
     setNewEfetivoTerceiros('0')
-    setNewTerceiros([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
+    setNewTerceiros([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '' }])
     setNewPlanejadoExecutado([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
     setEquipForm([{ nome: '', status: 'OPERANDO' }])
 
@@ -763,14 +762,13 @@ export default function RDO() {
                       <div style={{ marginTop: 12, border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                           <label style={labelStyle}>Terceirizados por empresa — controle para conferência</label>
-                          <button type="button" onClick={() => setNewTerceiros(items => [...items, { empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ EMPRESA</button>
+                          <button type="button" onClick={() => setNewTerceiros(items => [...items, { empresa_nome: '', funcao: '', quantidade: '1', observacoes: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ EMPRESA</button>
                         </div>
                         <div style={{ display: 'grid', gap: 10 }}>
-                          {newTerceiros.map((item, index) => <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 80px 110px', gap: 8, alignItems: 'end' }}>
+                          {newTerceiros.map((item, index) => <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 80px', gap: 8, alignItems: 'end' }}>
                             <div><label style={labelStyle}>Empresa terceirizada *</label><input style={inputStyle} placeholder="Nome da empresa" value={item.empresa_nome} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, empresa_nome: e.target.value } : x))} /></div>
                             <div><label style={labelStyle}>Função/serviço</label><input style={inputStyle} placeholder="Ex.: elétrica" value={item.funcao} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, funcao: e.target.value } : x))} /></div>
                             <div><label style={labelStyle}>Qtd.</label><input type="number" min="1" style={inputStyle} value={item.quantidade} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, quantidade: e.target.value } : x))} /></div>
-                            <div><label style={labelStyle}>Diária (R$)</label><input type="number" step="0.01" style={inputStyle} placeholder="0,00" value={item.valor_diaria} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, valor_diaria: e.target.value } : x))} /></div>
                             <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações</label><textarea rows={2} style={inputStyle} placeholder="Medição, frente, período ou informação para conferência" value={item.observacoes} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>
                             {newTerceiros.length > 1 && <button type="button" onClick={() => setNewTerceiros(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover empresa</button>}
                           </div>)}
