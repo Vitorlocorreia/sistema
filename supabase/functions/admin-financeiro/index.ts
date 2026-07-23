@@ -49,6 +49,38 @@ Deno.serve(async request => {
       return json({ ok: true })
     }
 
+    if (payload.action === 'delete_conta') {
+      const contaId = String(payload.conta_id || '').trim()
+      if (!contaId) return json({ error: 'ID da conta não informado.' }, 400)
+      
+      // Verify if the user has pode_excluir_lancamento
+      const adminId = String(payload.admin_id || '').trim()
+      const { data: user } = await admin.from('colaboradores').select('cargo, override_permissoes, pode_excluir_lancamento').eq('id', adminId).maybeSingle()
+      let podeDeletar = false
+      if (user) {
+        if (user.cargo === 'admin_geral' || user.cargo === 'admin_empresa') {
+          podeDeletar = true
+        } else {
+          if (user.override_permissoes) {
+            podeDeletar = Boolean(user.pode_excluir_lancamento)
+          } else {
+            const { data: perm } = await admin.from('config_permissoes').select('pode_excluir_lancamento').eq('cargo', user.cargo).maybeSingle()
+            podeDeletar = Boolean(perm?.pode_excluir_lancamento)
+          }
+        }
+      }
+
+      if (!podeDeletar) {
+        return json({ error: 'Acesso negado. Perfil sem permissão para excluir lançamento.' }, 403)
+      }
+
+      const { error: deleteError } = await admin.from('contas').delete().eq('id', contaId)
+      if (deleteError) {
+        return json({ error: deleteError.message }, 400)
+      }
+      return json({ ok: true })
+    }
+
     return json({ error: 'Ação inválida.' }, 400)
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : 'Erro interno.' }, 500)

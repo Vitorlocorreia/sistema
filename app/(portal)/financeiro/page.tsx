@@ -1900,7 +1900,17 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
   const excluir = async (id: string) => {
     if (!(await confirm('Excluir Lançamento', 'Deseja realmente excluir este lançamento financeiro?', { confirmLabel: 'Excluir', confirmColor: C.red }))) return
-    await supabase.from('contas').delete().eq('id', id)
+    
+    // Call edge function to bypass RLS for authorized non-admins
+    const { error, data: result } = await supabase.functions.invoke('admin-financeiro', {
+      body: { action: 'delete_conta', admin_id: colaboradorAtivo.id, conta_id: id }
+    })
+    
+    if (error || result?.error) {
+      return toast('Erro ao excluir: ' + (result?.error || error?.message || 'não foi possível excluir'), 'error')
+    }
+
+    toast('Lançamento excluído com sucesso.', 'success')
     load()
   }
 
@@ -2878,10 +2888,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
 
     setLoading(true)
     try {
+      // Usamos 'create_user' porque a edge function implantada pode não ter 'approve_user'
       const { data: result, error: functionError } = await supabase.functions.invoke('admin-users', {
         body: {
-          action: 'approve_user',
-          solicitacao_id: sol.id,
+          action: 'create_user',
           admin_id: colaboradorAtivo.id,
           nome: sol.nome,
           email: sol.email,
@@ -2906,6 +2916,13 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         return
       }
 
+      // Atualiza a solicitação diretamente via client usando as políticas RLS do RH
+      await supabase.from('solicitacoes_acesso').update({
+        status: 'aprovado',
+        aprovado_por: colaboradorAtivo.id,
+        aprovado_em: new Date().toISOString()
+      }).eq('id', sol.id)
+
       toast(`Acesso aprovado e conta criada para ${sol.nome}!`, 'success')
       onRefresh()
       await loadData()
@@ -2920,16 +2937,17 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   const rejeitarSolicitacao = async (id: string) => {
     setLoading(true)
     try {
-      const { data: result, error: functionError } = await supabase.functions.invoke('admin-users', {
-        body: {
-          action: 'reject_user',
-          solicitacao_id: id,
-          admin_id: colaboradorAtivo.id
-        }
-      })
+      // Atualiza a solicitação diretamente via client usando as políticas RLS do RH
+      const { error } = await supabase.from('solicitacoes_acesso').update({
+        status: 'rejeitado',
+        aprovado_por: colaboradorAtivo.id,
+        aprovado_em: new Date().toISOString()
+      }).eq('id', id)
 
-      if (functionError || result?.error) {
-        throw new Error(result?.error || functionError?.message || 'Erro ao rejeitar solicitação')
+      if (error) {
+        toast('Erro ao rejeitar: ' + error.message, 'error')
+        setLoading(false)
+        return
       }
 
       toast('Solicitação de acesso rejeitada.', 'info')

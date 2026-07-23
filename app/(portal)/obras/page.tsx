@@ -394,10 +394,40 @@ export default function Obras() {
 
   const salvarMedicao = async () => {
     if (!obraAtual || !medicaoForm.periodo_inicio || !medicaoForm.periodo_fim || !medicaoForm.valor_medido) return toast('Preencha período e valor da medição.', 'error')
+    
+    // Parse safely to avoid NaN issues with localized inputs (e.g. 1.000,50)
+    const rawValor = String(medicaoForm.valor_medido).replace(/[^\d.,-]/g, '')
+    const valorParsed = Number(rawValor.includes(',') && rawValor.includes('.') ? rawValor.replace(/\./g, '').replace(',', '.') : rawValor.replace(',', '.'))
+    
+    const rawPercentual = String(medicaoForm.percentual).replace(/[^\d.,-]/g, '')
+    const percentualParsed = Number(rawPercentual.includes(',') && rawPercentual.includes('.') ? rawPercentual.replace(/\./g, '').replace(',', '.') : rawPercentual.replace(',', '.')) || 0
+
+    if (isNaN(valorParsed) || valorParsed <= 0) return toast('Valor medido inválido.', 'error')
+
     const numero = medicaoForm.numero.trim() || `BM-${String(medicoesObra.length + 1).padStart(2, '0')}`
-    const { error } = await supabase.from('medicoes').insert({ obra_id: obraAtual.id, numero, periodo_inicio: medicaoForm.periodo_inicio, periodo_fim: medicaoForm.periodo_fim, valor_medido: Number(medicaoForm.valor_medido), percentual: Number(medicaoForm.percentual) || 0, observacoes: medicaoForm.observacoes || null, status: 'Rascunho' })
-    if (error) return toast(error.message, 'error')
-    setMedicaoForm({ numero: '', periodo_inicio: '', periodo_fim: '', valor_medido: '', percentual: '', observacoes: '' }); setShowMedicaoForm(false); toast('Boletim de medição criado.', 'success'); loadData()
+    
+    const payload = { 
+      obra_id: obraAtual.id, 
+      numero, 
+      periodo_inicio: medicaoForm.periodo_inicio, 
+      periodo_fim: medicaoForm.periodo_fim, 
+      valor_medido: valorParsed, 
+      percentual: percentualParsed, 
+      observacoes: medicaoForm.observacoes || null, 
+      status: 'Rascunho' 
+    }
+
+    const { error } = await supabase.from('medicoes').insert(payload)
+    
+    if (error) {
+      if (error.code === '23505') return toast(`O boletim ${numero} já existe nesta obra.`, 'error')
+      return toast(`Erro ao salvar: ${error.message}`, 'error')
+    }
+    
+    setMedicaoForm({ numero: '', periodo_inicio: '', periodo_fim: '', valor_medido: '', percentual: '', observacoes: '' })
+    setShowMedicaoForm(false)
+    toast('Boletim de medição criado.', 'success')
+    loadData()
   }
 
   const avancarMedicao = async (medicao: any) => {
