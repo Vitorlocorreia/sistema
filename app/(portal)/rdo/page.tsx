@@ -83,8 +83,7 @@ export default function RDO() {
 
   // Equipments state in form
   const [equipForm, setEquipForm] = useState<{ nome: string; status: 'OPERANDO' | 'PARADO' | 'MANUTENÇÃO' }[]>([
-    { nome: 'Retroescavadeira', status: 'OPERANDO' },
-    { nome: 'Betoneira', status: 'OPERANDO' }
+    { nome: '', status: 'OPERANDO' }
   ])
 
   // Activities state in form
@@ -282,10 +281,7 @@ export default function RDO() {
     setNewEfetivoTerceiros('0')
     setNewTerceiros([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '', valor_diaria: '' }])
     setNewPlanejadoExecutado([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
-    setEquipForm([
-      { nome: 'Retroescavadeira', status: 'OPERANDO' },
-      { nome: 'Betoneira', status: 'OPERANDO' }
-    ])
+    setEquipForm([{ nome: '', status: 'OPERANDO' }])
 
     // Refresh
     loadData()
@@ -793,17 +789,65 @@ export default function RDO() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 180, overflowY: 'auto' }}>
                         {actForm.map((a, idx) => (
-                          <input
-                            key={idx} style={inputStyle} placeholder={`Atividade ${idx + 1}`}
-                            value={a} onChange={e => setActForm(prev => {
-                              const n = [...prev]
-                              n[idx] = e.target.value
-                              return n
-                            })}
-                          />
+                          <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <input
+                              style={{ ...inputStyle, flex: 1 }} placeholder={`Atividade ${idx + 1}`}
+                              value={a} onChange={e => setActForm(prev => {
+                                const n = [...prev]
+                                n[idx] = e.target.value
+                                return n
+                              })}
+                            />
+                            {actForm.length > 1 && (
+                              <button type="button" onClick={() => setActForm(prev => prev.filter((_, i) => i !== idx))} style={{ ...btnGhost, padding: '4px 6px' }}>
+                                <X size={11} />
+                              </button>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
+
+                    {/* Equipamentos em Canteiro */}
+                    <div style={{ border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <label style={labelStyle}>Equipamentos em Canteiro</label>
+                        <button type="button" onClick={() => setEquipForm(eq => [...eq, { nome: '', status: 'OPERANDO' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ EQUIPAMENTO</button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {equipForm.map((eq, idx) => (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 160px auto', gap: 8, alignItems: 'end' }}>
+                            <div>
+                              <label style={labelStyle}>Nome do Equipamento *</label>
+                              <input
+                                style={inputStyle}
+                                placeholder="Ex.: Retroescavadeira, Betoneira..."
+                                value={eq.nome}
+                                onChange={e => setEquipForm(prev => prev.map((x, i) => i === idx ? { ...x, nome: e.target.value } : x))}
+                              />
+                            </div>
+                            <div>
+                              <label style={labelStyle}>Status</label>
+                              <select
+                                style={inputStyle}
+                                value={eq.status}
+                                onChange={e => setEquipForm(prev => prev.map((x, i) => i === idx ? { ...x, status: e.target.value as any } : x))}
+                              >
+                                <option value="OPERANDO">OPERANDO</option>
+                                <option value="PARADO">PARADO</option>
+                                <option value="MANUTENÇÃO">MANUTENÇÃO</option>
+                              </select>
+                            </div>
+                            {equipForm.length > 1 && (
+                              <button type="button" onClick={() => setEquipForm(prev => prev.filter((_, i) => i !== idx))} style={{ ...btnGhost, padding: '6px 8px', alignSelf: 'flex-end' }}>
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
                     <div style={{ border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><label style={labelStyle}>Planejado x executado</label><button type="button" onClick={() => setNewPlanejadoExecutado(items => [...items, { servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ SERVIÇO</button></div>
                       <div style={{ display: 'grid', gap: 9 }}>{newPlanejadoExecutado.map((item, index) => { const planned = parseFloat(item.planejada) || 0; const executed = parseFloat(item.executada) || 0; const percentage = planned > 0 ? Math.min(100, (executed / planned) * 100) : 0; return <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 110px 110px', gap: 8, alignItems: 'end' }}><div><label style={labelStyle}>Serviço *</label><input style={inputStyle} placeholder="Ex.: alvenaria" value={item.servico} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, servico: e.target.value } : x))} /></div><div><label style={labelStyle}>Unidade</label><input style={inputStyle} placeholder="m²" value={item.unidade} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, unidade: e.target.value } : x))} /></div><div><label style={labelStyle}>Planejado</label><input type="number" step="0.001" style={inputStyle} value={item.planejada} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, planejada: e.target.value } : x))} /></div><div><label style={labelStyle}>Executado</label><input type="number" step="0.001" style={inputStyle} value={item.executada} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, executada: e.target.value } : x))} /></div><div style={{ gridColumn: '1 / -1' }}><div style={{ height: 5, background: '#222530', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? C.green : C.amber }} /></div><small style={{ color: percentage >= 100 ? C.green : C.inkSoft, fontSize: 9 }}>{percentage.toFixed(1)}% executado</small></div><div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações</label><input style={inputStyle} placeholder="Frente, motivo de diferença ou evidência" value={item.observacoes} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>{newPlanejadoExecutado.length > 1 && <button type="button" onClick={() => setNewPlanejadoExecutado(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover</button>}</div> })}</div>
