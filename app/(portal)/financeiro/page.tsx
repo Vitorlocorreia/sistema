@@ -118,6 +118,7 @@ import { useConfirm } from '@/hooks/useConfirm'
 export default function FinanceiroPage() {
   const { confirm, ConfirmDialog } = useConfirm()
   const [tab, setTab] = useState<Tab>('historico')
+  const [activeFornecedorId, setActiveFornecedorId] = useState<string>('')
   
   // Colaborador atualmente conectado neste navegador/dispositivo
   const [colaboradorAtivo, setColaboradorAtivo] = useState<Colaborador | null>(null)
@@ -267,6 +268,10 @@ export default function FinanceiroPage() {
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
           confirm={confirm}
+          goToHistoricoByFornecedor={(id) => {
+            setActiveFornecedorId(id)
+            setTab('historico')
+          }}
         />
       )}
       {tab === 'contas' && (
@@ -281,6 +286,7 @@ export default function FinanceiroPage() {
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
           confirm={confirm}
+          initialFornecedorId={activeFornecedorId}
         />
       )}
       {tab === 'obras' && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} confirm={confirm} />}
@@ -556,6 +562,8 @@ interface TabProps {
   colaboradorAtivo: Colaborador
   permissaoAtiva: ConfigPermissao
   confirm: (title: string, desc: string, options?: any) => Promise<boolean>
+  goToHistoricoByFornecedor?: (idFornecedor: string) => void
+  initialFornecedorId?: string
 }
 
 function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
@@ -939,7 +947,7 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
 // ════════════════════════════════════════════════════════
 //  TAB: FORNECEDORES
 // ════════════════════════════════════════════════════════
-function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
+function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistoricoByFornecedor }: TabProps) {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [contasFornecedores, setContasFornecedores] = useState<Conta[]>([])
   const [empresas, setEmpresas]         = useState<Empresa[]>([])
@@ -1190,6 +1198,16 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+                {goToHistoricoByFornecedor && (
+                  <div style={{ padding: '0 14px', marginBottom: 14 }}>
+                    <button 
+                      style={{ ...btnGhost, color: C.amber, border: `1px solid ${C.amber}40`, width: '100%', justifyContent: 'center' }}
+                      onClick={() => goToHistoricoByFornecedor(f.id)}
+                    >
+                      <ArrowUpRight size={14} /> Ver Contas & Negociar (Histórico)
+                    </button>
                   </div>
                 )}
               </div>
@@ -1535,11 +1553,13 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 // ════════════════════════════════════════════════════════
 //  TAB: CONTAS / HISTÓRICO
 // ════════════════════════════════════════════════════════
-function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
+function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornecedorId }: TabProps) {
   const [contas, setContas]     = useState<ContaComRelacoes[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [fornecedores, setFornecedores] = useState<any[]>([])
   const [loading, setLoading]   = useState(true)
   const [filtEmpresa, setFiltEmpresa] = useState('')
+  const [filtFornecedor, setFiltFornecedor] = useState(initialFornecedorId || '')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
   const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
@@ -1605,18 +1625,21 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
     setLoading(true)
     let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false })
     let qE = supabase.from('empresas').select('*').order('razao_social')
+    let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social')
     
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
       if (ids.length > 0) {
         qC = qC.in('empresa_id', ids)
         qE = qE.in('id', ids)
+        qF = qF.in('empresa_id', ids)
       }
     }
 
-    const [{ data: c }, { data: e }] = await Promise.all([qC, qE])
+    const [{ data: c }, { data: e }, { data: f }] = await Promise.all([qC, qE, qF])
     setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
+    setFornecedores(f ?? [])
     setLoading(false)
   }, [colaboradorAtivo])
 
@@ -1727,13 +1750,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
 
   const filtered = contas.filter(c => {
     const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
+    const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
     const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
     const matchStatus  = filtStatus === 'todos' || c.status === filtStatus
     const data = c.data_previsao || c.data_vencimento
     const matchInicio = !filtDataInicio || data >= filtDataInicio
     const matchFim = !filtDataFim || data <= filtDataFim
     const matchSearch  = !search || c.descricao.toLowerCase().includes(search.toLowerCase()) || (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase())
-    return matchEmpresa && matchTipo && matchStatus && matchSearch && matchInicio && matchFim
+    return matchEmpresa && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim
   })
 
   const totalPago     = filtered.filter(c => c.status === 'Pago' && c.tipo === 'pagar').reduce((s, c) => s + c.valor, 0)
@@ -1769,6 +1793,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
         >
           {colaboradorAtivo.cargo !== 'admin_empresa' && <option value="">Todas as empresas</option>}
           {empresas.filter(e => colaboradorAtivo.cargo !== 'admin_empresa' || e.id === colaboradorAtivo.empresa_id).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
+        </select>
+        <select style={{ ...input, width: 180 }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
+          <option value="">Todos os Fornecedores</option>
+          {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
         </select>
         <select style={{ ...input, width: 140 }} value={filtTipo} onChange={e => setFiltTipo(e.target.value as any)}>
           <option value="todos">Todos os tipos</option>
