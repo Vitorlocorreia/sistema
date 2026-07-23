@@ -319,7 +319,6 @@ function ObrasFinanceiroTab({ permissaoAtiva, confirm }: TabProps) {
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
   
   const load = useCallback(async (isBackground = false) => {
-    if (!isBackground) setLoading(true)
     const [{ data: o }, { data: f }] = await Promise.all([
       supabase.from('obras').select('*').order('nome'),
       supabase.from('fotos').select('*').not('obra_id', 'is', null).order('created_at', { ascending: false }).limit(60),
@@ -739,7 +738,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
             <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
           ))}
         </select>
-        <button onClick={load} style={btnGhost}><RefreshCw size={13} /></button>
+        <button onClick={() => void load()} style={btnGhost}><RefreshCw size={13} /></button>
       </div>
 
       {loading ? (
