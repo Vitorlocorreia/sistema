@@ -19,6 +19,7 @@ import { PageTitle } from '@/components/PageTitle'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/Toast'
 import { C } from '@/lib/tokens'
+import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
 type Funcionario = {
   id: string
@@ -368,9 +369,8 @@ export default function RhPage() {
     setSelectedInvite(current => current ? ((inviteData ?? []).find(item => item.id === current.id) as Convite | undefined) ?? (null as unknown as Convite) : (null as unknown as Convite))
   }, [])
 
-  useEffect(() => {
-    void load()
-  }, [load])
+  useRealtimeSync(load, 'rh-sync', ['funcionarios', 'modelos_contrato', 'convites_cadastro', 'sso_materiais', 'treinamentos'])
+  useEffect(() => { load() }, [load])
 
   async function loadDetails(person: Funcionario) {
     setSelected(person)

@@ -7,6 +7,7 @@ import { toast } from '@/components/Toast'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
 import type { HistoricoEdicao, Quadro, QuadroCartao, QuadroColuna } from '@/lib/types'
+import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
 const field: React.CSSProperties = { width: '100%', background: '#0B0C0E', color: C.ink, border: `1px solid ${C.border}`, borderRadius: 4, padding: '9px 11px', outline: 'none', fontSize: 12 }
 const button: React.CSSProperties = { border: 0, borderRadius: 4, background: C.amber, color: '#090A0C', padding: '9px 13px', fontSize: 11, fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }
@@ -71,6 +72,9 @@ export default function QuadrosPage() {
     const { data: cs } = await supabase.from('quadro_cartoes').select('*').in('coluna_id', typedCols.map(c => c.id)).eq('arquivado', false).order('ordem')
     setCards((cs ?? []) as QuadroCartao[])
   }, [boardId])
+
+  useRealtimeSync(loadBoards, 'suprimentos-boards-sync', ['quadros'])
+  useRealtimeSync(loadBoard, 'suprimentos-board-sync', ['quadro_campos', 'quadro_automacoes', 'quadro_colunas', 'quadro_cartoes'])
 
   useEffect(() => { loadBoards() }, [loadBoards])
   useEffect(() => { loadBoard() }, [loadBoard])

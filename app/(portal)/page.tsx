@@ -1,6 +1,7 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { Building2, FileText, Camera, TrendingUp, Plus } from 'lucide-react'
 import { KpiCard } from '@/components/KpiCard'
 import { Panel } from '@/components/Panel'
@@ -25,6 +26,27 @@ export default function Dashboard() {
   const [suprimentosList, setSuprimentosList] = useState<any[]>([])
   const [fotosList, setFotosList] = useState<any[]>([])
 
+  const loadData = useCallback(async () => {
+    setLoading(true)
+    const [
+      { data: ob },
+      { data: rd },
+      { data: sp },
+      { data: ft }
+    ] = await Promise.all([
+      supabase.from('obras').select('id, nome, status, progresso').order('nome'),
+      supabase.from('rdos').select('id, resumo, status, obra:obras(nome)').order('data', { ascending: false }),
+      supabase.from('suprimentos').select('id, titulo, quantidade, unidade, status, obra:obras(nome)').order('created_at', { ascending: false }),
+      supabase.from('fotos').select('id, legenda, imagem_url, data_iso, created_at, obra:obras(nome)').order('created_at', { ascending: false })
+    ])
+
+    setObrasList(ob ?? [])
+    setRdosList(rd ?? [])
+    setSuprimentosList(sp ?? [])
+    setFotosList(ft ?? [])
+    setLoading(false)
+  }, [])
+
   useEffect(() => {
     const session = localStorage.getItem('colaborador_sessao')
     let cargo = ''
@@ -35,29 +57,10 @@ export default function Dashboard() {
       return
     }
     setIsAdminGeral(true)
-
-    async function loadData() {
-      setLoading(true)
-      const [
-        { data: ob },
-        { data: rd },
-        { data: sp },
-        { data: ft }
-      ] = await Promise.all([
-        supabase.from('obras').select('id, nome, status, progresso').order('nome'),
-        supabase.from('rdos').select('id, resumo, status, obra:obras(nome)').order('data', { ascending: false }),
-        supabase.from('suprimentos').select('id, titulo, quantidade, unidade, status, obra:obras(nome)').order('created_at', { ascending: false }),
-        supabase.from('fotos').select('id, legenda, imagem_url, data_iso, created_at, obra:obras(nome)').order('created_at', { ascending: false })
-      ])
-
-      setObrasList(ob ?? [])
-      setRdosList(rd ?? [])
-      setSuprimentosList(sp ?? [])
-      setFotosList(ft ?? [])
-      setLoading(false)
-    }
     loadData()
-  }, [router])
+  }, [router, loadData])
+
+  useRealtimeSync(loadData, 'dashboard-geral-sync', ['obras', 'rdos', 'suprimentos', 'fotos'])
 
   const obrasAtivas = useMemo(() => obrasList.filter(obra => !['concluída', 'concluida', 'finalizada', 'arquivada'].includes(String(obra.status || '').toLowerCase())).length, [obrasList])
   const rdosParaAssinar = useMemo(() => rdosList.filter(rdo => rdo.status !== 'Aprovado').length, [rdosList])

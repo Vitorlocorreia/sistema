@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/Toast'
 import { motion, AnimatePresence } from 'motion/react'
 import type { Obra } from '@/lib/types'
+import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
 const card: React.CSSProperties = {
   background: C.bgPanel,
@@ -214,6 +215,8 @@ export default function Obras() {
     }
     setLoading(false)
   }, [])
+
+  useRealtimeSync(loadData, 'obras-sync', ['fotos', 'obras', 'galeria_pastas', 'medicoes', 'contas', 'faturamentos'])
 
   useEffect(() => {
     loadData()

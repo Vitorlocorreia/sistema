@@ -14,6 +14,7 @@ import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'motion/react'
 import type { Obra, Rdo, RdoCompleto } from '@/lib/types'
+import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
 type EfetivoTerceiroForm = { empresa_nome: string; funcao: string; quantidade: string; observacoes: string; valor_diaria: string }
 type PlanejadoExecutadoForm = { servico: string; unidade: string; planejada: string; executada: string; observacoes: string }
@@ -124,6 +125,7 @@ export default function RDO() {
     setLoading(false)
   }, [])
 
+  useRealtimeSync(loadData, 'rdo-sync', ['rdos', 'rdos_efetivo', 'rdos_planejado', 'obras'])
   useEffect(() => { loadData() }, [loadData])
 
   const filteredRdos = useMemo(() => {

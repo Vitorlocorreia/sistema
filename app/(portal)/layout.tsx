@@ -131,6 +131,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           .single()
 
         if (error || !c) {
+          console.error('Session validation failed:', error, c)
           // Sessão inválida no banco → expulsa
           localStorage.removeItem(SESSION_KEY)
           invalidateAppsCache()

@@ -114,6 +114,7 @@ const btnGhost: React.CSSProperties = {
 }
 
 import { useConfirm } from '@/hooks/useConfirm'
+import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
 export default function FinanceiroPage() {
   const { confirm, ConfirmDialog } = useConfirm()
@@ -325,6 +326,7 @@ function ObrasFinanceiroTab({ permissaoAtiva, confirm }: TabProps) {
     setObras((o as Obra[]) || []); setFotos(f || []);
   }, [])
   
+  useRealtimeSync(load, 'financeiro-obras')
   useEffect(() => { void load() }, [load])
   
   async function criarObra(e: React.FormEvent) {
@@ -591,6 +593,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     setLoading(false)
   }, [colaboradorAtivo])
 
+  useRealtimeSync(load, 'financeiro-dashboard')
   useEffect(() => { load() }, [load])
 
   // Restringe a visualização às empresas autorizadas do colaborador
@@ -848,13 +851,14 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   const [form, setForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#C8A96E' })
   const [saving, setSaving] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('empresas').select('*').order('razao_social')
     setEmpresas(data ?? [])
     setLoading(false)
-  }
-  useEffect(() => { load() }, [])
+  }, [])
+  useRealtimeSync(load, 'financeiro-empresas')
+  useEffect(() => { load() }, [load])
 
   const save = async () => {
     if (!form.razao_social.trim()) return
@@ -983,6 +987,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     setLoading(false)
   }, [colaboradorAtivo])
 
+  useRealtimeSync(load, 'financeiro-fornecedores')
   useEffect(() => { void load() }, [load])
 
   const save = async () => {
@@ -1645,6 +1650,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
 
   const podeLancar = permissaoAtiva?.pode_lancar;
 
+  useRealtimeSync(load, 'financeiro-historico')
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
