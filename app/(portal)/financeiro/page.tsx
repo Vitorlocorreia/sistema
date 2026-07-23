@@ -145,16 +145,67 @@ export default function FinanceiroPage() {
     let logado: Colaborador | null = null
     try { logado = JSON.parse(raw) } catch { }
 
-    if (logado) {
-      setColaboradorAtivo(logado)
-      const { data: perm } = await supabase.from('config_permissoes').select('*').eq('cargo', logado.cargo).single()
-      if (perm) setPermissaoAtiva((logado.override_permissoes ? { ...perm, ...logado } : perm) as ConfigPermissao)
+    if (logado && logado.id) {
+      // Busca dados mais recentes do colaborador no Supabase para garantir permissões atualizadas
+      const { data: freshColab } = await supabase.from('colaboradores').select('*').eq('id', logado.id).maybeSingle()
+      const activeUser = (freshColab as Colaborador) || logado
+      setColaboradorAtivo(activeUser)
+      if (typeof window !== 'undefined' && freshColab) {
+        localStorage.setItem('colaborador_sessao', JSON.stringify(freshColab))
+      }
+
+      // Busca permissões do cargo
+      const { data: perm } = await supabase.from('config_permissoes').select('*').eq('cargo', activeUser.cargo).maybeSingle()
+
+      if (activeUser.cargo === 'admin_geral') {
+        setPermissaoAtiva({
+          cargo: 'admin_geral',
+          pode_empresas: true,
+          pode_fornecedores: true,
+          pode_lancar: true,
+          pode_pagar: true,
+          pode_aprovar: true,
+          limite_valor: 99999999,
+          apps: 'rh,ponto,financeiro,suprimentos,obras,rdo,frota,usuarios',
+          abas_financeiro: 'dashboard,historico,contas,empresas,fornecedores,obras,permissoes',
+          pode_alterar_status: true,
+          pode_excluir_lancamento: true,
+        })
+      } else if (activeUser.override_permissoes) {
+        setPermissaoAtiva({
+          cargo: activeUser.cargo,
+          pode_empresas: activeUser.pode_empresas ?? perm?.pode_empresas ?? false,
+          pode_fornecedores: activeUser.pode_fornecedores ?? perm?.pode_fornecedores ?? false,
+          pode_lancar: activeUser.pode_lancar ?? perm?.pode_lancar ?? true,
+          pode_pagar: activeUser.pode_pagar ?? perm?.pode_pagar ?? false,
+          pode_aprovar: activeUser.pode_aprovar ?? perm?.pode_aprovar ?? false,
+          limite_valor: activeUser.limite_valor ?? perm?.limite_valor ?? 0,
+          apps: activeUser.apps || perm?.apps || 'financeiro',
+          abas_financeiro: activeUser.abas_financeiro || perm?.abas_financeiro || null,
+          pode_alterar_status: activeUser.pode_alterar_status ?? perm?.pode_alterar_status ?? true,
+          pode_excluir_lancamento: activeUser.pode_excluir_lancamento ?? perm?.pode_excluir_lancamento ?? false,
+        })
+      } else {
+        setPermissaoAtiva({
+          cargo: activeUser.cargo,
+          pode_empresas: perm?.pode_empresas ?? activeUser.pode_empresas ?? false,
+          pode_fornecedores: perm?.pode_fornecedores ?? activeUser.pode_fornecedores ?? false,
+          pode_lancar: perm?.pode_lancar ?? activeUser.pode_lancar ?? true,
+          pode_pagar: perm?.pode_pagar ?? activeUser.pode_pagar ?? false,
+          pode_aprovar: perm?.pode_aprovar ?? activeUser.pode_aprovar ?? false,
+          limite_valor: perm?.limite_valor ?? activeUser.limite_valor ?? 0,
+          apps: perm?.apps || activeUser.apps || 'financeiro',
+          abas_financeiro: perm?.abas_financeiro || activeUser.abas_financeiro || null,
+          pode_alterar_status: perm?.pode_alterar_status ?? activeUser.pode_alterar_status ?? true,
+          pode_excluir_lancamento: perm?.pode_excluir_lancamento ?? activeUser.pode_excluir_lancamento ?? false,
+        })
+      }
     }
 
-    // Carrega lista de colaboradores para a aba de permissões (sem a coluna senha por segurança)
+    // Carrega lista de colaboradores para a aba de permissões
     const { data: cols } = await supabase
       .from('colaboradores')
-      .select('id, nome, email, cargo, empresa_id, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor')
+      .select('id, nome, email, cargo, empresa_id, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento')
       .order('nome')
     setColaboradores(cols ?? [])
 
@@ -1797,6 +1848,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const podeAprovar = permissaoAtiva?.pode_aprovar || isAdminGeral
   const podeAlterarStatus = permissaoAtiva?.pode_alterar_status !== false || isAdminGeral // default true
   const podeDeletar = (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
+  const podeEditar = (permissaoAtiva?.pode_lancar === true) || (permissaoAtiva?.pode_alterar_status === true) || (permissaoAtiva?.pode_pagar === true) || (permissaoAtiva?.pode_aprovar === true) || (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
 
   const activeFiltrosCount = [filtEmpresa, filtFornecedor, filtTipo !== 'todos' ? filtTipo : '', filtStatus !== 'todos' ? filtStatus : '', filtDataInicio, filtDataFim, filtOrdem !== 'novo' ? filtOrdem : ''].filter(Boolean).length
   const clearFiltros = () => { setFiltEmpresa(colaboradorAtivo.cargo === 'admin_empresa' ? colaboradorAtivo.empresa_id || '' : ''); setFiltFornecedor(initialFornecedorId || ''); setFiltTipo('todos'); setFiltStatus('todos'); setFiltDataInicio(''); setFiltDataFim(''); setFiltOrdem('novo') }
@@ -2030,7 +2082,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                             </button>
                           )}
 
-                          {podeLancar && (
+                          {podeEditar && (
                              <button onClick={() => iniciarEdicao(c)} title="Editar Lançamento" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
                                <Edit3 size={13} />
                              </button>
@@ -2218,7 +2270,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       {/* Modal de Edição de Conta */}
       {editandoConta && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ ...card, padding: 24, width: '100%', maxWidth: 500 }}>
+          <div style={{ ...card, padding: 24, width: '100%', maxWidth: 520 }}>
             <h3 style={{ margin: '0 0 16px', fontSize: 16, color: C.ink }}>Editar Lançamento</h3>
             
             <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
@@ -2226,10 +2278,25 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 <label style={label}>Descrição</label>
                 <input style={input} value={formEdicao.descricao || ''} onChange={e => setFormEdicao(f => ({ ...f, descricao: e.target.value }))} />
               </div>
-              <div>
-                <label style={label}>Valor</label>
-                <input style={input} type="number" step="0.01" value={formEdicao.valor || ''} onChange={e => setFormEdicao(f => ({ ...f, valor: Number(e.target.value) }))} />
+
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div style={{ flex: 1 }}>
+                  <label style={label}>Valor (R$)</label>
+                  <input style={input} type="number" step="0.01" value={formEdicao.valor || ''} onChange={e => setFormEdicao(f => ({ ...f, valor: Number(e.target.value) }))} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={label}>Status</label>
+                  <select style={input} value={formEdicao.status || ''} onChange={e => setFormEdicao(f => ({ ...f, status: e.target.value as any }))}>
+                    <option value="Lançado">Lançado</option>
+                    <option value="Aguardando aprovação">Aguardando aprovação</option>
+                    <option value="Liberado/OK">Liberado/OK</option>
+                    <option value="A pagar">A pagar</option>
+                    <option value="Pago">Pago</option>
+                    <option value="Negado">Negado</option>
+                  </select>
+                </div>
               </div>
+
               <div style={{ display: 'flex', gap: 12 }}>
                 <div style={{ flex: 1 }}>
                   <label style={label}>Categoria</label>
@@ -2237,6 +2304,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                     <option value="">Selecione a categoria</option>
                     {CATEGORIAS.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={label}>Data Previsão</label>
+                  <input style={input} type="date" value={formEdicao.data_previsao || ''} onChange={e => setFormEdicao(f => ({ ...f, data_previsao: e.target.value }))} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={label}>Vencimento</label>
