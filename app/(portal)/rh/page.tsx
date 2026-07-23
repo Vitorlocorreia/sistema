@@ -369,7 +369,7 @@ export default function RhPage() {
     setSelectedInvite(current => current ? ((inviteData ?? []).find(item => item.id === current.id) as Convite | undefined) ?? (null as unknown as Convite) : (null as unknown as Convite))
   }, [])
 
-  useRealtimeSync(load, 'rh-sync', ['funcionarios', 'modelos_contrato', 'convites_cadastro', 'sso_materiais', 'treinamentos'])
+  useRealtimeSync(load, 'rh-sync', ['funcionarios', 'rh_modelos_admissao', 'rh_admissao_convites', 'funcionario_historico', 'exames_ocupacionais'])
   useEffect(() => { load() }, [load])
 
   async function loadDetails(person: Funcionario) {

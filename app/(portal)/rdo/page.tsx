@@ -125,7 +125,7 @@ export default function RDO() {
     setLoading(false)
   }, [])
 
-  useRealtimeSync(loadData, 'rdo-sync', ['rdos', 'rdos_efetivo', 'rdos_planejado', 'obras'])
+  useRealtimeSync(loadData, 'rdo-sync', ['rdos', 'rdo_efetivos_terceiros', 'rdo_planejado_executado', 'obras'])
   useEffect(() => { loadData() }, [loadData])
 
   const filteredRdos = useMemo(() => {
