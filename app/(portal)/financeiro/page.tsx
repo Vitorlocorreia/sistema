@@ -2574,6 +2574,8 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoAcesso[]>([])
   const [loading, setLoading] = useState(true)
   const [savingPerms, setSavingPerms] = useState<string | null>(null)
+  const [globalLimite, setGlobalLimite] = useState<number>(0)
+  const [savingGlobalLimite, setSavingGlobalLimite] = useState(false)
   const [editingCargoNome, setEditingCargoNome] = useState<string | null>(null) // codigo do cargo em edicao
   const [editingCargoNomeValue, setEditingCargoNomeValue] = useState('')
   const [savingCargoNome, setSavingCargoNome] = useState(false)
@@ -2622,6 +2624,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       setEmpresas(e ?? [])
       setConfigPermissoes((p as ConfigPermissao[]) ?? [])
       setCargos((c as CargoSistema[]) ?? [])
+      if (p && (p as ConfigPermissao[]).length > 0) {
+        setGlobalLimite((p as ConfigPermissao[])[0].limite_valor || 0)
+      }
 
       // Carrega solicitações pendentes
       let querySol = supabase.from('solicitacoes_acesso').select('*').eq('status', 'pendente')
@@ -2636,6 +2641,22 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       setLoading(false)
     }
   }, [colaboradorAtivo])
+
+  // Salvar limite global
+  const salvarLimiteGlobal = async () => {
+    setSavingGlobalLimite(true)
+    const { error: permError } = await supabase.from('config_permissoes').update({ limite_valor: globalLimite }).not('cargo', 'is', null)
+    const { error: colError } = await supabase.from('colaboradores').update({ limite_valor: globalLimite }).not('id', 'is', null)
+    
+    if (permError || colError) {
+      toast('Erro ao atualizar limite global.', 'error')
+    } else {
+      toast('Limite global de autoliberação atualizado com sucesso.', 'success')
+      await loadData()
+      onRefresh()
+    }
+    setSavingGlobalLimite(false)
+  }
 
   const criarCargo = async () => {
     if (!isGeral) return
@@ -3057,14 +3078,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     setEditColForm({ ...editColForm, abas_financeiro: newAbasList.join(',') })
   }
 
-  const handleLimiteChange = (cargo: string, valor: string) => {
-    setConfigPermissoes(prev => prev.map(c => {
-      if (c.cargo === cargo) {
-        return { ...c, limite_valor: parseFloat(valor) || 0 }
-      }
-      return c
-    }))
-  }
+  // handleLimiteChange removido pois o limite agora é global
 
   // Filtra colaboradores mostrados
   // Se for admin por empresa, só vê os da mesma empresa
@@ -3342,6 +3356,38 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         {/* COLUNA DIREITA: MATRIZ DE PERMISSÕES DOS CARGOS (APENAS PARA ADMIN GERAL) */}
         {isGeral && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ ...card, padding: 18, borderColor: C.amber + '55', background: C.bgPanel }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.amber, marginBottom: 12 }}>Limite Global de Autoliberação (R$)</h3>
+              <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 16 }}>
+                Este limite se aplica a <strong>todos os usuários e cargos</strong> da empresa.
+                Qualquer lançamento financeiro acima deste valor exigirá a aprovação de um Administrador.
+              </div>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <input
+                  type="number"
+                  disabled={globalLimite === 0 || savingGlobalLimite}
+                  style={{ ...input, width: 200, opacity: globalLimite === 0 ? 0.4 : 1 }}
+                  value={globalLimite === 0 ? '' : globalLimite}
+                  onChange={e => setGlobalLimite(parseFloat(e.target.value) || 0)}
+                  placeholder={globalLimite === 0 ? 'Sem limite ativado' : 'Ex: 5000'}
+                />
+                <button style={btn()} onClick={salvarLimiteGlobal} disabled={savingGlobalLimite}>
+                  {savingGlobalLimite ? 'Salvando...' : 'Salvar Limite Global'}
+                </button>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, fontSize: 12, color: C.ink, cursor: 'pointer' }}>
+                <input
+                  type="checkbox"
+                  checked={globalLimite === 0}
+                  onChange={e => setGlobalLimite(e.target.checked ? 0 : 5000)}
+                  style={{ accentColor: C.amber, cursor: 'pointer' }}
+                />
+                <span style={{ fontWeight: globalLimite === 0 ? 800 : 400, color: globalLimite === 0 ? '#34D399' : C.ink }}>
+                  Desativar limites (Todos os valores serão aprovados automaticamente)
+                </span>
+              </label>
+            </div>
+
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>Regras & Permissões dos Cargos</h3>
 
             {loading ? (
@@ -3437,31 +3483,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                             })}
                           </div>
 
-                          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', background: '#0B0C0E33', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, height: 'fit-content' }}>
-                            <label style={label}>Limite de Autoliberação (R$)</label>
-                            <div style={{ fontSize: 10, color: C.inkSoft, marginBottom: 8 }}>Valores acima deste exigirão visto de um Administrador.</div>
-                            
-                            <input
-                              type="number"
-                              disabled={cfg.limite_valor === 0}
-                              style={{ ...input, padding: '6px 10px', fontSize: 12, opacity: cfg.limite_valor === 0 ? 0.4 : 1 }}
-                              value={cfg.limite_valor === 0 ? '' : cfg.limite_valor}
-                              onChange={e => handleLimiteChange(cfg.cargo, e.target.value)}
-                              placeholder={cfg.limite_valor === 0 ? 'Sem limite ativado' : 'Ex: 5000'}
-                            />
 
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, fontSize: 11, color: C.ink, cursor: 'pointer' }}>
-                              <input
-                                type="checkbox"
-                                checked={cfg.limite_valor === 0}
-                                onChange={e => handleLimiteChange(cfg.cargo, e.target.checked ? '0' : '5000')}
-                                style={{ accentColor: C.amber, cursor: 'pointer' }}
-                              />
-                              <span style={{ fontWeight: cfg.limite_valor === 0 ? 800 : 400, color: cfg.limite_valor === 0 ? '#34D399' : C.ink }}>
-                                Sem limite (Aprovação Automática)
-                              </span>
-                            </label>
-                          </div>
                         </div>
 
                         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
@@ -3645,28 +3667,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                       ))}
                     </div>
 
-                    <div>
-                      <label style={label}>Limite de Autoliberação (R$)</label>
-                      <input
-                        type="number"
-                        disabled={editColForm.limite_valor === 0}
-                        style={{ ...input, opacity: editColForm.limite_valor === 0 ? 0.4 : 1 }}
-                        value={editColForm.limite_valor === 0 ? '' : editColForm.limite_valor}
-                        onChange={e => setEditColForm({ ...editColForm, limite_valor: parseFloat(e.target.value) || 0 })}
-                        placeholder={editColForm.limite_valor === 0 ? 'Sem limite ativado' : 'Ex: 5000'}
-                      />
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 8, fontSize: 11, color: C.ink, cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={editColForm.limite_valor === 0}
-                          onChange={e => setEditColForm({ ...editColForm, limite_valor: e.target.checked ? 0 : 5000 })}
-                          style={{ accentColor: C.amber, cursor: 'pointer' }}
-                        />
-                        <span style={{ fontWeight: editColForm.limite_valor === 0 ? 800 : 400, color: editColForm.limite_valor === 0 ? '#34D399' : C.ink }}>
-                          Sem limite (Aprovação Automática)
-                        </span>
-                      </label>
-                    </div>
+
 
                     <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
                       <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Módulos Visíveis (Sidebar)</span>
