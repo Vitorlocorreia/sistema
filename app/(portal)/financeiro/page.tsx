@@ -1007,12 +1007,36 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
 // ════════════════════════════════════════════════════════
 //  TAB: FORNECEDORES
 // ════════════════════════════════════════════════════════
+function formatCnpjCpf(val: string, tipo: 'PJ' | 'PF'): string {
+  const digits = (val || '').replace(/\D/g, '')
+  if (tipo === 'PF') {
+    return digits.slice(0, 11)
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  }
+  return digits.slice(0, 14)
+    .replace(/^(\d{2})(\d)/, '$1.$2')
+    .replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1/$2')
+    .replace(/(\d{4})(\d)/, '$1-$2')
+}
+
+function formatTelefone(val: string): string {
+  const digits = (val || '').replace(/\D/g, '').slice(0, 11)
+  if (digits.length <= 10) {
+    return digits.replace(/^(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2')
+  }
+  return digits.replace(/^(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2')
+}
+
 function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistoricoByFornecedor }: TabProps) {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [contasFornecedores, setContasFornecedores] = useState<Conta[]>([])
   const [empresas, setEmpresas]         = useState<Empresa[]>([])
   const [loading, setLoading]           = useState(true)
   const [showForm, setShowForm]         = useState(false)
+  const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null)
   const [search, setSearch]             = useState('')
   const [form, setForm] = useState({
     razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ' as 'PJ'|'PF',
@@ -1046,28 +1070,95 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
   useRealtimeSync(load, 'financeiro-fornecedores')
   useEffect(() => { void load() }, [load])
 
-  const save = async () => {
-    if (!form.razao_social.trim()) return
-    setSaving(true)
-    const payload = {
-      ...form,
-      empresa_id: form.empresa_id || null,
-      prazo_pagamento: 0
-    }
-    const { error } = await supabase.from('fornecedores').insert(payload)
-    if (error) {
-      setSaving(false)
-      return toast(`Não foi possível salvar o fornecedor: ${error.message}`, 'error')
-    }
+  const abrirNovoForm = () => {
+    setEditingFornecedor(null)
     setForm({
       razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ',
       telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
       endereco: '', banco: '', agencia: '', conta: ''
     })
+    setShowForm(true)
+  }
+
+  const iniciarEdicaoFornecedor = (f: Fornecedor) => {
+    setEditingFornecedor(f)
+    const docTipo = (f.tipo as 'PJ'|'PF') || (f.cnpj && f.cnpj.replace(/\D/g, '').length === 11 ? 'PF' : 'PJ')
+    setForm({
+      razao_social: f.razao_social || '',
+      nome_fantasia: f.nome_fantasia || '',
+      cnpj: formatCnpjCpf(f.cnpj || '', docTipo),
+      tipo: docTipo,
+      telefone: f.telefone ? formatTelefone(f.telefone) : '',
+      email: f.email || '',
+      responsavel: f.responsavel || '',
+      pix: f.pix || '',
+      categoria: f.categoria || '',
+      empresa_id: f.empresa_id || '',
+      endereco: f.endereco || '',
+      banco: f.banco || '',
+      agencia: f.agencia || '',
+      conta: f.conta || ''
+    })
+    setShowForm(true)
+  }
+
+  const save = async () => {
+    if (!form.razao_social.trim()) {
+      return toast(form.tipo === 'PJ' ? 'Informe a Razão Social (*)' : 'Informe o Nome Completo (*)', 'error')
+    }
+
+    const docDigits = (form.cnpj || '').replace(/\D/g, '')
+    if (form.tipo === 'PF' && docDigits.length > 0 && docDigits.length !== 11) {
+      return toast('CPF inválido. O CPF deve conter 11 dígitos.', 'error')
+    }
+    if (form.tipo === 'PJ' && docDigits.length > 0 && docDigits.length !== 14) {
+      return toast('CNPJ inválido. O CNPJ deve conter 14 dígitos.', 'error')
+    }
+
+    setSaving(true)
+    const payload = {
+      razao_social: form.razao_social.trim(),
+      nome_fantasia: form.tipo === 'PJ' ? (form.nome_fantasia.trim() || null) : null,
+      cnpj: form.cnpj.trim() || null,
+      tipo: form.tipo,
+      telefone: form.telefone.trim() || null,
+      email: form.email.trim().toLowerCase() || null,
+      responsavel: form.responsavel.trim() || null,
+      categoria: form.categoria.trim() || null,
+      banco: form.banco.trim() || null,
+      agencia: form.agencia.trim() || null,
+      conta: form.conta.trim() || null,
+      pix: form.pix.trim() || null,
+      empresa_id: form.empresa_id || null,
+      endereco: form.endereco.trim() || null,
+      prazo_pagamento: editingFornecedor?.prazo_pagamento ?? 0
+    }
+
+    if (editingFornecedor) {
+      const { error } = await supabase.from('fornecedores').update(payload).eq('id', editingFornecedor.id)
+      if (error) {
+        setSaving(false)
+        return toast(`Não foi possível atualizar o fornecedor: ${error.message}`, 'error')
+      }
+      toast('Fornecedor atualizado com sucesso!', 'success')
+    } else {
+      const { error } = await supabase.from('fornecedores').insert(payload)
+      if (error) {
+        setSaving(false)
+        return toast(`Não foi possível salvar o fornecedor: ${error.message}`, 'error')
+      }
+      toast('Fornecedor cadastrado com sucesso!', 'success')
+    }
+
+    setForm({
+      razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ',
+      telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
+      endereco: '', banco: '', agencia: '', conta: ''
+    })
+    setEditingFornecedor(null)
     setShowForm(false)
     setSaving(false)
     await load()
-    toast('Fornecedor cadastrado.', 'success')
   }
 
   const remove = async (id: string) => {
@@ -1089,7 +1180,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
       return (
         f.razao_social.toLowerCase().includes(search.toLowerCase()) ||
         (f.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (f.categoria ?? '').toLowerCase().includes(search.toLowerCase())
+        (f.categoria ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        (f.cnpj ?? '').includes(search)
       )
     })
   , [fornecedores, search, colaboradorAtivo, empresasIds])
@@ -1124,18 +1216,35 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.ink }}>Fornecedores centralizados</h2>
         {podeCriar && (
-          <button style={btn()} onClick={() => setShowForm(v => !v)}><Plus size={14} /> Novo Fornecedor</button>
+          <button style={btn()} onClick={abrirNovoForm}><Plus size={14} /> Novo Fornecedor</button>
         )}
       </div>
 
       <div style={{ position: 'relative', marginBottom: 20, maxWidth: 360 }}>
         <Search size={13} color={C.inkSoft} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-        <input style={{ ...input, paddingLeft: 34 }} placeholder="Buscar por razão, fantasia ou categoria..." value={search} onChange={e => setSearch(e.target.value)} />
+        <input style={{ ...input, paddingLeft: 34 }} placeholder="Buscar por razão, fantasia, CNPJ/CPF ou categoria..." value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {showForm && podeCriar && (
         <div style={{ ...card, marginBottom: 20, borderColor: C.amber + '44' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.ink }}>
+              {editingFornecedor ? `Editar Fornecedor: ${editingFornecedor.razao_social}` : 'Novo Fornecedor'}
+            </h3>
+            <span style={{ fontSize: 11, color: C.inkSoft }}>{form.tipo === 'PJ' ? 'Pessoa Jurídica (CNPJ)' : 'Pessoa Física (CPF)'}</span>
+          </div>
+          
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14, marginBottom: 14 }}>
+            <div>
+              <label style={label}>Tipo de Pessoa</label>
+              <select style={input} value={form.tipo} onChange={e => {
+                const novoTipo = e.target.value as 'PJ'|'PF'
+                setForm(f => ({ ...f, tipo: novoTipo, cnpj: formatCnpjCpf(f.cnpj, novoTipo) }))
+              }}>
+                <option value="PJ">Pessoa Jurídica (CNPJ)</option>
+                <option value="PF">Pessoa Física (CPF)</option>
+              </select>
+            </div>
             <div>
               <label style={label}>{form.tipo === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}</label>
               <input style={input} value={form.razao_social} onChange={e => setForm(prev => ({ ...prev, razao_social: e.target.value }))} placeholder={form.tipo === 'PJ' ? "Ex: Cimento & Cia Ltda" : "Ex: João da Silva"} />
@@ -1148,15 +1257,15 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
             )}
             <div>
               <label style={label}>{form.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
-              <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: e.target.value }))} placeholder={form.tipo === 'PJ' ? "Ex: 00.000.000/0000-00" : "Ex: 000.000.000-00"} />
+              <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: formatCnpjCpf(e.target.value, prev.tipo) }))} placeholder={form.tipo === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"} />
             </div>
             <div>
-              <label style={label}>Telefone</label>
-              <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: e.target.value }))} placeholder="(11) 99999-9999" />
+              <label style={label}>Telefone / WhatsApp</label>
+              <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))} placeholder="(11) 99999-9999" />
             </div>
             <div>
               <label style={label}>E-mail</label>
-              <input style={input} value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="vendas@fornecedor.com" />
+              <input style={input} type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="vendas@fornecedor.com" />
             </div>
             <div>
               <label style={label}>Contato Responsável</label>
@@ -1183,13 +1292,6 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
               <input style={input} value={form.pix} onChange={e => setForm(prev => ({ ...prev, pix: e.target.value }))} placeholder="Chave PIX" />
             </div>
             <div>
-              <label style={label}>Tipo</label>
-              <select style={input} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as 'PJ'|'PF' }))}>
-                <option value="PJ">Pessoa Jurídica</option>
-                <option value="PF">Pessoa Física</option>
-              </select>
-            </div>
-            <div>
               <label style={label}>Empresa preferencial</label>
               <select style={input} value={form.empresa_id} onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}>
                 <option value="">Compartilhado entre todas</option>
@@ -1202,8 +1304,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
-            <button style={btnGhost} onClick={() => setShowForm(false)}>Cancelar</button>
+            <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : editingFornecedor ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}</button>
+            <button style={btnGhost} onClick={() => { setShowForm(false); setEditingFornecedor(null) }}>Cancelar</button>
           </div>
         </div>
       )}
@@ -1215,6 +1317,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
           {filtered.map(f => {
             const resumo = contasResumoMap[f.id] || { totalEmAberto: 0, totalPago: 0, totalPagasCount: 0, temVencidas: false }
             const { totalEmAberto, totalPago, totalPagasCount, temVencidas: temContasVencidas } = resumo
+            const docLabel = f.tipo === 'PF' ? 'CPF' : 'CNPJ'
 
             return (
               <div key={f.id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14, borderLeft: temContasVencidas ? `3px solid #EF4444` : `1px solid ${C.border}` }}>
@@ -1224,7 +1327,10 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 800, color: C.ink, fontSize: 14 }}>{f.nome_fantasia ?? f.razao_social}</span>
+                      <span style={{ fontWeight: 800, color: C.ink, fontSize: 14 }}>{f.nome_fantasia || f.razao_social}</span>
+                      <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: f.tipo === 'PF' ? '#3B82F620' : '#10B98120', color: f.tipo === 'PF' ? '#60A5FA' : '#34D399' }}>
+                        {f.tipo === 'PF' ? 'PESSOA FÍSICA' : 'PESSOA JURÍDICA'}
+                      </span>
                       {temContasVencidas && (
                         <span style={{ fontSize: 9, fontWeight: 900, background: '#EF444420', color: '#EF4444', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                           <AlertTriangle size={8} /> CONTAS VENCIDAS
@@ -1232,7 +1338,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
                       )}
                     </div>
                     <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
-                      {f.cnpj ?? 'Sem CNPJ'} · {f.categoria ?? 'Sem Categoria'}
+                      {f.cnpj ? `${docLabel}: ${f.cnpj}` : `Sem ${docLabel}`} · {f.categoria ?? 'Sem Categoria'} {f.responsavel ? `· Resp: ${f.responsavel}` : ''}
                     </div>
                   </div>
                   <div style={{ textAlign: 'right', marginRight: 16 }}>
@@ -1240,7 +1346,14 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
                     <div style={{ fontSize: 10, color: '#34D399' }}>Pagas: {totalPagasCount} ({fmt(totalPago)})</div>
                   </div>
                   {podeCriar && (
-                    <button onClick={() => remove(f.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4, flexShrink: 0 }}><X size={14} /></button>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                      <button onClick={() => iniciarEdicaoFornecedor(f)} title="Editar Fornecedor" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
+                        <Edit3 size={14} />
+                      </button>
+                      <button onClick={() => remove(f.id)} title="Excluir Fornecedor" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
+                        <X size={14} />
+                      </button>
+                    </div>
                   )}
                 </div>
 
