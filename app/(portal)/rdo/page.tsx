@@ -181,6 +181,29 @@ export default function RDO() {
     window.print()
   }
 
+  const handleDeleteBatch = async () => {
+    if (selectedRdoIds.length === 0) return
+    const confirmado = await confirm(
+      'Excluir RDOs Selecionados',
+      `Deseja excluir ${selectedRdoIds.length} diário(s) de obra? Esta ação não pode ser desfeita.`,
+      { confirmLabel: `Excluir ${selectedRdoIds.length}`, confirmColor: '#EF4444' }
+    )
+    if (!confirmado) return
+    // Excluir tabelas relacionadas e depois os RDOs
+    await Promise.all([
+      supabase.from('rdo_atividades').delete().in('rdo_id', selectedRdoIds),
+      supabase.from('rdo_equipamentos').delete().in('rdo_id', selectedRdoIds),
+      supabase.from('rdo_efetivos_terceiros').delete().in('rdo_id', selectedRdoIds),
+      supabase.from('rdo_planejado_executado').delete().in('rdo_id', selectedRdoIds),
+    ])
+    const { error } = await supabase.from('rdos').delete().in('id', selectedRdoIds)
+    if (error) return toast(error.message, 'error')
+    setSelectedRdoIds([])
+    if (selectedRdo && selectedRdoIds.includes(selectedRdo.id)) setSelectedRdo(null)
+    await loadData(true)
+    toast(`${selectedRdoIds.length} diário(s) excluído(s).`, 'success')
+  }
+
   const getWeatherIcon = (weather: string) => {
     switch (weather.toLowerCase()) {
       case 'sol':
@@ -417,24 +440,45 @@ export default function RDO() {
                   <span>Selecionar todos ({filteredRdos.length})</span>
                 </label>
                 {selectedRdoIds.length > 0 && (
-                  <button
-                    onClick={triggerPrintBatch}
-                    style={{
-                      background: C.amber,
-                      color: '#0B0C0E',
-                      border: 'none',
-                      borderRadius: 3,
-                      padding: '4px 10px',
-                      fontSize: 11,
-                      fontWeight: 800,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    <Printer size={13} /> Imprimir ({selectedRdoIds.length})
-                  </button>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    <span style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700 }}>{selectedRdoIds.length} selecionado(s)</span>
+                    <button
+                      onClick={triggerPrintBatch}
+                      style={{
+                        background: '#1e2130',
+                        color: C.ink,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 3,
+                        padding: '4px 10px',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Printer size={13} /> Imprimir ({selectedRdoIds.length})
+                    </button>
+                    <button
+                      onClick={handleDeleteBatch}
+                      style={{
+                        background: '#EF444415',
+                        color: '#F87171',
+                        border: '1px solid #EF444433',
+                        borderRadius: 3,
+                        padding: '4px 10px',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Trash2 size={13} /> Apagar ({selectedRdoIds.length})
+                    </button>
+                  </div>
                 )}
               </div>
 
