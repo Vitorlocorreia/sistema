@@ -28,12 +28,12 @@ const parseCurrency = (val: string | number | undefined | null): number => {
   if (!val) return 0
   const str = String(val).trim()
   if (!str) return 0
-  if (str.includes(',')) {
-    const cleanStr = str.replace(/\./g, '').replace(',', '.')
-    const num = parseFloat(cleanStr)
-    return isNaN(num) ? 0 : num
-  }
-  const num = parseFloat(str.replace(/\./g, ''))
+  // Aceita tanto o formato brasileiro (1.234,56) quanto o decimal (1234.56).
+  // O ponto só é separador de milhar quando existe vírgula decimal.
+  const cleanStr = str.includes(',')
+    ? str.replace(/\./g, '').replace(',', '.')
+    : str
+  const num = Number(cleanStr)
   return isNaN(num) ? 0 : num
 }
 
@@ -1837,7 +1837,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <label style={label}>Valor do Título *</label>
-                <input style={input} type="number" step="0.01" min="0" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
+                <input style={input} type="text" inputMode="decimal" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
               </div>
               <div>
                 <label style={label}>{form.tipo === 'pagar' ? 'Data de vencimento *' : 'Data de previsão *'}</label>
@@ -2380,8 +2380,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 const isExpanded = expandedContaId === c.id
 
                 const historico = c.historico_negociacao || []
-                const totalPagoHistorico = historico.filter(h => h.tipo === 'pagamento_parcial' && h.valor_pago).reduce((acc, h) => acc + (h.valor_pago || 0), 0)
-                const totalPago = totalPagoHistorico + (c.pagamento_antecipado ? (c.valor_antecipado || 0) : 0)
+                const totalPagoHistorico = historico
+                  .filter(h => h.tipo === 'pagamento_parcial' && Number(h.valor_pago) > 0)
+                  .reduce((acc, h) => acc + Number(h.valor_pago || 0), 0)
+                // Não tratar strings como "false" vindas de dados antigos como pagamento.
+                const totalPagoAntecipado = c.pagamento_antecipado === true
+                  ? Number(c.valor_antecipado || 0)
+                  : 0
+                const totalPago = Math.min(Number(c.valor || 0), totalPagoHistorico + totalPagoAntecipado)
                 const valorDesconto = historico.filter(h => h.tipo === 'desconto' && h.valor_novo).slice(-1)[0]?.valor_novo
                 const valorBase = valorDesconto !== undefined ? valorDesconto : c.valor
                 const valorCheioAbatido = Math.max(0, valorBase - totalPago)
