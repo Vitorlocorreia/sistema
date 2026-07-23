@@ -90,8 +90,8 @@ export default function RDO() {
   // Activities state in form
   const [actForm, setActForm] = useState<string[]>([''])
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const loadData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     const session = localStorage.getItem('colaborador_sessao')
     let colab = null
     try { 

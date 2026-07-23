@@ -353,7 +353,8 @@ export default function RhPage() {
   const [inviteSaving, setInviteSaving] = useState(false)
   const [archiveFilter, setArchiveFilter] = useState('')
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     const [{ data: peopleData, error: peopleError }, { data: modelData, error: modelError }, { data: inviteData, error: inviteError }] = await Promise.all([
       supabase.from('funcionarios').select('*').order('nome'),
       supabase.from('rh_modelos_admissao').select('*').eq('ativo', true).order('ordem'),

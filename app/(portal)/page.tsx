@@ -26,8 +26,8 @@ export default function Dashboard() {
   const [suprimentosList, setSuprimentosList] = useState<any[]>([])
   const [fotosList, setFotosList] = useState<any[]>([])
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const loadData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     const [
       { data: ob },
       { data: rd },

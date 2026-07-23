@@ -48,7 +48,8 @@ export default function QuadrosPage() {
   const [automations, setAutomations] = useState<QuadroAutomacao[]>([])
   const [cardTimeline, setCardTimeline] = useState<HistoricoEdicao[]>([])
 
-  const loadBoards = useCallback(async () => {
+  const loadBoards = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     const { data, error } = await supabase.from('quadros').select('*').eq('arquivado', false).order('ordem')
     if (error) { toast('Entre com Supabase Auth para acessar os quadros.', 'error'); setLoading(false); return }
     const result = (data ?? []) as Quadro[]
@@ -57,7 +58,7 @@ export default function QuadrosPage() {
     setLoading(false)
   }, [])
 
-  const loadBoard = useCallback(async () => {
+  const loadBoard = useCallback(async (isBackground = false) => {
     if (!boardId) { setColumns([]); setCards([]); return }
     const [{ data: fieldData }, { data: automationData }] = await Promise.all([
       supabase.from('quadro_campos').select('*').eq('quadro_id', boardId).order('ordem'),

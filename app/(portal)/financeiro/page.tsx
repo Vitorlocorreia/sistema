@@ -318,7 +318,8 @@ function ObrasFinanceiroTab({ permissaoAtiva, confirm }: TabProps) {
   
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
   
-  const load = useCallback(async () => {
+  const load = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     const [{ data: o }, { data: f }] = await Promise.all([
       supabase.from('obras').select('*').order('nome'),
       supabase.from('fotos').select('*').not('obra_id', 'is', null).order('created_at', { ascending: false }).limit(60),
@@ -574,8 +575,8 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [selected, setSelected] = useState<string>('todas')
   const [loading, setLoading]   = useState(true)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao')
     let qE = supabase.from('empresas').select('*').order('razao_social')
     
@@ -851,8 +852,8 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   const [form, setForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#C8A96E' })
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     const { data } = await supabase.from('empresas').select('*').order('razao_social')
     setEmpresas(data ?? [])
     setLoading(false)
@@ -965,8 +966,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
   })
   const [saving, setSaving] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     let qF = supabase.from('fornecedores').select('*').order('razao_social')
     let qE = supabase.from('empresas').select('*').order('razao_social')
     let qC = supabase.from('contas').select('*')
@@ -1626,8 +1627,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
     void load()
   }
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false })
     let qE = supabase.from('empresas').select('*').order('razao_social')
     let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social')

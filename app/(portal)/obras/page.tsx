@@ -181,8 +181,8 @@ export default function Obras() {
     }
   }, [])
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
+  const loadData = useCallback(async (isBackground = false) => {
+    if (!isBackground) setLoading(true)
     const [
       { data: f },
       { data: o },
