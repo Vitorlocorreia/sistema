@@ -107,6 +107,12 @@ export default function LoginPage() {
       return
     }
 
+    if (senhaSol.trim().length < 6) {
+      setErro('A senha deve conter no mínimo 6 caracteres.')
+      setLoading(false)
+      return
+    }
+
     try {
       // Verifica se o e-mail já existe na tabela de colaboradores ou solicitações
       const { data: colExistente } = await supabase

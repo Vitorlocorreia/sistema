@@ -119,7 +119,7 @@ Deno.serve(async request => {
       cargo,
       empresa_id: isGlobalAdmin ? null : (payload.empresa_id || (empresasIds?.[0] ?? null)),
       empresas_ids: isGlobalAdmin ? null : empresasIds,
-      senha: rawSenha || senha,
+      senha: senha,
       override_permissoes: isGlobalAdmin,
       apps: isGlobalAdmin ? allApps : (config?.apps || cargo),
       pode_empresas: isGlobalAdmin || Boolean(config?.pode_empresas),
