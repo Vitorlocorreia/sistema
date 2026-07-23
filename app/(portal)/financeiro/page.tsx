@@ -1569,6 +1569,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
   const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
+  const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo'>('novo')
   const [search, setSearch]           = useState('')
   const [editandoConta, setEditandoConta] = useState<ContaComRelacoes | null>(null)
   const [formEdicao, setFormEdicao] = useState<Partial<ContaComRelacoes>>({})
@@ -1764,6 +1765,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
     const matchFim = !filtDataFim || data <= filtDataFim
     const matchSearch  = !search || c.descricao.toLowerCase().includes(search.toLowerCase()) || (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase())
     return matchEmpresa && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim
+  }).sort((a, b) => {
+    const da = new Date(a.created_at || a.data_previsao || '').getTime()
+    const db = new Date(b.created_at || b.data_previsao || '').getTime()
+    return filtOrdem === 'novo' ? db - da : da - db
   })
 
   const totalPago     = filtered.filter(c => c.status === 'Pago' && c.tipo === 'pagar').reduce((s, c) => s + c.valor, 0)
@@ -1818,8 +1823,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
           <option value="Pago">Pago</option>
           <option value="Negado">Negado</option>
         </select>
-        <input title="Previsão inicial" aria-label="Previsão inicial" style={{ ...input, width: 145 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
-        <input title="Previsão final" aria-label="Previsão final" style={{ ...input, width: 145 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
+        <select style={{ ...input, width: 165 }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as 'novo' | 'antigo')}>
+          <option value="novo">↓ Mais recente primeiro</option>
+          <option value="antigo">↑ Mais antigo primeiro</option>
+        </select>
+        <span style={{ color: C.inkSoft, fontSize: 11, whiteSpace: 'nowrap' }}>Venc. de:</span>
+        <input title="Previsão inicial" aria-label="Previsão inicial" style={{ ...input, width: 130 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
+        <span style={{ color: C.inkSoft, fontSize: 11 }}>até:</span>
+        <input title="Previsão final" aria-label="Previsão final" style={{ ...input, width: 130 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
       </div>
 
       {loading ? (
