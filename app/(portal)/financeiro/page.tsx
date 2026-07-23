@@ -1736,7 +1736,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtEmpresa, setFiltEmpresa] = useState('')
   const [filtFornecedor, setFiltFornecedor] = useState(initialFornecedorId || '')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
-  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Liberado/OK'|'A pagar'|'Pago'|'Negado'>('todos')
+  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
@@ -2064,7 +2064,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   <select style={{ ...input }} value={filtStatus} onChange={e => setFiltStatus(e.target.value as any)}>
                     <option value="todos">Todos</option>
                     <option value="Lançado">Lançado</option>
-                    <option value="Bloqueado">Bloqueado (Aguard. Aprovação)</option>
+                    <option value="Bloqueado">Bloqueado</option>
+                    <option value="Aguardando aprovação">Aguardando aprovação</option>
                     <option value="Liberado/OK">Liberado/OK</option>
                     <option value="A pagar">A pagar</option>
                     <option value="Pago">Pago</option>
@@ -2104,7 +2105,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 const dataPrevisao = dataReferencia || ''
                 const venc = isVencido(dataReferencia || '', c.status)
                 const pago = c.status === 'Pago'
-                const aguardandoAprovacao = c.status === 'Bloqueado'
+                const aguardandoAprovacao = c.status === 'Bloqueado' || c.status === 'Aguardando aprovação'
                 
                 const isExpanded = expandedContaId === c.id
 
@@ -2213,6 +2214,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           {podeAlterarStatus && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, padding: '4px 6px', fontSize: 10 }}>
                             <option value="Lançado">Lançado</option>
                             <option value="Bloqueado">Bloqueado</option>
+                            <option value="Aguardando aprovação">Aguardando aprovação</option>
                             <option value="Liberado/OK">Liberado/OK</option>
                             <option value="A pagar">A pagar</option>
                             <option value="Pago">Pago</option>
@@ -2457,6 +2459,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   <select style={input} value={formEdicao.status || ''} onChange={e => setFormEdicao(f => ({ ...f, status: e.target.value as any }))}>
                     <option value="Lançado">Lançado</option>
                     <option value="Bloqueado">Bloqueado</option>
+                    <option value="Aguardando aprovação">Aguardando aprovação</option>
                     <option value="Liberado/OK">Liberado/OK</option>
                     <option value="A pagar">A pagar</option>
                     <option value="Pago">Pago</option>
