@@ -1480,12 +1480,11 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
     const valorNum = parseFloat(form.valor)
     
-    // Buscar o limite Global AO VIVO no banco de dados para garantir que a aprovação respeite a mudança instantânea
-    const { data: liveConfig } = await supabase.from('config_permissoes').select('limite_valor').limit(1).single()
-    const limiteAprovacao = liveConfig?.limite_valor ?? permissaoAtiva?.limite_valor ?? 5000
+    // Limite fixo de autoliberação: R$ 30.000
+    const limiteAprovacao = 30000
     
     let statusInicial: 'Lançado' | 'Bloqueado' = 'Lançado'
-    if (form.tipo === 'pagar' && limiteAprovacao !== 0 && valorNum > limiteAprovacao && !permissaoAtiva?.pode_aprovar) {
+    if (form.tipo === 'pagar' && valorNum > limiteAprovacao && !permissaoAtiva?.pode_aprovar) {
       statusInicial = 'Bloqueado'
     }
 
@@ -2320,11 +2319,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                             <option value="Pago">Pago</option>
                             <option value="Negado">Negado</option>
                           </select>}
-                          {aguardandoAprovacao && podeAprovar && (
-                            <button onClick={() => aprovarLançamento(c.id)} title="Aprovar Lançamento" style={{ ...btn(), padding: '4px 8px', fontSize: 10 }}>
-                              <Check size={11} /> Aprovar
-                            </button>
-                          )}
+
 
                           {podeEditar && (
                              <button onClick={() => iniciarEdicao(c)} title="Editar Lançamento" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
@@ -3476,37 +3471,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         {/* COLUNA DIREITA: MATRIZ DE PERMISSÕES DOS CARGOS (APENAS PARA ADMIN GERAL) */}
         {isGeral && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div style={{ ...card, padding: 18, borderColor: C.amber + '55', background: C.bgPanel }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.amber, marginBottom: 12 }}>Limite Global de Autoliberação (R$)</h3>
-              <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 16 }}>
-                Este limite se aplica a <strong>todos os usuários e cargos</strong> da empresa.
-                Qualquer lançamento financeiro acima deste valor exigirá a aprovação de um Administrador.
-              </div>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <input
-                  type="number"
-                  disabled={globalLimite === 0 || savingGlobalLimite}
-                  style={{ ...input, width: 200, opacity: globalLimite === 0 ? 0.4 : 1 }}
-                  value={globalLimite === 0 ? '' : globalLimite}
-                  onChange={e => setGlobalLimite(parseFloat(e.target.value) || 0)}
-                  placeholder={globalLimite === 0 ? 'Sem limite ativado' : 'Ex: 5000'}
-                />
-                <button style={btn()} onClick={salvarLimiteGlobal} disabled={savingGlobalLimite}>
-                  {savingGlobalLimite ? 'Salvando...' : 'Salvar Limite Global'}
-                </button>
-              </div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 12, fontSize: 12, color: C.ink, cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={globalLimite === 0}
-                  onChange={e => setGlobalLimite(e.target.checked ? 0 : 5000)}
-                  style={{ accentColor: C.amber, cursor: 'pointer' }}
-                />
-                <span style={{ fontWeight: globalLimite === 0 ? 800 : 400, color: globalLimite === 0 ? '#34D399' : C.ink }}>
-                  Desativar limites (Todos os valores serão aprovados automaticamente)
-                </span>
-              </label>
-            </div>
+
 
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>Regras & Permissões dos Cargos</h3>
 
