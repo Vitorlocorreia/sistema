@@ -1895,11 +1895,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                                 
                                 {/* Standard Details */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
-                                  <div>
-                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Fornecedor</div>
-                                    <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>{c.fornecedor?.razao_social || c.fornecedor?.nome_fantasia || 'N/A'}</div>
-                                    {c.fornecedor?.cnpj && <div style={{ fontSize: 11, color: C.inkSoft }}>CNPJ: {c.fornecedor.cnpj}</div>}
-                                  </div>
+
                                   <div>
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Observações do Lançamento</div>
                                     <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>{c.observacoes || 'Nenhuma observação'}</div>
