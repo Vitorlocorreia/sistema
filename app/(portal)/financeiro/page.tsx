@@ -789,7 +789,6 @@ interface TabProps {
 function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [contas, setContas]     = useState<ContaComRelacoes[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
-  const [selected, setSelected] = useState<string>('todas')
   const [loading, setLoading]   = useState(true)
 
   const load = useCallback(async (isBackground = false) => {
@@ -814,37 +813,11 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   useRealtimeSync(load, 'financeiro-dashboard')
   useEffect(() => { load() }, [load])
 
-  // Restringe a visualização às empresas autorizadas do colaborador
-  const empresasPermitidas = useMemo(() => {
-    if (colaboradorAtivo.cargo === 'admin_geral') return empresas
-    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-    if (ids.length === 0) return empresas
-    return empresas.filter(e => ids.includes(e.id))
-  }, [empresas, colaboradorAtivo])
-
-  useEffect(() => {
-    if (colaboradorAtivo.cargo === 'admin_empresa') {
-      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-      if (ids.length === 1) {
-        setSelected(ids[0])
-      } else {
-        setSelected('todas')
-      }
-    } else {
-      setSelected('todas')
-    }
-  }, [colaboradorAtivo])
-
   const filtered = useMemo(() => {
-    if (selected === 'todas') {
-      if (colaboradorAtivo.cargo === 'admin_empresa') {
-        const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-        if (ids.length > 0) return contas.filter(c => ids.includes(c.empresa_id))
-      }
-      return contas
-    }
-    return contas.filter(c => c.empresa_id === selected)
-  }, [contas, selected, colaboradorAtivo])
+    if (colaboradorAtivo.cargo === 'admin_geral') return contas
+    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+    return ids.length > 0 ? contas.filter(c => ids.includes(c.empresa_id)) : contas
+  }, [contas, colaboradorAtivo])
 
   const { receitas, despesas, resultado } = useMemo(() => {
     const rec = filtered.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + c.valor, 0)
@@ -942,20 +915,8 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
   return (
     <div>
-      {/* Selector de Empresa */}
+      {/* Empresas exibidas conforme as empresas vinculadas no perfil */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-        <span style={{ fontSize: 12, color: C.inkSoft, fontWeight: 700 }}>Filtrar Empresa:</span>
-        <select
-          value={selected}
-          disabled={empresasPermitidas.length <= 1}
-          onChange={e => setSelected(e.target.value)}
-          style={{ ...input, width: 240, padding: '7px 12px' }}
-        >
-          {empresasPermitidas.length > 1 && <option value="todas">Todas as empresas vinculadas</option>}
-          {empresasPermitidas.map((e: any) => (
-            <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
-          ))}
-        </select>
         <button onClick={() => void load()} style={btnGhost}><RefreshCw size={13} /></button>
       </div>
 
