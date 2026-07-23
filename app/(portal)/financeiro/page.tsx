@@ -16,7 +16,7 @@ import { motion, AnimatePresence } from 'motion/react'
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const fmt = (v: number) =>
-  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Math.abs(v || 0))
 
 const fmtDate = (d: string) => {
   if (!d) return '—'
@@ -1755,46 +1755,60 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [savingNegociacao, setSavingNegociacao] = useState(false)
 
   const salvarNegociacao = async (conta: ContaComRelacoes) => {
-    if (colaboradorAtivo.cargo !== 'admin_geral') return
-    if (!formNegociacao.descricao) return toast('Informe uma descrição/observação.', 'error')
+    if (!formNegociacao.descricao.trim()) return toast('Informe uma descrição/observação do acordo ou pagamento.', 'error')
+
+    if (formNegociacao.tipo === 'pagamento_parcial') {
+      const val = Number(formNegociacao.valor_pago)
+      if (isNaN(val) || val <= 0) {
+        return toast('Informe o valor pago parcialmente (maior que zero).', 'error')
+      }
+    }
+    if (formNegociacao.tipo === 'desconto') {
+      const val = Number(formNegociacao.valor_novo)
+      if (isNaN(val) || val < 0) {
+        return toast('Informe o novo valor negociado.', 'error')
+      }
+    }
+    if (formNegociacao.tipo === 'prorrogacao' && !formNegociacao.nova_data) {
+      return toast('Informe a nova data prorrogada.', 'error')
+    }
 
     setSavingNegociacao(true)
-    const novoItem = {
-      id: crypto.randomUUID(),
-      data: new Date().toISOString(),
-      autor: colaboradorAtivo.nome,
-      tipo: formNegociacao.tipo,
-      descricao: formNegociacao.descricao,
-      valor_pago: formNegociacao.tipo === 'pagamento_parcial' ? Number(formNegociacao.valor_pago) : undefined,
-      valor_novo: formNegociacao.tipo === 'desconto' ? Number(formNegociacao.valor_novo) : undefined,
-      nova_data: formNegociacao.tipo === 'prorrogacao' ? formNegociacao.nova_data : undefined
-    }
-
-    const { data: result, error: functionError } = await supabase.functions.invoke('admin-financeiro', {
-      body: {
-        action: 'save_negotiation',
-        admin_id: colaboradorAtivo.id,
-        conta_id: conta.id,
-        novo_item: novoItem
+    try {
+      const novoItem = {
+        id: crypto.randomUUID(),
+        data: new Date().toISOString(),
+        autor: colaboradorAtivo.nome,
+        tipo: formNegociacao.tipo,
+        descricao: formNegociacao.descricao.trim(),
+        valor_pago: formNegociacao.tipo === 'pagamento_parcial' ? Number(formNegociacao.valor_pago) : undefined,
+        valor_novo: formNegociacao.tipo === 'desconto' ? Number(formNegociacao.valor_novo) : undefined,
+        nova_data: formNegociacao.tipo === 'prorrogacao' ? formNegociacao.nova_data : undefined
       }
-    })
 
-    setSavingNegociacao(false)
-    if (functionError || result?.error) {
-      let detail = result?.error || functionError?.message || 'não foi possível salvar a negociação'
-      const response = (functionError as { context?: Response } | null)?.context
-      if (response) {
-        try {
-          const body = await response.clone().json() as { error?: string }
-          detail = body.error || detail
-        } catch { /* mantem mensagem padrao */ }
-      }
-      return toast('Erro ao salvar negociação: ' + detail, 'error')
+      const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
+      const novoHistorico = [...historicoAtual, novoItem]
+
+      const { error: dbError } = await supabase
+        .from('contas')
+        .update({ historico_negociacao: novoHistorico })
+        .eq('id', conta.id)
+
+      if (dbError) throw dbError
+
+      toast(
+        formNegociacao.tipo === 'pagamento_parcial' 
+          ? 'Pagamento parcial registrado com sucesso!' 
+          : 'Acordo / negociação salvo com sucesso!', 
+        'success'
+      )
+      setFormNegociacao({ tipo: 'observacao', descricao: '', valor_pago: '', valor_novo: '', nova_data: '' })
+      await load()
+    } catch (err: any) {
+      toast('Erro ao salvar negociação: ' + (err?.message || err), 'error')
+    } finally {
+      setSavingNegociacao(false)
     }
-    
-    toast('Negociação/Acordo salvo com sucesso!', 'success')
-    setFormNegociacao({ tipo: 'observacao', descricao: '', valor_pago: '', valor_novo: '', nova_data: '' })
-    void load()
   }
 
   const load = useCallback(async (isBackground = false) => {
@@ -1900,12 +1914,12 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       .from('comprovantes')
       .upload(uploadPath, file, { upsert: true })
       
-    if (uploadErr) return toast('Erro ao enviar anexo.', 'error')
+    if (uploadErr) return toast(`Erro ao enviar anexo: ${uploadErr.message}`, 'error')
     
-    const { data: { publicUrl } } = supabase.storage.from('comprovantes').getPublicUrl(uploadData.path)
+    const { data: { publicUrl } } = supabase.storage.from('comprovantes').getPublicUrl(uploadData.path || uploadPath)
     
     const { error } = await supabase.from('contas').update({ comprovante_url: publicUrl }).eq('id', contaId)
-    if (error) return toast(error.message, 'error')
+    if (error) return toast(`Erro ao salvar anexo no lançamento: ${error.message}`, 'error')
     
     toast('Comprovante anexado com sucesso.', 'success')
     void load()
@@ -2146,7 +2160,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
                       <td style={{ padding: '12px 14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
                         <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171' }}>
-                          {c.tipo === 'receber' ? '+' : '-'}{fmt(c.valor)}
+                          {fmt(c.valor)}
                         </div>
                         {totalPago > 0 && (
                           <div style={{ marginTop: 4 }}>
@@ -2231,6 +2245,25 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Observações do Lançamento</div>
                                     <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>{c.observacoes || 'Nenhuma observação'}</div>
                                   </div>
+                                  <div>
+                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 6 }}>Documento / Comprovante Anexo</div>
+                                    {c.comprovante_url ? (
+                                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                                        <a href={c.comprovante_url} target="_blank" rel="noopener noreferrer" style={{ ...btnGhost, fontSize: 11, color: C.amber, border: `1px solid ${C.amber}40`, textDecoration: 'none', padding: '6px 12px' }}>
+                                          <Paperclip size={13} /> Visualizar Documento ↗
+                                        </a>
+                                        <label style={{ ...btnGhost, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, color: C.inkSoft, padding: '6px 12px' }}>
+                                          Substituir Anexo
+                                          <input hidden type="file" accept="image/*,application/pdf" onChange={e => { const f = e.target.files?.[0]; if(f) void anexarComprovantePosterior(c.id, c.empresa_id, f); e.currentTarget.value = '' }} />
+                                        </label>
+                                      </div>
+                                    ) : (
+                                      <label style={{ ...btnGhost, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, color: C.amber, border: `1px solid ${C.amber}40`, padding: '6px 12px' }}>
+                                        <Paperclip size={13} /> Anexar Comprovante / Documento
+                                        <input hidden type="file" accept="image/*,application/pdf" onChange={e => { const f = e.target.files?.[0]; if(f) void anexarComprovantePosterior(c.id, c.empresa_id, f); e.currentTarget.value = '' }} />
+                                      </label>
+                                    )}
+                                  </div>
                                   {c.pagamento_antecipado && (
                                     <div>
                                       <div style={{ fontSize: 10, color: C.amber, textTransform: 'uppercase', fontWeight: 800 }}>Pagamento Antecipado</div>
@@ -2263,11 +2296,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                   </div>
                                 </div>
 
-                                {/* Negotiation Panel - Only for ADM-Geral */}
-                                {isAdminGeral && (
+                                {/* Negotiation Panel - Available for all management roles */}
+                                {(isAdminGeral || podePagar || podeAprovar || podeLancar || colaboradorAtivo.cargo === 'admin_empresa') && (
                                   <div style={{ background: '#0B0C0E', border: `1px solid ${C.amber}40`, borderRadius: 8, padding: 16 }}>
                                     <h3 style={{ margin: '0 0 16px', fontSize: 14, color: C.amber, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <Shield size={16} /> Gestão de Negociação & Acordos (Acesso Restrito)
+                                      <Shield size={16} /> Gestão de Pagamentos Parciais & Acordos
                                     </h3>
                                     
                                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>

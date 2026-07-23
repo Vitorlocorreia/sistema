@@ -4,12 +4,13 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', 'Access-Control-Allow-Methods': 'POST, OPTIONS' }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 
-// Verifica se o admin_id enviado no payload é um admin_geral na tabela colaboradores
-async function isAdminGeral(payload: Record<string, unknown>) {
+// Verifica se o admin_id enviado no payload possui autorização financeira
+async function isAuthorizedUser(payload: Record<string, unknown>) {
   const adminId = String(payload.admin_id || '').trim()
   if (!adminId) return false
-  const { data } = await admin.from('colaboradores').select('cargo').eq('id', adminId).maybeSingle()
-  return data?.cargo === 'admin_geral'
+  const { data } = await admin.from('colaboradores').select('cargo, pode_pagar, pode_lancar, pode_aprovar').eq('id', adminId).maybeSingle()
+  if (!data) return false
+  return data.cargo === 'admin_geral' || data.cargo === 'admin_empresa' || Boolean(data.pode_pagar) || Boolean(data.pode_lancar) || Boolean(data.pode_aprovar)
 }
 
 Deno.serve(async request => {
@@ -17,7 +18,7 @@ Deno.serve(async request => {
   try {
     const payload = await request.json()
 
-    if (!(await isAdminGeral(payload))) return json({ error: 'Acesso negado. Apenas o Administrador Geral pode executar esta ação no Financeiro.' }, 403)
+    if (!(await isAuthorizedUser(payload))) return json({ error: 'Acesso negado. Perfil sem permissão para executar esta ação.' }, 403)
 
     if (payload.action === 'save_negotiation') {
       const contaId = String(payload.conta_id || '').trim()
