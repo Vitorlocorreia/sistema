@@ -10,7 +10,7 @@ import {
 import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/Toast'
-import type { Empresa, Fornecedor, Conta, ContaComRelacoes, Obra, Colaborador, ConfigPermissao, CargoSistema } from '@/lib/types'
+import type { Empresa, Fornecedor, Conta, ContaComRelacoes, Obra, Colaborador, ConfigPermissao, CargoSistema, ItemNegociacao } from '@/lib/types'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -1879,14 +1879,16 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       historico_negociacao: [...historicoAtual, novoLogItem]
     }).eq('id', id)
 
-    await supabase.from('historico_edicoes').insert({
-      entidade: 'contas',
-      entidade_id: id,
-      acao: 'UPDATE',
-      dados_anteriores: { status: conta.status },
-      dados_novos: { status: 'Liberado/OK', aprovado_por: nomeAprovador },
-      usuario_nome: nomeAprovador
-    }).catch(() => {})
+    try {
+      await supabase.from('historico_edicoes').insert({
+        entidade: 'contas',
+        entidade_id: id,
+        acao: 'UPDATE',
+        dados_anteriores: { status: conta.status },
+        dados_novos: { status: 'Liberado/OK', aprovado_por: nomeAprovador },
+        usuario_nome: nomeAprovador
+      })
+    } catch {}
 
     load()
   }
@@ -1955,14 +1957,16 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     const { error } = await supabase.from('contas').update(payload).eq('id', id)
     if (error) return toast(error.message, 'error')
 
-    await supabase.from('historico_edicoes').insert({
-      entidade: 'contas',
-      entidade_id: id,
-      acao: 'UPDATE',
-      dados_anteriores: { status: conta.status },
-      dados_novos: { status, justificativa: payload.justificativa_negacao },
-      usuario_nome: colaboradorAtivo.nome || 'Usuário'
-    }).catch(() => {})
+    try {
+      await supabase.from('historico_edicoes').insert({
+        entidade: 'contas',
+        entidade_id: id,
+        acao: 'UPDATE',
+        dados_anteriores: { status: conta.status },
+        dados_novos: { status, justificativa: payload.justificativa_negacao },
+        usuario_nome: colaboradorAtivo.nome || 'Usuário'
+      })
+    } catch {}
 
     await load()
   }
@@ -2041,14 +2045,16 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     }).eq('id', editandoConta.id)
     if (error) return toast(error.message, 'error')
 
-    await supabase.from('historico_edicoes').insert({
-      entidade: 'contas',
-      entidade_id: editandoConta.id,
-      acao: 'UPDATE',
-      dados_anteriores: { status: editandoConta.status, valor: editandoConta.valor, descricao: editandoConta.descricao },
-      dados_novos: { status: formEdicao.status, valor: Number(formEdicao.valor), descricao: formEdicao.descricao },
-      usuario_nome: colaboradorAtivo.nome || 'Usuário'
-    }).catch(() => {})
+    try {
+      await supabase.from('historico_edicoes').insert({
+        entidade: 'contas',
+        entidade_id: editandoConta.id,
+        acao: 'UPDATE',
+        dados_anteriores: { status: editandoConta.status, valor: editandoConta.valor, descricao: editandoConta.descricao },
+        dados_novos: { status: formEdicao.status, valor: Number(formEdicao.valor), descricao: formEdicao.descricao },
+        usuario_nome: colaboradorAtivo.nome || 'Usuário'
+      })
+    } catch {}
 
     setEditandoConta(null)
     toast('Lançamento atualizado', 'success')
