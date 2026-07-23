@@ -1480,11 +1480,12 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
     const valorNum = parseFloat(form.valor)
     
-    // Regra de aprovação parametrizada pelo banco de dados config_permissoes
-    let statusInicial: 'Lançado' | 'Aguardando aprovação' = 'Lançado'
-    const limiteAprovacao = permissaoAtiva?.limite_valor || 5000
+    // Buscar o limite Global AO VIVO no banco de dados para garantir que a aprovação respeite a mudança instantânea
+    const { data: liveConfig } = await supabase.from('config_permissoes').select('limite_valor').limit(1).single()
+    const limiteAprovacao = liveConfig?.limite_valor ?? permissaoAtiva?.limite_valor ?? 5000
     
-    if (form.tipo === 'pagar' && valorNum > limiteAprovacao && !permissaoAtiva?.pode_aprovar) {
+    let statusInicial: 'Lançado' | 'Aguardando aprovação' = 'Lançado'
+    if (form.tipo === 'pagar' && limiteAprovacao !== 0 && valorNum > limiteAprovacao && !permissaoAtiva?.pode_aprovar) {
       statusInicial = 'Aguardando aprovação'
     }
 
@@ -1708,7 +1709,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
             </div>
 
             {/* Exibe aviso de aprovação necessário caso ultrapasse limite */}
-            {form.tipo === 'pagar' && form.valor && parseFloat(form.valor) > (permissaoAtiva?.limite_valor || 5000) && !permissaoAtiva?.pode_aprovar && (
+            {form.tipo === 'pagar' && form.valor && (permissaoAtiva?.limite_valor ?? 5000) !== 0 && parseFloat(form.valor) > (permissaoAtiva?.limite_valor ?? 5000) && !permissaoAtiva?.pode_aprovar && (
               <div style={{ background: '#3B82F618', border: '1px solid #3B82F633', color: '#3B82F6', borderRadius: 6, padding: '10px 14px', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
                 <Shield size={14} /> Lançamento de valor elevado exigirá aprovação de um Administrador para ser compensado.
               </div>
