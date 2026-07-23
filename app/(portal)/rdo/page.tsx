@@ -39,8 +39,12 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 4,
 }
 
+import { flushSync } from 'react-dom'
+import { useConfirm } from '@/hooks/useConfirm'
+
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 export default function RDO() {
+  const { confirm, ConfirmDialog } = useConfirm()
   const [rdos, setRdos] = useState<RdoCompleto[]>([])
   const [obras, setObras] = useState<Obra[]>([])
   const [selectedRdo, setSelectedRdo] = useState<RdoCompleto | null>(null)
@@ -155,18 +159,18 @@ export default function RDO() {
   }, [overridePrintRdos, selectedRdoIds, rdos, selectedRdo])
 
   const triggerPrintSingle = (rdo: RdoCompleto) => {
-    setOverridePrintRdos([rdo])
-    setTimeout(() => {
-      window.print()
-      setOverridePrintRdos(null)
-    }, 50)
+    flushSync(() => {
+      setOverridePrintRdos([rdo])
+    })
+    window.print()
+    setOverridePrintRdos(null)
   }
 
   const triggerPrintBatch = () => {
-    setOverridePrintRdos(null)
-    setTimeout(() => {
-      window.print()
-    }, 50)
+    flushSync(() => {
+      setOverridePrintRdos(null)
+    })
+    window.print()
   }
 
   const getWeatherIcon = (weather: string) => {
@@ -308,7 +312,7 @@ export default function RDO() {
 
   const handleDeleteRdo = async (id: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation()
-    if (!confirm('Deseja realmente excluir este Diário de Obra (RDO)? Esta ação não pode ser desfeita.')) return
+    if (!(await confirm('Atenção', 'Deseja realmente excluir este Diário de Obra (RDO)? Esta ação não pode ser desfeita.', { confirmLabel: 'Excluir', confirmColor: '#EF4444' }))) return
 
     try {
       await Promise.all([
@@ -1283,6 +1287,8 @@ export default function RDO() {
           }
         }
       `}</style>
+      
+      {ConfirmDialog}
     </>
   )
 }

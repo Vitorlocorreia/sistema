@@ -132,7 +132,10 @@ function BeforeAfterSlider({ antes, depois, fmtDate }: BeforeAfterSliderProps) {
   )
 }
 
+import { useConfirm } from '@/hooks/useConfirm'
+
 export default function Obras() {
+  const { confirm, ConfirmDialog } = useConfirm()
   const [fotosList, setFotosList] = useState<any[]>([])
   const [obrasList, setObrasList] = useState<Obra[]>([])
   const [loading, setLoading] = useState(true)
@@ -267,8 +270,8 @@ export default function Obras() {
   }
 
   // Deletar Obra
-  const handleDeleteObra = async (id: string, nome: string) => {
-    if (!confirm(`Deseja realmente excluir a obra "${nome}"? Isso removerá as tarefas, diários e solicitações vinculados.`)) return
+  async function excluirObra(id: string, nome: string) {
+    if (!(await confirm('Atenção', `Deseja realmente excluir a obra "${nome}"? Isso removerá as tarefas, diários e solicitações vinculados.`, { confirmLabel: 'Excluir', confirmColor: C.red }))) return
     try {
       const { error } = await supabase.from('obras').delete().eq('id', id)
       if (error) throw error
@@ -362,8 +365,9 @@ export default function Obras() {
     await supabase.from('galeria_pastas').update({ nome, drive_url, updated_at: new Date().toISOString() }).eq('id', pasta.id); loadData()
   }
 
-  const excluirPasta = async (pasta: any) => {
-    if (!confirm(`Excluir “${pasta.nome}” e suas subpastas?`)) return
+  async function removePasta(pasta: any) {
+    if (!(await confirm('Excluir Pasta', `Excluir “${pasta.nome}” e suas subpastas?`, { confirmLabel: 'Excluir', confirmColor: C.red }))) return
+    
     await supabase.from('galeria_pastas').delete().eq('id', pasta.id); if (pastaSelecionada === pasta.id) setPastaSelecionada(''); loadData()
   }
 
@@ -412,7 +416,7 @@ export default function Obras() {
         {podeGerenciar && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {obraAtual && (
-              <button onClick={() => handleDeleteObra(obraAtual.id, obraAtual.nome)} style={{ ...btnGhost, gap: 6, color: '#EF4444' }}>
+              <button onClick={() => excluirObra(obraAtual.id, obraAtual.nome)} style={{ ...btnGhost, gap: 6, color: '#EF4444' }}>
                 <Trash2 size={14} /> Excluir obra selecionada
               </button>
             )}
@@ -456,7 +460,7 @@ export default function Obras() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}><span style={{ color: C.inkSoft, fontSize: 11 }}>Organize quantas pastas e subpastas precisar e vincule cada uma ao Google Drive.</span>{podeGerenciar && <button style={btn()} onClick={() => criarPasta(null)}><Plus size={13}/>Nova pasta</button>}</div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))', gap: 9 }}>
               {pastas.filter(p => !p.parent_id).map(p => <div key={p.id} style={{ background: C.bgCard, border: `1px solid ${pastaSelecionada === p.id ? C.amber : C.border}`, padding: 11 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><button onClick={() => setPastaSelecionada(p.id)} style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, flex: 1 }}><Folder size={16} color={C.amber}/><strong style={{ fontSize: 12 }}>{p.nome}</strong></button>{p.drive_url && <a href={p.drive_url} target="_blank" rel="noreferrer" style={{ color: C.green }}><ExternalLink size={13}/></a>}{podeGerenciar && <><button style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }} onClick={() => criarPasta(p.id)}><Plus size={13}/></button><button style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }} onClick={() => editarPasta(p)}><Edit3 size={12}/></button><button style={{ all: 'unset', cursor: 'pointer', color: C.red }} onClick={() => excluirPasta(p)}><Trash2 size={12}/></button></>}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}><button onClick={() => setPastaSelecionada(p.id)} style={{ all: 'unset', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 7, flex: 1 }}><Folder size={16} color={C.amber}/><strong style={{ fontSize: 12 }}>{p.nome}</strong></button>{p.drive_url && <a href={p.drive_url} target="_blank" rel="noreferrer" style={{ color: C.green }}><ExternalLink size={13}/></a>}{podeGerenciar && <><button style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }} onClick={() => criarPasta(p.id)}><Plus size={13}/></button><button style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }} onClick={() => editarPasta(p)}><Edit3 size={12}/></button><button style={{ all: 'unset', cursor: 'pointer', color: C.red }} onClick={() => removePasta(p)}><Trash2 size={12}/></button></>}</div>
                 {pastas.filter(s => s.parent_id === p.id).map(s => <div key={s.id} style={{ margin:'8px 0 0 22px', display:'flex', gap:6, alignItems:'center', fontSize:10, color:C.inkSoft }}><Folder size={12}/><button onClick={() => setPastaSelecionada(s.id)} style={{ all:'unset',cursor:'pointer',flex:1,color:pastaSelecionada===s.id?C.amber:C.inkSoft }}>{s.nome}</button>{s.drive_url&&<a href={s.drive_url} target="_blank" rel="noreferrer" style={{color:C.green}}><ExternalLink size={11}/></a>}{podeGerenciar&&<button style={{all:'unset',cursor:'pointer'}} onClick={()=>editarPasta(s)}><Edit3 size={10}/></button>}</div>)}
               </div>)}
               {!pastas.length && <p style={{ color:C.inkSoft,fontSize:11 }}>Nenhuma pasta criada.</p>}
@@ -844,7 +848,7 @@ export default function Obras() {
                                   <Edit3 size={14} />
                                 </button>
                                 <button 
-                                  onClick={() => handleDeleteObra(o.id, o.nome)}
+                                  onClick={() => excluirObra(o.id, o.nome)}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.inkSoft }}
                                   title="Deletar Obra"
                                 >
@@ -870,6 +874,7 @@ export default function Obras() {
           </div>
         )}
       </AnimatePresence>
+      {ConfirmDialog}
     </div>
   )
 }

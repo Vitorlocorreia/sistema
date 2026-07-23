@@ -24,7 +24,7 @@ async function isAdmin(payload: Record<string, unknown>) {
   const adminId = String(payload.admin_id || '').trim()
   if (!adminId) return false
   const { data } = await admin.from('colaboradores').select('cargo').eq('id', adminId).maybeSingle()
-  return data?.cargo === 'admin_geral'
+  return data?.cargo === 'admin_geral' || data?.cargo === 'admin_empresa'
 }
 
 Deno.serve(async request => {
@@ -32,7 +32,7 @@ Deno.serve(async request => {
   try {
     const payload = await request.json()
 
-    if (!(await isAdmin(payload))) return json({ error: 'Apenas o Administrador Geral pode executar esta ação.' }, 403)
+    if (!(await isAdmin(payload))) return json({ error: 'Acesso negado. Apenas o Administrador pode executar esta ação.' }, 403)
 
     if (payload.action === 'delete_user') {
       const collaboratorId = String(payload.collaborator_id || '').trim()
@@ -60,7 +60,22 @@ Deno.serve(async request => {
       return json({ ok: true })
     }
 
-    if (payload.action !== 'create_user') return json({ error: 'Ação inválida.' }, 400)
+    if (payload.action === 'reject_user') {
+      const solId = String(payload.solicitacao_id || '').trim()
+      const adminId = String(payload.admin_id || '').trim()
+      if (!solId) return json({ error: 'Informe a solicitacao para rejeicao.' }, 400)
+      
+      const { error: rejectError } = await admin.from('solicitacoes_acesso').update({
+        status: 'rejeitado',
+        aprovado_por: adminId,
+        aprovado_em: new Date().toISOString()
+      }).eq('id', solId)
+      
+      if (rejectError) return json({ error: rejectError.message }, 400)
+      return json({ ok: true })
+    }
+
+    if (payload.action !== 'create_user' && payload.action !== 'approve_user') return json({ error: 'Ação inválida.' }, 400)
 
     const nome = String(payload.nome || '').trim()
     const email = String(payload.email || '').trim().toLowerCase()
@@ -126,6 +141,18 @@ Deno.serve(async request => {
     if (profileResult.error) {
       return json({ error: profileResult.error.message }, 400)
     }
+
+    // Se estiver aprovando uma solicitação, atualiza a tabela de solicitações
+    if (payload.action === 'approve_user' && payload.solicitacao_id) {
+      const solId = String(payload.solicitacao_id).trim()
+      const adminId = String(payload.admin_id || '').trim()
+      await admin.from('solicitacoes_acesso').update({
+        status: 'aprovado',
+        aprovado_por: adminId,
+        aprovado_em: new Date().toISOString()
+      }).eq('id', solId)
+    }
+
     return json({ ok: true, user_id: authUserId })
   } catch (error) {
     return json({ error: error instanceof Error ? error.message : 'Erro interno.' }, 500)

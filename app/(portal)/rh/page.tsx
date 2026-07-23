@@ -332,7 +332,11 @@ const tableHead: React.CSSProperties = { background: '#16181C', color: C.inkSoft
 const tableCell: React.CSSProperties = { minWidth: 0, padding: '9px 8px', borderBottom: `1px solid ${C.border}`, fontSize: 9, color: C.ink, background: '#0B0C0E' }
 const linkButton: React.CSSProperties = { border: 0, background: 'transparent', color: C.amber, padding: 0, cursor: 'pointer', fontSize: 9, textAlign: 'left' }
 
+import { useConfirm } from '@/hooks/useConfirm'
+
 export default function RhPage() {
+  const { confirm, ConfirmDialog } = useConfirm()
+  const [activeTab, setActiveTab] = useState<'ativos' | 'admissao'>('ativos')
   const [pessoas, setPessoas] = useState<Funcionario[]>([])
   const [modelos, setModelos] = useState<ModeloAdmissao[]>([])
   const [convites, setConvites] = useState<Convite[]>([])
@@ -430,7 +434,7 @@ export default function RhPage() {
     const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
     const { error } = await supabase.from('rh_admissao_convites').insert({ nome_destinatario: inviteForm.nome.trim(), cpf: inviteForm.cpf.trim() || null, matricula: inviteForm.matricula.trim() || null, email_destinatario: inviteForm.email.trim() || null, telefone_destinatario: inviteForm.telefone.trim() || null, endereco: inviteForm.endereco.trim() || null, cargo: inviteForm.cargo.trim() || null, obra: inviteForm.obra.trim() || null, data_admissao: inviteForm.data_admissao || null, token_hash: tokenHash, token_code: token, expires_at: expiresAt, status: 'ativo', etapa_atual: 1 })
     setInviteSaving(false)
-    if (error) return toast(`NÃ£o foi possÃ­vel gerar o convite: ${error.message}`, 'error')
+    if (error) return toast(`Não foi possível gerar o convite: ${error.message}`, 'error')
     const link = `${window.location.origin}/admissao/${token}`
     await navigator.clipboard?.writeText(link)
     setInviteOpen(false)
@@ -440,7 +444,7 @@ export default function RhPage() {
   }
 
   async function revokeInvite(invite: Convite) {
-    if (!confirm(`Revogar o convite de ${invite.nome_destinatario}?`)) return
+    if (!(await confirm('Revogar Convite', `Revogar o convite de ${invite.nome_destinatario}?`, { confirmLabel: 'Revogar', confirmColor: '#EF4444' }))) return
     const { error } = await supabase.from('rh_admissao_convites').update({ status: 'revogado', revogado_em: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', invite.id)
     if (error) return toast(error.message, 'error')
     await load()
@@ -448,7 +452,7 @@ export default function RhPage() {
   }
 
   async function deleteInvite(invite: Convite) {
-    if (!confirm(`Excluir definitivamente o cadastro de ${invite.nome_destinatario}? Os documentos enviados também serão excluídos.`)) return
+    if (!(await confirm('Excluir Cadastro', `Excluir definitivamente o cadastro de ${invite.nome_destinatario}? Os documentos enviados também serão excluídos.`, { confirmLabel: 'Excluir', confirmColor: '#EF4444' }))) return
     const paths = invite.documentos.map(documento => documento.storage_path).filter(Boolean)
     if (paths.length) await supabase.storage.from('rh-documentos').remove(paths)
     const { error } = await supabase.from('rh_admissao_convites').delete().eq('id', invite.id)
@@ -459,7 +463,7 @@ export default function RhPage() {
   }
 
   async function deleteEmployee(person: Funcionario) {
-    if (!confirm(`Excluir definitivamente ${person.nome} e todos os documentos do baú? Esta ação não pode ser desfeita.`)) return
+    if (!(await confirm('Excluir Funcionário', `Excluir definitivamente ${person.nome} e todos os documentos do baú? Esta ação não pode ser desfeita.`, { confirmLabel: 'Excluir', confirmColor: '#EF4444' }))) return
     const { data: documents } = await supabase.from('funcionario_documentos').select('storage_path').eq('funcionario_id', person.id)
     const paths = (documents ?? []).map(documento => documento.storage_path).filter(Boolean)
     if (paths.length) await supabase.storage.from('rh-documentos').remove(paths)
@@ -492,9 +496,16 @@ export default function RhPage() {
   }
 
   async function openCadastroDocument(documento: DocumentoCadastro) {
+    const w = window.open('', '_blank')
     const { data, error } = await supabase.storage.from('rh-documentos').createSignedUrl(documento.storage_path, 3600)
-    if (error || !data?.signedUrl) return toast(error?.message || 'Não foi possível abrir o documento.', 'error')
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    if (error || !data?.signedUrl) {
+      if (w) w.close()
+      return toast(error?.message || 'Não foi possível abrir o documento.', 'error')
+    }
+    if (w) {
+      w.location.href = data.signedUrl
+      w.focus()
+    }
   }
 
   async function reviewCadastroDocument(invite: Convite, documento: DocumentoCadastro, status: 'aprovado' | 'devolvido' | 'pendencia') {
@@ -509,7 +520,11 @@ export default function RhPage() {
   }
 
   async function approveInvite(invite: Convite) {
-    if (!confirm(`Aprovar ${invite.nome_destinatario} e criar o funcionário definitivamente?`)) return
+    if (!(await confirm('Aprovar Colaborador', `Aprovar ${invite.nome_destinatario} e criar o funcionário definitivamente?`, { confirmLabel: 'Aprovar', confirmColor: '#10B981' }))) return
+    
+    // Força a renovação ou verificação do Token para evitar falha 401/403 na Edge Function
+    await supabase.auth.getSession()
+
     const { data, error } = await supabase.functions.invoke('rh-admissao', { body: { action: 'approve', convite_id: invite.id } })
     if (error || data?.error) return toast(data?.error || error?.message || 'Não foi possível aprovar.', 'error')
     setSelectedInvite(null as unknown as Convite)
@@ -586,9 +601,17 @@ export default function RhPage() {
   async function openDocument(documento: Record<string, string | null>) {
     const path = documento.storage_path || documento.arquivo_url
     if (!path) return toast('Este registro ainda não possui arquivo.', 'error')
+    
+    const w = window.open('', '_blank')
     const { data, error } = await supabase.storage.from('rh-documentos').createSignedUrl(path, 3600)
-    if (error || !data?.signedUrl) return toast(error?.message || 'Não foi possível abrir o arquivo.', 'error')
-    window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+    if (error || !data?.signedUrl) {
+      if (w) w.close()
+      return toast(error?.message || 'Não foi possível abrir o arquivo.', 'error')
+    }
+    if (w) {
+      w.location.href = data.signedUrl
+      w.focus()
+    }
   }
 
   async function addHistory() {
@@ -804,6 +827,8 @@ export default function RhPage() {
           )}
         </section>
       </div>
+
+      {ConfirmDialog}
     </>
   )
 }

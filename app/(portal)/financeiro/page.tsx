@@ -113,7 +113,10 @@ const btnGhost: React.CSSProperties = {
   gap: 6,
 }
 
+import { useConfirm } from '@/hooks/useConfirm'
+
 export default function FinanceiroPage() {
+  const { confirm, ConfirmDialog } = useConfirm()
   const [tab, setTab] = useState<Tab>('historico')
   
   // Colaborador atualmente conectado neste navegador/dispositivo
@@ -249,40 +252,47 @@ export default function FinanceiroPage() {
         <DashboardTab 
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
+          confirm={confirm}
         />
       )}
       {tab === 'empresas' && (
         <EmpresasTab 
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
+          confirm={confirm}
         />
       )}
       {tab === 'fornecedores' && (
         <FornecedoresTab 
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
+          confirm={confirm}
         />
       )}
       {tab === 'contas' && (
         <ContasTab 
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
+          confirm={confirm}
         />
       )}
       {tab === 'historico' && (
         <HistoricoTab 
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
+          confirm={confirm}
         />
       )}
-      {tab === 'obras' && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} />}
+      {tab === 'obras' && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} confirm={confirm} />}
       {tab === 'permissoes' && (
         <PermissoesTab 
           colaboradorAtivo={colaboradorAtivo!} 
           colaboradores={colaboradores} 
           onRefresh={carregarSessaoColaborador} 
+          confirm={confirm}
         />
       )}
+      {ConfirmDialog}
     </div>
   )
 }
@@ -290,7 +300,7 @@ export default function FinanceiroPage() {
 // ════════════════════════════════════════════════════════
 //  TAB: DASHBOARD
 // ════════════════════════════════════════════════════════
-function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
+function ObrasFinanceiroTab({ permissaoAtiva, confirm }: TabProps) {
   const [obras, setObras] = useState<Obra[]>([])
   const [obraId, setObraId] = useState<string>('todas')
   const [fotos, setFotos] = useState<any[]>([])
@@ -340,7 +350,7 @@ function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
   }
   
   async function excluirObra(id: string, nome: string) {
-    if (!confirm(`Deseja realmente excluir a obra "${nome}"? Isso removerá os dados vinculados.`)) return
+    if (!(await confirm('Atenção', `Deseja realmente excluir a obra "${nome}"? Isso removerá os dados vinculados.`, { confirmLabel: 'Excluir', confirmColor: C.red }))) return
     const { error } = await supabase.from('obras').delete().eq('id', id)
     if (error) return toast(error.message, 'error')
     if (obraId === id) setObraId('todas'); 
@@ -545,6 +555,7 @@ function ObrasFinanceiroTab({ permissaoAtiva }: TabProps) {
 interface TabProps {
   colaboradorAtivo: Colaborador
   permissaoAtiva: ConfigPermissao
+  confirm: (title: string, desc: string, options?: any) => Promise<boolean>
 }
 
 function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
@@ -555,14 +566,22 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: c }, { data: e }] = await Promise.all([
-      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao'),
-      supabase.from('empresas').select('*').order('razao_social'),
-    ])
+    let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao')
+    let qE = supabase.from('empresas').select('*').order('razao_social')
+    
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+      if (ids.length > 0) {
+        qC = qC.in('empresa_id', ids)
+        qE = qE.in('id', ids)
+      }
+    }
+    
+    const [{ data: c }, { data: e }] = await Promise.all([qC, qE])
     setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
     setLoading(false)
-  }, [])
+  }, [colaboradorAtivo])
 
   useEffect(() => { load() }, [load])
 
@@ -814,7 +833,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 // ════════════════════════════════════════════════════════
 //  TAB: EMPRESAS
 // ════════════════════════════════════════════════════════
-function EmpresasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
+function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [loading, setLoading]   = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -845,7 +864,7 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   }
 
   const remove = async (id: string) => {
-    if (!confirm('Remover empresa?')) return
+    if (!(await confirm('Remover empresa', 'Deseja realmente remover esta empresa?', { confirmLabel: 'Remover', confirmColor: C.red }))) return
     await supabase.from('empresas').delete().eq('id', id)
     load()
   }
@@ -920,7 +939,7 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 // ════════════════════════════════════════════════════════
 //  TAB: FORNECEDORES
 // ════════════════════════════════════════════════════════
-function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
+function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [contasFornecedores, setContasFornecedores] = useState<Conta[]>([])
   const [empresas, setEmpresas]         = useState<Empresa[]>([])
@@ -934,19 +953,29 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   })
   const [saving, setSaving] = useState(false)
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: f }, { data: e }, { data: c }] = await Promise.all([
-      supabase.from('fornecedores').select('*').order('razao_social'),
-      supabase.from('empresas').select('*').order('razao_social'),
-      supabase.from('contas').select('*'),
-    ])
+    let qF = supabase.from('fornecedores').select('*').order('razao_social')
+    let qE = supabase.from('empresas').select('*').order('razao_social')
+    let qC = supabase.from('contas').select('*')
+
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+      if (ids.length > 0) {
+        qF = qF.in('empresa_id', ids)
+        qE = qE.in('id', ids)
+        qC = qC.in('empresa_id', ids)
+      }
+    }
+
+    const [{ data: f }, { data: e }, { data: c }] = await Promise.all([qF, qE, qC])
     setFornecedores(f ?? [])
     setEmpresas(e ?? [])
     setContasFornecedores(c ?? [])
     setLoading(false)
-  }
-  useEffect(() => { load() }, [])
+  }, [colaboradorAtivo])
+
+  useEffect(() => { void load() }, [load])
 
   const save = async () => {
     if (!form.razao_social.trim()) return
@@ -973,7 +1002,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   }
 
   const remove = async (id: string) => {
-    if (!confirm('Remover fornecedor?')) return
+    if (!(await confirm('Remover fornecedor', 'Deseja realmente remover este fornecedor?', { confirmLabel: 'Remover', confirmColor: C.red }))) return
     await supabase.from('fornecedores').delete().eq('id', id)
     load()
   }
@@ -1206,16 +1235,24 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   })
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('empresas').select('*').order('razao_social'),
-      supabase.from('fornecedores').select('*').order('razao_social'),
-      supabase.from('obras').select('*').order('nome'),
-    ]).then(([{ data: e }, { data: f }, { data: o }]) => {
+    let qE = supabase.from('empresas').select('*').order('razao_social')
+    let qF = supabase.from('fornecedores').select('*').order('razao_social')
+    let qO = supabase.from('obras').select('*').order('nome')
+    
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+      if (ids.length > 0) {
+        qE = qE.in('id', ids)
+        qF = qF.in('empresa_id', ids)
+      }
+    }
+
+    Promise.all([qE, qF, qO]).then(([{ data: e }, { data: f }, { data: o }]) => {
       setEmpresas(e ?? [])
       setFornecedores(f ?? [])
       setObras(o ?? [])
     })
-  }, [])
+  }, [colaboradorAtivo])
 
   useEffect(() => {
     if (colaboradorAtivo.cargo === 'admin_empresa' && colaboradorAtivo.empresa_id) {
@@ -1498,7 +1535,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 // ════════════════════════════════════════════════════════
 //  TAB: CONTAS / HISTÓRICO
 // ════════════════════════════════════════════════════════
-function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
+function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   const [contas, setContas]     = useState<ContaComRelacoes[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [loading, setLoading]   = useState(true)
@@ -1537,15 +1574,27 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       nova_data: formNegociacao.tipo === 'prorrogacao' ? formNegociacao.nova_data : undefined
     }
 
-    const historicoAtual = conta.historico_negociacao || []
-    const novoHistorico = [...historicoAtual, novoItem]
-
-    const { error } = await supabase.from('contas').update({
-      historico_negociacao: novoHistorico
-    }).eq('id', conta.id)
+    const { data: result, error: functionError } = await supabase.functions.invoke('admin-financeiro', {
+      body: {
+        action: 'save_negotiation',
+        admin_id: colaboradorAtivo.id,
+        conta_id: conta.id,
+        novo_item: novoItem
+      }
+    })
 
     setSavingNegociacao(false)
-    if (error) return toast('Erro ao salvar negociação: ' + error.message, 'error')
+    if (functionError || result?.error) {
+      let detail = result?.error || functionError?.message || 'não foi possível salvar a negociação'
+      const response = (functionError as { context?: Response } | null)?.context
+      if (response) {
+        try {
+          const body = await response.clone().json() as { error?: string }
+          detail = body.error || detail
+        } catch { /* mantem mensagem padrao */ }
+      }
+      return toast('Erro ao salvar negociação: ' + detail, 'error')
+    }
     
     toast('Negociação/Acordo salvo com sucesso!', 'success')
     setFormNegociacao({ tipo: 'observacao', descricao: '', valor_pago: '', valor_novo: '', nova_data: '' })
@@ -1554,14 +1603,22 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: c }, { data: e }] = await Promise.all([
-      supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false }),
-      supabase.from('empresas').select('*').order('razao_social'),
-    ])
+    let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false })
+    let qE = supabase.from('empresas').select('*').order('razao_social')
+    
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+      if (ids.length > 0) {
+        qC = qC.in('empresa_id', ids)
+        qE = qE.in('id', ids)
+      }
+    }
+
+    const [{ data: c }, { data: e }] = await Promise.all([qC, qE])
     setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
     setLoading(false)
-  }, [])
+  }, [colaboradorAtivo])
 
   const podeLancar = permissaoAtiva?.pode_lancar;
 
@@ -1621,7 +1678,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   }
 
   const excluir = async (id: string) => {
-    if (!confirm('Deseja realmente excluir este lançamento financeiro?')) return
+    if (!(await confirm('Excluir Lançamento', 'Deseja realmente excluir este lançamento financeiro?', { confirmLabel: 'Excluir', confirmColor: C.red }))) return
     await supabase.from('contas').delete().eq('id', id)
     load()
   }
@@ -2098,6 +2155,7 @@ interface PermissoesTabProps {
   colaboradorAtivo: Colaborador
   colaboradores: Colaborador[]
   onRefresh: () => Promise<void>
+  confirm: (title: string, desc: string, options?: any) => Promise<boolean>
 }
 
 import type { SolicitacaoAcesso } from '@/lib/types'
@@ -2174,7 +2232,7 @@ function SeletorMultiEmpresas({
   )
 }
 
-function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: PermissoesTabProps) {
+function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: PermissoesTabProps) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [configPermissoes, setConfigPermissoes] = useState<ConfigPermissao[]>([])
   const [cargos, setCargos] = useState<CargoSistema[]>([])
@@ -2333,11 +2391,11 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
 
     const colsAfetados = colaboradores.filter(c => c.cargo === codigo)
     if (colsAfetados.length > 0) {
-      if (!confirm(`Existem ${colsAfetados.length} colaborador(es) com o cargo "${nomeCargo}". Ao excluir, o cargo deles será alterado para "Operador". Deseja continuar?`)) {
+      if (!(await confirm('Excluir Cargo', `Existem ${colsAfetados.length} colaborador(es) com o cargo "${nomeCargo}". Ao excluir, o cargo deles será alterado para "Operador". Deseja continuar?`, { confirmLabel: 'Continuar', confirmColor: C.red }))) {
         return
       }
     } else {
-      if (!confirm(`Tem certeza que deseja excluir o cargo "${nomeCargo}"?`)) return
+      if (!(await confirm('Excluir Cargo', `Tem certeza que deseja excluir o cargo "${nomeCargo}"?`, { confirmLabel: 'Excluir', confirmColor: C.red }))) return
     }
 
     try {
@@ -2496,7 +2554,8 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
     try {
       const { data: result, error: functionError } = await supabase.functions.invoke('admin-users', {
         body: {
-          action: 'create_user',
+          action: 'approve_user',
+          solicitacao_id: sol.id,
           admin_id: colaboradorAtivo.id,
           nome: sol.nome,
           email: sol.email,
@@ -2516,16 +2575,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
             detail = body.error || detail
           } catch { /* mantem mensagem padrao */ }
         }
-        toast('Erro ao criar colaborador: ' + detail, 'error')
+        toast('Erro ao aprovar colaborador: ' + detail, 'error')
         setLoading(false)
         return
       }
-
-      await supabase.from('solicitacoes_acesso').update({
-        status: 'aprovado',
-        aprovado_por: colaboradorAtivo.id,
-        aprovado_em: new Date().toISOString()
-      }).eq('id', sol.id)
 
       toast(`Acesso aprovado e conta criada para ${sol.nome}!`, 'success')
       onRefresh()
@@ -2541,11 +2594,17 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh }: Permissoe
   const rejeitarSolicitacao = async (id: string) => {
     setLoading(true)
     try {
-      await supabase.from('solicitacoes_acesso').update({
-        status: 'rejeitado',
-        aprovado_por: colaboradorAtivo.id,
-        aprovado_em: new Date().toISOString()
-      }).eq('id', id)
+      const { data: result, error: functionError } = await supabase.functions.invoke('admin-users', {
+        body: {
+          action: 'reject_user',
+          solicitacao_id: id,
+          admin_id: colaboradorAtivo.id
+        }
+      })
+
+      if (functionError || result?.error) {
+        throw new Error(result?.error || functionError?.message || 'Erro ao rejeitar solicitação')
+      }
 
       toast('Solicitação de acesso rejeitada.', 'info')
       await loadData()
