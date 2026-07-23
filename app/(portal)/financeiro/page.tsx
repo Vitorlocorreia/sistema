@@ -2234,7 +2234,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 const totalPago = totalPagoHistorico + (c.pagamento_antecipado ? (c.valor_antecipado || 0) : 0)
                 const valorDesconto = historico.filter(h => h.tipo === 'desconto' && h.valor_novo).slice(-1)[0]?.valor_novo
                 const valorBase = valorDesconto !== undefined ? valorDesconto : c.valor
-                const saldoDevedor = Math.max(0, valorBase - totalPago)
+                const valorCheioAbatido = Math.max(0, valorBase - totalPago)
+                const saldoDevedor = valorCheioAbatido
+
+                const ultimaNegociacao = [...historico].reverse().find(h => (h.tipo === 'pagamento_parcial' && h.valor_pago) || (h.tipo === 'desconto' && h.valor_novo))
+                const valorNegociadoHoje = ultimaNegociacao?.valor_pago ?? ultimaNegociacao?.valor_novo
 
                 return (
                   <Fragment key={c.id}>
@@ -2292,12 +2296,12 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
                       <td style={{ padding: '12px 14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
                         <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13 }}>
-                          {fmt(c.valor)}
+                          {fmt(totalPago > 0 ? valorCheioAbatido : c.valor)}
                         </div>
-                        {(totalPago > 0 || saldoDevedor !== c.valor) && (
+                        {valorNegociadoHoje !== undefined && (
                           <div style={{ marginTop: 4 }}>
                             <div style={{ fontSize: 10, color: C.amber, fontWeight: 800 }}>
-                              {c.tipo === 'receber' ? 'A receber (hoje): ' : 'A pagar (hoje): '}{fmt(saldoDevedor)}
+                              {c.tipo === 'receber' ? 'A receber (hoje): ' : 'A pagar (hoje): '}{fmt(valorNegociadoHoje)}
                             </div>
                           </div>
                         )}
