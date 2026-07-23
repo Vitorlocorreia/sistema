@@ -1105,7 +1105,11 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
         <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando empresas...</p>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 14 }}>
-          {empresas.filter(e => colaboradorAtivo.cargo !== 'admin_empresa' || e.id === colaboradorAtivo.empresa_id).map(e => (
+          {empresas.filter(e => {
+            if (colaboradorAtivo.cargo !== 'admin_empresa') return true
+            const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+            return ids.includes(e.id)
+          }).map(e => (
             <div key={e.id} style={{ ...card, borderLeft: `3px solid ${e.cor}`, position: 'relative' }}>
               <div style={{ width: 36, height: 36, borderRadius: 8, background: e.cor + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
                 <Building2 size={16} color={e.cor} />
