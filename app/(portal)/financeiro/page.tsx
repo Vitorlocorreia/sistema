@@ -1736,12 +1736,19 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                 <label style={label}>Empresa *</label>
                 <select
                   style={input}
-                  disabled={colaboradorAtivo.cargo === 'admin_empresa'}
+                  disabled={(() => {
+                    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                    return ids.length === 1
+                  })()}
                   value={form.empresa_id}
                   onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}
                 >
                   <option value="">Selecione a empresa</option>
-                  {empresas.filter(e => colaboradorAtivo.cargo !== 'admin_empresa' || e.id === colaboradorAtivo.empresa_id).map((e: any) => (
+                  {empresas.filter(e => {
+                    if (colaboradorAtivo.cargo === 'admin_geral') return true
+                    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                    return ids.length === 0 || ids.includes(e.id)
+                  }).map((e: any) => (
                     <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
                   ))}
                 </select>
@@ -2249,9 +2256,21 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
               <div style={{ display: 'grid', gap: 6 }}>
                 <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Empresa</label>
-                <select style={{ ...input }} disabled={colaboradorAtivo.cargo === 'admin_empresa'} value={filtEmpresa} onChange={e => setFiltEmpresa(e.target.value)}>
-                  {colaboradorAtivo.cargo !== 'admin_empresa' && <option value="">Todas as empresas</option>}
-                  {empresas.filter(e => colaboradorAtivo.cargo !== 'admin_empresa' || e.id === colaboradorAtivo.empresa_id).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
+                <select 
+                  style={{ ...input }} 
+                  disabled={(() => {
+                    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                    return colaboradorAtivo.cargo !== 'admin_geral' && ids.length === 1
+                  })()} 
+                  value={filtEmpresa} 
+                  onChange={e => setFiltEmpresa(e.target.value)}
+                >
+                  <option value="">Todas as empresas autorizadas</option>
+                  {empresas.filter(e => {
+                    if (colaboradorAtivo.cargo === 'admin_geral') return true
+                    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                    return ids.length === 0 || ids.includes(e.id)
+                  }).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
                 </select>
               </div>
 
