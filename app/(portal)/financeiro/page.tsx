@@ -1580,11 +1580,6 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     data_vencimento: '',
     possui_fornecedor: false,
     observacoes: '',
-    pagamento_antecipado: false,
-    tipo_antecipacao: 'Parcial' as 'Parcial'|'Total',
-    valor_antecipado: '',
-    data_antecipacao: '',
-    justificativa_antecipacao: '',
     recorrencia: 'unico' as 'unico'|'mensal'|'semanal',
   })
 
@@ -1676,11 +1671,11 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         fornecedor_id: form.possui_fornecedor ? (form.fornecedor_id || null) : null,
         possui_fornecedor: form.possui_fornecedor,
         observacoes: form.observacoes || null,
-        pagamento_antecipado: form.pagamento_antecipado,
-        tipo_antecipacao: form.pagamento_antecipado ? form.tipo_antecipacao : null,
-        valor_antecipado: form.pagamento_antecipado ? (parseCurrency(form.valor_antecipado) || null) : null,
-        data_antecipacao: form.pagamento_antecipado ? (form.data_antecipacao || null) : null,
-        justificativa_antecipacao: form.pagamento_antecipado ? (form.justificativa_antecipacao || null) : null,
+        pagamento_antecipado: false,
+        tipo_antecipacao: null,
+        valor_antecipado: null,
+        data_antecipacao: null,
+        justificativa_antecipacao: null,
         obra_id: form.obra_id || null,
         categoria: form.categoria || null,
         comprovante_url: comprovanteUrl,
@@ -1719,11 +1714,6 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       data_vencimento: '',
       possui_fornecedor: false,
       observacoes: '',
-      pagamento_antecipado: false,
-      tipo_antecipacao: 'Parcial',
-      valor_antecipado: '',
-      data_antecipacao: '',
-      justificativa_antecipacao: '',
       recorrencia: 'unico'
     })
   }
@@ -1848,16 +1838,6 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
             <div>
               <label style={label}>Observações do lançamento</label>
               <textarea style={input} rows={3} value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Informações para aprovação, pagamento ou conferência" />
-            </div>
-
-            <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, padding: 14 }}>
-              <label style={{ ...label, display: 'flex', alignItems: 'center', gap: 8 }}><input type="checkbox" checked={form.pagamento_antecipado} onChange={e => setForm(f => ({ ...f, pagamento_antecipado: e.target.checked }))} /> Pagamento antecipado</label>
-              {form.pagamento_antecipado && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-                <select style={input} value={form.tipo_antecipacao} onChange={e => setForm(f => ({ ...f, tipo_antecipacao: e.target.value as 'Parcial'|'Total' }))}><option>Parcial</option><option>Total</option></select>
-                <input style={input} type="number" step="0.01" placeholder="Valor antecipado" value={form.valor_antecipado} onChange={e => setForm(f => ({ ...f, valor_antecipado: e.target.value }))} />
-                <input style={input} type="date" value={form.data_antecipacao} onChange={e => setForm(f => ({ ...f, data_antecipacao: e.target.value }))} />
-                <input style={input} placeholder="Justificativa" value={form.justificativa_antecipacao} onChange={e => setForm(f => ({ ...f, justificativa_antecipacao: e.target.value }))} />
-              </div>}
             </div>
 
             <div style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '14px 18px', background: '#0B0C0E33' }}>
@@ -2383,11 +2363,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 const totalPagoHistorico = historico
                   .filter(h => h.tipo === 'pagamento_parcial' && Number(h.valor_pago) > 0)
                   .reduce((acc, h) => acc + Number(h.valor_pago || 0), 0)
-                // Não tratar strings como "false" vindas de dados antigos como pagamento.
-                const totalPagoAntecipado = c.pagamento_antecipado === true
-                  ? Number(c.valor_antecipado || 0)
-                  : 0
-                const totalPago = Math.min(Number(c.valor || 0), totalPagoHistorico + totalPagoAntecipado)
+                const totalPago = Math.min(Number(c.valor || 0), totalPagoHistorico)
                 const valorDesconto = historico.filter(h => h.tipo === 'desconto' && h.valor_novo).slice(-1)[0]?.valor_novo
                 const valorBase = valorDesconto !== undefined ? valorDesconto : c.valor
                 const valorCheioAbatido = Math.max(0, valorBase - totalPago)
@@ -2567,15 +2543,6 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                       </label>
                                     )}
                                   </div>
-                                  {c.pagamento_antecipado && (
-                                    <div>
-                                      <div style={{ fontSize: 10, color: C.amber, textTransform: 'uppercase', fontWeight: 800 }}>Pagamento Antecipado</div>
-                                      <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>Tipo: {c.tipo_antecipacao} | Data: {fmtDate(c.data_antecipacao || '')}</div>
-                                      <div style={{ fontSize: 11, color: C.inkSoft }}>Valor: {fmt(c.valor_antecipado || 0)}</div>
-                                      <div style={{ fontSize: 11, color: C.inkSoft }}>Justificativa: {c.justificativa_antecipacao}</div>
-                                    </div>
-                                  )}
-
                                   <div style={{ background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: `1px solid rgba(255,255,255,0.05)` }}>
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 8 }}>Resumo Financeiro</div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.inkSoft, marginBottom: 4 }}>
