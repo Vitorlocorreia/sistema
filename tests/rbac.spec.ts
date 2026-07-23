@@ -71,25 +71,53 @@ test.describe('Controle de Acesso Baseado em Funções (RBAC)', () => {
         });
       }
       if (url.includes('colaboradores')) {
+        const colabs = [
+          { id: 'admin-123', nome: 'Admin', cargo: 'admin_geral', apps: 'financeiro' },
+          { id: 'eng-123', nome: 'Eng', cargo: 'engenheiro', apps: 'financeiro', empresa_id: 'empresa-a' },
+          { id: 'admin-empresa-123', nome: 'Admin Emp', cargo: 'admin_empresa', apps: 'financeiro', empresa_id: 'empresa-a' }
+        ];
+
+        const isSingle = route.request().headers()['accept']?.includes('application/vnd.pgrst.object+json');
+        
+        if (isSingle) {
+          const match = url.match(/id=eq\.([^&]+)/);
+          const colab = match ? colabs.find(c => c.id === match[1]) : colabs[0];
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(colab)
+          });
+        }
+        
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify([
-            { id: 'admin-123', nome: 'Admin', cargo: 'admin_geral', apps: 'financeiro' },
-            { id: 'eng-123', nome: 'Eng', cargo: 'engenheiro', apps: 'financeiro', empresa_id: 'empresa-a' },
-            { id: 'admin-empresa-123', nome: 'Admin Emp', cargo: 'admin_empresa', apps: 'financeiro', empresa_id: 'empresa-a' }
-          ])
+          body: JSON.stringify(colabs)
         });
       }
       if (url.includes('config_permissoes')) {
+        const perms = [
+          { cargo: 'admin_geral', apps: 'financeiro,rh,suprimentos,obras,rdo' },
+          { cargo: 'engenheiro', apps: 'financeiro,obras,rdo' },
+          { cargo: 'admin_empresa', apps: 'financeiro,rh' }
+        ];
+        
+        const isSingle = route.request().headers()['accept']?.includes('application/vnd.pgrst.object+json');
+
+        if (isSingle) {
+          const match = url.match(/cargo=eq\.([^&]+)/);
+          const p = match ? perms.find(c => c.cargo === match[1]) : perms[0];
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(p)
+          });
+        }
+        
         return route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify([
-            { cargo: 'admin_geral', apps: 'financeiro,rh,suprimentos' },
-            { cargo: 'engenheiro', apps: 'financeiro' },
-            { cargo: 'admin_empresa', apps: 'financeiro' }
-          ])
+          body: JSON.stringify(perms)
         });
       }
       // Outras tabelas: retorna array vazio
@@ -116,7 +144,7 @@ test.describe('Controle de Acesso Baseado em Funções (RBAC)', () => {
     
     // Injeta a sessão do Engenheiro no localStorage
     await page.evaluate((usr) => {
-      localStorage.setItem('usuario', JSON.stringify(usr));
+      localStorage.setItem('colaborador_sessao', JSON.stringify(usr));
     }, engenheiro);
 
     // Navega para o financeiro
@@ -132,7 +160,7 @@ test.describe('Controle de Acesso Baseado em Funções (RBAC)', () => {
     await page.getByText('Conta Empresa A').click();
     
     // O formulário de negociação não deve estar visível
-    await expect(page.getByText('Nova Negociação / Acordo')).not.toBeVisible();
+    await expect(page.getByText('Registrar Nova Negociação')).not.toBeVisible();
   });
 
   test('Teste 2: Acesso Multi-Tenant (Isolamento de listagem)', async ({ page }) => {
@@ -140,7 +168,7 @@ test.describe('Controle de Acesso Baseado em Funções (RBAC)', () => {
     
     // Injeta a sessão do Admin Empresa A
     await page.evaluate((usr) => {
-      localStorage.setItem('usuario', JSON.stringify(usr));
+      localStorage.setItem('colaborador_sessao', JSON.stringify(usr));
     }, adminEmpresaA);
 
     // Navega para o financeiro
@@ -153,8 +181,7 @@ test.describe('Controle de Acesso Baseado em Funções (RBAC)', () => {
     // Como estamos mocando as requisições, vamos interceptar a URL requisitada
     const [request] = await Promise.all([
       page.waitForRequest(req => req.url().includes('/rest/v1/contas') && req.method() === 'GET'),
-      page.reload(),
-      page.evaluate((usr) => { localStorage.setItem('usuario', JSON.stringify(usr)); }, adminEmpresaA)
+      page.reload()
     ]);
 
     expect(request.url()).toContain('empresa_id=in');
@@ -166,7 +193,7 @@ test.describe('Controle de Acesso Baseado em Funções (RBAC)', () => {
     
     // Injeta a sessão do Admin Geral
     await page.evaluate((usr) => {
-      localStorage.setItem('usuario', JSON.stringify(usr));
+      localStorage.setItem('colaborador_sessao', JSON.stringify(usr));
     }, adminGeral);
 
     await page.goto('/financeiro');
@@ -178,6 +205,6 @@ test.describe('Controle de Acesso Baseado em Funções (RBAC)', () => {
     await expect(page.locator('text=Conta Empresa A')).toBeVisible({ timeout: 5000 });
     await page.getByText('Conta Empresa A').click();
 
-    await expect(page.getByText('Nova Negociação / Acordo')).toBeVisible();
+    await expect(page.getByText('Registrar Nova Negociação')).toBeVisible();
   });
 });
