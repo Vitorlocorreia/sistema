@@ -1756,7 +1756,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtEmpresa, setFiltEmpresa] = useState('')
   const [filtFornecedor, setFiltFornecedor] = useState(initialFornecedorId || '')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
-  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago'|'Negado'>('todos')
+  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
@@ -2188,6 +2188,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                     <option value="Aguardando aprovação">Aguardando aprovação</option>
                     <option value="Liberado/OK">Liberado/OK</option>
                     <option value="A pagar">A pagar</option>
+                    <option value="Pago Parcial">Pago Parcial</option>
                     <option value="Pago">Pago</option>
                     <option value="Negado">Negado</option>
                   </select>
@@ -2225,6 +2226,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 const dataPrevisao = dataReferencia || ''
                 const venc = isVencido(dataReferencia || '', c.status)
                 const pago = c.status === 'Pago'
+                const pagoParcial = c.status === 'Pago Parcial'
                 const aguardandoAprovacao = c.status === 'Bloqueado' || c.status === 'Aguardando aprovação'
                 
                 const isExpanded = expandedContaId === c.id
@@ -2309,8 +2311,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       <td style={{ padding: '12px 14px' }}>
                         <span style={{
                           fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-                          background: c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : aguardandoAprovacao ? '#3B82F620' : venc ? '#F8717120' : C.amber + '20',
-                          color: c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : aguardandoAprovacao ? '#3B82F6' : venc ? '#F87171' : C.amber,
+                          background: c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#A78BFA20' : aguardandoAprovacao ? '#3B82F620' : venc ? '#F8717120' : C.amber + '20',
+                          color: c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#A78BFA' : aguardandoAprovacao ? '#3B82F6' : venc ? '#F87171' : C.amber,
                         }}>
                           {c.status.toUpperCase()}
                         </span>
@@ -2343,6 +2345,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                             <option value="Aguardando aprovação">Aguardando aprovação</option>
                             <option value="Liberado/OK">Liberado/OK</option>
                             <option value="A pagar">A pagar</option>
+                            <option value="Pago Parcial">Pago Parcial</option>
                             <option value="Pago">Pago</option>
                             <option value="Negado">Negado</option>
                           </select>}
@@ -2588,6 +2591,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                     <option value="Aguardando aprovação">Aguardando aprovação</option>
                     <option value="Liberado/OK">Liberado/OK</option>
                     <option value="A pagar">A pagar</option>
+                    <option value="Pago Parcial">Pago Parcial</option>
                     <option value="Pago">Pago</option>
                     <option value="Negado">Negado</option>
                   </select>
