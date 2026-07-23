@@ -2433,7 +2433,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       : colForm.cargo === 'admin_geral' ? null : (colForm.empresa_id || null)
 
     const { data: result, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'create_user', nome: colForm.nome.trim(), email: colForm.email.trim().toLowerCase(), senha: colForm.senha, cargo: colForm.cargo, empresa_id: empresaIdDestino }
+      body: { action: 'create_user', admin_id: colaboradorAtivo.id, nome: colForm.nome.trim(), email: colForm.email.trim().toLowerCase(), senha: colForm.senha, cargo: colForm.cargo, empresa_id: empresaIdDestino }
     })
 
     if (error || result?.error) {
