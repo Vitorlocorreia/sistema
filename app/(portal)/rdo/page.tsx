@@ -120,7 +120,14 @@ export default function RDO() {
     }
 
     if (rdosList.length > 0) {
-      setSelectedRdo(prev => prev || rdosList[0])
+      setSelectedRdo(prev => {
+        if (!prev) return rdosList[0]
+        // Re-sync with fresh data: find updated version, close if deleted
+        const fresh = rdosList.find(r => r.id === prev.id)
+        return fresh ?? null
+      })
+    } else {
+      setSelectedRdo(null)
     }
     setLoading(false)
   }, [])
