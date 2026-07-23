@@ -1342,7 +1342,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const save = async () => {
     const dataBase = form.tipo === 'pagar' ? form.data_vencimento : form.data_previsao
     if (!form.empresa_id || !form.descricao || !form.valor || !dataBase) {
-      alert('Preencha os campos obrigatórios (*)')
+      toast('Preencha os campos obrigatórios (*)', 'error')
       return
     }
     setSaving(true)
@@ -2486,13 +2486,13 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     if (!isGeral) return
     const codigo = cargoForm.codigo.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_')
     const nome = cargoForm.nome.trim()
-    if (!codigo || !nome) return alert('Informe o código e o nome do novo cargo.')
-    if (['admin_geral', 'admin_empresa'].includes(codigo)) return alert('Este código é reservado.')
+    if (!codigo || !nome) return toast('Informe o código e o nome do novo cargo.', 'error')
+    if (['admin_geral', 'admin_empresa'].includes(codigo)) return toast('Este código é reservado.', 'error')
     setSavingCargo(true)
     const { error: cargoError } = await supabase.from('cargos_sistema').insert({ codigo, nome, descricao: cargoForm.descricao.trim() || null })
     if (cargoError) {
       setSavingCargo(false)
-      return alert('Erro ao criar cargo: ' + cargoError.message)
+      return toast('Erro ao criar cargo: ' + cargoError.message, 'error')
     }
     const { error: permError } = await supabase.from('config_permissoes').insert({
       cargo: codigo,
@@ -2507,13 +2507,13 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     if (permError) {
       await supabase.from('cargos_sistema').delete().eq('codigo', codigo)
       setSavingCargo(false)
-      return alert('Cargo criado parcialmente; permissões falharam: ' + permError.message)
+      return toast('Cargo criado parcialmente; permissões falharam: ' + permError.message, 'error')
     }
     setCargoForm({ codigo: '', nome: '', descricao: '', apps: 'rh' })
     setShowCargoForm(false)
     setSavingCargo(false)
     await loadData()
-    alert(`Cargo "${nome}" criado. Agora configure as permissões na matriz abaixo.`)
+    toast(`Cargo "${nome}" criado. Agora configure as permissões na matriz abaixo.`, 'success')
   }
 
   useEffect(() => {
@@ -2563,7 +2563,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   // Excluir cargo do sistema
   const excluirCargo = async (codigo: string) => {
     if (['admin_geral', 'admin_empresa'].includes(codigo)) {
-      return alert('Não é possível excluir cargos nativos do sistema.')
+      return toast('Não é possível excluir cargos nativos do sistema.', 'error')
     }
 
     const cargoObj = cargos.find(c => c.codigo === codigo)
@@ -2595,7 +2595,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       onRefresh()
       await loadData()
     } catch (err: any) {
-      alert('Erro ao excluir cargo: ' + (err?.message || err))
+      toast('Erro ao excluir cargo: ' + (err?.message || err), 'error')
     } finally {
       setLoading(false)
     }
@@ -2604,8 +2604,8 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   // Cadastrar novo colaborador
   const criarColaborador = async () => {
     if (!colForm.nome.trim()) return
-    if (!colForm.email.trim()) { alert('Informe um e-mail para o colaborador.'); return }
-    if (colForm.senha.trim().length < 8) { alert('Defina uma senha de acesso com no mínimo 8 caracteres.'); return }
+    if (!colForm.email.trim()) { toast('Informe um e-mail para o colaborador.', 'error'); return }
+    if (colForm.senha.trim().length < 8) { toast('Defina uma senha de acesso com no mínimo 8 caracteres.', 'error'); return }
     setSavingCol(true)
     
     const empresaIdDestino = colaboradorAtivo.cargo === 'admin_empresa'
@@ -2625,7 +2625,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
           detail = body.error || detail
         } catch { /* mantém a mensagem padrão */ }
       }
-      alert('Erro ao criar colaborador: ' + detail)
+      toast('Erro ao criar colaborador: ' + detail, 'error')
     } else {
       setColForm({
         nome: '',
@@ -2671,12 +2671,12 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         .eq('id', editColForm.id)
 
       if (error) throw error
-      alert('Configurações salvas para ' + editColForm.nome)
+      toast('Configurações salvas para ' + editColForm.nome, 'success')
       setEditColForm(null)
       onRefresh()
       await loadData()
     } catch (err: any) {
-      alert('Erro ao salvar permissões da pessoa: ' + err.message)
+      toast('Erro ao salvar permissões da pessoa: ' + err.message, 'error')
     } finally {
       setSavingEditCol(false)
     }
