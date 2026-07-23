@@ -2192,6 +2192,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                             👤 Lançado por: {c.criado_por}
                           </div>
                         )}
+                        {c.created_at && (
+                          <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
+                            🕒 {new Date(c.created_at).toLocaleDateString('pt-BR')} às {new Date(c.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        )}
                         {c.aprovado_por && (
                           <div style={{ fontSize: 9, color: '#34D399', marginTop: 2 }}>
                             ✓ Aprovado por: {c.aprovado_por}
@@ -2251,6 +2256,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                 {/* Standard Details */}
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
 
+                                  <div>
+                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Data e Horário do Lançamento</div>
+                                    <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>
+                                      🕒 {c.created_at ? new Date(c.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}
+                                      {c.criado_por ? <span style={{ color: C.inkSoft, fontSize: 11 }}> por {c.criado_por}</span> : ''}
+                                    </div>
+                                  </div>
                                   <div>
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Observações do Lançamento</div>
                                     <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>{c.observacoes || 'Nenhuma observação'}</div>
