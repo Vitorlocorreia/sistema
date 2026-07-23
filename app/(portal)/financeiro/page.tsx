@@ -205,7 +205,7 @@ export default function FinanceiroPage() {
     // Carrega lista de colaboradores para a aba de permissões
     const { data: cols } = await supabase
       .from('colaboradores')
-      .select('id, nome, email, cargo, empresa_id, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento')
+      .select('id, nome, email, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento')
       .order('nome')
     setColaboradores(cols ?? [])
 
@@ -1901,13 +1901,12 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const excluir = async (id: string) => {
     if (!(await confirm('Excluir Lançamento', 'Deseja realmente excluir este lançamento financeiro?', { confirmLabel: 'Excluir', confirmColor: C.red }))) return
     
-    // Call edge function to bypass RLS for authorized non-admins
-    const { error, data: result } = await supabase.functions.invoke('admin-financeiro', {
-      body: { action: 'delete_conta', admin_id: colaboradorAtivo.id, conta_id: id }
-    })
+    // Agora usamos a exclusão direta via Client porque as regras de RLS no Postgres foram corrigidas
+    // para espelhar as configurações do painel (como pode_excluir_lancamento).
+    const { error } = await supabase.from('contas').delete().eq('id', id)
     
-    if (error || result?.error) {
-      return toast('Erro ao excluir: ' + (result?.error || error?.message || 'não foi possível excluir'), 'error')
+    if (error) {
+      return toast('Erro ao excluir: ' + error.message, 'error')
     }
 
     toast('Lançamento excluído com sucesso.', 'success')
