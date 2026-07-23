@@ -67,6 +67,16 @@ export interface Database {
 
 // ─── DOMAIN TYPES ────────────────────────────────────────────────────────────
 
+export interface ItemMedicao {
+  id: string
+  data: string
+  autor: string
+  bm: string
+  medido_acumulado: number
+  saldo_a_medir: number
+  observacao?: string
+}
+
 export interface Obra {
   id: string
   nome: string
@@ -79,6 +89,7 @@ export interface Obra {
   endereco: string | null
   bm_atual?: string | null
   medido_acumulado?: number | null
+  historico_medicoes?: ItemMedicao[] | null
   created_at: string
 }
 
