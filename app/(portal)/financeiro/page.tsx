@@ -114,10 +114,12 @@ const btnGhost: React.CSSProperties = {
 }
 
 import { useConfirm } from '@/hooks/useConfirm'
+import { usePrompt } from '@/hooks/usePrompt'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
 export default function FinanceiroPage() {
   const { confirm, ConfirmDialog } = useConfirm()
+  const { prompt, PromptDialog } = usePrompt()
   const [tab, setTab] = useState<Tab>('historico')
   const [activeFornecedorId, setActiveFornecedorId] = useState<string>('')
   
@@ -287,6 +289,7 @@ export default function FinanceiroPage() {
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
           confirm={confirm}
+          prompt={prompt}
           initialFornecedorId={activeFornecedorId}
         />
       )}
@@ -300,6 +303,7 @@ export default function FinanceiroPage() {
         />
       )}
       {ConfirmDialog}
+      {PromptDialog}
     </div>
   )
 }
@@ -564,6 +568,7 @@ interface TabProps {
   colaboradorAtivo: Colaborador
   permissaoAtiva: ConfigPermissao
   confirm: (title: string, desc: string, options?: any) => Promise<boolean>
+  prompt?: (title: string, options?: { description?: string; placeholder?: string; confirmLabel?: string }) => Promise<string | null>
   goToHistoricoByFornecedor?: (idFornecedor: string) => void
   initialFornecedorId?: string
 }
@@ -1558,7 +1563,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 // ════════════════════════════════════════════════════════
 //  TAB: CONTAS / HISTÓRICO
 // ════════════════════════════════════════════════════════
-function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornecedorId }: TabProps) {
+function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initialFornecedorId }: TabProps) {
   const [contas, setContas]     = useState<ContaComRelacoes[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [fornecedores, setFornecedores] = useState<any[]>([])
@@ -1696,8 +1701,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
     if (status !== 'Pago') payload.pago_em = null
     
     if (status === 'Negado') {
-      const justificativa = window.prompt('O lançamento será marcado como Negado. Qual a justificativa?')
-      if (!justificativa) return // Cancela a operação se não houver justificativa
+      const justificativa = await prompt?.(
+        'Justificativa de Negação',
+        {
+          description: 'O lançamento será marcado como Negado. Informe a justificativa (obrigatório).',
+          placeholder: 'Ex: Documento inválido, valor incorreto…',
+          confirmLabel: 'Negar Lançamento',
+        }
+      )
+      if (!justificativa) return
       payload.justificativa_negacao = justificativa
     } else {
       payload.justificativa_negacao = null

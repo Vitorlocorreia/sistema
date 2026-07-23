@@ -21,6 +21,7 @@ const defaultApps = [
 
 import { StatusBadge } from '@/components/StatusBadge'
 import { EmbeddedBrowser } from '@/components/EmbeddedBrowser'
+import { ConnectionStatusBanner } from '@/components/ConnectionStatusBanner'
 import { supabase } from '@/lib/supabase'
 
 const iconMap: Record<string, any> = {
@@ -270,6 +271,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#0B0C0E] text-[#F3F4F6] font-sans selection:bg-[#F59E0B] selection:text-[#0B0C0E]">
+      <ConnectionStatusBanner />
 
       {/* ── MOBILE HEADER ────────────────────────────────────────── */}
       <header className="md:hidden flex items-center justify-between px-6 py-4 bg-[#12141C] border-b border-[#222530] sticky top-0 z-40">
