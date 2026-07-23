@@ -1571,6 +1571,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
   const [filtDataFim, setFiltDataFim] = useState('')
   const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo'>('novo')
   const [search, setSearch]           = useState('')
+  const [showFiltros, setShowFiltros] = useState(false)
   const [editandoConta, setEditandoConta] = useState<ContaComRelacoes | null>(null)
   const [formEdicao, setFormEdicao] = useState<Partial<ContaComRelacoes>>({})
 
@@ -1781,6 +1782,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
   const podeAlterarStatus = permissaoAtiva?.pode_alterar_status !== false || isAdminGeral // default true
   const podeDeletar = (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
 
+  const activeFiltrosCount = [filtEmpresa, filtFornecedor, filtTipo !== 'todos' ? filtTipo : '', filtStatus !== 'todos' ? filtStatus : '', filtDataInicio, filtDataFim, filtOrdem !== 'novo' ? filtOrdem : ''].filter(Boolean).length
+  const clearFiltros = () => { setFiltEmpresa(colaboradorAtivo.cargo === 'admin_empresa' ? colaboradorAtivo.empresa_id || '' : ''); setFiltFornecedor(initialFornecedorId || ''); setFiltTipo('todos'); setFiltStatus('todos'); setFiltDataInicio(''); setFiltDataFim(''); setFiltOrdem('novo') }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -1791,46 +1795,86 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 20 }}>
+      {/* ── Barra de busca + botão Filtros ── */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
           <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input style={{ ...input, paddingLeft: 30 }} placeholder="Buscar por descrição ou obra..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <select
-          style={{ ...input, width: 180 }}
-          disabled={colaboradorAtivo.cargo === 'admin_empresa'}
-          value={filtEmpresa}
-          onChange={e => setFiltEmpresa(e.target.value)}
-        >
-          {colaboradorAtivo.cargo !== 'admin_empresa' && <option value="">Todas as empresas</option>}
-          {empresas.filter(e => colaboradorAtivo.cargo !== 'admin_empresa' || e.id === colaboradorAtivo.empresa_id).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
-        </select>
-        <select style={{ ...input, width: 180 }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
-          <option value="">Todos os Fornecedores</option>
-          {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
-        </select>
-        <select style={{ ...input, width: 140 }} value={filtTipo} onChange={e => setFiltTipo(e.target.value as any)}>
-          <option value="todos">Todos os tipos</option>
-          <option value="pagar">A Pagar (Saída)</option>
-          <option value="receber">A Receber (Entrada)</option>
-        </select>
-        <select style={{ ...input, width: 150 }} value={filtStatus} onChange={e => setFiltStatus(e.target.value as any)}>
-          <option value="todos">Todos os status</option>
-          <option value="Lançado">Lançado</option>
-          <option value="Aguardando aprovação">Aguardando aprovação</option>
-          <option value="Liberado/OK">Liberado/OK</option>
-          <option value="A pagar">A pagar</option>
-          <option value="Pago">Pago</option>
-          <option value="Negado">Negado</option>
-        </select>
-        <select style={{ ...input, width: 165 }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as 'novo' | 'antigo')}>
-          <option value="novo">↓ Mais recente primeiro</option>
-          <option value="antigo">↑ Mais antigo primeiro</option>
-        </select>
-        <span style={{ color: C.inkSoft, fontSize: 11, whiteSpace: 'nowrap' }}>Venc. de:</span>
-        <input title="Previsão inicial" aria-label="Previsão inicial" style={{ ...input, width: 130 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
-        <span style={{ color: C.inkSoft, fontSize: 11 }}>até:</span>
-        <input title="Previsão final" aria-label="Previsão final" style={{ ...input, width: 130 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowFiltros(f => !f)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${activeFiltrosCount > 0 ? C.amber : C.border}`, borderRadius: 5, background: activeFiltrosCount > 0 ? '#F59E0B14' : '#0B0C0E', color: activeFiltrosCount > 0 ? C.amber : C.inkSoft, padding: '8px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+            Filtros{activeFiltrosCount > 0 ? ` (${activeFiltrosCount})` : ''}
+            <span style={{ fontSize: 9, opacity: 0.7 }}>{showFiltros ? '▲' : '▼'}</span>
+          </button>
+          {showFiltros && (
+            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50, width: 340, background: '#13151A', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, boxShadow: '0 8px 32px rgba(0,0,0,.6)', display: 'grid', gap: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>Filtros avançados</span>
+                {activeFiltrosCount > 0 && <button onClick={clearFiltros} style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>Limpar tudo</button>}
+              </div>
+
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Ordenação</label>
+                <select style={{ ...input }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as 'novo' | 'antigo')}>
+                  <option value="novo">↓ Mais recente primeiro</option>
+                  <option value="antigo">↑ Mais antigo primeiro</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Empresa</label>
+                <select style={{ ...input }} disabled={colaboradorAtivo.cargo === 'admin_empresa'} value={filtEmpresa} onChange={e => setFiltEmpresa(e.target.value)}>
+                  {colaboradorAtivo.cargo !== 'admin_empresa' && <option value="">Todas as empresas</option>}
+                  {empresas.filter(e => colaboradorAtivo.cargo !== 'admin_empresa' || e.id === colaboradorAtivo.empresa_id).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Fornecedor</label>
+                <select style={{ ...input }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
+                  <option value="">Todos os fornecedores</option>
+                  {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Tipo</label>
+                  <select style={{ ...input }} value={filtTipo} onChange={e => setFiltTipo(e.target.value as any)}>
+                    <option value="todos">Todos</option>
+                    <option value="pagar">A Pagar</option>
+                    <option value="receber">A Receber</option>
+                  </select>
+                </div>
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Status</label>
+                  <select style={{ ...input }} value={filtStatus} onChange={e => setFiltStatus(e.target.value as any)}>
+                    <option value="todos">Todos</option>
+                    <option value="Lançado">Lançado</option>
+                    <option value="Aguardando aprovação">Aguardando aprovação</option>
+                    <option value="Liberado/OK">Liberado/OK</option>
+                    <option value="A pagar">A pagar</option>
+                    <option value="Pago">Pago</option>
+                    <option value="Negado">Negado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gap: 6 }}>
+                <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Vencimento (intervalo)</label>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input title="De" aria-label="Vencimento de" style={{ ...input, flex: 1 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
+                  <span style={{ color: C.inkSoft, fontSize: 11 }}>até</span>
+                  <input title="Até" aria-label="Vencimento até" style={{ ...input, flex: 1 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {loading ? (
