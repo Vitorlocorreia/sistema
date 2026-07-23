@@ -1569,7 +1569,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
   const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
-  const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo'>('novo')
+  const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
   const [search, setSearch]           = useState('')
   const [showFiltros, setShowFiltros] = useState(false)
   const [editandoConta, setEditandoConta] = useState<ContaComRelacoes | null>(null)
@@ -1769,6 +1769,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
   }).sort((a, b) => {
     const da = new Date(a.created_at || a.data_previsao || '').getTime()
     const db = new Date(b.created_at || b.data_previsao || '').getTime()
+    if (filtOrdem === 'maior_valor') return b.valor - a.valor
+    if (filtOrdem === 'menor_valor') return a.valor - b.valor
+    if (filtOrdem === 'az') return a.descricao.localeCompare(b.descricao, 'pt-BR')
+    if (filtOrdem === 'za') return b.descricao.localeCompare(a.descricao, 'pt-BR')
     return filtOrdem === 'novo' ? db - da : da - db
   })
 
@@ -1819,9 +1823,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, initialFornec
 
               <div style={{ display: 'grid', gap: 6 }}>
                 <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Ordenação</label>
-                <select style={{ ...input }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as 'novo' | 'antigo')}>
+                <select style={{ ...input }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as 'novo' | 'antigo' | 'maior_valor' | 'menor_valor' | 'az' | 'za')}>
                   <option value="novo">↓ Mais recente primeiro</option>
                   <option value="antigo">↑ Mais antigo primeiro</option>
+                  <option value="maior_valor">↓ Maior valor primeiro</option>
+                  <option value="menor_valor">↑ Menor valor primeiro</option>
+                  <option value="az">A → Z (descrição)</option>
+                  <option value="za">Z → A (descrição)</option>
                 </select>
               </div>
 
