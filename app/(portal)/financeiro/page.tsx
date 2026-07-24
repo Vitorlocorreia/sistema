@@ -423,9 +423,12 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
       saldo_a_medir: saldo,
       observacao: metricasForm.observacao.trim() || undefined
     }
+    const valorContrato = Number(obra?.valor_contrato || 0)
+    const novoProgresso = valorContrato > 0 ? Math.min(100, Math.round((medido / valorContrato) * 100)) : 0
     const { error } = await supabase.from('obras').update({
       bm_atual: novoItem.bm,
       medido_acumulado: medido,
+      progresso: novoProgresso,
       historico_medicoes: [...historicoAtual, novoItem]
     }).eq('id', id)
     if (error) return toast(error.message, 'error')
@@ -449,10 +452,14 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
     const novoHistorico = historico.filter(h => h.id !== medicaoId)
     // recalc bm_atual e medido_acumulado pelo último item restante
     const ultimo = novoHistorico[novoHistorico.length - 1]
+    const novoMedido = ultimo?.medido_acumulado ?? 0
+    const valorContrato = Number(obra?.valor_contrato || 0)
+    const novoProgresso = valorContrato > 0 ? Math.min(100, Math.round((novoMedido / valorContrato) * 100)) : 0
     const { error } = await supabase.from('obras').update({
       historico_medicoes: novoHistorico,
       bm_atual: ultimo?.bm ?? null,
-      medido_acumulado: ultimo?.medido_acumulado ?? 0
+      medido_acumulado: novoMedido,
+      progresso: novoProgresso
     }).eq('id', obraIdAlvo)
     if (error) return toast(error.message, 'error')
     await load(); toast('Medição excluída.', 'success')
@@ -474,10 +481,14 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
     })
     // recalc bm_atual e medido_acumulado pelo último item do histórico
     const ultimo = novoHistorico[novoHistorico.length - 1]
+    const novoMedido = ultimo?.medido_acumulado ?? 0
+    const valorContrato = Number(obra?.valor_contrato || 0)
+    const novoProgresso = valorContrato > 0 ? Math.min(100, Math.round((novoMedido / valorContrato) * 100)) : 0
     const { error } = await supabase.from('obras').update({
       historico_medicoes: novoHistorico,
       bm_atual: ultimo?.bm ?? null,
-      medido_acumulado: ultimo?.medido_acumulado ?? 0
+      medido_acumulado: novoMedido,
+      progresso: novoProgresso
     }).eq('id', obraIdAlvo)
     if (error) return toast(error.message, 'error')
     setEditandoMedicaoId(null)
