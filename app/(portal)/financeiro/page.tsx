@@ -2484,7 +2484,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       onClick={() => setExpandedContaId(isExpanded ? null : c.id)}
                       style={{ 
                         borderBottom: isExpanded ? 'none' : `1px solid ${C.border}`, 
-                        background: aguardandoAprovacao ? '#3B82F605' : (isExpanded ? '#12141C' : 'none'),
+                        background: aguardandoAprovacao ? '#F9731610' : (isExpanded ? '#12141C' : 'none'),
+                        borderLeft: aguardandoAprovacao ? '3px solid #F97316' : 'none',
                         cursor: 'pointer',
                         transition: 'background 0.2s'
                       }}
@@ -2551,11 +2552,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       </td>
                       <td style={{ padding: '12px 14px' }}>
                         <span style={{
-                          fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-                          background: c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#A78BFA20' : aguardandoAprovacao ? '#3B82F620' : venc ? '#F8717120' : C.amber + '20',
-                          color: c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#A78BFA' : aguardandoAprovacao ? '#3B82F6' : venc ? '#F87171' : C.amber,
+                          fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
+                          letterSpacing: 0.4,
+                          background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#A78BFA20' : aguardandoAprovacao ? '#F9731622' : venc ? '#F8717120' : C.amber + '20',
+                          color: (c.status === 'Bloqueado' || aguardandoAprovacao) ? '#FB923C' : c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#A78BFA' : venc ? '#F87171' : C.amber,
+                          border: (c.status === 'Bloqueado' || aguardandoAprovacao) ? '1px solid #F9731666' : 'none',
+                          boxShadow: (c.status === 'Bloqueado' || aguardandoAprovacao) ? '0 0 8px #F9731633' : 'none'
                         }}>
-                          {c.status.toUpperCase()}
+                          {(c.status === 'Bloqueado' || c.status === 'Aguardando aprovação') ? `🔒 ${c.status.toUpperCase()}` : c.status.toUpperCase()}
                         </span>
                         {c.criado_por && (
                           <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
