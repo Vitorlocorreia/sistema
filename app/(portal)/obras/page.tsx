@@ -147,6 +147,8 @@ export default function Obras() {
   const [pastaSelecionada, setPastaSelecionada] = useState('')
   const [showMedicaoForm, setShowMedicaoForm] = useState(false)
   const [medicaoForm, setMedicaoForm] = useState({ numero: '', periodo_inicio: '', periodo_fim: '', valor_medido: '', percentual: '', observacoes: '' })
+  const [showUrbForm, setShowUrbForm] = useState(false)
+  const [urbForm, setUrbForm] = useState({ data: '', valor: '', desc: '' })
 
   const [obraSelecionada, setObraSelecionada] = useState<string>('')
   const [filtroObra, setFiltroObra] = useState<string>('Todas')
@@ -538,6 +540,7 @@ export default function Obras() {
                             </div>
                             <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
                               <span style={{ fontSize: 10, color: '#A78BFA' }}>{fmtMoney(Number(obra.medido_acumulado || 0))} medido</span>
+                              {obra.proximo_urb_valor ? <span style={{ fontSize: 10, color: '#3B82F6', fontWeight: 800 }}>+{fmtMoney(Number(obra.proximo_urb_valor))} (previsto)</span> : null}
                               <span style={{ fontSize: 10, color: C.inkSoft }}>{fmtMoney(Number(obra.valor_contrato || 0))}</span>
                               <span style={{ fontSize: 11, fontWeight: 900, color: pct >= 70 ? C.green : pct >= 30 ? C.amber : C.inkSoft, minWidth: 36, textAlign: 'right' }}>{pct}%</span>
                             </div>
@@ -585,19 +588,40 @@ export default function Obras() {
                 <MetricCard icon={indicadores.resultadoRealizado >= 0 ? TrendingUp : TrendingDown} label="Resultado realizado" value={fmtMoney(indicadores.resultadoRealizado)} color={indicadores.resultadoRealizado >= 0 ? C.green : C.red}/>
                 <MetricCard icon={TrendingUp} label="Lucro projetado" value={fmtMoney(indicadores.lucroProjetado)} color={indicadores.lucroProjetado >= 0 ? C.green : C.red} detail={`${indicadores.margem.toFixed(1)}% de margem`}/>
               </div>
-              {obraAtual.proximo_urb_valor && (
-                <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 12, padding: 12, background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.3)', borderRadius: 6 }}>
-                  <div style={{ background: 'rgba(139, 92, 246, 0.2)', padding: 8, borderRadius: 4 }}><Calendar size={18} color="#8B5CF6" /></div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 10, fontWeight: 900, color: '#8B5CF6', textTransform: 'uppercase', letterSpacing: 0.5 }}>Próximo BM Previsto</div>
-                    <div style={{ fontSize: 16, fontWeight: 900, color: C.ink, marginTop: 2 }}>{fmtMoney(Number(obraAtual.proximo_urb_valor))}</div>
+              </div>
+              <div style={{ marginTop: 12, padding: 12, background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.2)', borderRadius: 6 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <Calendar size={15} color="#8B5CF6" />
+                    <span style={{ fontSize: 11, fontWeight: 900, color: '#8B5CF6', textTransform: 'uppercase' }}>Previsão do Próximo BM</span>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    {obraAtual.proximo_urb_data && <div style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>{new Date(obraAtual.proximo_urb_data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>}
-                    {obraAtual.proximo_urb_desc && <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>{obraAtual.proximo_urb_desc}</div>}
-                  </div>
+                  {podeGerenciar && (
+                    <button style={{ ...btnGhost, padding: '4px 8px', fontSize: 9 }} onClick={() => { setUrbForm({ data: obraAtual.proximo_urb_data || '', valor: obraAtual.proximo_urb_valor ? String(obraAtual.proximo_urb_valor) : '', desc: obraAtual.proximo_urb_desc || '' }); setShowUrbForm(!showUrbForm) }}>
+                      {showUrbForm ? 'Cancelar' : 'Definir / Editar'}
+                    </button>
+                  )}
                 </div>
-              )}
+                {showUrbForm ? (
+                  <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                    <input type="date" style={inputStyle} value={urbForm.data} onChange={e => setUrbForm(u => ({ ...u, data: e.target.value }))} />
+                    <input type="number" style={inputStyle} placeholder="Valor previsto" value={urbForm.valor} onChange={e => setUrbForm(u => ({ ...u, valor: e.target.value }))} />
+                    <input style={{ ...inputStyle, flex: 1 }} placeholder="Descrição / Observação" value={urbForm.desc} onChange={e => setUrbForm(u => ({ ...u, desc: e.target.value }))} />
+                    <button style={{ ...btn(C.amber), padding: '6px 12px' }} onClick={salvarUrb}>Salvar</button>
+                  </div>
+                ) : (
+                  <div style={{ marginTop: 10 }}>
+                    {obraAtual.proximo_urb_valor ? (
+                      <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+                        <div><span style={{ fontSize: 9, color: C.inkSoft, display: 'block' }}>VALOR PREVISTO</span><strong style={{ fontSize: 14, color: C.ink }}>{fmtMoney(Number(obraAtual.proximo_urb_valor))}</strong></div>
+                        {obraAtual.proximo_urb_data && <div><span style={{ fontSize: 9, color: C.inkSoft, display: 'block' }}>DATA</span><strong style={{ fontSize: 12, color: C.ink }}>{new Date(obraAtual.proximo_urb_data + 'T00:00:00').toLocaleDateString('pt-BR')}</strong></div>}
+                        {obraAtual.proximo_urb_desc && <div><span style={{ fontSize: 9, color: C.inkSoft, display: 'block' }}>LOTE / DESCRIÇÃO</span><span style={{ fontSize: 11, color: C.inkSoft }}>{obraAtual.proximo_urb_desc}</span></div>}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 11, color: C.inkSoft }}>Nenhuma previsão cadastrada.</span>
+                    )}
+                  </div>
+                )}
+              </div>
               <div style={{ marginTop: 12 }}><div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.inkSoft, marginBottom: 5 }}><span>Avanço físico informado</span><strong>{obraAtual.progresso}%</strong></div><div style={{ height: 7, background: '#0B0C0E', border: `1px solid ${C.border}` }}><div style={{ height: '100%', width: `${Math.min(100, obraAtual.progresso)}%`, background: C.amber }}/></div></div>
               {showMedicaoForm && <div style={{ marginTop: 14, background: '#0B0C0E', border: `1px solid ${C.border}`, padding: 12 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 9 }}><input style={inputStyle} placeholder="Número (automático)" value={medicaoForm.numero} onChange={e => setMedicaoForm({...medicaoForm,numero:e.target.value})}/><input title="Início do período" style={inputStyle} type="date" value={medicaoForm.periodo_inicio} onChange={e => setMedicaoForm({...medicaoForm,periodo_inicio:e.target.value})}/><input title="Fim do período" style={inputStyle} type="date" value={medicaoForm.periodo_fim} onChange={e => setMedicaoForm({...medicaoForm,periodo_fim:e.target.value})}/><input style={inputStyle} type="number" placeholder="Valor medido" value={medicaoForm.valor_medido} onChange={e => setMedicaoForm({...medicaoForm,valor_medido:e.target.value})}/><input style={inputStyle} type="number" placeholder="% executado" value={medicaoForm.percentual} onChange={e => setMedicaoForm({...medicaoForm,percentual:e.target.value})}/><input style={inputStyle} placeholder="Observações" value={medicaoForm.observacoes} onChange={e => setMedicaoForm({...medicaoForm,observacoes:e.target.value})}/></div><button style={{ ...btn(), marginTop: 9 }} onClick={salvarMedicao}><Plus size={13}/>Salvar boletim</button>

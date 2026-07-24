@@ -662,31 +662,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
       {/* Visão Geral */}
       {obraId === 'todas' && (
         <div style={{ ...card, padding: 24 }}>
-          {podeGerenciar && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-              <button onClick={() => setShowForm(!showForm)} style={btn(showForm ? '#EF4444' : C.amber)}>
-                {showForm ? <X size={14} /> : <Plus size={14} />} {showForm ? 'Cancelar Cadastro' : 'Nova Obra'}
-              </button>
-            </div>
-          )}
-          
-          {/* Formulário Retrátil */}
-          <AnimatePresence>
-            {showForm && (
-              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} style={{ overflow: 'hidden' }}>
-                <form onSubmit={criarObra} style={{ background: '#12141C', padding: 16, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 20 }}>
-                  <h3 style={{ margin: '0 0 12px', fontSize: 14, color: C.ink }}>Dados da Nova Obra</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(200px,1fr))', gap: 12 }}>
-                    <input style={input} placeholder="Nome da obra *" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} required />
-                    <input style={input} placeholder="Cliente" value={form.cliente} onChange={e => setForm({ ...form, cliente: e.target.value })} />
-                    <input style={input} placeholder="Endereço" value={form.endereco} onChange={e => setForm({ ...form, endereco: e.target.value })} />
-                    <input style={input} type="number" placeholder="Valor do contrato (Opcional)" value={form.valor} onChange={e => setForm({ ...form, valor: e.target.value })} />
-                  </div>
-                  <button style={{ ...btn(C.amber), marginTop: 12 }}><Plus size={14} /> Salvar e Criar Obra</button>
-                </form>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
           
           {/* ─── DASHBOARD GLOBAL DE PORTFÓLIO ──────────────────────────── */}
           {obras.length > 0 && (() => {
@@ -742,6 +718,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                             </div>
                             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                               <span style={{ fontSize: 10, color: '#A78BFA' }}>{fmt(valMedido)}</span>
+                              {o.proximo_urb_valor ? <span style={{ fontSize: 10, color: '#3B82F6', fontWeight: 800 }}>+{fmt(Number(o.proximo_urb_valor))} (previsto)</span> : null}
                               <span style={{ fontSize: 10, color: C.inkSoft }}>/ {fmt(valContrato)}</span>
                               <span style={{ fontSize: 11, fontWeight: 900, color: pctMedido >= 70 ? C.green : pctMedido >= 30 ? C.amber : C.inkSoft, minWidth: 40, textAlign: 'right' }}>{pctMedido.toFixed(1)}%</span>
                             </div>
