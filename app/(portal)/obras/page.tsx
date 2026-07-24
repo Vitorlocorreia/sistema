@@ -168,7 +168,10 @@ export default function Obras() {
     data_inicio: '',
     data_fim: '',
     progresso: 0,
-    status: 'Em dia'
+    status: 'Em dia',
+    proximo_urb_data: '',
+    proximo_urb_valor: '',
+    proximo_urb_desc: ''
   })
 
   // Carrega dados da sessão
@@ -236,7 +239,10 @@ export default function Obras() {
       data_inicio: formObra.data_inicio || null,
       data_fim: formObra.data_fim || null,
       progresso: Number(formObra.progresso),
-      status: formObra.status
+      status: formObra.status,
+      proximo_urb_data: formObra.proximo_urb_data || null,
+      proximo_urb_valor: formObra.proximo_urb_valor ? parseFloat(formObra.proximo_urb_valor) : null,
+      proximo_urb_desc: formObra.proximo_urb_desc.trim() || null
     }
 
     try {
@@ -261,7 +267,10 @@ export default function Obras() {
         data_inicio: '',
         data_fim: '',
         progresso: 0,
-        status: 'Em dia'
+        status: 'Em dia',
+        proximo_urb_data: '',
+        proximo_urb_valor: '',
+        proximo_urb_desc: ''
       })
       setShowFormNova(false)
       loadData()
@@ -296,7 +305,10 @@ export default function Obras() {
       data_inicio: obra.data_inicio || '',
       data_fim: obra.data_fim || '',
       progresso: obra.progresso || 0,
-      status: obra.status || 'Em dia'
+      status: obra.status || 'Em dia',
+      proximo_urb_data: obra.proximo_urb_data || '',
+      proximo_urb_valor: obra.proximo_urb_valor ? String(obra.proximo_urb_valor) : '',
+      proximo_urb_desc: obra.proximo_urb_desc || ''
     })
     setShowFormNova(true)
   }
@@ -899,6 +911,24 @@ export default function Obras() {
                       <div>
                         <label style={labelStyle}>Data Conclusão</label>
                         <input type="date" style={inputStyle} value={formObra.data_fim} onChange={e => setFormObra(o => ({ ...o, data_fim: e.target.value }))} />
+                      </div>
+                    </div>
+
+                    <div style={{ padding: 12, background: 'rgba(59, 130, 246, 0.05)', border: `1px solid ${C.border}`, borderRadius: 4, marginBottom: 16 }}>
+                      <h5 style={{ margin: '0 0 10px 0', fontSize: 10, fontWeight: 900, color: '#3B82F6', textTransform: 'uppercase' }}>📅 Previsão do Próximo URB</h5>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr', gap: 12 }}>
+                        <div>
+                          <label style={labelStyle}>Data Prevista</label>
+                          <input type="date" style={inputStyle} value={formObra.proximo_urb_data} onChange={e => setFormObra(o => ({ ...o, proximo_urb_data: e.target.value }))} />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Valor Estimado (R$)</label>
+                          <input type="number" style={inputStyle} value={formObra.proximo_urb_valor} onChange={e => setFormObra(o => ({ ...o, proximo_urb_valor: e.target.value }))} placeholder="Ex: 50000" />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Descrição / Observação</label>
+                          <input style={inputStyle} value={formObra.proximo_urb_desc} onChange={e => setFormObra(o => ({ ...o, proximo_urb_desc: e.target.value }))} placeholder="Ex: Liberação Lote 7" />
+                        </div>
                       </div>
                     </div>
 

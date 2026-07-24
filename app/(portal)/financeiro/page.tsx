@@ -745,10 +745,16 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                               <span style={{ fontSize: 11, fontWeight: 900, color: pctMedido >= 70 ? C.green : pctMedido >= 30 ? C.amber : C.inkSoft, minWidth: 40, textAlign: 'right' }}>{pctMedido.toFixed(1)}%</span>
                             </div>
                           </div>
-                          <div style={{ height: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                          <div style={{ height: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', position: 'relative', marginBottom: o.proximo_urb_data ? 6 : 0 }}>
                             <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${pctMedido}%`, background: '#7C3AED44', borderRadius: 4 }} />
                             <div style={{ position: 'absolute', top: '25%', left: 0, height: '50%', width: `${pctFisico}%`, background: pctFisico >= 70 ? C.green : C.amber, borderRadius: 4 }} />
                           </div>
+                          {o.proximo_urb_data && (
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(59, 130, 246, 0.08)', padding: '4px 8px', borderRadius: 4, borderLeft: '2px solid #3B82F6' }}>
+                              <span style={{ fontSize: 9, color: '#3B82F6', fontWeight: 800 }}>📅 Próximo URB: {new Date(o.proximo_urb_data + 'T12:00:00').toLocaleDateString('pt-BR')} {o.proximo_urb_desc ? `— ${o.proximo_urb_desc}` : ''}</span>
+                              {o.proximo_urb_valor ? <span style={{ fontSize: 9, fontWeight: 900, color: C.ink }}>{fmt(o.proximo_urb_valor)}</span> : null}
+                            </div>
+                          )}
                         </div>
                       )
                     })}

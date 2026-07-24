@@ -109,7 +109,21 @@ export default function Dashboard() {
     const pendingApproval = suprimentosList.filter(s => s.status === 'Aprovação')
     const atrasados = rdosList.filter(r => (r.resumo ?? '').toLowerCase().includes('atraso'))
     
+    const now = Date.now()
+    const urbsProximos = obrasList.filter(o => {
+      if (!o.proximo_urb_data) return false
+      const diffDays = (new Date(o.proximo_urb_data + 'T12:00:00').getTime() - now) / (1000 * 60 * 60 * 24)
+      return diffDays >= -5 && diffDays <= 20
+    }).sort((a, b) => new Date(a.proximo_urb_data + 'T12:00:00').getTime() - new Date(b.proximo_urb_data + 'T12:00:00').getTime())
+
+    const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val)
+
     return [
+      ...(urbsProximos.length > 0 ? urbsProximos.map(u => ({
+        emoji: '📅', color: '#3B82F6',
+        text: `Previsão de URB: ${u.nome} agendado para ${new Date(u.proximo_urb_data + 'T12:00:00').toLocaleDateString('pt-BR')}${u.proximo_urb_valor ? ` no valor de ${formatCurrency(u.proximo_urb_valor)}` : ''}.`,
+        link: { label: 'Ver Obras', href: '/financeiro' }
+      })) : []),
       ...(pendingApproval.length > 0 ? [{
         emoji: '💰', color: C.amber,
         text: `Aprovação Pendente: ${pendingApproval.length} pedido(s) de material aguardando liberação em `,
@@ -123,7 +137,7 @@ export default function Dashboard() {
         emoji: '🏗️', color: C.amber,
         text: 'Bem-vindo ao sistema! Comece cadastrando suas obras em Suprimentos ou gerando o primeiro Diário de Obra.',
       }] : []),
-      ...(obrasList.length > 0 && pendingApproval.length === 0 && atrasados.length === 0 ? [{
+      ...(obrasList.length > 0 && pendingApproval.length === 0 && atrasados.length === 0 && urbsProximos.length === 0 ? [{
         emoji: '✅', color: '#10B981',
         text: `Tudo em ordem: ${obrasList.length} obra(s) ativa(s), sem alertas pendentes.`,
       }] : []),

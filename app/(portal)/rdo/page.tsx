@@ -890,7 +890,7 @@ export default function RDO() {
                           <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Histórico de Movimentações</span>
                           <span style={{ fontSize: 9, background: `${C.amber}22`, color: C.amber, border: `1px solid ${C.amber}44`, padding: '1px 6px', borderRadius: 3 }}>{timeline.length} registro(s)</span>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
                           {timeline.map((item, idx) => (
                             <div key={item.id} style={{ display: 'flex', gap: 10, position: 'relative' }}>
                               {/* linha da timeline */}

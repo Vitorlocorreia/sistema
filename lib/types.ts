@@ -90,6 +90,9 @@ export interface Obra {
   bm_atual?: string | null
   medido_acumulado?: number | null
   historico_medicoes?: ItemMedicao[] | null
+  proximo_urb_data?: string | null
+  proximo_urb_valor?: number | null
+  proximo_urb_desc?: string | null
   created_at: string
 }
 
