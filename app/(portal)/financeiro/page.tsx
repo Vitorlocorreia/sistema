@@ -2949,6 +2949,48 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const totalPago     = filtered.filter(c => c.status === 'Pago' && c.tipo === 'pagar').reduce((s, c) => s + c.valor, 0)
   const totalRecebido = filtered.filter(c => c.status === 'Pago' && c.tipo === 'receber').reduce((s, c) => s + c.valor, 0)
 
+  // Filtro base para cálculo dinâmico de estatísticas dos botões/select de status
+  const contasBaseFiltro = contas.filter(c => {
+    const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
+    const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
+    const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
+    const data = c.data_previsao || c.data_vencimento
+    const matchInicio = !filtDataInicio || data >= filtDataInicio
+    const matchFim = !filtDataFim || data <= filtDataFim
+    const codFormatted = fmtCodigo(c)
+    const matchSearch  = !search ||
+      c.descricao.toLowerCase().includes(search.toLowerCase()) ||
+      (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.fornecedor?.razao_social ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      codFormatted.toLowerCase().includes(search.toLowerCase()) ||
+      String(c.codigo_sequencial || '').includes(search.trim())
+    return matchEmpresa && matchFornecedor && matchTipo && matchSearch && matchInicio && matchFim
+  })
+
+  const getStatsByStatus = (st: string) => {
+    const list = st === 'todos' ? contasBaseFiltro : contasBaseFiltro.filter(c => c.status === st)
+    const count = list.length
+    const total = list.reduce((s, c) => s + (c.valor || 0), 0)
+    return { count, total }
+  }
+
+  const totalValorFiltrado = filtered.reduce((s, c) => s + (c.valor || 0), 0)
+  const totalAPagarFiltrado = filtered.filter(c => c.status !== 'Pago' && c.status !== 'Negado' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
+  const totalPagoFiltrado   = filtered.filter(c => c.status === 'Pago' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
+
+  const listaStatusOpcoes = [
+    { value: 'todos', label: 'Todos os Status' },
+    { value: 'Lançado', label: 'Lançado' },
+    { value: 'Bloqueado', label: 'Bloqueado' },
+    { value: 'Aguardando aprovação', label: 'Aguardando aprovação' },
+    { value: 'Liberado/OK', label: 'Liberado/OK' },
+    { value: 'A pagar', label: 'A pagar' },
+    { value: 'Pago Parcial', label: 'Pago Parcial' },
+    { value: 'Pago', label: 'Pago' },
+    { value: 'Negado', label: 'Negado' },
+  ]
+
   // Permissões dinâmicas
   const isAdminGeral = colaboradorAtivo.cargo === 'admin_geral'
   const podePagar = permissaoAtiva?.pode_pagar || isAdminGeral
@@ -3057,15 +3099,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   <div style={{ display: 'grid', gap: 6 }}>
                     <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Status</label>
                     <select style={{ ...input }} value={filtStatus} onChange={e => setFiltStatus(e.target.value as any)}>
-                      <option value="todos">Todos</option>
-                      <option value="Lançado">Lançado</option>
-                      <option value="Bloqueado">Bloqueado</option>
-                      <option value="Aguardando aprovação">Aguardando aprovação</option>
-                      <option value="Liberado/OK">Liberado/OK</option>
-                      <option value="A pagar">A pagar</option>
-                      <option value="Pago Parcial">Pago Parcial</option>
-                      <option value="Pago">Pago</option>
-                      <option value="Negado">Negado</option>
+                      {listaStatusOpcoes.map(st => {
+                        const stats = getStatsByStatus(st.value)
+                        return (
+                          <option key={st.value} value={st.value}>
+                            {st.label} ({stats.count} · {fmt(stats.total)})
+                          </option>
+                        )
+                      })}
                     </select>
                   </div>
                 </div>
@@ -3100,6 +3141,56 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
           >
             <FileText size={13} /> {modoExportacao ? 'Cancelar Exportação' : 'Exportar Pagamentos'}
           </button>
+        </div>
+      </div>
+
+      {/* ── Pills Rápidos de Filtro por Status (Com contagem e totais) ── */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6, marginBottom: 14, scrollbarWidth: 'thin' }}>
+        {listaStatusOpcoes.map(st => {
+          const stats = getStatsByStatus(st.value)
+          const isSelected = filtStatus === st.value
+          return (
+            <button
+              key={st.value}
+              onClick={() => setFiltStatus(st.value as any)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 12px',
+                borderRadius: 20,
+                border: `1px solid ${isSelected ? C.amber : C.border}`,
+                background: isSelected ? 'rgba(245, 158, 11, 0.15)' : '#0B0C0E',
+                color: isSelected ? C.amber : C.inkSoft,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <span>{st.label}</span>
+              <span style={{ background: isSelected ? C.amber : 'rgba(255,255,255,0.1)', color: isSelected ? '#000' : C.ink, padding: '1px 6px', borderRadius: 10, fontSize: 9, fontWeight: 900 }}>
+                {stats.count}
+              </span>
+              {stats.total > 0 && <span style={{ fontSize: 10, opacity: 0.85 }}>({fmt(stats.total)})</span>}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Resumo Geral dos Resultados Filtrados ── */}
+      <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 18px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>📊 Resumo do Filtro:</span>
+          <span style={{ fontSize: 12, color: C.amber, fontWeight: 900, background: 'rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: 4, border: `1px solid ${C.amber}33` }}>
+            {filtered.length} conta(s)
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 18, alignItems: 'center', fontSize: 12 }}>
+          <div><span style={{ color: C.inkSoft }}>Soma Total: </span><strong style={{ color: C.ink, fontWeight: 900 }}>{fmt(totalValorFiltrado)}</strong></div>
+          <div><span style={{ color: C.inkSoft }}>Pendente / A Pagar: </span><strong style={{ color: '#F87171', fontWeight: 900 }}>{fmt(totalAPagarFiltrado)}</strong></div>
+          <div><span style={{ color: C.inkSoft }}>Pago: </span><strong style={{ color: '#34D399', fontWeight: 900 }}>{fmt(totalPagoFiltrado)}</strong></div>
         </div>
       </div>
 
