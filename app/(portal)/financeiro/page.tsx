@@ -641,7 +641,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                   <div style={{ fontSize: 16, color: C.amber, fontWeight: 800, marginTop: 4 }}>{obraSelecionada.bm_atual || '—'}</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Medido Acumulado</div>
+                  <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Medido Acumulado (Total)</div>
                   <div style={{ fontSize: 16, color: C.ink, fontWeight: 800, marginTop: 4 }}>{fmt(Number(obraSelecionada.medido_acumulado || 0))}</div>
                 </div>
                 <div style={{ background: 'rgba(52,211,153,0.06)', padding: 12, borderRadius: 6, border: `1px solid rgba(52,211,153,0.2)` }}>
@@ -740,11 +740,34 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                                   </div>
                                 )}
                               </div>
-                              <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                                <div><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Medido Acum.</span><div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{fmt(item.medido_acumulado)}</div></div>
-                                <div><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Saldo a Medir</span><div style={{ fontSize: 13, fontWeight: 700, color: '#34D399' }}>{fmt(item.saldo_a_medir)}</div></div>
-                                {item.observacao && <div style={{ flex: '1 1 200px' }}><span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Obs.</span><div style={{ fontSize: 12, color: C.inkSoft, fontStyle: 'italic' }}>{item.observacao}</div></div>}
-                              </div>
+                              {(() => {
+                                const historicoArray = obraSelecionada.historico_medicoes || []
+                                // Como a lista está invertida (.reverse()), o item anterior na ordem cronológica é o índice + 1
+                                const itemAnterior = historicoArray[historicoArray.length - 1 - idx - 1]
+                                const medidoDesteBM = itemAnterior ? Math.max(0, item.medido_acumulado - itemAnterior.medido_acumulado) : item.medido_acumulado
+                                return (
+                                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                                    <div>
+                                      <span style={{ fontSize: 9, color: C.amber, textTransform: 'uppercase', fontWeight: 800 }}>Medido Neste BM</span>
+                                      <div style={{ fontSize: 13, fontWeight: 800, color: C.amber }}>{fmt(medidoDesteBM)}</div>
+                                    </div>
+                                    <div>
+                                      <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Medido Acum. (Total)</span>
+                                      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{fmt(item.medido_acumulado)}</div>
+                                    </div>
+                                    <div>
+                                      <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Saldo a Medir</span>
+                                      <div style={{ fontSize: 13, fontWeight: 700, color: '#34D399' }}>{fmt(item.saldo_a_medir)}</div>
+                                    </div>
+                                    {item.observacao && (
+                                      <div style={{ flex: '1 1 200px' }}>
+                                        <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Obs.</span>
+                                        <div style={{ fontSize: 12, color: C.inkSoft, fontStyle: 'italic' }}>{item.observacao}</div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </>
                           )}
                         </div>
