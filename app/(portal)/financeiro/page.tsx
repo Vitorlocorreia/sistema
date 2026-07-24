@@ -409,25 +409,27 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
 
   async function salvarMetricasObra(id: string) {
     if (!metricasForm.bm_atual.trim()) return toast('Informe o BM (ex: BM-004)', 'error')
-    if (!metricasForm.medido_acumulado) return toast('Informe o Medido Acumulado', 'error')
-    const medido = parseCurrency(metricasForm.medido_acumulado)
+    if (!metricasForm.medido_acumulado) return toast('Informe o Valor Medido', 'error')
+    const medidoNovoPeriodo = parseCurrency(metricasForm.medido_acumulado)
     const obra = obras.find(o => o.id === id)
-    const saldo = Math.max(0, Number(obra?.valor_contrato || 0) - medido)
+    const acumuladoAnterior = Number(obra?.medido_acumulado || 0)
+    const medidoTotalAcumulado = acumuladoAnterior + medidoNovoPeriodo
+    const valorContrato = Number(obra?.valor_contrato || 0)
+    const saldo = Math.max(0, valorContrato - medidoTotalAcumulado)
     const historicoAtual: ItemMedicao[] = Array.isArray(obra?.historico_medicoes) ? obra!.historico_medicoes as ItemMedicao[] : []
     const novoItem: ItemMedicao = {
       id: crypto.randomUUID(),
       data: new Date().toISOString(),
       autor: colaboradorAtivo.nome || 'Usuário',
       bm: metricasForm.bm_atual.trim(),
-      medido_acumulado: medido,
+      medido_acumulado: medidoTotalAcumulado,
       saldo_a_medir: saldo,
       observacao: metricasForm.observacao.trim() || undefined
     }
-    const valorContrato = Number(obra?.valor_contrato || 0)
-    const novoProgresso = valorContrato > 0 ? Math.min(100, Math.round((medido / valorContrato) * 100)) : 0
+    const novoProgresso = valorContrato > 0 ? Math.min(100, (medidoTotalAcumulado / valorContrato) * 100) : 0
     const { error } = await supabase.from('obras').update({
       bm_atual: novoItem.bm,
-      medido_acumulado: medido,
+      medido_acumulado: medidoTotalAcumulado,
       progresso: novoProgresso,
       historico_medicoes: [...historicoAtual, novoItem]
     }).eq('id', id)
@@ -664,8 +666,13 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                       <input style={input} placeholder="Ex: BM-004" value={metricasForm.bm_atual} onChange={e => setMetricasForm({ ...metricasForm, bm_atual: e.target.value })} />
                     </div>
                     <div>
-                      <label style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 700, textTransform: 'uppercase' }}>Medido Acumulado (R$) *</label>
-                      <input style={input} type="number" step="0.01" placeholder="0,00" value={metricasForm.medido_acumulado} onChange={e => setMetricasForm({ ...metricasForm, medido_acumulado: e.target.value })} />
+                      <label style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 700, textTransform: 'uppercase' }}>Medido Neste BM (R$) *</label>
+                      <input style={input} placeholder="0,00" value={metricasForm.medido_acumulado} onChange={e => setMetricasForm({ ...metricasForm, medido_acumulado: e.target.value })} />
+                      {metricasForm.medido_acumulado && (
+                        <div style={{ fontSize: 9, color: C.amber, marginTop: 4, fontWeight: 700 }}>
+                          Novo Total Acumulado: {fmt(Number(obraSelecionada.medido_acumulado || 0) + parseCurrency(metricasForm.medido_acumulado))}
+                        </div>
+                      )}
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 700, textTransform: 'uppercase' }}>Observação</label>
