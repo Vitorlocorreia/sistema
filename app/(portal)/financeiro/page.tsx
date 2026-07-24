@@ -426,7 +426,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
       saldo_a_medir: saldo,
       observacao: metricasForm.observacao.trim() || undefined
     }
-    const novoProgresso = valorContrato > 0 ? Math.min(100, (medidoTotalAcumulado / valorContrato) * 100) : 0
+    const novoProgresso = valorContrato > 0 ? Math.min(100, Math.round((medidoTotalAcumulado / valorContrato) * 100)) : 0
     const { error } = await supabase.from('obras').update({
       bm_atual: novoItem.bm,
       medido_acumulado: medidoTotalAcumulado,
