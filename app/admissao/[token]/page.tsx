@@ -18,6 +18,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
   const [erro, setErro] = useState('')
   const [enviando, setEnviando] = useState('')
   const [pixInput, setPixInput] = useState('')
+  const [bancoInput, setBancoInput] = useState('')
+  const [agenciaContaInput, setAgenciaContaInput] = useState('')
   const [finalizado, setFinalizado] = useState(false)
   const endpoint = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/rh-admissao`
 
@@ -30,7 +32,12 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
       setFluxo(body)
       // Carrega valor do PIX salvo previamente se existir
       const docPix = (body.documentos as Documento[] | undefined)?.find(d => d.item_id === 'pix')
-      if (docPix?.nome?.startsWith('Chave PIX:')) {
+      if (docPix?.nome?.startsWith('Dados Bancários:')) {
+        const parts = docPix.nome.replace('Dados Bancários:', '').split(' | ')
+        setPixInput(parts[0]?.replace('PIX:', '').trim() || '')
+        setBancoInput(parts[1]?.replace('Banco:', '').trim() || '')
+        setAgenciaContaInput(parts[2]?.replace('Agência/Conta:', '').trim() || '')
+      } else if (docPix?.nome?.startsWith('Chave PIX:')) {
         setPixInput(docPix.nome.replace('Chave PIX:', '').trim())
       }
       setErro('')
@@ -79,9 +86,9 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           token,
           modelo_id: modelo.id,
           item_id: item.id,
-          nome: `Chave PIX: ${pixInput.trim()}`,
+          nome: `Dados Bancários: PIX: ${pixInput.trim()} | Banco: ${bancoInput.trim()} | Agência/Conta: ${agenciaContaInput.trim()}`,
           mime_type: 'text/plain',
-          tamanho_bytes: pixInput.trim().length,
+          tamanho_bytes: 10,
         }),
       })
       const prepared = await request.json()
@@ -173,19 +180,31 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                               <CreditCard size={14} color={C.amber} />
                               <strong style={{ fontSize: 11 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
                             </div>
-                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
                               <input
-                                style={{ flex: 1, minWidth: 200, background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
-                                placeholder="Digite sua Chave PIX e Banco (ex: CPF / Banco Itaú)"
+                                style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                                placeholder="Chave PIX (obrigatório)"
                                 value={pixInput}
                                 onChange={e => setPixInput(e.target.value)}
                               />
+                              <input
+                                style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                                placeholder="Banco (ex: Itaú, Nubank)"
+                                value={bancoInput}
+                                onChange={e => setBancoInput(e.target.value)}
+                              />
+                              <input
+                                style={{ gridColumn: '1 / -1', background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                                placeholder="Agência e Conta (obrigatório) ex: Ag 0000 / Cc 00000-0"
+                                value={agenciaContaInput}
+                                onChange={e => setAgenciaContaInput(e.target.value)}
+                              />
                               <button
-                                disabled={enviando === id || !pixInput.trim()}
+                                disabled={enviando === id || !pixInput.trim() || !agenciaContaInput.trim()}
                                 onClick={() => void salvarChavePix(modelo, item)}
-                                style={{ padding: '7px 14px', background: C.amber, color: '#0B0C0E', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: pixInput.trim() ? 1 : 0.5 }}
+                                style={{ gridColumn: '1 / -1', padding: '9px 14px', background: C.amber, color: '#0B0C0E', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: (pixInput.trim() && agenciaContaInput.trim()) ? 1 : 0.5 }}
                               >
-                                {enviando === id ? 'Salvando...' : accepted ? 'Atualizar PIX' : 'Salvar PIX'}
+                                {enviando === id ? 'Salvando...' : accepted ? 'Atualizar Dados Bancários' : 'Salvar Dados Bancários'}
                               </button>
                             </div>
                             {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 6 }}>✓ {accepted.nome}</div>}

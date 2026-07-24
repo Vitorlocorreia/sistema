@@ -897,6 +897,7 @@ export default function RhPage() {
                   </div>
                   <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5 }}>
                     {invite.cargo || 'Cargo não informado'}
+                    {invite.obra ? ` · ${invite.obra}` : ''}
                     {invite.data_inicio_efetivo && ` · Início: ${new Date(invite.data_inicio_efetivo + 'T00:00:00').toLocaleDateString('pt-BR')}`}
                   </div>
                   <div style={{ color: invite.status === 'devolvido' || expired ? '#F87171' : C.amber, fontSize: 10, fontWeight: 800, marginTop: 7 }}>
