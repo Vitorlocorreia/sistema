@@ -639,7 +639,11 @@ export default function Obras() {
                 >
                   <div style={{ height: 130, overflow: 'hidden', position: 'relative' }}>
                     <img
-                      src={foto.imagem_url ?? '/obra_fundacao.png'}
+                      src={
+                        !foto.imagem_url ? '/obra_fundacao.png' : foto.imagem_url.startsWith('http')
+                          ? foto.imagem_url
+                          : supabase.storage.from('rdo-fotos').getPublicUrl(foto.imagem_url).data.publicUrl
+                      }
                       alt={foto.legenda ?? 'Foto do Canteiro'}
                       style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                     />
@@ -699,7 +703,11 @@ export default function Obras() {
               }}
             >
               <img 
-                src={lightboxFoto.imagem_url ?? '/obra_finalizada.png'} 
+                src={
+                  !lightboxFoto.imagem_url ? '/obra_finalizada.png' : lightboxFoto.imagem_url.startsWith('http')
+                    ? lightboxFoto.imagem_url
+                    : supabase.storage.from('rdo-fotos').getPublicUrl(lightboxFoto.imagem_url).data.publicUrl
+                } 
                 alt={lightboxFoto.legenda ?? 'Visualização'} 
                 style={{ width: '100%', height: 'auto', maxHeight: '70vh', objectFit: 'contain', background: '#07080a', display: 'block' }}
               />
