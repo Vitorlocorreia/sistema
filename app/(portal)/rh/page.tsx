@@ -69,7 +69,7 @@ type Details = {
   etapas: EtapaAdmissao[]
 }
 type DocumentoCadastro = { id: string; modelo_id: string; item_id: string; nome: string; storage_path: string; status: string; observacao_rh: string | null; enviado_em: string | null; modelo?: { id: string; ordem: number; nome: string } }
-type Convite = { id: string; nome_destinatario: string; email_destinatario: string | null; telefone_destinatario: string | null; cpf: string | null; matricula: string | null; endereco: string | null; data_admissao: string | null; cargo: string | null; obra: string | null; etapa_atual: number; expires_at: string; status: string; token_code: string | null; justificativa_devolucao: string | null; created_at: string; revogado_em: string | null; aprovado_em: string | null; funcionario_id: string | null; documentos: DocumentoCadastro[] }
+type Convite = { id: string; nome_destinatario: string; email_destinatario: string | null; telefone_destinatario: string | null; cpf: string | null; matricula: string | null; endereco: string | null; data_admissao: string | null; data_inicio_efetivo: string | null; inicio_efetivo: boolean; cargo: string | null; obra: string | null; etapa_atual: number; expires_at: string; status: string; token_code: string | null; justificativa_devolucao: string | null; created_at: string; revogado_em: string | null; aprovado_em: string | null; funcionario_id: string | null; documentos: DocumentoCadastro[] }
 
 const emptyDetails: Details = { historico: [], documentos: [], exames: [], etapas: [] }
 const emptyForm = { nome: '', cpf: '', matricula: '', cargo: '', data_admissao: '', telefone: '', email: '', endereco: '' }
@@ -193,11 +193,45 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
     {/* Cabeçalho com ações do convite */}
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start', marginBottom: 13 }}>
       <div>
-        <strong style={{ fontSize: 13 }}>{invite.nome_destinatario}</strong>
-        <p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>Perfil temporário · {invite.cpf || 'CPF não informado'} · {invite.cargo || 'Cargo não informado'}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <strong style={{ fontSize: 13 }}>{invite.nome_destinatario}</strong>
+          {invite.inicio_efetivo && (
+            <span style={{ fontSize: 9, fontWeight: 900, background: '#3B82F625', color: '#60A5FA', border: '1px solid #3B82F666', padding: '2px 6px', borderRadius: 4 }}>
+              🚀 Início Efetivo na Empresa
+            </span>
+          )}
+        </div>
+        <p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>
+          Perfil temporário · {invite.cpf || 'CPF não informado'} · {invite.cargo || 'Cargo não informado'}
+          {invite.data_inicio_efetivo && ` · Data de Início Efetivo: ${new Date(invite.data_inicio_efetivo + 'T00:00:00').toLocaleDateString('pt-BR')}`}
+        </p>
         <button style={{ ...linkButton, marginTop: 6 }} onClick={onCopy}>Copiar link do candidato</button>
       </div>
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button
+          style={{ ...outlineBtn, borderColor: C.amber, color: C.amber }}
+          onClick={async () => {
+            const dataAtual = invite.data_inicio_efetivo || new Date().toISOString().slice(0, 10)
+            const novaData = window.prompt('Informe a Data de Início Efetivo do funcionário (AAAA-MM-DD):', dataAtual)
+            if (novaData === null) return
+            const toggleEfetivo = window.confirm(`Marcar este funcionário como "EM INÍCIO EFETIVO"?\n\n(Data selecionada: ${novaData || 'Sem data'})`)
+            
+            const { error } = await supabase
+              .from('rh_admissao_convites')
+              .update({
+                data_inicio_efetivo: novaData.trim() || null,
+                inicio_efetivo: toggleEfetivo,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', invite.id)
+
+            if (error) return toast(error.message, 'error')
+            toast('Início efetivo atualizado com sucesso!', 'success')
+            await onRefresh?.()
+          }}
+        >
+          ✏️ Alterar Início Efetivo
+        </button>
         <button style={outlineBtn} onClick={onRegenerate}>Novo link</button>
         <button style={outlineBtn} onClick={onRevoke}>Revogar</button>
         <button style={{ ...outlineBtn, color: '#F87171' }} onClick={onDelete}><Trash2 size={12} />Excluir</button>
@@ -349,7 +383,7 @@ export default function RhPage() {
   const [details, setDetails] = useState<Details>(emptyDetails)
   const [form, setForm] = useState(emptyForm)
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [inviteForm, setInviteForm] = useState({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_admissao: '', validade: '72' })
+  const [inviteForm, setInviteForm] = useState({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false, validade: '72' })
   const [inviteSaving, setInviteSaving] = useState(false)
   const [archiveFilter, setArchiveFilter] = useState('')
 
@@ -432,13 +466,29 @@ export default function RhPage() {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
     const tokenHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
     const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
-    const { error } = await supabase.from('rh_admissao_convites').insert({ nome_destinatario: inviteForm.nome.trim(), cpf: inviteForm.cpf.trim() || null, matricula: inviteForm.matricula.trim() || null, email_destinatario: inviteForm.email.trim() || null, telefone_destinatario: inviteForm.telefone.trim() || null, endereco: inviteForm.endereco.trim() || null, cargo: inviteForm.cargo.trim() || null, obra: inviteForm.obra.trim() || null, data_admissao: inviteForm.data_admissao || null, token_hash: tokenHash, token_code: token, expires_at: expiresAt, status: 'ativo', etapa_atual: 1 })
+    const { error } = await supabase.from('rh_admissao_convites').insert({
+      nome_destinatario: inviteForm.nome.trim(),
+      cpf: inviteForm.cpf.trim() || null,
+      matricula: inviteForm.matricula.trim() || null,
+      email_destinatario: inviteForm.email.trim() || null,
+      telefone_destinatario: inviteForm.telefone.trim() || null,
+      endereco: inviteForm.endereco.trim() || null,
+      cargo: inviteForm.cargo.trim() || null,
+      obra: inviteForm.obra.trim() || null,
+      data_inicio_efetivo: inviteForm.data_inicio_efetivo || null,
+      inicio_efetivo: inviteForm.inicio_efetivo,
+      token_hash: tokenHash,
+      token_code: token,
+      expires_at: expiresAt,
+      status: 'ativo',
+      etapa_atual: 1
+    })
     setInviteSaving(false)
     if (error) return toast(`Não foi possível gerar o convite: ${error.message}`, 'error')
     const link = `${window.location.origin}/admissao/${token}`
     await navigator.clipboard?.writeText(link)
     setInviteOpen(false)
-    setInviteForm({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_admissao: '', validade: '72' })
+    setInviteForm({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false, validade: '72' })
     await load()
     toast(`Link criado e copiado. Expira em ${hours} hora(s).`, 'success')
   }
@@ -681,8 +731,19 @@ export default function RhPage() {
           <p style={{ color: C.inkSoft, fontSize: 10, margin: '6px 0 12px' }}>Preencha os dados que o RH já possui. O candidato receberá o link apenas para enviar os documentos das quatro etapas.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
             {([['nome', 'Nome do candidato *'], ['cpf', 'CPF'], ['matricula', 'Matrícula'], ['email', 'E-mail'], ['telefone', 'Telefone'], ['endereco', 'Endereço'], ['cargo', 'Cargo'], ['obra', 'Obra']] as const).map(([key, placeholder]) => <input key={key} style={input} placeholder={placeholder} value={inviteForm[key]} onChange={event => setInviteForm({ ...inviteForm, [key]: event.target.value })} />)}
-            <label style={{ fontSize: 10, color: C.inkSoft }}>Previsão de admissão<input style={{ ...input, marginTop: 4 }} type="date" value={inviteForm.data_admissao} onChange={event => setInviteForm({ ...inviteForm, data_admissao: event.target.value })} /></label>
+            <label style={{ fontSize: 10, color: C.inkSoft }}>Data de início efetivo<input style={{ ...input, marginTop: 4 }} type="date" value={inviteForm.data_inicio_efetivo} onChange={event => setInviteForm({ ...inviteForm, data_inicio_efetivo: event.target.value })} /></label>
             <label style={{ fontSize: 10, color: C.inkSoft }}>Validade do link (horas)<input style={{ ...input, marginTop: 4 }} type="number" min={1} max={168} value={inviteForm.validade} onChange={event => setInviteForm({ ...inviteForm, validade: event.target.value })} /></label>
+          </div>
+          <div style={{ marginTop: 10 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: C.amber, fontWeight: 700, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={inviteForm.inicio_efetivo}
+                onChange={e => setInviteForm({ ...inviteForm, inicio_efetivo: e.target.checked })}
+                style={{ width: 16, height: 16, accentColor: C.amber, cursor: 'pointer' }}
+              />
+              🚀 Já iniciou efetivamente na empresa / obra? (Mesmo pendente de documentos)
+            </label>
           </div>
           <button disabled={inviteSaving} style={{ ...btn, marginTop: 12, opacity: inviteSaving ? 0.6 : 1 }} onClick={() => void createInvite()}><ClipboardPlus size={14} />{inviteSaving ? 'Gerando...' : 'Gerar e copiar link'}</button>
         </div>
@@ -705,7 +766,54 @@ export default function RhPage() {
       {false && selectedInvite && <section style={{ ...card, marginBottom: 14 }}><CadastroTable invite={selectedInvite} modelos={modelos} onOpen={documento => void openCadastroDocument(documento)} onReview={(documento, status) => void reviewCadastroDocument(selectedInvite, documento, status)} onApprove={() => void approveInvite(selectedInvite)} onRevoke={() => void revokeInvite(selectedInvite)} onRegenerate={() => void regenerateInvite(selectedInvite)} onCopy={() => void copyInviteCode(selectedInvite)} onDelete={() => void deleteInvite(selectedInvite)} /></section>}
 
       {convites.length > 0 && <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 14, alignItems: 'start' }}>
-        <section style={card}><div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}><strong style={{ fontSize: 12 }}>Em cadastro</strong><span style={{ color: C.inkSoft, fontSize: 10 }}>{convites.length}</span></div><div style={{ display: 'grid', gap: 8 }}>{convites.map(invite => { const expired = new Date(invite.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(invite.status); const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link gerado'; return <button key={invite.id} onClick={() => setSelectedInvite(invite)} style={{ textAlign: 'left', padding: '12px 13px', background: selectedInvite?.id === invite.id ? '#F59E0B18' : '#0B0C0E', color: C.ink, border: `1px solid ${selectedInvite?.id === invite.id ? '#F59E0B66' : C.border}`, borderRadius: 5, cursor: 'pointer', minHeight: 78 }}><strong style={{ fontSize: 12, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invite.nome_destinatario}</strong><div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5 }}>{invite.cargo || 'Cargo não informado'}</div><div style={{ color: invite.status === 'devolvido' || expired ? '#F87171' : C.amber, fontSize: 10, fontWeight: 800, marginTop: 7 }}>{label}</div>{invite.status === 'devolvido' && invite.justificativa_devolucao && <div style={{ color: '#FCA5A5', fontSize: 9, marginTop: 4, lineHeight: 1.35 }}>{invite.justificativa_devolucao}</div>}</button> })}</div></section>
+        <section style={card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+            <strong style={{ fontSize: 12 }}>Em cadastro</strong>
+            <span style={{ color: C.inkSoft, fontSize: 10 }}>{convites.length}</span>
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {convites.map(invite => {
+              const expired = new Date(invite.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(invite.status);
+              const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link gerado';
+              return (
+                <button
+                  key={invite.id}
+                  onClick={() => setSelectedInvite(invite)}
+                  style={{
+                    textAlign: 'left',
+                    padding: '12px 13px',
+                    background: selectedInvite?.id === invite.id ? '#F59E0B18' : '#0B0C0E',
+                    color: C.ink,
+                    border: `1px solid ${selectedInvite?.id === invite.id ? '#F59E0B66' : invite.inicio_efetivo ? '#3B82F6AA' : C.border}`,
+                    borderRadius: 5,
+                    cursor: 'pointer',
+                    minHeight: 78,
+                    position: 'relative'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                    <strong style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{invite.nome_destinatario}</strong>
+                    {invite.inicio_efetivo && (
+                      <span style={{ fontSize: 9, fontWeight: 900, background: '#3B82F625', color: '#60A5FA', border: '1px solid #3B82F666', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        🚀 Início Efetivo
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5 }}>
+                    {invite.cargo || 'Cargo não informado'}
+                    {invite.data_inicio_efetivo && ` · Início: ${new Date(invite.data_inicio_efetivo + 'T00:00:00').toLocaleDateString('pt-BR')}`}
+                  </div>
+                  <div style={{ color: invite.status === 'devolvido' || expired ? '#F87171' : C.amber, fontSize: 10, fontWeight: 800, marginTop: 7 }}>
+                    {label}
+                  </div>
+                  {invite.status === 'devolvido' && invite.justificativa_devolucao && (
+                    <div style={{ color: '#FCA5A5', fontSize: 9, marginTop: 4, lineHeight: 1.35 }}>{invite.justificativa_devolucao}</div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </section>
         <section style={card}>{selectedInvite ? <CadastroTable invite={selectedInvite} modelos={modelos} onOpen={documento => void openCadastroDocument(documento)} onReview={(documento, status) => void reviewCadastroDocument(selectedInvite, documento, status)} onApprove={() => void approveInvite(selectedInvite)} onRevoke={() => void revokeInvite(selectedInvite)} onRegenerate={() => void regenerateInvite(selectedInvite)} onCopy={() => void copyInviteCode(selectedInvite)} onDelete={() => void deleteInvite(selectedInvite)} onRefresh={() => load()} /> : <p style={{ color: C.inkSoft, fontSize: 11 }}>Selecione um cadastro para revisar documentos, copiar o código do convite e acompanhar as quatro etapas.</p>}</section>
       </div>}
 
