@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, FileText, Calendar, Building, Sun, CloudRain, Cloud,
   UserCheck, AlertTriangle, Hammer, CheckCircle2, FileUp,
-  Search, X, Check, Eye, Printer, Award, Clock, Trash2
+  Search, X, Check, Eye, Printer, Award, Clock, Trash2, Edit3, History, Save
 } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { PageTitle } from '@/components/PageTitle'
@@ -18,6 +18,7 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
 type EfetivoTerceiroForm = { empresa_nome: string; funcao: string; quantidade: string; observacoes: string }
 type PlanejadoExecutadoForm = { servico: string; unidade: string; planejada: string; executada: string; observacoes: string }
+type HistoricoEdicao = { id: string; data: string; autor: string; resumo_alteracao: string; campos: { campo: string; antes: string; depois: string }[] }
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
@@ -88,6 +89,41 @@ export default function RDO() {
 
   // Activities state in form
   const [actForm, setActForm] = useState<string[]>([''])
+
+  // ─── EDIT MODE STATES ──────────────────────────────────────────────────────
+  const [editMode, setEditMode] = useState(false)
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editGeral, setEditGeral] = useState({ resumo: '', ocorrencias: '', responsavel: '', cargo: '', crea: '', clima_manha: 'Sol', clima_tarde: 'Sol', condicao_solo: 'Seco', efetivo_proprio: '0', efetivo_terceiros: '0', definicao_servico: '', liberacoes: '' })
+  const [editAtividades, setEditAtividades] = useState<string[]>([''])
+  const [editEquipamentos, setEditEquipamentos] = useState<{ nome: string; status: 'OPERANDO' | 'PARADO' | 'MANUTENÇÃO' }[]>([{ nome: '', status: 'OPERANDO' }])
+  const [editPlanejado, setEditPlanejado] = useState<PlanejadoExecutadoForm[]>([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
+
+  function openEditMode(rdo: RdoCompleto) {
+    setEditGeral({
+      resumo: rdo.resumo ?? '',
+      ocorrencias: rdo.ocorrencias ?? '',
+      responsavel: rdo.responsavel ?? '',
+      cargo: rdo.cargo ?? '',
+      crea: rdo.crea ?? '',
+      clima_manha: rdo.clima_manha ?? 'Sol',
+      clima_tarde: rdo.clima_tarde ?? 'Sol',
+      condicao_solo: rdo.condicao_solo ?? 'Seco',
+      efetivo_proprio: String(rdo.efetivo_proprio ?? 0),
+      efetivo_terceiros: String(rdo.efetivo_terceiros ?? 0),
+      definicao_servico: rdo.definicao_servico ?? '',
+      liberacoes: rdo.liberacoes ?? '',
+    })
+    setEditAtividades(rdo.atividades?.map(a => a.descricao) ?? [''])
+    setEditEquipamentos(rdo.equipamentos?.map(eq => ({ nome: eq.nome, status: eq.status as 'OPERANDO' | 'PARADO' | 'MANUTENÇÃO' })) ?? [{ nome: '', status: 'OPERANDO' }])
+    setEditPlanejado((rdo as any).planejado_executado?.map((p: any) => ({
+      servico: p.servico ?? '',
+      unidade: p.unidade ?? '',
+      planejada: String(p.quantidade_planejada ?? ''),
+      executada: String(p.quantidade_executada ?? ''),
+      observacoes: p.observacoes ?? '',
+    })) ?? [{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
+    setEditMode(true)
+  }
 
   const loadData = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
@@ -307,6 +343,78 @@ export default function RDO() {
 
     // Refresh
     loadData()
+  }
+
+  async function handleUpdateRdo() {
+    if (!selectedRdo) return
+    setSavingEdit(true)
+    try {
+      // Build diff for history
+      const campos: HistoricoEdicao['campos'] = []
+      const check = (campo: string, antes: string, depois: string) => { if (antes !== depois) campos.push({ campo, antes, depois }) }
+      check('Resumo', selectedRdo.resumo ?? '', editGeral.resumo)
+      check('Ocorrências', selectedRdo.ocorrencias ?? '', editGeral.ocorrencias)
+      check('Responsável', selectedRdo.responsavel ?? '', editGeral.responsavel)
+      check('Cargo', selectedRdo.cargo ?? '', editGeral.cargo)
+      check('CREA', selectedRdo.crea ?? '', editGeral.crea)
+      check('Clima Manhã', selectedRdo.clima_manha ?? '', editGeral.clima_manha)
+      check('Clima Tarde', selectedRdo.clima_tarde ?? '', editGeral.clima_tarde)
+      check('Cond. Solo', selectedRdo.condicao_solo ?? '', editGeral.condicao_solo)
+      check('Efetivo Próprio', String(selectedRdo.efetivo_proprio ?? 0), editGeral.efetivo_proprio)
+      check('Efetivo Terceiros', String(selectedRdo.efetivo_terceiros ?? 0), editGeral.efetivo_terceiros)
+      check('Def. Serviços', selectedRdo.definicao_servico ?? '', editGeral.definicao_servico)
+      check('Liberações', selectedRdo.liberacoes ?? '', editGeral.liberacoes)
+
+      const novaEntrada: HistoricoEdicao = {
+        id: crypto.randomUUID(),
+        data: new Date().toISOString(),
+        autor: colaboradorAtivo?.nome ?? 'Usuário',
+        resumo_alteracao: campos.length > 0 ? `${campos.length} campo(s) alterado(s)` : 'Atividades/equipamentos atualizados',
+        campos,
+      }
+      const historicoAtual: HistoricoEdicao[] = Array.isArray((selectedRdo as any).historico_edicoes) ? (selectedRdo as any).historico_edicoes : []
+
+      const { error } = await supabase.from('rdos').update({
+        resumo: editGeral.resumo || null,
+        ocorrencias: editGeral.ocorrencias || null,
+        responsavel: editGeral.responsavel,
+        cargo: editGeral.cargo || null,
+        crea: editGeral.crea || null,
+        clima_manha: editGeral.clima_manha,
+        clima_tarde: editGeral.clima_tarde,
+        condicao_solo: editGeral.condicao_solo,
+        efetivo_proprio: parseInt(editGeral.efetivo_proprio) || 0,
+        efetivo_terceiros: parseInt(editGeral.efetivo_terceiros) || 0,
+        definicao_servico: editGeral.definicao_servico || null,
+        liberacoes: editGeral.liberacoes || null,
+        historico_edicoes: [...historicoAtual, novaEntrada],
+        updated_at: new Date().toISOString(),
+      }).eq('id', selectedRdo.id)
+      if (error) throw error
+
+      // Atividades: delete all + re-insert
+      await supabase.from('rdo_atividades').delete().eq('rdo_id', selectedRdo.id)
+      const validActs = editAtividades.filter(a => a.trim())
+      if (validActs.length) await supabase.from('rdo_atividades').insert(validActs.map(desc => ({ rdo_id: selectedRdo.id, descricao: desc })))
+
+      // Equipamentos: delete all + re-insert
+      await supabase.from('rdo_equipamentos').delete().eq('rdo_id', selectedRdo.id)
+      const validEquips = editEquipamentos.filter(eq => eq.nome.trim())
+      if (validEquips.length) await supabase.from('rdo_equipamentos').insert(validEquips.map(eq => ({ rdo_id: selectedRdo.id, nome: eq.nome, status: eq.status })))
+
+      // Planejado×Executado: delete all + re-insert
+      await supabase.from('rdo_planejado_executado').delete().eq('rdo_id', selectedRdo.id)
+      const validPlan = editPlanejado.filter(p => p.servico.trim())
+      if (validPlan.length) await supabase.from('rdo_planejado_executado').insert(validPlan.map(p => ({ rdo_id: selectedRdo.id, servico: p.servico.trim(), unidade: p.unidade || null, quantidade_planejada: parseFloat(p.planejada) || 0, quantidade_executada: parseFloat(p.executada) || 0, observacoes: p.observacoes || null })))
+
+      toast('RDO atualizado com sucesso!', 'success')
+      setEditMode(false)
+      await loadData(true)
+    } catch (err: unknown) {
+      toast('Erro ao salvar: ' + (err instanceof Error ? err.message : 'falha'), 'error')
+    } finally {
+      setSavingEdit(false)
+    }
   }
 
   const handleSignDigital = async (id: string) => {
@@ -541,26 +649,46 @@ export default function RDO() {
                 title={`Detalhes do Diário de Obra`}
                 action={
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => triggerPrintSingle(selectedRdo)}
-                      style={{ ...inputStyle, background: 'none', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
-                    >
-                      <Printer size={13} /> Imprimir Este
-                    </button>
-                    <button
-                      onClick={(e) => handleDeleteRdo(selectedRdo.id, e)}
-                      title="Excluir Diário de Obra"
-                      style={{ ...inputStyle, background: 'none', border: `1px solid #F8717155`, color: '#F87171', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
-                    >
-                      <Trash2 size={13} /> Excluir
-                    </button>
-                    {selectedRdo.status !== 'Aprovado' && (
+                    {!editMode ? (
                       <button
-                        onClick={() => handleSignDigital(selectedRdo.id)}
-                        style={{ ...inputStyle, background: C.amber, color: '#0b0c0e', border: 'none', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', fontSize: 11, cursor: 'pointer' }}
+                        onClick={() => openEditMode(selectedRdo)}
+                        style={{ ...inputStyle, background: 'none', border: `1px solid ${C.amber}55`, color: C.amber, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
                       >
-                        <Check size={13} /> Assinar
+                        <Edit3 size={13} /> Editar
                       </button>
+                    ) : (
+                      <>
+                        <button onClick={() => setEditMode(false)} style={{ ...inputStyle, background: 'none', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer', color: C.inkSoft }}>
+                          <X size={13} /> Cancelar
+                        </button>
+                        <button onClick={() => void handleUpdateRdo()} disabled={savingEdit} style={{ ...inputStyle, background: C.amber, color: '#0b0c0e', border: 'none', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', fontSize: 11, cursor: 'pointer', opacity: savingEdit ? 0.6 : 1 }}>
+                          <Save size={13} /> {savingEdit ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      </>
+                    )}
+                    {!editMode && (
+                      <>
+                        <button
+                          onClick={() => triggerPrintSingle(selectedRdo)}
+                          style={{ ...inputStyle, background: 'none', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                        >
+                          <Printer size={13} /> Imprimir
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteRdo(selectedRdo.id, e)}
+                          style={{ ...inputStyle, background: 'none', border: `1px solid #F8717155`, color: '#F87171', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                        >
+                          <Trash2 size={13} /> Excluir
+                        </button>
+                        {selectedRdo.status !== 'Aprovado' && (
+                          <button
+                            onClick={() => handleSignDigital(selectedRdo.id)}
+                            style={{ ...inputStyle, background: C.amber, color: '#0b0c0e', border: 'none', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', fontSize: 11, cursor: 'pointer' }}
+                          >
+                            <Check size={13} /> Assinar
+                          </button>
+                        )}
+                      </>
                     )}
                   </div>
                 }
@@ -572,7 +700,15 @@ export default function RDO() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
                     <div>
                       <h4 style={{ fontSize: 14, fontWeight: 900, color: C.ink }}>{selectedRdo.obra?.nome ?? 'Obra'}</h4>
-                      <p style={{ fontSize: 11, color: C.inkSoft }}>Responsável: {selectedRdo.responsavel} {selectedRdo.cargo ? `(${selectedRdo.cargo})` : ''}</p>
+                      {editMode ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
+                          <div><span style={labelStyle}>Responsável</span><input style={inputStyle} value={editGeral.responsavel} onChange={e => setEditGeral(f => ({...f, responsavel: e.target.value}))} /></div>
+                          <div><span style={labelStyle}>Cargo</span><input style={inputStyle} value={editGeral.cargo} onChange={e => setEditGeral(f => ({...f, cargo: e.target.value}))} /></div>
+                          <div><span style={labelStyle}>CREA</span><input style={inputStyle} value={editGeral.crea} onChange={e => setEditGeral(f => ({...f, crea: e.target.value}))} /></div>
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: 11, color: C.inkSoft }}>Responsável: {selectedRdo.responsavel} {selectedRdo.cargo ? `(${selectedRdo.cargo})` : ''}</p>
+                      )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <span style={{ fontSize: 13, fontWeight: 900, color: C.amber }}>RDO-DIGITAL</span>
@@ -581,6 +717,15 @@ export default function RDO() {
                   </div>
 
                   {/* Conditions */}
+                  {editMode ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                      <div><span style={labelStyle}>Clima Manhã</span><select style={inputStyle} value={editGeral.clima_manha} onChange={e => setEditGeral(f => ({...f, clima_manha: e.target.value}))}><option>Sol</option><option>Nublado</option><option>Chuva</option></select></div>
+                      <div><span style={labelStyle}>Clima Tarde</span><select style={inputStyle} value={editGeral.clima_tarde} onChange={e => setEditGeral(f => ({...f, clima_tarde: e.target.value}))}><option>Sol</option><option>Nublado</option><option>Chuva</option></select></div>
+                      <div><span style={labelStyle}>Solo</span><select style={inputStyle} value={editGeral.condicao_solo} onChange={e => setEditGeral(f => ({...f, condicao_solo: e.target.value}))}><option>Seco</option><option>Lama</option></select></div>
+                      <div><span style={labelStyle}>Ef. Próprio</span><input type="number" style={inputStyle} value={editGeral.efetivo_proprio} onChange={e => setEditGeral(f => ({...f, efetivo_proprio: e.target.value}))} /></div>
+                      <div><span style={labelStyle}>Ef. Terc.</span><input type="number" style={inputStyle} value={editGeral.efetivo_terceiros} onChange={e => setEditGeral(f => ({...f, efetivo_terceiros: e.target.value}))} /></div>
+                    </div>
+                  ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
                     <div style={{ background: C.bgCard, padding: 8, borderRadius: 2, border: `1px solid ${C.border}` }}>
                       <span style={labelStyle}>Clima</span>
@@ -597,33 +742,85 @@ export default function RDO() {
                       <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>{Number(selectedRdo.efetivo_proprio) + Number(selectedRdo.efetivo_terceiros)} colab.</span>
                     </div>
                   </div>
+                  )}
+
+                  {/* Resumo e Ocorrências */}
+                  {editMode ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div><span style={labelStyle}>Relato do dia</span><textarea rows={3} style={inputStyle} value={editGeral.resumo} onChange={e => setEditGeral(f => ({...f, resumo: e.target.value}))} /></div>
+                      <div><span style={labelStyle}>Ocorrências</span><textarea rows={2} style={inputStyle} value={editGeral.ocorrencias} onChange={e => setEditGeral(f => ({...f, ocorrencias: e.target.value}))} /></div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div><span style={labelStyle}>Def. de Serviços</span><textarea rows={2} style={inputStyle} value={editGeral.definicao_servico} onChange={e => setEditGeral(f => ({...f, definicao_servico: e.target.value}))} /></div>
+                        <div><span style={labelStyle}>Liberações</span><textarea rows={2} style={inputStyle} value={editGeral.liberacoes} onChange={e => setEditGeral(f => ({...f, liberacoes: e.target.value}))} /></div>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {selectedRdo.resumo && <div><span style={labelStyle}>Relato do dia</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.resumo}</p></div>}
+                      {selectedRdo.ocorrencias && <div><span style={labelStyle}>Ocorrências / Observações</span><div style={{ fontSize: 12, color: C.red, background: `${C.red}05`, border: `1px solid ${C.red}22`, padding: 10, borderRadius: 2 }}>{selectedRdo.ocorrencias}</div></div>}
+                      {(selectedRdo.definicao_servico || selectedRdo.liberacoes) && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><div><span style={labelStyle}>Definição dos serviços</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.definicao_servico || '—'}</p></div><div><span style={labelStyle}>Liberações</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.liberacoes || '—'}</p></div></div>}
+                    </>
+                  )}
 
                   {/* Activities */}
                   <div>
-                    <span style={labelStyle}>Atividades Realizadas</span>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {selectedRdo.atividades?.map((a, i) => (
-                        <div key={i} style={{ fontSize: 12, color: C.ink, display: 'flex', gap: 8 }}>
-                          <span style={{ color: C.amber, fontWeight: 900 }}>•</span>
-                          <span>{a.descricao}</span>
-                        </div>
-                      ))}
-                      {(!selectedRdo.atividades || selectedRdo.atividades.length === 0) && <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhuma atividade registrada.</p>}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={labelStyle}>Atividades Realizadas</span>
+                      {editMode && <button type="button" onClick={() => setEditAtividades(a => [...a, ''])} style={{ fontSize: 9, color: C.amber, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>+ Adicionar</button>}
                     </div>
+                    {editMode ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {editAtividades.map((a, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 6 }}>
+                            <input style={{ ...inputStyle, flex: 1 }} value={a} onChange={e => setEditAtividades(arr => arr.map((x, j) => j === i ? e.target.value : x))} placeholder={`Atividade ${i + 1}`} />
+                            <button type="button" onClick={() => setEditAtividades(arr => arr.filter((_, j) => j !== i))} style={{ color: '#F87171', background: 'none', border: 'none', cursor: 'pointer' }}><X size={13} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {selectedRdo.atividades?.map((a, i) => (
+                          <div key={i} style={{ fontSize: 12, color: C.ink, display: 'flex', gap: 8 }}>
+                            <span style={{ color: C.amber, fontWeight: 900 }}>•</span>
+                            <span>{a.descricao}</span>
+                          </div>
+                        ))}
+                        {(!selectedRdo.atividades || selectedRdo.atividades.length === 0) && <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhuma atividade registrada.</p>}
+                      </div>
+                    )}
                   </div>
 
                   {/* Equipments */}
                   <div>
-                    <span style={labelStyle}>Equipamentos em Canteiro</span>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                      {selectedRdo.equipamentos?.map((eq, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 2, fontSize: 11 }}>
-                          <span style={{ color: C.ink, fontWeight: 700 }}>{eq.nome}</span>
-                          <span style={{ color: eq.status === 'OPERANDO' ? C.green : C.amber, fontWeight: 800 }}>{eq.status}</span>
-                        </div>
-                      ))}
-                      {(!selectedRdo.equipamentos || selectedRdo.equipamentos.length === 0) && <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhum equipamento registrado.</p>}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={labelStyle}>Equipamentos em Canteiro</span>
+                      {editMode && <button type="button" onClick={() => setEditEquipamentos(e => [...e, { nome: '', status: 'OPERANDO' }])} style={{ fontSize: 9, color: C.amber, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>+ Adicionar</button>}
                     </div>
+                    {editMode ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        {editEquipamentos.map((eq, i) => (
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 32px', gap: 6 }}>
+                            <input style={inputStyle} value={eq.nome} onChange={e => setEditEquipamentos(arr => arr.map((x, j) => j === i ? {...x, nome: e.target.value} : x))} placeholder="Nome do equipamento" />
+                            <select style={inputStyle} value={eq.status} onChange={e => setEditEquipamentos(arr => arr.map((x, j) => j === i ? {...x, status: e.target.value as any} : x))}>
+                              <option value="OPERANDO">OPERANDO</option>
+                              <option value="PARADO">PARADO</option>
+                              <option value="MANUTENÇÃO">MANUTENÇÃO</option>
+                            </select>
+                            <button type="button" onClick={() => setEditEquipamentos(arr => arr.filter((_, j) => j !== i))} style={{ color: '#F87171', background: 'none', border: 'none', cursor: 'pointer' }}><X size={13} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        {selectedRdo.equipamentos?.map((eq, i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 2, fontSize: 11 }}>
+                            <span style={{ color: C.ink, fontWeight: 700 }}>{eq.nome}</span>
+                            <span style={{ color: eq.status === 'OPERANDO' ? C.green : C.amber, fontWeight: 800 }}>{eq.status}</span>
+                          </div>
+                        ))}
+                        {(!selectedRdo.equipamentos || selectedRdo.equipamentos.length === 0) && <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhum equipamento registrado.</p>}
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -631,24 +828,31 @@ export default function RDO() {
                     {(selectedRdo as any).terceiros?.length ? <div style={{ display: 'grid', gap: 7 }}>{(selectedRdo as any).terceiros.map((item: any) => <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 60px 110px 120px', gap: 8, alignItems: 'center', padding: '8px 10px', background: C.bgCard, border: `1px solid ${C.border}`, fontSize: 11 }}><strong>{item.empresa_nome}</strong><span>{item.funcao || '—'}</span><span>{item.quantidade} col.</span><span>{item.valor_diaria ? `R$ ${Number(item.valor_diaria).toFixed(2)}/dia` : 'Sem valor'}</span><span style={{ color: item.pagamento_status === 'pago' ? C.green : C.amber, fontWeight: 800 }}>{item.pagamento_status}</span>{item.observacoes && <small style={{ gridColumn: '1 / -1', color: C.inkSoft }}>{item.observacoes}</small>}</div>)}</div> : <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhuma empresa terceirizada detalhada neste RDO.</p>}
                   </div>
 
+                  {/* Planejado x Executado */}
                   <div>
-                    <span style={labelStyle}>Planejado x executado</span>
-                    {(selectedRdo as any).planejado_executado?.length ? <div style={{ display: 'grid', gap: 7 }}>{(selectedRdo as any).planejado_executado.map((item: any) => { const planned = Number(item.quantidade_planejada) || 0; const executed = Number(item.quantidade_executada) || 0; const percentage = planned > 0 ? Math.min(100, executed / planned * 100) : 0; return <div key={item.id} style={{ padding: 9, background: C.bgCard, border: `1px solid ${C.border}`, fontSize: 11 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{item.servico}</strong><span>{executed} / {planned} {item.unidade || ''} ({percentage.toFixed(1)}%)</span></div><div style={{ height: 5, marginTop: 6, background: '#222530', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? C.green : C.amber }} /></div>{item.observacoes && <small style={{ display: 'block', marginTop: 5, color: C.inkSoft }}>{item.observacoes}</small>}</div> })}</div> : <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhum serviço planejado registrado.</p>}
-                  </div>
-
-                  {/* Comments */}
-                  {(selectedRdo.definicao_servico || selectedRdo.liberacoes) && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    <div><span style={labelStyle}>Definição dos serviços</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.definicao_servico || '—'}</p></div>
-                    <div><span style={labelStyle}>Liberações</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.liberacoes || '—'}</p></div>
-                  </div>}
-                  {selectedRdo.ocorrencias && (
-                    <div>
-                      <span style={labelStyle}>Ocorrências / Observações</span>
-                      <div style={{ fontSize: 12, color: C.red, background: `${C.red}05`, border: `1px solid ${C.red}22`, padding: 10, borderRadius: 2 }}>
-                        {selectedRdo.ocorrencias}
-                      </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={labelStyle}>Planejado x Executado</span>
+                      {editMode && <button type="button" onClick={() => setEditPlanejado(p => [...p, { servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])} style={{ fontSize: 9, color: C.amber, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>+ Adicionar</button>}
                     </div>
-                  )}
+                    {editMode ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {editPlanejado.map((p, i) => (
+                          <div key={i} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, padding: 10 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 32px', gap: 6, marginBottom: 6 }}>
+                              <input style={inputStyle} value={p.servico} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, servico: e.target.value} : x))} placeholder="Serviço" />
+                              <input style={inputStyle} value={p.unidade} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, unidade: e.target.value} : x))} placeholder="Unidade" />
+                              <input style={inputStyle} type="number" value={p.planejada} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, planejada: e.target.value} : x))} placeholder="Planejado" />
+                              <input style={inputStyle} type="number" value={p.executada} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, executada: e.target.value} : x))} placeholder="Executado" />
+                              <button type="button" onClick={() => setEditPlanejado(arr => arr.filter((_, j) => j !== i))} style={{ color: '#F87171', background: 'none', border: 'none', cursor: 'pointer' }}><X size={13} /></button>
+                            </div>
+                            <input style={inputStyle} value={p.observacoes} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, observacoes: e.target.value} : x))} placeholder="Observações (opcional)" />
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      (selectedRdo as any).planejado_executado?.length ? <div style={{ display: 'grid', gap: 7 }}>{(selectedRdo as any).planejado_executado.map((item: any) => { const planned = Number(item.quantidade_planejada) || 0; const executed = Number(item.quantidade_executada) || 0; const percentage = planned > 0 ? Math.min(100, executed / planned * 100) : 0; return <div key={item.id} style={{ padding: 9, background: C.bgCard, border: `1px solid ${C.border}`, fontSize: 11 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{item.servico}</strong><span>{executed} / {planned} {item.unidade || ''} ({percentage.toFixed(1)}%)</span></div><div style={{ height: 5, marginTop: 6, background: '#222530', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? C.green : C.amber }} /></div>{item.observacoes && <small style={{ display: 'block', marginTop: 5, color: C.inkSoft }}>{item.observacoes}</small>}</div> })}</div> : <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhum serviço planejado registrado.</p>
+                    )}
+                  </div>
 
                   {/* Signature block */}
                   <div style={{ borderTop: `1px dashed ${C.border}`, paddingTop: 14, marginTop: 10 }}>
@@ -667,6 +871,60 @@ export default function RDO() {
                       </div>
                     )}
                   </div>
+
+                  {/* ─── HISTÓRICO DE MOVIMENTAÇÕES ─── */}
+                  {(() => {
+                    const historico: HistoricoEdicao[] = Array.isArray((selectedRdo as any).historico_edicoes) ? (selectedRdo as any).historico_edicoes : []
+                    const criacao: HistoricoEdicao = {
+                      id: 'criacao',
+                      data: selectedRdo.created_at ?? new Date().toISOString(),
+                      autor: selectedRdo.responsavel ?? 'Sistema',
+                      resumo_alteracao: 'RDO criado',
+                      campos: []
+                    }
+                    const timeline = [criacao, ...historico].reverse()
+                    return (
+                      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
+                          <History size={13} color={C.amber} />
+                          <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Histórico de Movimentações</span>
+                          <span style={{ fontSize: 9, background: `${C.amber}22`, color: C.amber, border: `1px solid ${C.amber}44`, padding: '1px 6px', borderRadius: 3 }}>{timeline.length} registro(s)</span>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                          {timeline.map((item, idx) => (
+                            <div key={item.id} style={{ display: 'flex', gap: 10, position: 'relative' }}>
+                              {/* linha da timeline */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 24, flexShrink: 0 }}>
+                                <div style={{ width: 9, height: 9, borderRadius: '50%', background: idx === 0 ? C.amber : C.border, marginTop: 9, zIndex: 1, border: `2px solid ${idx === 0 ? C.amber : C.inkSoft}`, flexShrink: 0 }} />
+                                {idx < timeline.length - 1 && <div style={{ width: 1, flex: 1, background: C.border, minHeight: 16, marginTop: 2 }} />}
+                              </div>
+                              <div style={{ flex: 1, paddingBottom: 14 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 800, color: idx === 0 ? C.amber : C.ink }}>
+                                    {item.id === 'criacao' ? '🟢 Criação do RDO' : `✏️ ${item.resumo_alteracao}`}
+                                  </span>
+                                  <span style={{ fontSize: 9, color: C.inkSoft }}>{new Date(item.data).toLocaleString('pt-BR')}</span>
+                                </div>
+                                <span style={{ fontSize: 9, color: C.inkSoft }}>por {item.autor}</span>
+                                {item.campos.length > 0 && (
+                                  <div style={{ marginTop: 5, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                                    {item.campos.map((c, ci) => (
+                                      <div key={ci} style={{ fontSize: 9, color: C.inkSoft, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 3, padding: '3px 7px' }}>
+                                        <span style={{ color: C.ink, fontWeight: 700 }}>{c.campo}:</span>{' '}
+                                        <span style={{ color: '#F87171' }}>{c.antes || '(vazio)'}</span>
+                                        {' → '}
+                                        <span style={{ color: C.green }}>{c.depois || '(vazio)'}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })()}
 
                 </div>
               </Panel>
