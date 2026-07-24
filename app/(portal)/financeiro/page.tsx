@@ -382,7 +382,61 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
   const [editandoObra, setEditandoObra] = useState<Obra | null>(null)
   const [editObraForm, setEditObraForm] = useState({ nome: '', cliente: '', endereco: '', valor: '', status: 'Em dia' })
   const [fotoExpandida, setFotoExpandida] = useState<any | null>(null)
+  const [selecionadasFotos, setSelecionadasFotos] = useState<string[]>([])
+  const [processandoLote, setProcessandoLote] = useState(false)
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
+
+  const toggleFotoSelecionada = (id: string) => {
+    setSelecionadasFotos(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const selecionarTodasFotos = (lista: any[]) => {
+    if (selecionadasFotos.length === lista.length) {
+      setSelecionadasFotos([])
+    } else {
+      setSelecionadasFotos(lista.map(f => f.id))
+    }
+  }
+
+  async function excluirFotosEmLote() {
+    if (selecionadasFotos.length === 0) return
+    if (!(await confirm('Excluir Fotos Selecionadas', `Deseja realmente excluir as ${selecionadasFotos.length} fotos selecionadas?`, { confirmLabel: `Excluir (${selecionadasFotos.length})`, confirmColor: C.red }))) return
+    
+    setProcessandoLote(true)
+    const { error } = await supabase.from('fotos').delete().in('id', selecionadasFotos)
+    setProcessandoLote(false)
+    if (error) return toast(error.message, 'error')
+    
+    setSelecionadasFotos([])
+    await load()
+    toast(`${selecionadasFotos.length} fotos excluídas com sucesso.`, 'success')
+  }
+
+  async function baixarFotosEmLote(lista: any[]) {
+    const fotosParaBaixar = lista.filter(f => selecionadasFotos.includes(f.id))
+    if (fotosParaBaixar.length === 0) return
+    toast(`Iniciando download de ${fotosParaBaixar.length} foto(s)...`, 'info')
+    
+    for (let i = 0; i < fotosParaBaixar.length; i++) {
+      const f = fotosParaBaixar[i]
+      try {
+        const response = await fetch(f.resolvedUrl || f.imagem_url)
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const ext = f.imagem_url.includes('.png') ? 'png' : 'jpg'
+        a.download = `${f.legenda || 'foto_obra'}_${i + 1}.${ext}`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        window.URL.revokeObjectURL(url)
+      } catch {
+        // Fallback para abrir link direto
+        window.open(f.resolvedUrl || f.imagem_url, '_blank')
+      }
+    }
+  }
   
   const load = useCallback(async (isBackground = false) => {
     const [{ data: o }, { data: f }] = await Promise.all([
@@ -854,17 +908,49 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
             
             {/* Anexos */}
             <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
                 <h3 style={{ margin: 0, fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}><Camera size={16}/> Galeria de Fotos e Comprovantes</h3>
-                {podeGerenciar && (
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <input style={{ ...input, width: 220 }} placeholder="Legenda da nova foto..." value={legenda} onChange={e => setLegenda(e.target.value)} />
-                    <label style={{ ...btn(C.amber), cursor: 'pointer', padding: '0 12px' }}>
-                      <Plus size={14} /> Anexar
-                      <input hidden type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) void anexarFoto(f); e.currentTarget.value = '' }} />
-                    </label>
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {fotosObra.length > 0 && (
+                    <button
+                      onClick={() => selecionarTodasFotos(fotosObra)}
+                      style={{ ...btnGhost, padding: '6px 10px', fontSize: 11, color: C.ink }}
+                    >
+                      {selecionadasFotos.length === fotosObra.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                    </button>
+                  )}
+
+                  {selecionadasFotos.length > 0 && (
+                    <>
+                      <button
+                        onClick={() => void baixarFotosEmLote(fotosObra)}
+                        style={{ ...btn('#3B82F6'), padding: '6px 12px', fontSize: 11 }}
+                      >
+                        <ArrowDownRight size={13} /> Baixar ({selecionadasFotos.length})
+                      </button>
+
+                      {podeGerenciar && (
+                        <button
+                          onClick={() => void excluirFotosEmLote()}
+                          disabled={processandoLote}
+                          style={{ ...btn('#EF4444'), padding: '6px 12px', fontSize: 11 }}
+                        >
+                          <Trash2 size={13} /> {processandoLote ? 'Excluindo...' : `Excluir (${selecionadasFotos.length})`}
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {podeGerenciar && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input style={{ ...input, width: 180 }} placeholder="Legenda da nova foto..." value={legenda} onChange={e => setLegenda(e.target.value)} />
+                      <label style={{ ...btn(C.amber), cursor: 'pointer', padding: '0 12px' }}>
+                        <Plus size={14} /> Anexar
+                        <input hidden type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) void anexarFoto(f); e.currentTarget.value = '' }} />
+                      </label>
+                    </div>
+                  )}
+                </div>
               </div>
               
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
@@ -874,10 +960,28 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                     ? f.imagem_url
                     : supabase.storage.from(isRdo ? 'rdo-fotos' : 'comprovantes').getPublicUrl(f.imagem_url).data.publicUrl
 
+                  const isChecked = selecionadasFotos.includes(f.id)
+
                   return (
-                    <div key={f.id} style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden', background: '#12141C', position: 'relative' }}>
+                    <div key={f.id} style={{ border: `1px solid ${isChecked ? C.amber : C.border}`, borderRadius: 6, overflow: 'hidden', background: isChecked ? '#1E1B13' : '#12141C', position: 'relative', transition: 'all 0.2s' }}>
                       <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setFotoExpandida({ ...f, resolvedUrl: fotoUrl })}>
                         <img src={fotoUrl} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
+                        
+                        {/* Checkbox de Seleção */}
+                        <div
+                          onClick={e => { e.stopPropagation(); toggleFotoSelecionada(f.id) }}
+                          style={{
+                            position: 'absolute', top: 6, left: 6, width: 22, height: 22, borderRadius: 4,
+                            background: isChecked ? C.amber : 'rgba(11,12,14,0.85)',
+                            border: `1.5px solid ${isChecked ? C.amber : '#fff'}`,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', zIndex: 2, backdropFilter: 'blur(4px)'
+                          }}
+                          title={isChecked ? 'Desmarcar foto' : 'Selecionar foto'}
+                        >
+                          {isChecked && <Check size={14} color="#0B0C0E" strokeWidth={3} />}
+                        </div>
+
                         <div style={{ position: 'absolute', bottom: 6, left: 6, background: isRdo ? '#3B82F6DD' : '#10B981DD', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 800, color: '#fff', backdropFilter: 'blur(3px)' }}>
                           {isRdo ? '📋 Foto RDO' : '💰 Financeiro'}
                         </div>
