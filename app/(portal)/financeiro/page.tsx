@@ -1545,7 +1545,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
       if (ids.length > 0) {
-        qF = qF.in('empresa_id', ids)
+        qF = qF.or(`empresa_id.in.(${ids.join(',')}),empresa_id.is.null`)
         qE = qE.in('id', ids)
         qC = qC.in('empresa_id', ids)
       }
@@ -1949,7 +1949,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
       if (ids.length > 0) {
         qE = qE.in('id', ids)
-        qF = qF.in('empresa_id', ids)
+        qF = qF.or(`empresa_id.in.(${ids.join(',')}),empresa_id.is.null`)
       }
     }
 
