@@ -467,7 +467,98 @@ export default function Obras() {
         <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando fotos e evoluções...</p>
       ) : (
         <>
+          {/* ─── DASHBOARD GLOBAL ─────────────────────────────────────────── */}
+          {(() => {
+            const totalContrato = obrasList.reduce((s, o) => s + Number(o.valor_contrato || 0), 0)
+            const totalMedido   = obrasList.reduce((s, o) => s + Number(o.medido_acumulado || 0), 0)
+            const totalPago     = contas.filter(c => c.tipo === 'pagar' && c.status === 'Pago').reduce((s, c) => s + Number(c.valor), 0)
+            const totalAberto   = contas.filter(c => c.tipo === 'pagar' && c.status !== 'Pago').reduce((s, c) => s + Number(c.valor), 0)
+            const totalRecebido = contas.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + Number(c.valor), 0)
+            const saldo         = totalRecebido - totalPago
+            const progressoMedio = obrasList.length ? obrasList.reduce((s, o) => s + Number(o.progresso || 0), 0) / obrasList.length : 0
+            const totalObras    = obrasList.length
+            const obrasAtivas   = obrasList.filter(o => (o.status || 'Em dia') !== 'Concluído').length
+            const saldoPct      = totalContrato > 0 ? (saldo / totalContrato) * 100 : 0
+
+            const kpis = [
+              { label: 'Total de Obras',      value: String(totalObras),          sub: `${obrasAtivas} ativas`,                       color: C.amber,    icon: '🏗️' },
+              { label: 'Portfólio Contratos', value: fmtMoney(totalContrato),     sub: 'valor contratado total',                      color: '#60A5FA',  icon: '📋' },
+              { label: 'Medido Acumulado',    value: fmtMoney(totalMedido),       sub: `${totalContrato > 0 ? ((totalMedido/totalContrato)*100).toFixed(1) : 0}% do portfólio`, color: '#A78BFA', icon: '📐' },
+              { label: 'Total Pago (Custos)', value: fmtMoney(totalPago),         sub: `+ ${fmtMoney(totalAberto)} em aberto`,         color: C.red,      icon: '💸' },
+              { label: 'Receita Recebida',    value: fmtMoney(totalRecebido),     sub: 'faturamento confirmado',                      color: C.green,    icon: '💰' },
+              { label: 'Saldo do Portfólio',  value: fmtMoney(saldo),             sub: `${saldoPct >= 0 ? '+' : ''}${saldoPct.toFixed(1)}% sobre contratos`, color: saldo >= 0 ? C.green : C.red, icon: saldo >= 0 ? '📈' : '📉' },
+              { label: 'Progresso Médio',     value: `${progressoMedio.toFixed(1)}%`, sub: 'avanço físico ponderado',                color: C.amber,    icon: '⚡' },
+            ]
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* KPI cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
+                  {kpis.map(k => (
+                    <div key={k.label} style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ fontSize: 18 }}>{k.icon}</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>{k.label}</span>
+                      </div>
+                      <span style={{ fontSize: 20, fontWeight: 900, color: k.color, lineHeight: 1.1 }}>{k.value}</span>
+                      <span style={{ fontSize: 9, color: C.inkSoft }}>{k.sub}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Barra de progresso geral do portfólio */}
+                <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>📊 Portfólio de Obras — Progresso Individual</span>
+                    <span style={{ fontSize: 10, color: C.inkSoft }}>{totalObras} obras · progresso médio {progressoMedio.toFixed(1)}%</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+                    {[...obrasList].sort((a, b) => Number(b.progresso || 0) - Number(a.progresso || 0)).map(obra => {
+                      const pct = Math.min(100, Number(obra.progresso || 0))
+                      const medidoPct = Number(obra.valor_contrato || 0) > 0 ? ((Number(obra.medido_acumulado || 0) / Number(obra.valor_contrato)) * 100) : 0
+                      const statusColor = obra.status === 'Atrasado' ? C.red : obra.status === 'Concluído' ? C.green : C.amber
+                      return (
+                        <div key={obra.id}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: C.ink }}>{obra.nome}</span>
+                              <span style={{ fontSize: 8, fontWeight: 900, background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55`, padding: '1px 5px', borderRadius: 3 }}>{obra.status || 'Em dia'}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+                              <span style={{ fontSize: 10, color: '#A78BFA' }}>{fmtMoney(Number(obra.medido_acumulado || 0))} medido</span>
+                              <span style={{ fontSize: 10, color: C.inkSoft }}>{fmtMoney(Number(obra.valor_contrato || 0))}</span>
+                              <span style={{ fontSize: 11, fontWeight: 900, color: pct >= 70 ? C.green : pct >= 30 ? C.amber : C.inkSoft, minWidth: 36, textAlign: 'right' }}>{pct}%</span>
+                            </div>
+                          </div>
+                          {/* Barra dupla: medido (roxo) + progresso físico (âmbar) */}
+                          <div style={{ height: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                            {/* Medido financeiro */}
+                            <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${Math.min(100, medidoPct)}%`, background: '#7C3AED55', borderRadius: 4 }} />
+                            {/* Progresso físico */}
+                            <div style={{ position: 'absolute', top: '25%', left: 0, height: '50%', width: `${pct}%`, background: pct >= 70 ? C.green : C.amber, borderRadius: 4, transition: 'width 0.6s ease' }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: C.inkSoft }}>
+                      <div style={{ width: 12, height: 4, background: '#7C3AED55', border: '1px solid #7C3AED', borderRadius: 2 }} />
+                      Medição financeira acumulada
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: C.inkSoft }}>
+                      <div style={{ width: 12, height: 4, background: C.amber, borderRadius: 2 }} />
+                      Avanço físico informado
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+          {/* ─────────────────────────────────────────────────────────────── */}
+
           <Panel title="Métricas, custos e medições da obra" action={podeGerenciar && <button style={btn()} onClick={() => setShowMedicaoForm(v => !v)}><FilePlus2 size={13}/>Nova medição</button>}>
+
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
               {obrasList.map(obra => <button key={obra.id} onClick={() => setObraSelecionada(obra.nome)} style={{ ...btnGhost, padding: '5px 10px', color: obraAtual?.id === obra.id ? C.amber : C.inkSoft, borderColor: obraAtual?.id === obra.id ? C.amber : C.border }}>{obra.nome}</button>)}
             </div>
