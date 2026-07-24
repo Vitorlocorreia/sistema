@@ -1950,7 +1950,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 800, color: C.ink, fontSize: 14 }}>{f.nome_fantasia || f.razao_social}</span>
+                      <span style={{ fontWeight: 800, color: C.ink, fontSize: 14 }}>{f.razao_social || f.nome_fantasia}</span>
                       <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: f.tipo === 'PF' ? '#3B82F620' : '#10B98120', color: f.tipo === 'PF' ? '#60A5FA' : '#34D399' }}>
                         {f.tipo === 'PF' ? 'PESSOA FÍSICA' : 'PESSOA JURÍDICA'}
                       </span>
@@ -2298,7 +2298,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                   )}
                 </div>
                 <select style={input} value={form.fornecedor_id} onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}>
-                  <option value="">Selecione o fornecedor</option>{fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                  <option value="">Selecione o fornecedor</option>{fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social ?? f.nome_fantasia}</option>)}
                 </select>
               </div>}
               <div>
@@ -2497,7 +2497,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         c.tipo === 'pagar' ? 'Conta a Pagar' : 'Conta a Receber',
         `"${(c.descricao || '').replace(/"/g, '""')}"`,
         `"${(c.empresa?.nome_fantasia || c.empresa?.razao_social || '').replace(/"/g, '""')}"`,
-        `"${(forn?.nome_fantasia || forn?.razao_social || 'Geral').replace(/"/g, '""')}"`,
+        `"${(forn?.razao_social || forn?.nome_fantasia || 'Geral').replace(/"/g, '""')}"`,
         `"${forn?.cnpj || ''}"`,
         `"${forn?.pix || ''}"`,
         `"${forn?.banco || ''}"`,
@@ -2998,7 +2998,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Fornecedor</label>
                   <select style={{ ...input }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
                     <option value="">Todos os fornecedores</option>
-                    {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                    {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social ?? f.nome_fantasia}</option>)}
                   </select>
                 </div>
 
@@ -3232,7 +3232,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         </span>
                       </td>
                       <td style={{ padding: '12px 14px', color: C.inkSoft }}>
-                        <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.nome_fantasia ?? c.fornecedor?.razao_social ?? 'Geral'}</div>
+                        <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.razao_social ?? c.fornecedor?.nome_fantasia ?? 'Geral'}</div>
                         {c.obra && <div style={{ fontSize: 10, color: C.amber }}>Obra: {c.obra.nome}</div>}
                         {c.fornecedor?.pix && <div style={{ fontSize: 10, color: '#34D399', marginTop: 2 }}>PIX: {c.fornecedor.pix}</div>}
                         {(c.fornecedor?.banco) && <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
@@ -3569,7 +3569,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 <label style={label}>Fornecedor</label>
                 <select style={input} value={formEdicao.fornecedor_id || ''} onChange={e => setFormEdicao(f => ({ ...f, fornecedor_id: e.target.value }))}>
                   <option value="">Sem Fornecedor / Outros</option>
-                  {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                  {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social ?? f.nome_fantasia}</option>)}
                 </select>
               </div>
 
