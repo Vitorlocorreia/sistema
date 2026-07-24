@@ -315,13 +315,6 @@ export default function FinanceiroPage() {
       </div>
 
       {/* Tab content */}
-      {tab === 'dashboard' && (
-        <DashboardTab 
-          colaboradorAtivo={colaboradorAtivo!} 
-          permissaoAtiva={permissaoAtiva!} 
-          confirm={confirm}
-        />
-      )}
       {tab === 'empresas' && (
         <EmpresasTab 
           colaboradorAtivo={colaboradorAtivo!} 
