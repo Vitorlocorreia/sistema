@@ -189,6 +189,41 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
     }
   }
 
+  const [editIniciandoOpen, setEditIniciandoOpen] = useState(false)
+  const [dataEfetivaInput, setDataEfetivaInput] = useState('')
+  const [isEfetivoCheck, setIsEfetivoCheck] = useState(false)
+  const [savingEfetivo, setSavingEfetivo] = useState(false)
+
+  function openModalEfetivo() {
+    setDataEfetivaInput(invite.data_inicio_efetivo || new Date().toISOString().slice(0, 10))
+    setIsEfetivoCheck(!!invite.inicio_efetivo)
+    setEditIniciandoOpen(true)
+  }
+
+  async function handleSaveEfetivo() {
+    setSavingEfetivo(true)
+    try {
+      const { error } = await supabase
+        .from('rh_admissao_convites')
+        .update({
+          data_inicio_efetivo: dataEfetivaInput || null,
+          inicio_efetivo: isEfetivoCheck,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', invite.id)
+
+      if (error) throw error
+      toast('Início efetivo atualizado com sucesso!', 'success')
+      setEditIniciandoOpen(false)
+      await onRefresh?.()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Falha ao atualizar início efetivo'
+      toast(msg, 'error')
+    } finally {
+      setSavingEfetivo(false)
+    }
+  }
+
   return <div>
     {/* Cabeçalho com ações do convite */}
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'start', marginBottom: 13 }}>
@@ -210,25 +245,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
           style={{ ...outlineBtn, borderColor: C.amber, color: C.amber }}
-          onClick={async () => {
-            const dataAtual = invite.data_inicio_efetivo || new Date().toISOString().slice(0, 10)
-            const novaData = window.prompt('Informe a Data de Início Efetivo do funcionário (AAAA-MM-DD):', dataAtual)
-            if (novaData === null) return
-            const toggleEfetivo = window.confirm(`Marcar este funcionário como "EM INÍCIO EFETIVO"?\n\n(Data selecionada: ${novaData || 'Sem data'})`)
-            
-            const { error } = await supabase
-              .from('rh_admissao_convites')
-              .update({
-                data_inicio_efetivo: novaData.trim() || null,
-                inicio_efetivo: toggleEfetivo,
-                updated_at: new Date().toISOString()
-              })
-              .eq('id', invite.id)
-
-            if (error) return toast(error.message, 'error')
-            toast('Início efetivo atualizado com sucesso!', 'success')
-            await onRefresh?.()
-          }}
+          onClick={openModalEfetivo}
         >
           ✏️ Alterar Início Efetivo
         </button>
@@ -238,6 +255,80 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
         {invite.status === 'aguardando_aprovacao' && <button style={btn} onClick={onApprove}><CheckCircle2 size={12} />Aprovar cadastro</button>}
       </div>
     </div>
+
+    {/* MODAL REACT DE ALTERAÇÃO DE INÍCIO EFETIVO */}
+    {editIniciandoOpen && (
+      <div style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        background: 'rgba(0, 0, 0, 0.75)',
+        backdropFilter: 'blur(4px)',
+        zIndex: 9999,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16
+      }}>
+        <div style={{
+          background: '#12141C',
+          border: `1px solid ${C.amber}`,
+          borderRadius: 8,
+          padding: 20,
+          maxWidth: 420,
+          width: '100%',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.6)'
+        }}>
+          <h3 style={{ margin: '0 0 8px', fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+            ✏️ Alterar Início Efetivo
+          </h3>
+          <p style={{ fontSize: 11, color: C.inkSoft, margin: '0 0 16px', lineHeight: 1.4 }}>
+            Atualize a data de entrada do funcionário na empresa/obra e defina se ele já está em início efetivo de trabalho.
+          </p>
+
+          <div style={{ display: 'grid', gap: 14 }}>
+            <label style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>
+              Data de Início Efetivo:
+              <input
+                type="date"
+                style={{ ...input, marginTop: 6 }}
+                value={dataEfetivaInput}
+                onChange={e => setDataEfetivaInput(e.target.value)}
+              />
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 11, color: C.amber, fontWeight: 700, cursor: 'pointer', background: '#0B0C0E', padding: '10px 12px', borderRadius: 6, border: `1px solid ${C.border}` }}>
+              <input
+                type="checkbox"
+                checked={isEfetivoCheck}
+                onChange={e => setIsEfetivoCheck(e.target.checked)}
+                style={{ width: 17, height: 17, accentColor: C.amber, cursor: 'pointer' }}
+              />
+              🚀 Já iniciou efetivamente na empresa / obra?
+            </label>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            <button
+              style={{ ...outlineBtn, fontSize: 11, padding: '8px 14px' }}
+              onClick={() => setEditIniciandoOpen(false)}
+              disabled={savingEfetivo}
+            >
+              Cancelar
+            </button>
+            <button
+              style={{ ...btn, fontSize: 11, padding: '8px 14px' }}
+              onClick={() => void handleSaveEfetivo()}
+              disabled={savingEfetivo}
+            >
+              {savingEfetivo ? 'Salvando...' : 'Salvar Alterações'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     {/* ETAPA 4 — GUIA MÉDICA BIDIRECIONAL */}
     {modeloEtapa4 && (
