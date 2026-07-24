@@ -556,15 +556,16 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                     {(() => {
                       const valContrato = Number(o.valor_contrato || 0)
                       const valMedido = Number(o.medido_acumulado || 0)
-                      const pctCalculado = valContrato > 0 ? Math.min(100, Math.round((valMedido / valContrato) * 100)) : (o.progresso || 0)
+                      const pctRaw = valContrato > 0 ? (valMedido / valContrato) * 100 : (o.progresso || 0)
+                      const pctFormatado = pctRaw === 0 ? '0%' : pctRaw < 0.01 ? '<0,01%' : (pctRaw % 1 === 0 ? pctRaw.toFixed(0) + '%' : pctRaw.toFixed(2).replace('.', ',') + '%')
                       return (
                         <>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
                             <span style={{ color: C.inkSoft }}>Progresso Físico</span>
-                            <strong style={{ color: C.amber }}>{pctCalculado}%</strong>
+                            <strong style={{ color: C.amber }}>{pctFormatado}</strong>
                           </div>
                           <div style={{ width: '100%', height: 6, background: '#0B0C0E', borderRadius: 3, overflow: 'hidden' }}>
-                            <div style={{ width: `${Math.min(100, Math.max(0, pctCalculado))}%`, height: '100%', background: C.amber, borderRadius: 3 }} />
+                            <div style={{ width: `${Math.min(100, Math.max(0, pctRaw))}%`, height: '100%', background: C.amber, borderRadius: 3 }} />
                           </div>
                         </>
                       )
@@ -621,8 +622,9 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                   {(() => {
                     const c = Number(obraSelecionada.valor_contrato || 0)
                     const m = Number(obraSelecionada.medido_acumulado || 0)
-                    return c > 0 ? Math.min(100, Math.round((m / c) * 100)) : (obraSelecionada.progresso || 0)
-                  })()}%
+                    const pctRaw = c > 0 ? (m / c) * 100 : (obraSelecionada.progresso || 0)
+                    return pctRaw === 0 ? '0%' : pctRaw < 0.01 ? '<0,01%' : (pctRaw % 1 === 0 ? pctRaw.toFixed(0) + '%' : pctRaw.toFixed(2).replace('.', ',') + '%')
+                  })()}
                 </strong>
               </div>
               <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Fotos do Financeiro</span><strong style={{ fontSize: 14, color: C.ink }}>{fotosObra.length}</strong></div>
