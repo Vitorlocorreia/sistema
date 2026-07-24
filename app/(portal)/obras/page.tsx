@@ -444,6 +444,21 @@ export default function Obras() {
     loadData()
   }
 
+  const salvarUrb = async () => {
+    if (!obraAtual) return
+    const valorNum = Number(urbForm.valor)
+    const { error } = await supabase.from('obras').update({
+      proximo_urb_data: urbForm.data || null,
+      proximo_urb_valor: valorNum || null,
+      proximo_urb_desc: urbForm.desc || null
+    }).eq('id', obraAtual.id)
+    if (error) return toast(`Erro: ${error.message}`, 'error')
+    setShowUrbForm(false)
+    toast('Previsão salva.', 'success')
+    await loadData()
+  }
+
+
   const avancarMedicao = async (medicao: any) => {
     const proximo = medicao.status === 'Rascunho' ? 'Aprovada' : 'Faturada'
     const { error } = await supabase.from('medicoes').update({ status: proximo, updated_at: new Date().toISOString() }).eq('id', medicao.id)
