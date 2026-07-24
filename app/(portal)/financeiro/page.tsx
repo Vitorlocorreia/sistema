@@ -3155,7 +3155,6 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
           </span>
         </div>
         <div style={{ display: 'flex', gap: 18, alignItems: 'center', fontSize: 12 }}>
-          <div><span style={{ color: C.inkSoft }}>Soma Total: </span><strong style={{ color: C.ink, fontWeight: 900 }}>{fmt(totalValorFiltrado)}</strong></div>
           <div><span style={{ color: C.inkSoft }}>Pendente / A Pagar: </span><strong style={{ color: '#F87171', fontWeight: 900 }}>{fmt(totalAPagarFiltrado)}</strong></div>
           <div><span style={{ color: C.inkSoft }}>Pago: </span><strong style={{ color: '#34D399', fontWeight: 900 }}>{fmt(totalPagoFiltrado)}</strong></div>
         </div>
