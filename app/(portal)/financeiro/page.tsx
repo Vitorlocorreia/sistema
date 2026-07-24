@@ -249,6 +249,7 @@ export default function FinanceiroPage() {
     if (abasConfig !== null && abasConfig !== undefined) {
       const abas = abasConfig.split(',').map(a => a.trim()).filter(Boolean)
       if (isAdminGeral && !abas.includes('permissoes')) abas.push('permissoes')
+      if (abas.includes('dashboard') && !abas.includes('obras')) abas.push('obras')
       return abas
     }
 
@@ -752,7 +753,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                           {o.proximo_urb_data && (
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(59, 130, 246, 0.08)', padding: '4px 8px', borderRadius: 4, borderLeft: '2px solid #3B82F6' }}>
                               <span style={{ fontSize: 9, color: '#3B82F6', fontWeight: 800 }}>📅 Próximo URB: {new Date(o.proximo_urb_data + 'T12:00:00').toLocaleDateString('pt-BR')} {o.proximo_urb_desc ? `— ${o.proximo_urb_desc}` : ''}</span>
-                              {o.proximo_urb_valor ? <span style={{ fontSize: 9, fontWeight: 900, color: C.ink }}>{fmt(o.proximo_urb_valor)}</span> : null}
+                              {o.proximo_urb_valor ? <span style={{ fontSize: 9, fontWeight: 900, color: C.ink }}>{fmt(Number(o.proximo_urb_valor))}</span> : null}
                             </div>
                           )}
                         </div>
