@@ -588,7 +588,6 @@ export default function Obras() {
                 <MetricCard icon={indicadores.resultadoRealizado >= 0 ? TrendingUp : TrendingDown} label="Resultado realizado" value={fmtMoney(indicadores.resultadoRealizado)} color={indicadores.resultadoRealizado >= 0 ? C.green : C.red}/>
                 <MetricCard icon={TrendingUp} label="Lucro projetado" value={fmtMoney(indicadores.lucroProjetado)} color={indicadores.lucroProjetado >= 0 ? C.green : C.red} detail={`${indicadores.margem.toFixed(1)}% de margem`}/>
               </div>
-              </div>
               <div style={{ marginTop: 12, padding: 12, background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.2)', borderRadius: 6 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
