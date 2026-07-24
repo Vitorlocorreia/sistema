@@ -377,7 +377,8 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
   const [metricasForm, setMetricasForm] = useState({ bm_atual: '', medido_acumulado: '', observacao: '' })
   const [editandoMedicaoId, setEditandoMedicaoId] = useState<string | null>(null)
   const [editMedicaoForm, setEditMedicaoForm] = useState({ bm: '', medido_acumulado: '', observacao: '' })
-  
+  const [editandoFotoId, setEditandoFotoId] = useState<string | null>(null)
+  const [editFotoLegenda, setEditFotoLegenda] = useState('')
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
   
   const load = useCallback(async (isBackground = false) => {
@@ -405,6 +406,21 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
     const { data: pub } = supabase.storage.from('comprovantes').getPublicUrl(path)
     const { error } = await supabase.from('fotos').insert({ obra_id: obraId, imagem_url: pub.publicUrl, legenda: legenda || file.name, data_iso: new Date().toISOString().slice(0, 10) })
     if (error) return toast(error.message, 'error'); setLegenda(''); await load(); toast('Foto anexada.', 'success')
+  }
+
+  async function excluirFoto(fotoId: string) {
+    if (!(await confirm('Excluir Foto', 'Deseja realmente remover esta foto da galeria?', { confirmLabel: 'Excluir', confirmColor: C.red }))) return
+    const { error } = await supabase.from('fotos').delete().eq('id', fotoId)
+    if (error) return toast(error.message, 'error')
+    await load(); toast('Foto excluída com sucesso.', 'success')
+  }
+
+  async function salvarEdicaoFoto(fotoId: string) {
+    if (!editFotoLegenda.trim()) return toast('Informe a legenda.', 'error')
+    const { error } = await supabase.from('fotos').update({ legenda: editFotoLegenda.trim() }).eq('id', fotoId)
+    if (error) return toast(error.message, 'error')
+    setEditandoFotoId(null)
+    await load(); toast('Legenda da foto atualizada.', 'success')
   }
 
   async function salvarMetricasObra(id: string) {
@@ -802,11 +818,49 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
               
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
                 {fotosObra.map(f => (
-                  <div key={f.id} style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden', background: '#12141C' }}>
-                    <img src={f.imagem_url} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
+                  <div key={f.id} style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden', background: '#12141C', position: 'relative' }}>
+                    <div style={{ position: 'relative' }}>
+                      <img src={f.imagem_url} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
+                      {podeGerenciar && (
+                        <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4, background: 'rgba(11,12,14,0.85)', padding: '2px 4px', borderRadius: 4, backdropFilter: 'blur(4px)' }}>
+                          <button
+                            onClick={() => { setEditandoFotoId(f.id); setEditFotoLegenda(f.legenda || '') }}
+                            style={{ background: 'none', border: 'none', color: C.ink, cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
+                            title="Editar legenda"
+                          >
+                            <Edit3 size={12} color={C.amber} />
+                          </button>
+                          <button
+                            onClick={() => excluirFoto(f.id)}
+                            style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
+                            title="Excluir foto"
+                          >
+                            <Trash2 size={12} color="#F87171" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <div style={{ padding: '8px 10px' }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda'}</div>
-                      <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>{new Date(f.data_iso).toLocaleDateString('pt-BR')}</div>
+                      {editandoFotoId === f.id ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <input
+                            style={{ ...input, fontSize: 11, padding: '4px 6px' }}
+                            value={editFotoLegenda}
+                            onChange={e => setEditFotoLegenda(e.target.value)}
+                            placeholder="Legenda da foto..."
+                            autoFocus
+                          />
+                          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                            <button onClick={() => salvarEdicaoFoto(f.id)} style={{ ...btn(C.amber), padding: '2px 8px', fontSize: 10 }}>Salvar</button>
+                            <button onClick={() => setEditandoFotoId(null)} style={{ ...btnGhost, padding: '2px 8px', fontSize: 10 }}>Cancelar</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda'}</div>
+                          <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>{new Date(f.data_iso).toLocaleDateString('pt-BR')}</div>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))}
