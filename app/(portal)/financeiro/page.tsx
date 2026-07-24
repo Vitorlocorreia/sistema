@@ -549,7 +549,15 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
   }
   
   const obraSelecionada = obras.find(o => o.id === obraId)
-  const fotosObra = fotos.filter(f => f.obra_id === obraId)
+  const fotosObra = useMemo(() => {
+    const raw = fotos.filter(f => f.obra_id === obraId)
+    const seen = new Set<string>()
+    return raw.filter(f => {
+      if (!f.imagem_url || seen.has(f.imagem_url)) return false
+      seen.add(f.imagem_url)
+      return true
+    })
+  }, [fotos, obraId])
   
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -631,7 +639,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontSize: 10, color: C.inkSoft }}>Fotos Anexas</span>
-                        <strong style={{ fontSize: 12, color: C.ink }}>{fotos.filter(f => f.obra_id === o.id).length}</strong>
+                        <strong style={{ fontSize: 12, color: C.ink }}>{new Set(fotos.filter(f => f.obra_id === o.id).map(f => f.imagem_url).filter(Boolean)).size}</strong>
                       </div>
                     </div>
                   </div>
