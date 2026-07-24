@@ -2484,8 +2484,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       onClick={() => setExpandedContaId(isExpanded ? null : c.id)}
                       style={{ 
                         borderBottom: isExpanded ? 'none' : `1px solid ${C.border}`, 
-                        background: aguardandoAprovacao ? '#F9731610' : (isExpanded ? '#12141C' : 'none'),
-                        borderLeft: aguardandoAprovacao ? '3px solid #F97316' : 'none',
+                        background: c.status === 'Bloqueado' ? '#F9731610' : c.status === 'Aguardando aprovação' ? '#3B82F608' : (isExpanded ? '#12141C' : 'none'),
+                        borderLeft: c.status === 'Bloqueado' ? '3px solid #F97316' : c.status === 'Aguardando aprovação' ? '3px solid #3B82F6' : 'none',
                         cursor: 'pointer',
                         transition: 'background 0.2s'
                       }}
@@ -2554,12 +2554,12 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         <span style={{
                           fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
                           letterSpacing: 0.4,
-                          background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#A78BFA20' : aguardandoAprovacao ? '#F9731622' : venc ? '#F8717120' : C.amber + '20',
-                          color: (c.status === 'Bloqueado' || aguardandoAprovacao) ? '#FB923C' : c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#A78BFA' : venc ? '#F87171' : C.amber,
-                          border: (c.status === 'Bloqueado' || aguardandoAprovacao) ? '1px solid #F9731666' : 'none',
-                          boxShadow: (c.status === 'Bloqueado' || aguardandoAprovacao) ? '0 0 8px #F9731633' : 'none'
+                          background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Aguardando aprovação' ? '#3B82F620' : c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#A78BFA20' : venc ? '#F8717120' : C.amber + '20',
+                          color: c.status === 'Bloqueado' ? '#FB923C' : c.status === 'Aguardando aprovação' ? '#60A5FA' : c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#A78BFA' : venc ? '#F87171' : C.amber,
+                          border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Aguardando aprovação' ? '1px solid #3B82F644' : 'none',
+                          boxShadow: c.status === 'Bloqueado' ? '0 0 8px #F9731633' : 'none'
                         }}>
-                          {(c.status === 'Bloqueado' || c.status === 'Aguardando aprovação') ? `🔒 ${c.status.toUpperCase()}` : c.status.toUpperCase()}
+                          {c.status === 'Bloqueado' ? '🔒 BLOQUEADO' : c.status === 'Aguardando aprovação' ? '⏳ AGUARDANDO APROVAÇÃO' : c.status.toUpperCase()}
                         </span>
                         {c.criado_por && (
                           <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
