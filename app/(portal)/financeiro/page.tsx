@@ -1527,8 +1527,9 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     return map
   }, [contasFornecedores])
 
-  // Verifica permissão dinamicamente do banco
-  const podeCriar = permissaoAtiva?.pode_fornecedores
+  // Verifica permissão dinamicamente (seja pela flag ou pela aba ativa)
+  const temAbaFornecedores = permissaoAtiva?.abas_financeiro ? permissaoAtiva.abas_financeiro.split(',').map(a => a.trim()).includes('fornecedores') : false
+  const podeCriar = Boolean(permissaoAtiva?.pode_fornecedores || temAbaFornecedores || colaboradorAtivo.cargo === 'admin_geral')
 
   return (
     <div>
@@ -1724,6 +1725,33 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [ok, setOk]                     = useState(false)
   const [anexoFile, setAnexoFile]       = useState<File | null>(null)
   const [anexoNome, setAnexoNome]       = useState('')
+  const [showNovoFornModal, setShowNovoFornModal] = useState(false)
+  const [salvandoForn, setSalvandoForn] = useState(false)
+  const [fornForm, setFornForm]         = useState({ razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ' as 'PJ'|'PF', pix: '', categoria: '' })
+
+  const salvarNovoFornecedorRapido = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!fornForm.razao_social.trim()) return toast('Informe a Razão Social / Nome (*)', 'error')
+    setSalvandoForn(true)
+    const payload = {
+      razao_social: fornForm.razao_social.trim(),
+      nome_fantasia: fornForm.tipo === 'PJ' ? (fornForm.nome_fantasia.trim() || null) : null,
+      cnpj: fornForm.cnpj.trim() || null,
+      tipo: fornForm.tipo,
+      pix: fornForm.pix.trim() || null,
+      categoria: fornForm.categoria.trim() || null,
+    }
+    const { data, error } = await supabase.from('fornecedores').insert(payload).select().single()
+    setSalvandoForn(false)
+    if (error) return toast(`Erro ao salvar fornecedor: ${error.message}`, 'error')
+    toast('Fornecedor cadastrado com sucesso!', 'success')
+    setShowNovoFornModal(false)
+    setFornForm({ razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ', pix: '', categoria: '' })
+    // Reload fornecedores e seleciona o novo
+    const { data: listF } = await supabase.from('fornecedores').select('*').order('razao_social')
+    setFornecedores(listF || [])
+    if (data) setForm(f => ({ ...f, possui_fornecedor: true, fornecedor_id: data.id }))
+  }
 
   const [form, setForm] = useState({
     tipo: 'pagar' as 'pagar'|'receber',
@@ -1953,9 +1981,21 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                 </select>
               </div>
               {form.possui_fornecedor && <div>
-                <label style={label}>Fornecedor</label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={{ ...label, marginBottom: 0 }}>Fornecedor</label>
+                  {permissaoAtiva?.pode_fornecedores && (
+                    <button
+                      type="button"
+                      onClick={() => setShowNovoFornModal(true)}
+                      style={{ background: 'none', border: 'none', color: C.amber, fontSize: 10, fontWeight: 800, cursor: 'pointer', padding: 0 }}
+                      title="Cadastrar fornecedor rapidamente sem sair da tela"
+                    >
+                      + Novo Fornecedor
+                    </button>
+                  )}
+                </div>
                 <select style={input} value={form.fornecedor_id} onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}>
-                  <option value="">Selecione</option>{fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                  <option value="">Selecione o fornecedor</option>{fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
                 </select>
               </div>}
               <div>
@@ -2034,6 +2074,70 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
           </div>
         </>
       )}
+
+      {/* MODAL CADASTRAR NOVO FORNECEDOR RÁPIDO */}
+      <AnimatePresence>
+        {showNovoFornModal && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, width: '100%', maxWidth: 460, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 900, color: C.ink, margin: 0 }}>👥 Cadastrar Novo Fornecedor</h3>
+                <button onClick={() => setShowNovoFornModal(false)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
+              </div>
+
+              <form onSubmit={salvarNovoFornecedorRapido} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setFornForm(f => ({ ...f, tipo: 'PJ' }))}
+                    style={{ flex: 1, padding: '6px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11, border: `1px solid ${fornForm.tipo === 'PJ' ? C.amber : C.border}`, background: fornForm.tipo === 'PJ' ? C.amber + '18' : 'none', color: fornForm.tipo === 'PJ' ? C.amber : C.inkSoft }}
+                  >Pessoa Jurídica (PJ)</button>
+                  <button
+                    type="button"
+                    onClick={() => setFornForm(f => ({ ...f, tipo: 'PF' }))}
+                    style={{ flex: 1, padding: '6px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11, border: `1px solid ${fornForm.tipo === 'PF' ? '#3B82F6' : C.border}`, background: fornForm.tipo === 'PF' ? '#3B82F618' : 'none', color: fornForm.tipo === 'PF' ? '#60A5FA' : C.inkSoft }}
+                  >Pessoa Física (PF)</button>
+                </div>
+
+                <div>
+                  <label style={label}>{fornForm.tipo === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}</label>
+                  <input style={input} value={fornForm.razao_social} onChange={e => setFornForm({ ...fornForm, razao_social: e.target.value })} placeholder={fornForm.tipo === 'PJ' ? 'Ex: Fornecedor Cimentos LTDA' : 'Ex: João da Silva'} required />
+                </div>
+
+                {fornForm.tipo === 'PJ' && (
+                  <div>
+                    <label style={label}>Nome Fantasia</label>
+                    <input style={input} value={fornForm.nome_fantasia} onChange={e => setFornForm({ ...fornForm, nome_fantasia: e.target.value })} placeholder="Ex: Cimentos Brasil" />
+                  </div>
+                )}
+
+                <div>
+                  <label style={label}>{fornForm.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
+                  <input style={input} value={fornForm.cnpj} onChange={e => setFornForm({ ...fornForm, cnpj: e.target.value })} placeholder={fornForm.tipo === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00'} />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={label}>Chave PIX</label>
+                    <input style={input} value={fornForm.pix} onChange={e => setFornForm({ ...fornForm, pix: e.target.value })} placeholder="CNPJ, E-mail ou Celular" />
+                  </div>
+                  <div>
+                    <label style={label}>Categoria</label>
+                    <input style={input} value={fornForm.categoria} onChange={e => setFornForm({ ...fornForm, categoria: e.target.value })} placeholder="Ex: Materiais, Serviços..." />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
+                  <button type="button" onClick={() => setShowNovoFornModal(false)} style={{ ...btnGhost, padding: '8px 16px' }}>Cancelar</button>
+                  <button type="submit" disabled={salvandoForn} style={{ ...btn(C.amber), padding: '8px 20px' }}>{salvandoForn ? 'Salvando...' : 'Cadastrar Fornecedor'}</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -2125,12 +2229,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     }
   }
 
+  const [obras, setObras]       = useState<Obra[]>([])
+
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
     let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false })
     let qE = supabase.from('empresas').select('*').order('razao_social')
     let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social')
-    
+    let qO = supabase.from('obras').select('*').order('nome')
+
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
       if (ids.length > 0) {
@@ -2140,10 +2247,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       }
     }
 
-    const [{ data: c }, { data: e }, { data: f }] = await Promise.all([qC, qE, qF])
+    const [{ data: c }, { data: e }, { data: f }, { data: o }] = await Promise.all([qC, qE, qF, qO])
     setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
     setFornecedores(f ?? [])
+    setObras(o ?? [])
     setLoading(false)
   }, [colaboradorAtivo])
 
@@ -2317,7 +2425,21 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
   function iniciarEdicao(c: ContaComRelacoes) {
     setEditandoConta(c)
-    setFormEdicao({ descricao: c.descricao, valor: c.valor, data_previsao: c.data_previsao, data_vencimento: c.data_vencimento, status: c.status, categoria: c.categoria || '' })
+    setFormEdicao({
+      tipo: c.tipo,
+      empresa_id: c.empresa_id,
+      fornecedor_id: c.fornecedor_id || '',
+      obra_id: c.obra_id || '',
+      descricao: c.descricao,
+      valor: c.valor,
+      data_previsao: c.data_previsao,
+      data_vencimento: c.data_vencimento,
+      status: c.status,
+      categoria: c.categoria || '',
+      observacoes: c.observacoes || '',
+      recorrencia: c.recorrencia || 'unico',
+      possui_fornecedor: Boolean(c.fornecedor_id)
+    })
   }
 
   async function salvarEdicaoConta() {
@@ -2325,10 +2447,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
     const valorEditadoNum = parseCurrency(formEdicao.valor)
     const mudancas: string[] = []
+    if (editandoConta.tipo !== formEdicao.tipo) mudancas.push(`tipo para "${formEdicao.tipo === 'pagar' ? 'A Pagar' : 'A Receber'}"`)
+    if (editandoConta.empresa_id !== formEdicao.empresa_id) mudancas.push(`empresa`)
+    if (editandoConta.fornecedor_id !== (formEdicao.fornecedor_id || null)) mudancas.push(`fornecedor`)
+    if (editandoConta.obra_id !== (formEdicao.obra_id || null)) mudancas.push(`obra`)
     if (editandoConta.status !== formEdicao.status) mudancas.push(`status de "${editandoConta.status}" para "${formEdicao.status}"`)
     if (editandoConta.descricao !== formEdicao.descricao) mudancas.push(`descrição para "${formEdicao.descricao}"`)
     if (editandoConta.valor !== valorEditadoNum) mudancas.push(`valor para ${fmt(valorEditadoNum)}`)
     if (editandoConta.data_vencimento !== formEdicao.data_vencimento) mudancas.push(`vencimento para ${formEdicao.data_vencimento}`)
+    if (editandoConta.categoria !== (formEdicao.categoria || null)) mudancas.push(`categoria`)
 
     const historicoAtual = Array.isArray(editandoConta.historico_negociacao) ? editandoConta.historico_negociacao : []
     let novoHistorico = historicoAtual
@@ -2338,18 +2465,25 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         data: new Date().toISOString(),
         autor: colaboradorAtivo.nome || 'Usuário',
         tipo: 'alteracao_status',
-        descricao: `Edição manual: alterou ${mudancas.join(', ')}`
+        descricao: `Edição completa do lançamento: alterou ${mudancas.join(', ')}`
       }
       novoHistorico = [...historicoAtual, novoLogItem]
     }
 
     const { error } = await supabase.from('contas').update({
+      tipo: formEdicao.tipo,
+      empresa_id: formEdicao.empresa_id,
+      fornecedor_id: formEdicao.fornecedor_id || null,
+      obra_id: formEdicao.obra_id || null,
       descricao: formEdicao.descricao,
       valor: valorEditadoNum,
       data_previsao: formEdicao.data_previsao,
       data_vencimento: formEdicao.data_vencimento,
       status: formEdicao.status,
       categoria: formEdicao.categoria || null,
+      observacoes: formEdicao.observacoes || null,
+      recorrencia: formEdicao.recorrencia || 'unico',
+      possui_fornecedor: Boolean(formEdicao.fornecedor_id),
       historico_negociacao: novoHistorico
     }).eq('id', editandoConta.id)
     if (error) return toast(error.message, 'error')
@@ -2892,24 +3026,83 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         </div>
       )}
       
-      {/* Modal de Edição de Conta */}
+      {/* Modal de Edição de Conta Completa */}
       {editandoConta && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ ...card, padding: 24, width: '100%', maxWidth: 520 }}>
-            <h3 style={{ margin: '0 0 16px', fontSize: 16, color: C.ink }}>Editar Lançamento</h3>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20 }}>
+          <div style={{ ...card, padding: 24, width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12, marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>✏️ Editar Lançamento Financeiro</h3>
+              <button onClick={() => setEditandoConta(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
+            </div>
             
-            <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
-              <div>
-                <label style={label}>Descrição</label>
-                <input style={input} value={formEdicao.descricao || ''} onChange={e => setFormEdicao(f => ({ ...f, descricao: e.target.value }))} />
+            <div style={{ display: 'grid', gap: 14, marginBottom: 20 }}>
+              {/* Tipo de Lançamento */}
+              <div style={{ display: 'flex', gap: 10 }}>
+                {(['pagar','receber'] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setFormEdicao(f => ({ ...f, tipo: t }))}
+                    style={{
+                      flex: 1, padding: '8px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11,
+                      border: `1px solid ${formEdicao.tipo === t ? (t === 'pagar' ? '#F87171' : '#34D399') : C.border}`,
+                      background: formEdicao.tipo === t ? (t === 'pagar' ? '#F8717118' : '#34D39918') : 'none',
+                      color: formEdicao.tipo === t ? (t === 'pagar' ? '#F87171' : '#34D399') : C.inkSoft,
+                      textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    }}
+                  >
+                    {t === 'pagar' ? <ArrowDownRight size={13} /> : <ArrowUpRight size={13} />}
+                    Conta a {t === 'pagar' ? 'Pagar' : 'Receber'}
+                  </button>
+                ))}
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={label}>Valor (R$)</label>
-                  <input style={input} type="number" step="0.01" value={formEdicao.valor || ''} onChange={e => setFormEdicao(f => ({ ...f, valor: Number(e.target.value) }))} />
+              {/* Empresa & Obra */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={label}>Empresa *</label>
+                  <select
+                    style={input}
+                    value={formEdicao.empresa_id || ''}
+                    onChange={e => setFormEdicao(f => ({ ...f, empresa_id: e.target.value }))}
+                  >
+                    <option value="">Selecione a empresa</option>
+                    {empresas.map(e => (
+                      <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
+                    ))}
+                  </select>
                 </div>
-                <div style={{ flex: 1 }}>
+                <div>
+                  <label style={label}>Obra Vinculada</label>
+                  <select style={input} value={formEdicao.obra_id || ''} onChange={e => setFormEdicao(f => ({ ...f, obra_id: e.target.value }))}>
+                    <option value="">Geral / Administrativo</option>
+                    {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Fornecedor */}
+              <div>
+                <label style={label}>Fornecedor</label>
+                <select style={input} value={formEdicao.fornecedor_id || ''} onChange={e => setFormEdicao(f => ({ ...f, fornecedor_id: e.target.value }))}>
+                  <option value="">Sem Fornecedor / Outros</option>
+                  {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                </select>
+              </div>
+
+              {/* Descrição */}
+              <div>
+                <label style={label}>Descrição do Lançamento *</label>
+                <input style={input} value={formEdicao.descricao || ''} onChange={e => setFormEdicao(f => ({ ...f, descricao: e.target.value }))} placeholder="Ex: NF Cimento CP-II" />
+              </div>
+
+              {/* Valor & Status */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <label style={label}>Valor (R$) *</label>
+                  <input style={input} type="number" step="0.01" value={formEdicao.valor ?? ''} onChange={e => setFormEdicao(f => ({ ...f, valor: Number(e.target.value) }))} />
+                </div>
+                <div>
                   <label style={label}>Status</label>
                   <select style={input} value={formEdicao.status || ''} onChange={e => setFormEdicao(f => ({ ...f, status: e.target.value as any }))}>
                     <option value="Lançado">Lançado</option>
@@ -2924,26 +3117,48 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
-                <div style={{ flex: 1 }}>
+              {/* Categoria, Previsão e Vencimento */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 12 }}>
+                <div>
                   <label style={label}>Categoria</label>
                   <select style={input} value={formEdicao.categoria || ''} onChange={e => setFormEdicao(f => ({ ...f, categoria: e.target.value }))}>
                     <option value="">Selecione a categoria</option>
                     {CATEGORIAS.map(cat => <option key={cat} value={cat}>{cat}</option>)}
                   </select>
                 </div>
-                <div style={{ flex: 1 }}>
+                <div>
                   <label style={label}>Data Previsão</label>
                   <input style={input} type="date" value={formEdicao.data_previsao || ''} onChange={e => setFormEdicao(f => ({ ...f, data_previsao: e.target.value }))} />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div>
                   <label style={label}>Vencimento</label>
                   <input style={input} type="date" value={formEdicao.data_vencimento || ''} onChange={e => setFormEdicao(f => ({ ...f, data_vencimento: e.target.value }))} />
                 </div>
               </div>
+
+              {/* Recorrência */}
+              <div>
+                <label style={label}>Recorrência</label>
+                <select style={input} value={formEdicao.recorrencia || 'unico'} onChange={e => setFormEdicao(f => ({ ...f, recorrencia: e.target.value as any }))}>
+                  <option value="unico">Lançamento Único</option>
+                  <option value="mensal">Mensal</option>
+                  <option value="semanal">Semanal</option>
+                </select>
+              </div>
+
+              {/* Observações */}
+              <div>
+                <label style={label}>Observações / Anotações</label>
+                <textarea
+                  style={{ ...input, height: 64, resize: 'vertical' }}
+                  value={formEdicao.observacoes || ''}
+                  onChange={e => setFormEdicao(f => ({ ...f, observacoes: e.target.value }))}
+                  placeholder="Anotações adicionais do lançamento..."
+                />
+              </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
               <button onClick={() => setEditandoConta(null)} style={{ ...btnGhost, color: C.inkSoft }}>Cancelar</button>
               <button onClick={() => void salvarEdicaoConta()} style={btn(C.amber)}>Salvar Alterações</button>
             </div>
