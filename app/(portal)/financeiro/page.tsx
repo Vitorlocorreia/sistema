@@ -2720,7 +2720,70 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     setFiltOrdem('novo')
   }
 
-  return (
+  const [selecionadasContas, setSelecionadasContas] = useState<string[]>([])
+
+  const toggleContaSelecionada = (id: string) => {
+    setSelecionadasContas(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  const selecionarTodasContas = (lista: ContaComRelacoes[]) => {
+    if (selecionadasContas.length === lista.length) {
+      setSelecionadasContas([])
+    } else {
+      setSelecionadasContas(lista.map(c => c.id))
+    }
+  }
+
+  const exportarContasCSV = (listaExportar: ContaComRelacoes[]) => {
+    if (listaExportar.length === 0) return toast('Nenhum lançamento selecionado para exportar.', 'error')
+
+    const headers = [
+      'ID', 'Tipo', 'Descrição', 'Empresa', 'Fornecedor', 'CNPJ/CPF Fornecedor',
+      'PIX', 'Banco', 'Agência', 'Conta Bancária', 'Obra', 'Categoria',
+      'Valor Original (R$)', 'Status', 'Data Vencimento/Previsao', 'Pago Em',
+      'Criado Por', 'Aprovado Por', 'Observacoes'
+    ]
+
+    const rows = listaExportar.map(c => {
+      const forn = c.fornecedor
+      return [
+        c.id,
+        c.tipo === 'pagar' ? 'Conta a Pagar' : 'Conta a Receber',
+        `"${(c.descricao || '').replace(/"/g, '""')}"`,
+        `"${(c.empresa?.nome_fantasia || c.empresa?.razao_social || '').replace(/"/g, '""')}"`,
+        `"${(forn?.nome_fantasia || forn?.razao_social || 'Geral').replace(/"/g, '""')}"`,
+        `"${forn?.cnpj || ''}"`,
+        `"${forn?.pix || ''}"`,
+        `"${forn?.banco || ''}"`,
+        `"${forn?.agencia || ''}"`,
+        `"${forn?.conta || ''}"`,
+        `"${(c.obra?.nome || 'Geral').replace(/"/g, '""')}"`,
+        `"${(c.categoria || '').replace(/"/g, '""')}"`,
+        c.valor ? c.valor.toFixed(2).replace('.', ',') : '0,00',
+        c.status,
+        c.data_vencimento || c.data_previsao || '',
+        c.pago_em ? new Date(c.pago_em).toLocaleDateString('pt-BR') : '',
+        `"${(c.criado_por || '').replace(/"/g, '""')}"`,
+        `"${(c.aprovado_por || '').replace(/"/g, '""')}"`,
+        `"${(c.observacoes || '').replace(/"/g, '""')}"`
+      ]
+    })
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const qtd = listaExportar.length
+    link.download = `relatorio_pagamentos_${qtd}_itens_${new Date().toISOString().slice(0,10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast(`${qtd} lançamento(s) exportado(s) com sucesso!`, 'success')
+  }
+
+    return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.ink }}>Histórico Financeiro</h2>
@@ -2730,102 +2793,123 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         </div>
       </div>
 
-      {/* ── Barra de busca + botão Filtros ── */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center' }}>
+      {/* ── Barra de busca + botão Filtros + Exportar Excel/CSV ── */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
           <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
           <input style={{ ...input, paddingLeft: 30 }} placeholder="Buscar por descrição ou obra..." value={search} onChange={e => setSearch(e.target.value)} />
         </div>
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setShowFiltros(f => !f)}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${activeFiltrosCount > 0 ? C.amber : C.border}`, borderRadius: 5, background: activeFiltrosCount > 0 ? '#F59E0B14' : '#0B0C0E', color: activeFiltrosCount > 0 ? C.amber : C.inkSoft, padding: '8px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
-            Filtros{activeFiltrosCount > 0 ? ` (${activeFiltrosCount})` : ''}
-            <span style={{ fontSize: 9, opacity: 0.7 }}>{showFiltros ? '▲' : '▼'}</span>
-          </button>
-          {showFiltros && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50, width: 340, background: '#13151A', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, boxShadow: '0 8px 32px rgba(0,0,0,.6)', display: 'grid', gap: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>Filtros avançados</span>
-                {activeFiltrosCount > 0 && <button onClick={clearFiltros} style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>Limpar tudo</button>}
-              </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowFiltros(f => !f)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${activeFiltrosCount > 0 ? C.amber : C.border}`, borderRadius: 5, background: activeFiltrosCount > 0 ? '#F59E0B14' : '#0B0C0E', color: activeFiltrosCount > 0 ? C.amber : C.inkSoft, padding: '8px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
+              Filtros{activeFiltrosCount > 0 ? ` (${activeFiltrosCount})` : ''}
+              <span style={{ fontSize: 9, opacity: 0.7 }}>{showFiltros ? '▲' : '▼'}</span>
+            </button>
+            {showFiltros && (
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50, width: 340, background: '#13151A', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, boxShadow: '0 8px 32px rgba(0,0,0,.6)', display: 'grid', gap: 14 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>Filtros avançados</span>
+                  {activeFiltrosCount > 0 && <button onClick={clearFiltros} style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>Limpar tudo</button>}
+                </div>
 
-              <div style={{ display: 'grid', gap: 6 }}>
-                <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Ordenação</label>
-                <select style={{ ...input }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as 'novo' | 'antigo' | 'maior_valor' | 'menor_valor' | 'az' | 'za')}>
-                  <option value="novo">↓ Mais recente primeiro</option>
-                  <option value="antigo">↑ Mais antigo primeiro</option>
-                  <option value="maior_valor">↓ Maior valor primeiro</option>
-                  <option value="menor_valor">↑ Menor valor primeiro</option>
-                  <option value="az">A → Z (descrição)</option>
-                  <option value="za">Z → A (descrição)</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gap: 6 }}>
-                <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Empresa</label>
-                <select 
-                  style={{ ...input }} 
-                  disabled={(() => {
-                    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-                    return colaboradorAtivo.cargo !== 'admin_geral' && ids.length === 1
-                  })()} 
-                  value={filtEmpresa} 
-                  onChange={e => setFiltEmpresa(e.target.value)}
-                >
-                  <option value="">Todas as empresas autorizadas</option>
-                  {empresas.filter(e => {
-                    if (colaboradorAtivo.cargo === 'admin_geral') return true
-                    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-                    return ids.length === 0 || ids.includes(e.id)
-                  }).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gap: 6 }}>
-                <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Fornecedor</label>
-                <select style={{ ...input }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
-                  <option value="">Todos os fornecedores</option>
-                  {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
-                </select>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Tipo</label>
-                  <select style={{ ...input }} value={filtTipo} onChange={e => setFiltTipo(e.target.value as any)}>
-                    <option value="todos">Todos</option>
-                    <option value="pagar">A Pagar</option>
-                    <option value="receber">A Receber</option>
+                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Ordenação</label>
+                  <select style={{ ...input }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as 'novo' | 'antigo' | 'maior_valor' | 'menor_valor' | 'az' | 'za')}>
+                    <option value="novo">↓ Mais recente primeiro</option>
+                    <option value="antigo">↑ Mais antigo primeiro</option>
+                    <option value="maior_valor">↓ Maior valor primeiro</option>
+                    <option value="menor_valor">↑ Menor valor primeiro</option>
+                    <option value="az">A → Z (descrição)</option>
+                    <option value="za">Z → A (descrição)</option>
                   </select>
                 </div>
+
                 <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Status</label>
-                  <select style={{ ...input }} value={filtStatus} onChange={e => setFiltStatus(e.target.value as any)}>
-                    <option value="todos">Todos</option>
-                    <option value="Lançado">Lançado</option>
-                    <option value="Bloqueado">Bloqueado</option>
-                    <option value="Aguardando aprovação">Aguardando aprovação</option>
-                    <option value="Liberado/OK">Liberado/OK</option>
-                    <option value="A pagar">A pagar</option>
-                    <option value="Pago Parcial">Pago Parcial</option>
-                    <option value="Pago">Pago</option>
-                    <option value="Negado">Negado</option>
+                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Empresa</label>
+                  <select 
+                    style={{ ...input }} 
+                    disabled={(() => {
+                      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                      return colaboradorAtivo.cargo !== 'admin_geral' && ids.length === 1
+                    })()} 
+                    value={filtEmpresa} 
+                    onChange={e => setFiltEmpresa(e.target.value)}
+                  >
+                    <option value="">Todas as empresas autorizadas</option>
+                    {empresas.filter(e => {
+                      if (colaboradorAtivo.cargo === 'admin_geral') return true
+                      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                      return ids.length === 0 || ids.includes(e.id)
+                    }).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
                   </select>
                 </div>
-              </div>
 
-              <div style={{ display: 'grid', gap: 6 }}>
-                <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Vencimento (intervalo)</label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <input title="De" aria-label="Vencimento de" style={{ ...input, flex: 1 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
-                  <span style={{ color: C.inkSoft, fontSize: 11 }}>até</span>
-                  <input title="Até" aria-label="Vencimento até" style={{ ...input, flex: 1 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Fornecedor</label>
+                  <select style={{ ...input }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
+                    <option value="">Todos os fornecedores</option>
+                    {fornecedores.map(f => <option key={f.id} value={f.id}>{f.nome_fantasia ?? f.razao_social}</option>)}
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Tipo</label>
+                    <select style={{ ...input }} value={filtTipo} onChange={e => setFiltTipo(e.target.value as any)}>
+                      <option value="todos">Todos</option>
+                      <option value="pagar">A Pagar</option>
+                      <option value="receber">A Receber</option>
+                    </select>
+                  </div>
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Status</label>
+                    <select style={{ ...input }} value={filtStatus} onChange={e => setFiltStatus(e.target.value as any)}>
+                      <option value="todos">Todos</option>
+                      <option value="Lançado">Lançado</option>
+                      <option value="Bloqueado">Bloqueado</option>
+                      <option value="Aguardando aprovação">Aguardando aprovação</option>
+                      <option value="Liberado/OK">Liberado/OK</option>
+                      <option value="A pagar">A pagar</option>
+                      <option value="Pago Parcial">Pago Parcial</option>
+                      <option value="Pago">Pago</option>
+                      <option value="Negado">Negado</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Vencimento (intervalo)</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <input title="De" aria-label="Vencimento de" style={{ ...input, flex: 1 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
+                    <span style={{ color: C.inkSoft, fontSize: 11 }}>até</span>
+                    <input title="Até" aria-label="Vencimento até" style={{ ...input, flex: 1 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+          </div>
+
+          {/* Botões de Exportação */}
+          {selecionadasContas.length > 0 ? (
+            <button
+              onClick={() => exportarContasCSV(filtered.filter(c => selecionadasContas.includes(c.id)))}
+              style={{ ...btn('#34D399'), padding: '8px 14px', fontSize: 11 }}
+              title="Exportar itens selecionados via checkbox para planilha Excel / CSV"
+            >
+              <FileText size={13} /> Exportar Selecionados ({selecionadasContas.length})
+            </button>
+          ) : (
+            <button
+              onClick={() => exportarContasCSV(filtered)}
+              style={{ ...btnGhost, color: '#34D399', borderColor: '#34D39955', padding: '8px 14px', fontSize: 11 }}
+              title="Exportar todos os lançamentos atualmente filtrados para Excel / CSV"
+            >
+              <FileText size={13} /> Exportar Relatório ({filtered.length})
+            </button>
           )}
         </div>
       </div>
@@ -2837,6 +2921,15 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#0B0C0E' }}>
+                <th style={{ padding: '12px 10px', textAlign: 'center', width: 40 }}>
+                  <input
+                    type="checkbox"
+                    checked={filtered.length > 0 && selecionadasContas.length === filtered.length}
+                    onChange={() => selecionarTodasContas(filtered)}
+                    title={selecionadasContas.length === filtered.length ? 'Desmarcar todos' : 'Marcar todos os filtrados'}
+                    style={{ cursor: 'pointer', width: 15, height: 15, accentColor: C.amber }}
+                  />
+                </th>
                 {['Tipo','Descrição','Empresa','Fornecedor','Vencimento','Valor','Status','Ações'].map(h => (
                   <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: .6, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
@@ -2886,6 +2979,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         transition: 'background 0.2s'
                       }}
                     >
+                      <td style={{ padding: '12px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selecionadasContas.includes(c.id)}
+                          onChange={() => toggleContaSelecionada(c.id)}
+                          style={{ cursor: 'pointer', width: 15, height: 15, accentColor: C.amber }}
+                        />
+                      </td>
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ width: 28, height: 28, borderRadius: 6, background: c.tipo === 'receber' ? '#34D39918' : '#F8717118', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {c.tipo === 'receber' ? <ArrowUpRight size={13} color="#34D399" /> : <ArrowDownRight size={13} color="#F87171" />}
