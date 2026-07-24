@@ -645,9 +645,92 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
             )}
           </AnimatePresence>
           
+          {/* ─── DASHBOARD GLOBAL DE PORTFÓLIO ──────────────────────────── */}
+          {obras.length > 0 && (() => {
+            const totalContrato  = obras.reduce((s, o) => s + Number(o.valor_contrato || 0), 0)
+            const totalMedido    = obras.reduce((s, o) => s + Number(o.medido_acumulado || 0), 0)
+            const saldoMedir     = Math.max(0, totalContrato - totalMedido)
+            const progressoMedio = obras.length ? obras.reduce((s, o) => s + Number(o.progresso || 0), 0) / obras.length : 0
+            const obrasAtivas    = obras.filter(o => o.status !== 'Concluído').length
+
+            const kpis = [
+              { label: 'Total de Obras',       value: String(obras.length),         sub: `${obrasAtivas} ativas`,                                                                                   color: C.amber,   icon: '🏗️' },
+              { label: 'Portfólio Contratos',  value: fmt(totalContrato),           sub: 'soma dos contratos',                                                                                      color: '#60A5FA', icon: '📋' },
+              { label: 'Medido Acumulado',     value: fmt(totalMedido),             sub: `${totalContrato > 0 ? ((totalMedido / totalContrato) * 100).toFixed(1) : 0}% do portfólio`,             color: '#A78BFA', icon: '📐' },
+              { label: 'Saldo a Medir',        value: fmt(saldoMedir),              sub: 'restante para medir',                                                                                     color: C.green,   icon: '💰' },
+              { label: 'Progresso Médio',      value: `${progressoMedio.toFixed(1)}%`, sub: 'média do avanço físico',                                                                              color: C.amber,   icon: '⚡' },
+            ]
+
+            return (
+              <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {/* KPI cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
+                  {kpis.map(k => (
+                    <div key={k.label} style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <span style={{ fontSize: 16 }}>{k.icon}</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>{k.label}</span>
+                      </div>
+                      <span style={{ fontSize: 19, fontWeight: 900, color: k.color, lineHeight: 1.1 }}>{k.value}</span>
+                      <span style={{ fontSize: 9, color: C.inkSoft }}>{k.sub}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Barras de progresso por obra */}
+                <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>📊 Progresso Individual por Obra</span>
+                    <span style={{ fontSize: 10, color: C.inkSoft }}>{obras.length} obras · média {progressoMedio.toFixed(1)}%</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {[...obras].sort((a, b) => Number(b.medido_acumulado || 0) - Number(a.medido_acumulado || 0)).map(o => {
+                      const valContrato = Number(o.valor_contrato || 0)
+                      const valMedido   = Number(o.medido_acumulado || 0)
+                      const pctMedido   = valContrato > 0 ? Math.min(100, (valMedido / valContrato) * 100) : 0
+                      const pctFisico   = Math.min(100, Number(o.progresso || 0))
+                      const statusColor = o.status === 'Atrasado' ? '#EF4444' : o.status === 'Concluído' ? C.green : C.amber
+                      return (
+                        <div key={o.id}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <button onClick={() => setObraId(o.id)} style={{ all: 'unset', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: C.ink }}>{o.nome}</button>
+                              <span style={{ fontSize: 8, fontWeight: 900, background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55`, padding: '1px 5px', borderRadius: 3 }}>{o.status || 'Em dia'}</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                              <span style={{ fontSize: 10, color: '#A78BFA' }}>{fmt(valMedido)}</span>
+                              <span style={{ fontSize: 10, color: C.inkSoft }}>/ {fmt(valContrato)}</span>
+                              <span style={{ fontSize: 11, fontWeight: 900, color: pctMedido >= 70 ? C.green : pctMedido >= 30 ? C.amber : C.inkSoft, minWidth: 40, textAlign: 'right' }}>{pctMedido.toFixed(1)}%</span>
+                            </div>
+                          </div>
+                          <div style={{ height: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${pctMedido}%`, background: '#7C3AED44', borderRadius: 4 }} />
+                            <div style={{ position: 'absolute', top: '25%', left: 0, height: '50%', width: `${pctFisico}%`, background: pctFisico >= 70 ? C.green : C.amber, borderRadius: 4 }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <div style={{ display: 'flex', gap: 16, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: C.inkSoft }}>
+                      <div style={{ width: 12, height: 4, background: '#7C3AED44', border: '1px solid #7C3AED', borderRadius: 2 }} />
+                      Medição financeira acumulada
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: C.inkSoft }}>
+                      <div style={{ width: 12, height: 4, background: C.amber, borderRadius: 2 }} />
+                      Avanço físico
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+          {/* ──────────────────────────────────────────────────────────────── */}
+
           {/* Grid de Obras */}
           {obras.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft }}>Nenhuma obra cadastrada ainda.</div>
+
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {obras.map(o => (
