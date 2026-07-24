@@ -207,7 +207,8 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
         .from('rh_admissao_convites')
         .update({
           data_inicio_efetivo: dataEfetivaInput || null,
-          inicio_efetivo: isEfetivoCheck,
+          // badge automático: true se a data estiver preenchida
+          inicio_efetivo: !!dataEfetivaInput,
           updated_at: new Date().toISOString()
         })
         .eq('id', invite.id)
@@ -285,7 +286,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
             ✏️ Alterar Início Efetivo
           </h3>
           <p style={{ fontSize: 11, color: C.inkSoft, margin: '0 0 16px', lineHeight: 1.4 }}>
-            Atualize a data de entrada do funcionário na empresa/obra e defina se ele já está em início efetivo de trabalho.
+            Informe a data de início efetivo do funcionário. O badge 🚀 é ativado automaticamente ao preencher a data.
           </p>
 
           <div style={{ display: 'grid', gap: 14 }}>
@@ -297,17 +298,15 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                 value={dataEfetivaInput}
                 onChange={e => setDataEfetivaInput(e.target.value)}
               />
+              <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginTop: 3 }}>
+                Deixe em branco para remover o início efetivo
+              </span>
             </label>
 
-            <label style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 11, color: C.amber, fontWeight: 700, cursor: 'pointer', background: '#0B0C0E', padding: '10px 12px', borderRadius: 6, border: `1px solid ${C.border}` }}>
-              <input
-                type="checkbox"
-                checked={isEfetivoCheck}
-                onChange={e => setIsEfetivoCheck(e.target.checked)}
-                style={{ width: 17, height: 17, accentColor: C.amber, cursor: 'pointer' }}
-              />
-              🚀 Já iniciou efetivamente na empresa / obra?
-            </label>
+            {/* Preview automático do badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: 11, fontWeight: 700, background: '#0B0C0E', padding: '10px 12px', borderRadius: 6, border: `1px solid ${dataEfetivaInput ? C.amber + '66' : C.border}`, color: dataEfetivaInput ? C.amber : C.inkSoft }}>
+              {dataEfetivaInput ? '🚀 Badge "Início Efetivo" será ativado' : '⏸ Badge inativo — preencha a data para ativar'}
+            </div>
           </div>
 
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
@@ -822,19 +821,25 @@ export default function RhPage() {
           <p style={{ color: C.inkSoft, fontSize: 10, margin: '6px 0 12px' }}>Preencha os dados que o RH já possui. O candidato receberá o link apenas para enviar os documentos das quatro etapas.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
             {([['nome', 'Nome do candidato *'], ['cpf', 'CPF'], ['matricula', 'Matrícula'], ['email', 'E-mail'], ['telefone', 'Telefone'], ['endereco', 'Endereço'], ['cargo', 'Cargo'], ['obra', 'Obra']] as const).map(([key, placeholder]) => <input key={key} style={input} placeholder={placeholder} value={inviteForm[key]} onChange={event => setInviteForm({ ...inviteForm, [key]: event.target.value })} />)}
-            <label style={{ fontSize: 10, color: C.inkSoft }}>Data de início efetivo<input style={{ ...input, marginTop: 4 }} type="date" value={inviteForm.data_inicio_efetivo} onChange={event => setInviteForm({ ...inviteForm, data_inicio_efetivo: event.target.value })} /></label>
-            <label style={{ fontSize: 10, color: C.inkSoft }}>Validade do link (horas)<input style={{ ...input, marginTop: 4 }} type="number" min={1} max={168} value={inviteForm.validade} onChange={event => setInviteForm({ ...inviteForm, validade: event.target.value })} /></label>
-          </div>
-          <div style={{ marginTop: 10 }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: C.amber, fontWeight: 700, cursor: 'pointer' }}>
+            <label style={{ fontSize: 10, color: C.inkSoft }}>
+              Data de início efetivo
+              {inviteForm.data_inicio_efetivo && (
+                <span style={{ marginLeft: 6, fontSize: 10, color: C.amber, fontWeight: 700 }}>🚀 badge ativo</span>
+              )}
               <input
-                type="checkbox"
-                checked={inviteForm.inicio_efetivo}
-                onChange={e => setInviteForm({ ...inviteForm, inicio_efetivo: e.target.checked })}
-                style={{ width: 16, height: 16, accentColor: C.amber, cursor: 'pointer' }}
+                style={{ ...input, marginTop: 4 }}
+                type="date"
+                value={inviteForm.data_inicio_efetivo}
+                onChange={event => setInviteForm({
+                  ...inviteForm,
+                  data_inicio_efetivo: event.target.value,
+                  // badge automático ao preencher a data
+                  inicio_efetivo: !!event.target.value
+                })}
               />
-              🚀 Já iniciou efetivamente na empresa / obra? (Mesmo pendente de documentos)
+              <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginTop: 3 }}>Ao preencher a data, o badge 🚀 Início Efetivo é ativado automaticamente</span>
             </label>
+            <label style={{ fontSize: 10, color: C.inkSoft }}>Validade do link (horas)<input style={{ ...input, marginTop: 4 }} type="number" min={1} max={168} value={inviteForm.validade} onChange={event => setInviteForm({ ...inviteForm, validade: event.target.value })} /></label>
           </div>
           <button disabled={inviteSaving} style={{ ...btn, marginTop: 12, opacity: inviteSaving ? 0.6 : 1 }} onClick={() => void createInvite()}><ClipboardPlus size={14} />{inviteSaving ? 'Gerando...' : 'Gerar e copiar link'}</button>
         </div>
