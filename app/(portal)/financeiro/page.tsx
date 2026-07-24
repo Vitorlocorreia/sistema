@@ -423,7 +423,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
   const [editandoFotoId, setEditandoFotoId] = useState<string | null>(null)
   const [editFotoLegenda, setEditFotoLegenda] = useState('')
   const [editandoObra, setEditandoObra] = useState<Obra | null>(null)
-  const [editObraForm, setEditObraForm] = useState({ nome: '', cliente: '', endereco: '', valor: '', status: 'Em dia' })
+  const [editObraForm, setEditObraForm] = useState({ nome: '', cliente: '', endereco: '', valor: '', status: 'Em dia', proximo_urb_data: '', proximo_urb_valor: '', proximo_urb_desc: '' })
   const [fotoExpandida, setFotoExpandida] = useState<any | null>(null)
   const [selecionadasFotos, setSelecionadasFotos] = useState<string[]>([])
   const [processandoLote, setProcessandoLote] = useState(false)
@@ -505,7 +505,10 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
       cliente: o.cliente || '',
       endereco: o.endereco || '',
       valor: o.valor_contrato ? String(o.valor_contrato) : '',
-      status: o.status || 'Em dia'
+      status: o.status || 'Em dia',
+      proximo_urb_data: o.proximo_urb_data || '',
+      proximo_urb_valor: o.proximo_urb_valor ? String(o.proximo_urb_valor) : '',
+      proximo_urb_desc: o.proximo_urb_desc || ''
     })
   }
 
@@ -514,6 +517,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
     if (!editandoObra) return
     if (!editObraForm.nome.trim()) return toast('Informe o nome da obra.', 'error')
     const novoValorContrato = parseCurrency(editObraForm.valor)
+    const proximoValor = parseCurrency(editObraForm.proximo_urb_valor)
     const medidoAcum = Number(editandoObra.medido_acumulado || 0)
     const novoProgresso = novoValorContrato > 0 ? Math.min(100, Math.round((medidoAcum / novoValorContrato) * 100)) : 0
     const { error } = await supabase.from('obras').update({
@@ -522,7 +526,10 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
       endereco: editObraForm.endereco.trim() || null,
       valor_contrato: novoValorContrato,
       status: editObraForm.status || 'Em dia',
-      progresso: novoProgresso
+      progresso: novoProgresso,
+      proximo_urb_data: editObraForm.proximo_urb_data || null,
+      proximo_urb_valor: proximoValor > 0 ? proximoValor : null,
+      proximo_urb_desc: editObraForm.proximo_urb_desc.trim() || null
     }).eq('id', editandoObra.id)
     if (error) return toast(error.message, 'error')
     setEditandoObra(null)
@@ -886,6 +893,46 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                 </div>
               </div>
 
+              {/* Previsão do Próximo BM */}
+              <div style={{ marginBottom: 20, padding: 14, background: 'rgba(59, 130, 246, 0.08)', borderRadius: 8, border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, color: '#3B82F6', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    📅 Previsão do Próximo BM
+                  </div>
+                  {podeGerenciar && (
+                    <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: '#3B82F6', padding: '4px 8px', fontSize: 10 }}>
+                      <Edit3 size={12} /> Editar Previsão
+                    </button>
+                  )}
+                </div>
+                {obraSelecionada.proximo_urb_valor || obraSelecionada.proximo_urb_data ? (
+                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {obraSelecionada.proximo_urb_valor && (
+                      <div>
+                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 700 }}>VALOR PREVISTO</span>
+                        <strong style={{ fontSize: 15, color: '#3B82F6' }}>{fmt(Number(obraSelecionada.proximo_urb_valor))}</strong>
+                      </div>
+                    )}
+                    {obraSelecionada.proximo_urb_data && (
+                      <div>
+                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 700 }}>DATA PREVISTA</span>
+                        <strong style={{ fontSize: 13, color: C.ink }}>{new Date(obraSelecionada.proximo_urb_data + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>
+                      </div>
+                    )}
+                    {obraSelecionada.proximo_urb_desc && (
+                      <div>
+                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 700 }}>LOTE / OBSERVAÇÃO</span>
+                        <span style={{ fontSize: 11, color: C.inkSoft }}>{obraSelecionada.proximo_urb_desc}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: C.inkSoft }}>
+                    Nenhuma previsão de BM cadastrada para esta obra. {podeGerenciar && <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ all: 'unset', cursor: 'pointer', color: '#3B82F6', textDecoration: 'underline' }}>Cadastrar agora</button>}
+                  </div>
+                )}
+              </div>
+
               {/* Formulário nova medição */}
               {podeGerenciar && (
                 <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 8, border: `1px dashed ${C.border}`, marginBottom: 20 }}>
@@ -1186,6 +1233,24 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                     <option value="Atrasada">Atrasada</option>
                     <option value="Concluída">Concluída</option>
                   </select>
+                </div>
+
+                <div style={{ padding: 12, background: 'rgba(59, 130, 246, 0.06)', borderRadius: 6, border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                  <label style={{ ...label, color: '#3B82F6' }}>📅 Previsão do Próximo BM</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
+                    <div>
+                      <label style={{ fontSize: 9, color: C.inkSoft }}>Data Prevista</label>
+                      <input type="date" style={input} value={editObraForm.proximo_urb_data} onChange={e => setEditObraForm({ ...editObraForm, proximo_urb_data: e.target.value })} />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: 9, color: C.inkSoft }}>Valor Estimado (R$)</label>
+                      <input style={input} value={editObraForm.proximo_urb_valor} onChange={e => setEditObraForm({ ...editObraForm, proximo_urb_valor: e.target.value })} placeholder="0,00" />
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <label style={{ fontSize: 9, color: C.inkSoft }}>Descrição / Lote</label>
+                    <input style={input} value={editObraForm.proximo_urb_desc} onChange={e => setEditObraForm({ ...editObraForm, proximo_urb_desc: e.target.value })} placeholder="Ex: Liberar Medição Lote 3" />
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
