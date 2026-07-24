@@ -297,23 +297,7 @@ export default function FinanceiroPage() {
           </h1>
         </div>
 
-        {permissaoAtiva?.pode_lancar && (
-          <button
-            onClick={() => setShowImportModal(true)}
-            style={{
-              ...btn('#10B981'),
-              padding: '9px 18px',
-              fontSize: 12,
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              boxShadow: '0 2px 10px rgba(16,185,129,0.2)'
-            }}
-          >
-            <FileSpreadsheet size={16} /> Importar Planilha Excel
-          </button>
-        )}
+
       </div>
 
       {/* Tabs */}
