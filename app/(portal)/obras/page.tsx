@@ -465,7 +465,7 @@ export default function Obras() {
                 <Trash2 size={14} /> Excluir obra selecionada
               </button>
             )}
-            <button onClick={() => { setIsGerenciarOpen(true); setShowFormNova(true); setFormObra({ id: '', nome: '', cliente: '', endereco: '', valor_contrato: '', data_inicio: '', data_fim: '', progresso: 0, status: 'Em dia' }) }} style={{ ...btn(C.amber), gap: 6 }}>
+            <button onClick={() => { setIsGerenciarOpen(true); setShowFormNova(true); setFormObra({ id: '', nome: '', cliente: '', endereco: '', valor_contrato: '', data_inicio: '', data_fim: '', progresso: 0, status: 'Em dia', proximo_urb_data: '', proximo_urb_valor: '', proximo_urb_desc: '' }) }} style={{ ...btn(C.amber), gap: 6 }}>
               <Plus size={14} /> Nova obra
             </button>
             <button onClick={() => setIsGerenciarOpen(true)} style={{ ...btnGhost, gap: 6 }}>
@@ -859,7 +859,8 @@ export default function Obras() {
                       setFormObra({
                         id: '', nome: '', cliente: '', endereco: '',
                         valor_contrato: '', data_inicio: '', data_fim: '',
-                        progresso: 0, status: 'Em dia'
+                        progresso: 0, status: 'Em dia',
+                        proximo_urb_data: '', proximo_urb_valor: '', proximo_urb_desc: ''
                       })
                       setShowFormNova(p => !p)
                     }}
@@ -962,7 +963,7 @@ export default function Obras() {
                       <button type="submit" disabled={savingObra} style={btn(C.amber)}>
                         {savingObra ? 'Salvando...' : formObra.id ? 'Salvar Edição' : 'Criar Obra'}
                       </button>
-                      <button type="button" onClick={() => { setShowFormNova(false); setFormObra({ id:'', nome:'', cliente:'', endereco:'', valor_contrato:'', data_inicio:'', data_fim:'', progresso:0, status:'Em dia' }) }} style={btnGhost}>
+                      <button type="button" onClick={() => { setShowFormNova(false); setFormObra({ id:'', nome:'', cliente:'', endereco:'', valor_contrato:'', data_inicio:'', data_fim:'', progresso:0, status:'Em dia', proximo_urb_data: '', proximo_urb_valor: '', proximo_urb_desc: '' }) }} style={btnGhost}>
                         Cancelar
                       </button>
                     </div>

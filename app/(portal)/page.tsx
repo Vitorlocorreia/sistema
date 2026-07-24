@@ -220,9 +220,9 @@ export default function Dashboard() {
               <span style={{ color: ins.color, fontWeight: 900, lineHeight: 1 }}>{ins.emoji}</span>
               <div style={{ color: C.inkSoft, lineHeight: 1.4 }}>
                 {ins.text}
-                {ins.link && (
-                  <a href={ins.link.href} style={{ color: C.amber, fontWeight: 800, textDecoration: 'underline' }}>
-                    {ins.link.label}
+                {(ins as any).link && (
+                  <a href={(ins as any).link.href} style={{ color: C.amber, fontWeight: 800, textDecoration: 'underline' }}>
+                    {(ins as any).link.label}
                   </a>
                 )}
               </div>
