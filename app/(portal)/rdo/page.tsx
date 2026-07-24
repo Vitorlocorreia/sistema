@@ -60,6 +60,7 @@ export default function RDO() {
   const [filterStatus, setFilterStatus] = useState('Todos')
   const [selectedRdoIds, setSelectedRdoIds] = useState<string[]>([])
   const [overridePrintRdos, setOverridePrintRdos] = useState<RdoCompleto[] | null>(null)
+  const [fotoExpandida, setFotoExpandida] = useState<{ url: string; legenda: string } | null>(null)
 
   // Form states
   const [newObraId, setNewObraId] = useState('')
@@ -886,10 +887,15 @@ export default function RDO() {
                               : ''
                           if (!url) return null
                           return (
-                            <div key={foto.id} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', padding: 6 }}>
+                            <div
+                              key={foto.id}
+                              onClick={() => setFotoExpandida({ url, legenda: foto.legenda || 'Foto do RDO' })}
+                              style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', padding: 6, cursor: 'pointer', transition: 'transform 0.15s ease, border-color 0.15s ease' }}
+                              title="Clique para expandir a imagem"
+                            >
                               <img src={url} alt={foto.legenda || 'Foto RDO'} style={{ width: '100%', height: 95, objectFit: 'cover', borderRadius: 2 }} />
                               <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginTop: 4, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {foto.legenda || 'Foto em campo'}
+                                🔍 {foto.legenda || 'Foto em campo'}
                               </span>
                             </div>
                           )
@@ -1429,6 +1435,94 @@ export default function RDO() {
           </div>
         ))}
       </div>
+
+      {/* Lightbox Modal para fotos expandidas */}
+      <AnimatePresence>
+        {fotoExpandida && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setFotoExpandida(null)}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 99999,
+              background: 'rgba(0, 0, 0, 0.88)',
+              backdropFilter: 'blur(6px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 24,
+              cursor: 'zoom-out'
+            }}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                position: 'relative',
+                maxWidth: '90vw',
+                maxHeight: '85vh',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                background: '#12141C',
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                padding: 16,
+                boxShadow: '0 20px 50px rgba(0,0,0,0.8)'
+              }}
+            >
+              <button
+                onClick={() => setFotoExpandida(null)}
+                style={{
+                  position: 'absolute',
+                  top: 12,
+                  right: 12,
+                  background: 'rgba(255,255,255,0.1)',
+                  border: 'none',
+                  borderRadius: '50%',
+                  width: 32,
+                  height: 32,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: '#fff',
+                  cursor: 'pointer',
+                  zIndex: 10
+                }}
+              >
+                <X size={18} />
+              </button>
+
+              <img
+                src={fotoExpandida.url}
+                alt={fotoExpandida.legenda}
+                style={{
+                  maxWidth: '100%',
+                  maxHeight: '72vh',
+                  objectFit: 'contain',
+                  borderRadius: 4
+                }}
+              />
+
+              <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>
+                  {fotoExpandida.legenda}
+                </span>
+                <a
+                  href={fotoExpandida.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ fontSize: 11, color: C.amber, fontWeight: 700, textDecoration: 'underline' }}
+                >
+                  Abrir imagem original ↗
+                </a>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <style jsx global>{`
         .rdo-print-only {
