@@ -3103,7 +3103,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         const stats = getStatsByStatus(st.value)
                         return (
                           <option key={st.value} value={st.value}>
-                            {st.label} ({stats.count} · {fmt(stats.total)})
+                            {st.label} ({stats.count})
                           </option>
                         )
                       })}
@@ -3144,40 +3144,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         </div>
       </div>
 
-      {/* ── Pills Rápidos de Filtro por Status (Com contagem e totais) ── */}
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 6, marginBottom: 14, scrollbarWidth: 'thin' }}>
-        {listaStatusOpcoes.map(st => {
-          const stats = getStatsByStatus(st.value)
-          const isSelected = filtStatus === st.value
-          return (
-            <button
-              key={st.value}
-              onClick={() => setFiltStatus(st.value as any)}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 12px',
-                borderRadius: 20,
-                border: `1px solid ${isSelected ? C.amber : C.border}`,
-                background: isSelected ? 'rgba(245, 158, 11, 0.15)' : '#0B0C0E',
-                color: isSelected ? C.amber : C.inkSoft,
-                fontSize: 11,
-                fontWeight: 700,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.15s ease'
-              }}
-            >
-              <span>{st.label}</span>
-              <span style={{ background: isSelected ? C.amber : 'rgba(255,255,255,0.1)', color: isSelected ? '#000' : C.ink, padding: '1px 6px', borderRadius: 10, fontSize: 9, fontWeight: 900 }}>
-                {stats.count}
-              </span>
-              {stats.total > 0 && <span style={{ fontSize: 10, opacity: 0.85 }}>({fmt(stats.total)})</span>}
-            </button>
-          )
-        })}
-      </div>
+
 
       {/* ── Resumo Geral dos Resultados Filtrados ── */}
       <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 18px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
