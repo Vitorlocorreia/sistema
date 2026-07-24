@@ -2540,19 +2540,19 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                       <span>Valor Cheio (Original):</span>
                                       <span style={{ fontWeight: 700, color: C.ink }}>{fmt(c.valor)}</span>
                                     </div>
-                                    {valorDesconto !== undefined && (
+                                    {ultimoDesconto?.valor_novo !== undefined && (
                                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#34D399', marginBottom: 4 }}>
                                         <span>Valor c/ Desconto:</span>
-                                        <span>{fmt(valorDesconto)}</span>
+                                        <span>{fmt(Number(ultimoDesconto.valor_novo))}</span>
                                       </div>
                                     )}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#34D399', marginBottom: 4 }}>
                                       <span>Total Pago (Amortizado):</span>
-                                      <span style={{ fontWeight: 700 }}>{fmt(totalPago)}</span>
+                                      <span style={{ fontWeight: 700 }}>{fmt(totalAbatido)}</span>
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.amber, fontWeight: 800, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
                                       <span>{c.tipo === 'receber' ? 'A Receber:' : 'A Pagar:'}</span>
-                                      <span>{fmt(saldoDevedor)}</span>
+                                      <span>{fmt(valorCheioAbatido)}</span>
                                     </div>
                                   </div>
                                 </div>
