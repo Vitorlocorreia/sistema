@@ -50,7 +50,6 @@ const isVencido = (d: string, status: string) => {
 // ─── NAV TABS ────────────────────────────────────────────────────────────────
 const TABS = [
   { id: 'obras',      label: 'Obras & Metricas', icon: Building2 },
-  { id: 'dashboard', label: 'Dashboard', icon: DollarSign },
   { id: 'empresas',  label: 'Empresas',  icon: Building2  },
   { id: 'fornecedores', label: 'Fornecedores', icon: Users },
   { id: 'contas',    label: 'Lançar Conta', icon: Plus     },
@@ -249,7 +248,6 @@ export default function FinanceiroPage() {
     const apps = (colaboradorAtivo?.override_permissoes ? colaboradorAtivo.apps : permissaoAtiva?.apps) || ''
     const tem = (app: string) => apps.split(',').map(item => item.trim()).includes(app)
     const abas: string[] = []
-    if (isAdminGeral) abas.push('dashboard')
     abas.push('historico')
     if (tem('financeiro')) abas.push('contas')
     if (permissaoAtiva?.pode_empresas) abas.push('empresas')
@@ -502,17 +500,13 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
       {/* Visão Geral */}
       {obraId === 'todas' && (
         <div style={{ ...card, padding: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-            <div>
-              <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 800, color: C.ink }}>Visão Geral das Obras</h2>
-              <p style={{ margin: 0, fontSize: 12, color: C.inkSoft }}>Acompanhe o andamento de todos os projetos em andamento.</p>
-            </div>
-            {podeGerenciar && (
+          {podeGerenciar && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
               <button onClick={() => setShowForm(!showForm)} style={btn(showForm ? '#EF4444' : C.amber)}>
                 {showForm ? <X size={14} /> : <Plus size={14} />} {showForm ? 'Cancelar Cadastro' : 'Nova Obra'}
               </button>
-            )}
-          </div>
+            </div>
+          )}
           
           {/* Formulário Retrátil */}
           <AnimatePresence>
@@ -595,7 +589,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
       {obraId !== 'todas' && obraSelecionada && (
         <div style={{ ...card, padding: 24 }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
-            <button onClick={() => { setObraId('todas'); setMetricasForm({ bm_atual: '', medido_acumulado: '', observacao: '' }) }} style={{ ...btnGhost, color: C.inkSoft, padding: '6px 10px' }}>← Visão Geral</button>
+            <button onClick={() => { setObraId('todas'); setMetricasForm({ bm_atual: '', medido_acumulado: '', observacao: '' }) }} style={{ ...btnGhost, color: C.inkSoft, padding: '6px 10px' }}>← Voltar às Obras</button>
             <div style={{ width: 1, height: 24, background: C.border }} />
             <h2 style={{ margin: 0, fontSize: 18, color: C.ink }}>{obraSelecionada.nome}</h2>
             {podeGerenciar && (
@@ -3749,7 +3743,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                               {([
-                                ['dashboard',    '📊 Dashboard'],
                                 ['historico',    '📋 Histórico & Fluxo'],
                                 ['contas',       '➕ Lançar Conta'],
                                 ['empresas',     '🏢 Empresas'],

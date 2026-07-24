@@ -195,9 +195,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   // Route guard: só redireciona se authChecked E apps carregados
   useEffect(() => {
     if (!authChecked || appsAutorizados.length === 0) return
-    if (pathname === '/' && colaborador?.cargo !== 'admin_geral') {
-      const fallback = appsAutorizados.includes('rh') || appsAutorizados.includes('ponto') ? '/rh'
-        : appsAutorizados.includes('obras') ? '/obras'
+    if (pathname === '/') {
+      const fallback = appsAutorizados.includes('financeiro') ? '/financeiro'
+        : appsAutorizados.includes('rh') || appsAutorizados.includes('ponto') ? '/rh'
         : appsAutorizados.includes('rdo') ? '/rdo'
         : appsAutorizados.includes('suprimentos') ? '/suprimentos'
         : '/financeiro'
@@ -336,22 +336,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
 
-        {/* Dashboard link */}
-        <button
-          onClick={() => { router.push('/'); setMobileOpen(false) }}
-          style={{
-            all: 'unset', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 10,
-            padding: '11px 14px', borderRadius: 2, marginBottom: 6,
-            background: pathname === '/' ? '#1E2230' : 'transparent',
-            border: `1px solid ${pathname === '/' ? C.border : 'transparent'}`,
-            color: pathname === '/' ? C.ink : C.inkSoft,
-            fontSize: 13, fontWeight: 700, transition: 'all 0.15s',
-          }}
-          className="hover:text-brand-amber hover:border-brand-border hover:bg-brand-card/50"
-        >
-          <LayoutGrid size={16} /> Visão Geral
-        </button>
+
 
         {/* Section header + edit toggle */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '18px 8px 10px' }}>
