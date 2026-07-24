@@ -553,13 +553,22 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                   {/* Card Body */}
                   <div style={{ padding: '16px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {o.endereco && <div style={{ fontSize: 11, color: C.inkSoft }}><b style={{ color: C.ink }}>📍 Local:</b> {o.endereco}</div>}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                      <span style={{ color: C.inkSoft }}>Progresso Físico</span>
-                      <strong style={{ color: C.amber }}>{o.progresso || 0}%</strong>
-                    </div>
-                    <div style={{ width: '100%', height: 6, background: '#0B0C0E', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.min(100, Math.max(0, o.progresso || 0))}%`, height: '100%', background: C.amber, borderRadius: 3 }} />
-                    </div>
+                    {(() => {
+                      const valContrato = Number(o.valor_contrato || 0)
+                      const valMedido = Number(o.medido_acumulado || 0)
+                      const pctCalculado = valContrato > 0 ? Math.min(100, Math.round((valMedido / valContrato) * 100)) : (o.progresso || 0)
+                      return (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                            <span style={{ color: C.inkSoft }}>Progresso Físico</span>
+                            <strong style={{ color: C.amber }}>{pctCalculado}%</strong>
+                          </div>
+                          <div style={{ width: '100%', height: 6, background: '#0B0C0E', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ width: `${Math.min(100, Math.max(0, pctCalculado))}%`, height: '100%', background: C.amber, borderRadius: 3 }} />
+                          </div>
+                        </>
+                      )
+                    })()}
                     
                     <div style={{ display: 'flex', gap: 16, marginTop: 'auto', paddingTop: 12, borderTop: `1px dashed ${C.border}` }}>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -606,7 +615,16 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
             <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', background: '#12141C', padding: 16, borderRadius: 8, border: `1px solid ${C.border}` }}>
               <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Cliente</span><strong style={{ fontSize: 14, color: C.ink }}>{obraSelecionada.cliente || '—'}</strong></div>
               <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Contrato</span><strong style={{ fontSize: 14, color: C.ink }}>{fmt(Number(obraSelecionada.valor_contrato || 0))}</strong></div>
-              <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Progresso</span><strong style={{ fontSize: 14, color: C.amber }}>{obraSelecionada.progresso}%</strong></div>
+              <div>
+                <span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Progresso</span>
+                <strong style={{ fontSize: 14, color: C.amber }}>
+                  {(() => {
+                    const c = Number(obraSelecionada.valor_contrato || 0)
+                    const m = Number(obraSelecionada.medido_acumulado || 0)
+                    return c > 0 ? Math.min(100, Math.round((m / c) * 100)) : (obraSelecionada.progresso || 0)
+                  })()}%
+                </strong>
+              </div>
               <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Fotos do Financeiro</span><strong style={{ fontSize: 14, color: C.ink }}>{fotosObra.length}</strong></div>
             </div>
             
