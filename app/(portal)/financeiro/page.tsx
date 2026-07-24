@@ -379,6 +379,8 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
   const [editMedicaoForm, setEditMedicaoForm] = useState({ bm: '', medido_acumulado: '', observacao: '' })
   const [editandoFotoId, setEditandoFotoId] = useState<string | null>(null)
   const [editFotoLegenda, setEditFotoLegenda] = useState('')
+  const [editandoObra, setEditandoObra] = useState<Obra | null>(null)
+  const [editObraForm, setEditObraForm] = useState({ nome: '', cliente: '', endereco: '', valor: '', status: 'Em dia' })
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
   
   const load = useCallback(async (isBackground = false) => {
@@ -396,6 +398,38 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
     e.preventDefault(); if (!form.nome.trim()) return toast('Informe o nome da obra.', 'error')
     const { data, error } = await supabase.from('obras').insert({ nome: form.nome.trim(), cliente: form.cliente || null, endereco: form.endereco || null, valor_contrato: Number(form.valor) || 0, progresso: 0, status: 'Em dia' }).select().single()
     if (error) return toast(error.message, 'error'); setForm({ nome: '', cliente: '', endereco: '', valor: '' }); setShowForm(false); setObraId(data.id); await load(); toast('Obra criada.', 'success')
+  }
+
+  function abrirEdicaoObra(o: Obra) {
+    setEditandoObra(o)
+    setEditObraForm({
+      nome: o.nome || '',
+      cliente: o.cliente || '',
+      endereco: o.endereco || '',
+      valor: o.valor_contrato ? String(o.valor_contrato) : '',
+      status: o.status || 'Em dia'
+    })
+  }
+
+  async function salvarEdicaoObra(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editandoObra) return
+    if (!editObraForm.nome.trim()) return toast('Informe o nome da obra.', 'error')
+    const novoValorContrato = parseCurrency(editObraForm.valor)
+    const medidoAcum = Number(editandoObra.medido_acumulado || 0)
+    const novoProgresso = novoValorContrato > 0 ? Math.min(100, Math.round((medidoAcum / novoValorContrato) * 100)) : 0
+    const { error } = await supabase.from('obras').update({
+      nome: editObraForm.nome.trim(),
+      cliente: editObraForm.cliente.trim() || null,
+      endereco: editObraForm.endereco.trim() || null,
+      valor_contrato: novoValorContrato,
+      status: editObraForm.status || 'Em dia',
+      progresso: novoProgresso
+    }).eq('id', editandoObra.id)
+    if (error) return toast(error.message, 'error')
+    setEditandoObra(null)
+    await load()
+    toast('Obra atualizada com sucesso!', 'success')
   }
   
   async function anexarFoto(file: File) {
@@ -605,9 +639,14 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                   <div style={{ padding: '12px 20px', background: 'rgba(0,0,0,0.2)', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <button onClick={() => setObraId(o.id)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}>Ver Detalhes <ArrowUpRight size={14} /></button>
                     {podeGerenciar && (
-                      <button onClick={() => excluirObra(o.id, o.nome)} style={{ all: 'unset', cursor: 'pointer', padding: 6, color: C.inkSoft, opacity: 0.6 }} title="Excluir obra">
-                        <Trash2 size={15} color="#EF4444" />
-                      </button>
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        <button onClick={() => abrirEdicaoObra(o)} style={{ all: 'unset', cursor: 'pointer', padding: 6, color: C.amber, opacity: 0.8 }} title="Editar obra">
+                          <Edit3 size={15} color={C.amber} />
+                        </button>
+                        <button onClick={() => excluirObra(o.id, o.nome)} style={{ all: 'unset', cursor: 'pointer', padding: 6, color: C.inkSoft, opacity: 0.6 }} title="Excluir obra">
+                          <Trash2 size={15} color="#EF4444" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -625,7 +664,10 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
             <div style={{ width: 1, height: 24, background: C.border }} />
             <h2 style={{ margin: 0, fontSize: 18, color: C.ink }}>{obraSelecionada.nome}</h2>
             {podeGerenciar && (
-               <button onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)} style={{ ...btnGhost, color: '#EF4444', marginLeft: 'auto', padding: '6px 10px' }}><Trash2 size={14}/> Excluir Obra</button>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+                <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Edit3 size={14}/> Editar Obra</button>
+                <button onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)} style={{ ...btnGhost, color: '#EF4444', padding: '6px 12px' }}><Trash2 size={14}/> Excluir Obra</button>
+              </div>
             )}
           </div>
           
@@ -874,7 +916,55 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
           </div>
         </div>
       )}
-      
+
+      {/* MODAL EDITAR OBRA */}
+      <AnimatePresence>
+        {editandoObra && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, width: '100%', maxWidth: 460, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+                <h3 style={{ fontSize: 16, fontWeight: 900, color: C.ink, margin: 0 }}>✏️ Editar Obra</h3>
+                <button onClick={() => setEditandoObra(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
+              </div>
+
+              <form onSubmit={salvarEdicaoObra} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={label}>Nome da Obra *</label>
+                  <input style={input} value={editObraForm.nome} onChange={e => setEditObraForm({ ...editObraForm, nome: e.target.value })} placeholder="Ex: LOTE 07" />
+                </div>
+                <div>
+                  <label style={label}>Cliente</label>
+                  <input style={input} value={editObraForm.cliente} onChange={e => setEditObraForm({ ...editObraForm, cliente: e.target.value })} placeholder="Ex: Governo do Estado" />
+                </div>
+                <div>
+                  <label style={label}>Endereço / Localização</label>
+                  <input style={input} value={editObraForm.endereco} onChange={e => setEditObraForm({ ...editObraForm, endereco: e.target.value })} placeholder="Ex: Recife - PE" />
+                </div>
+                <div>
+                  <label style={label}>Valor do Contrato (R$)</label>
+                  <input style={input} value={editObraForm.valor} onChange={e => setEditObraForm({ ...editObraForm, valor: e.target.value })} placeholder="0,00" />
+                </div>
+                <div>
+                  <label style={label}>Status</label>
+                  <select style={input} value={editObraForm.status} onChange={e => setEditObraForm({ ...editObraForm, status: e.target.value })}>
+                    <option value="Em dia">Em dia</option>
+                    <option value="Em andamento">Em andamento</option>
+                    <option value="Atrasada">Atrasada</option>
+                    <option value="Concluída">Concluída</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
+                  <button type="button" onClick={() => setEditandoObra(null)} style={{ ...btnGhost, padding: '8px 16px' }}>Cancelar</button>
+                  <button type="submit" style={{ ...btn(C.amber), padding: '8px 20px' }}>Salvar Alterações</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
