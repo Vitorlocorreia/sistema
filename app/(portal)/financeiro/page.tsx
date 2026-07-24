@@ -861,11 +861,15 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
               
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
                 {fotosObra.map(f => {
-                  const isRdo = Boolean(f.rdo_id)
+                  const isRdo = Boolean(f.rdo_id) || (f.imagem_url && !f.imagem_url.includes('comprovantes'))
+                  const fotoUrl = !f.imagem_url ? '' : f.imagem_url.startsWith('http')
+                    ? f.imagem_url
+                    : supabase.storage.from(isRdo ? 'rdo-fotos' : 'comprovantes').getPublicUrl(f.imagem_url).data.publicUrl
+
                   return (
                     <div key={f.id} style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden', background: '#12141C', position: 'relative' }}>
-                      <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setFotoExpandida(f)}>
-                        <img src={f.imagem_url} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
+                      <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setFotoExpandida({ ...f, resolvedUrl: fotoUrl })}>
+                        <img src={fotoUrl} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
                         <div style={{ position: 'absolute', bottom: 6, left: 6, background: isRdo ? '#3B82F6DD' : '#10B981DD', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 800, color: '#fff', backdropFilter: 'blur(3px)' }}>
                           {isRdo ? '📋 Foto RDO' : '💰 Financeiro'}
                         </div>
@@ -982,7 +986,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
           >
             <div style={{ position: 'absolute', top: 20, right: 20, display: 'flex', gap: 10, alignItems: 'center' }}>
               <a
-                href={fotoExpandida.imagem_url}
+                href={fotoExpandida.resolvedUrl || fotoExpandida.imagem_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
@@ -1006,7 +1010,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
               onClick={e => e.stopPropagation()}
             >
               <img
-                src={fotoExpandida.imagem_url}
+                src={fotoExpandida.resolvedUrl || fotoExpandida.imagem_url}
                 alt={fotoExpandida.legenda || 'Foto da Obra'}
                 style={{ maxWidth: '100%', maxHeight: '75vh', borderRadius: 8, objectFit: 'contain', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', border: `1px solid ${C.border}` }}
               />
