@@ -2343,17 +2343,25 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 const isExpanded = expandedContaId === c.id
 
                 const historico = c.historico_negociacao || []
+                
+                // Soma todos os pagamentos parciais registrados no histórico
                 const totalPagoHistorico = historico
-                  .filter(h => h.tipo === 'pagamento_parcial' && Number(h.valor_pago) > 0)
-                  .reduce((acc, h) => acc + Number(h.valor_pago || 0), 0)
-                const totalPago = Math.min(Number(c.valor || 0), totalPagoHistorico)
-                const valorDesconto = historico.filter(h => h.tipo === 'desconto' && h.valor_novo).slice(-1)[0]?.valor_novo
-                const valorBase = valorDesconto !== undefined ? valorDesconto : c.valor
-                const valorCheioAbatido = Math.max(0, valorBase - totalPago)
-                const saldoDevedor = valorCheioAbatido
+                  .reduce((acc, h) => {
+                    const val = Number(h.valor_pago || (h.tipo === 'pagamento_parcial' ? h.valor_novo : 0) || 0)
+                    return acc + (val > 0 ? val : 0)
+                  }, 0)
 
-                const ultimaNegociacao = [...historico].reverse().find(h => (h.tipo === 'pagamento_parcial' && h.valor_pago) || (h.tipo === 'desconto' && h.valor_novo))
-                const valorNegociadoHoje = ultimaNegociacao?.valor_pago ?? ultimaNegociacao?.valor_novo
+                // Verifica se há desconto aplicado
+                const ultimoDesconto = [...historico].reverse().find(h => h.tipo === 'desconto' && h.valor_novo)
+                const valorBase = ultimoDesconto?.valor_novo !== undefined ? Number(ultimoDesconto.valor_novo) : Number(c.valor || 0)
+                
+                // Valor restante a pagar/receber (saldo devedor)
+                const totalAbatido = Math.min(valorBase, totalPagoHistorico)
+                const valorCheioAbatido = Math.max(0, valorBase - totalAbatido)
+
+                // Última negociação / pagamento efetuado
+                const ultimaNegociacao = [...historico].reverse().find(h => Number(h.valor_pago || 0) > 0 || Number(h.valor_novo || 0) > 0)
+                const valorNegociadoHoje = ultimaNegociacao ? (Number(ultimaNegociacao.valor_pago || 0) || Number(ultimaNegociacao.valor_novo || 0)) : undefined
 
                 return (
                   <Fragment key={c.id}>
@@ -2411,9 +2419,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
                       <td style={{ padding: '12px 14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
                         <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13 }}>
-                          {fmt(totalPago > 0 ? valorCheioAbatido : c.valor)}
+                          {fmt((pagoParcial || totalPagoHistorico > 0) ? valorCheioAbatido : c.valor)}
                         </div>
-                        {valorNegociadoHoje !== undefined && (
+                        {valorNegociadoHoje !== undefined && valorNegociadoHoje > 0 && (
                           <div style={{ marginTop: 4 }}>
                             <div style={{ fontSize: 10, color: C.amber, fontWeight: 800 }}>
                               {c.tipo === 'receber' ? 'A receber (hoje): ' : 'A pagar (hoje): '}{fmt(valorNegociadoHoje)}
