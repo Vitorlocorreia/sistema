@@ -873,6 +873,33 @@ export default function RDO() {
                     )}
                   </div>
 
+                  {/* Registro Fotográfico na tela */}
+                  <div>
+                    <span style={labelStyle}>📷 Registro Fotográfico ({selectedRdo.fotos?.length || 0})</span>
+                    {selectedRdo.fotos && selectedRdo.fotos.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, marginTop: 8 }}>
+                        {selectedRdo.fotos.map(foto => {
+                          const url = foto.imagem_url?.startsWith('http')
+                            ? foto.imagem_url
+                            : foto.imagem_url
+                              ? supabase.storage.from(foto.imagem_url.includes('comprovantes') ? 'comprovantes' : 'rdo-fotos').getPublicUrl(foto.imagem_url).data.publicUrl
+                              : ''
+                          if (!url) return null
+                          return (
+                            <div key={foto.id} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', padding: 6 }}>
+                              <img src={url} alt={foto.legenda || 'Foto RDO'} style={{ width: '100%', height: 95, objectFit: 'cover', borderRadius: 2 }} />
+                              <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginTop: 4, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {foto.legenda || 'Foto em campo'}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <p style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>Nenhuma foto anexada a este RDO.</p>
+                    )}
+                  </div>
+
                   {/* Signature block */}
                   <div style={{ borderTop: `1px dashed ${C.border}`, paddingTop: 14, marginTop: 10 }}>
                     {selectedRdo.status === 'Aprovado' && selectedRdo.assinatura_at ? (
