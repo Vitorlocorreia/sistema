@@ -250,6 +250,7 @@ export interface Conta {
   aprovado_em: string | null
   criado_por?: string | null
   historico_negociacao?: ItemNegociacao[] | null
+  codigo_sequencial?: number | null
   created_at: string
 }
 

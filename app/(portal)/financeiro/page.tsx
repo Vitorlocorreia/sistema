@@ -1,11 +1,12 @@
 'use client'
 import React, { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
+import * as XLSX from 'xlsx'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus,
   Building2, Users, FileText, CheckCircle, Clock, X,
   Search, RefreshCw, ArrowUpRight, ArrowDownRight, Calendar,
   Shield, Check, AlertTriangle, Paperclip, Eye, UserPlus, ToggleLeft, ToggleRight,
-  Edit3, Sliders, Camera, Trash2
+  Edit3, Sliders, Camera, Trash2, FileSpreadsheet, Upload, Download, CheckCircle2
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
@@ -21,6 +22,12 @@ const fmt = (v: number) =>
 const fmtDate = (d: string) => {
   if (!d) return '—'
   return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR')
+}
+
+const fmtCodigo = (c: { tipo?: string; codigo_sequencial?: number | null }) => {
+  if (!c || !c.codigo_sequencial) return ''
+  const pref = c.tipo === 'receber' ? 'REC' : 'PAG'
+  return `${pref}-${String(c.codigo_sequencial).padStart(5, '0')}`
 }
 
 const parseCurrency = (val: string | number | undefined | null): number => {
@@ -143,6 +150,7 @@ export default function FinanceiroPage() {
   
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [loadingAcesso, setLoadingAcesso] = useState(true)
+  const [showImportModal, setShowImportModal] = useState(false)
 
   // Carrega colaborador da sessão de login
   const carregarSessaoColaborador = useCallback(async () => {
@@ -236,11 +244,11 @@ export default function FinanceiroPage() {
     // Se o cargo/usuário tem abas_financeiro configurado, usa ele
     const abasConfig = (colaboradorAtivo?.override_permissoes
       ? colaboradorAtivo.abas_financeiro
-      : permissaoAtiva?.abas_financeiro) || null
+      : permissaoAtiva?.abas_financeiro)
 
-    if (abasConfig) {
+    if (abasConfig !== null && abasConfig !== undefined) {
       const abas = abasConfig.split(',').map(a => a.trim()).filter(Boolean)
-      if (isAdminGeral) abas.push('permissoes')
+      if (isAdminGeral && !abas.includes('permissoes')) abas.push('permissoes')
       return abas
     }
 
@@ -259,11 +267,14 @@ export default function FinanceiroPage() {
 
   // Garante que o tab ativo seja sempre válido
   useEffect(() => {
-    if (colaboradorAtivo && !getAbasPermitidas().includes(tab)) {
-      setTab('historico')
+    if (colaboradorAtivo) {
+      const permitidas = getAbasPermitidas()
+      if (!permitidas.includes(tab)) {
+        setTab((permitidas[0] as Tab) || 'historico')
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [colaboradorAtivo?.cargo])
+  }, [colaboradorAtivo?.cargo, colaboradorAtivo?.abas_financeiro, permissaoAtiva?.abas_financeiro])
 
   if (loadingAcesso) {
     return <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando permissões...</p>
@@ -284,6 +295,24 @@ export default function FinanceiroPage() {
             Portal Financeiro
           </h1>
         </div>
+
+        {permissaoAtiva?.pode_lancar && (
+          <button
+            onClick={() => setShowImportModal(true)}
+            style={{
+              ...btn('#10B981'),
+              padding: '9px 18px',
+              fontSize: 12,
+              fontWeight: 800,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              boxShadow: '0 2px 10px rgba(16,185,129,0.2)'
+            }}
+          >
+            <FileSpreadsheet size={16} /> Importar Planilha Excel
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -333,14 +362,15 @@ export default function FinanceiroPage() {
           }}
         />
       )}
-      {tab === 'contas' && (
+      {/* Conteúdo das Tabs */}
+      {tab === 'contas' && abasVisiveis.includes('contas') && (
         <ContasTab 
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
           confirm={confirm}
         />
       )}
-      {tab === 'historico' && (
+      {tab === 'historico' && abasVisiveis.includes('historico') && (
         <HistoricoTab 
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
@@ -349,9 +379,10 @@ export default function FinanceiroPage() {
           initialFornecedorId={activeFornecedorId}
         />
       )}
-      {tab === 'obras' && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} confirm={confirm} />}
-      {tab === 'permissoes' && (
+      {tab === 'obras' && abasVisiveis.includes('obras') && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} confirm={confirm} />}
+      {tab === 'permissoes' && abasVisiveis.includes('permissoes') && (
         <PermissoesTab 
+
           colaboradorAtivo={colaboradorAtivo!} 
           colaboradores={colaboradores} 
           onRefresh={carregarSessaoColaborador} 
@@ -360,6 +391,17 @@ export default function FinanceiroPage() {
       )}
       {ConfirmDialog}
       {PromptDialog}
+
+      {showImportModal && (
+        <ImportarExcelModal
+          isOpen={showImportModal}
+          onClose={() => setShowImportModal(false)}
+          colaboradorAtivo={colaboradorAtivo!}
+          onSuccess={() => {
+            setTab('historico')
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -2435,7 +2477,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     if (listaExportar.length === 0) return toast('Nenhum lançamento selecionado para exportar.', 'error')
 
     const headers = [
-      'ID', 'Tipo', 'Descrição', 'Empresa', 'Fornecedor', 'CNPJ/CPF Fornecedor',
+      'Código', 'ID', 'Tipo', 'Descrição', 'Empresa', 'Fornecedor', 'CNPJ/CPF Fornecedor',
       'PIX', 'Banco', 'Agência', 'Conta Bancária', 'Obra', 'Categoria',
       'Valor Original (R$)', 'Status', 'Data Vencimento/Previsao', 'Pago Em',
       'Criado Por', 'Aprovado Por', 'Observacoes'
@@ -2444,6 +2486,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     const rows = listaExportar.map(c => {
       const forn = c.fornecedor
       return [
+        fmtCodigo(c) || `#${c.id.slice(0, 5)}`,
         c.id,
         c.tipo === 'pagar' ? 'Conta a Pagar' : 'Conta a Receber',
         `"${(c.descricao || '').replace(/"/g, '""')}"`,
@@ -2830,7 +2873,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     const data = c.data_previsao || c.data_vencimento
     const matchInicio = !filtDataInicio || data >= filtDataInicio
     const matchFim = !filtDataFim || data <= filtDataFim
-    const matchSearch  = !search || c.descricao.toLowerCase().includes(search.toLowerCase()) || (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase())
+    const codFormatted = fmtCodigo(c)
+    const matchSearch  = !search ||
+      c.descricao.toLowerCase().includes(search.toLowerCase()) ||
+      (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.fornecedor?.razao_social ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      codFormatted.toLowerCase().includes(search.toLowerCase()) ||
+      String(c.codigo_sequencial || '').includes(search.trim())
     return matchEmpresa && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim
   }).sort((a, b) => {
     const da = new Date(a.created_at || a.data_previsao || '').getTime()
@@ -3070,7 +3120,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                     />
                   </th>
                 )}
-                {['Tipo','Descrição','Empresa','Fornecedor','Vencimento','Valor','Status','Ações'].map(h => (
+                {['Código', 'Tipo','Descrição','Empresa','Fornecedor','Vencimento','Valor','Status','Ações'].map(h => (
                   <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: .6, whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -3129,6 +3179,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           />
                         </td>
                       )}
+                      <td style={{ padding: '12px 14px' }}>
+                        <span style={{ fontSize: 10, fontWeight: 900, background: '#12141C', color: c.tipo === 'receber' ? '#34D399' : C.amber, border: `1px solid ${C.border}`, padding: '3px 7px', borderRadius: 4, letterSpacing: 0.5, fontFamily: 'monospace' }}>
+                          {fmtCodigo(c) || `#${c.id.slice(0, 5)}`}
+                        </span>
+                      </td>
                       <td style={{ padding: '12px 14px' }}>
                         <div style={{ width: 28, height: 28, borderRadius: 6, background: c.tipo === 'receber' ? '#34D39918' : '#F8717118', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                           {c.tipo === 'receber' ? <ArrowUpRight size={13} color="#34D399" /> : <ArrowDownRight size={13} color="#F87171" />}
@@ -4825,6 +4880,460 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
           </div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════
+//  MODAL IMPORTAÇÃO DE EXCEL / HISTÓRICO RETROATIVO
+// ════════════════════════════════════════════════════════
+function ImportarExcelModal({
+  isOpen,
+  onClose,
+  colaboradorAtivo,
+  onSuccess
+}: {
+  isOpen: boolean
+  onClose: () => void
+  colaboradorAtivo: Colaborador
+  onSuccess: () => void
+}) {
+  const [file, setFile] = useState<File | null>(null)
+  const [sheetData, setSheetData] = useState<any[]>([])
+  const [columns, setColumns] = useState<string[]>([])
+  const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
+  const [obras, setObras] = useState<Obra[]>([])
+  
+  const [colMap, setColMap] = useState<Record<string, string>>({
+    descricao: '',
+    valor: '',
+    data_vencimento: '',
+    tipo: '',
+    status: '',
+    fornecedor: '',
+    obra: '',
+    categoria: '',
+    observacoes: ''
+  })
+
+  const [empresaPadraoId, setEmpresaPadraoId] = useState<string>('')
+  const [statusPadrao, setStatusPadrao] = useState<string>('Pago')
+  const [tipoPadrao, setTipoPadrao] = useState<'pagar'|'receber'>('pagar')
+  
+  const [importando, setImportando] = useState(false)
+  const [progresso, setProgresso] = useState<{ atual: number; total: number } | null>(null)
+
+  useEffect(() => {
+    if (!isOpen) return
+    Promise.all([
+      supabase.from('empresas').select('*').order('razao_social'),
+      supabase.from('fornecedores').select('*').order('razao_social'),
+      supabase.from('obras').select('*').order('nome')
+    ]).then(([{ data: e }, { data: f }, { data: o }]) => {
+      const empList = e ?? []
+      setEmpresas(empList)
+      setFornecedores(f ?? [])
+      setObras(o ?? [])
+      if (empList.length > 0) setEmpresaPadraoId(empList[0].id)
+    })
+  }, [isOpen])
+
+  const baixarModeloExcel = () => {
+    const modelo = [
+      {
+        'Tipo': 'pagar',
+        'Descrição': 'Compra de Materiais para Estrutura',
+        'Valor': 4500.50,
+        'Data Vencimento': '2024-01-15',
+        'Status': 'Pago',
+        'Empresa': 'Sua Empresa LTDA',
+        'Fornecedor': 'Distribuidora de Aço S/A',
+        'Obra': 'Residencial Alphaville',
+        'Categoria': 'Material de Construção',
+        'Observações': 'Lançamento retroativo importado'
+      },
+      {
+        'Tipo': 'pagar',
+        'Descrição': 'Locação de Gerador a Diesel',
+        'Valor': 1200.00,
+        'Data Vencimento': '2024-02-10',
+        'Status': 'Pago',
+        'Empresa': 'Sua Empresa LTDA',
+        'Fornecedor': 'Locadora de Equipamentos',
+        'Obra': 'Residencial Alphaville',
+        'Categoria': 'Locação',
+        'Observações': 'Pago via PIX em Fev/2024'
+      }
+    ]
+
+    const ws = XLSX.utils.json_to_sheet(modelo)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Modelo Importação')
+    XLSX.writeFile(wb, 'modelo_importacao_financeiro.xlsx')
+  }
+
+  const processarArquivo = async (uploadedFile: File) => {
+    setFile(uploadedFile)
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer)
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true })
+        const firstSheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[firstSheetName]
+        const json = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' })
+
+        if (json.length === 0) {
+          toast('Planilha vazia ou em formato não reconhecido.', 'error')
+          return
+        }
+
+        const detectedCols = Object.keys(json[0] || {})
+        setColumns(detectedCols)
+        setSheetData(json)
+
+        const autoMap: Record<string, string> = {
+          descricao: detectedCols.find(c => /descri|hist|titulo|ref|lancamento/i.test(c)) || '',
+          valor: detectedCols.find(c => /valor|quantia|preco|montante|total/i.test(c)) || '',
+          data_vencimento: detectedCols.find(c => /venc|data|dt_venc|vencimento|pagamento/i.test(c)) || '',
+          tipo: detectedCols.find(c => /tipo|natureza|operacao/i.test(c)) || '',
+          status: detectedCols.find(c => /status|situacao|pago|estado/i.test(c)) || '',
+          fornecedor: detectedCols.find(c => /fornecedor|cliente|favorecido|credor/i.test(c)) || '',
+          obra: detectedCols.find(c => /obra|projeto|centro/i.test(c)) || '',
+          categoria: detectedCols.find(c => /categoria|grupo|classificacao/i.test(c)) || '',
+          observacoes: detectedCols.find(c => /obs|observa|detalhe|nota/i.test(c)) || '',
+        }
+        setColMap(autoMap)
+      } catch (err) {
+        toast('Erro ao ler arquivo Excel: ' + (err instanceof Error ? err.message : 'Arquivo inválido'), 'error')
+      }
+    }
+    reader.readAsArrayBuffer(uploadedFile)
+  }
+
+  const parseExcelDateStr = (val: any): string => {
+    if (!val) return new Date().toISOString().slice(0, 10)
+    if (val instanceof Date) return val.toISOString().slice(0, 10)
+    if (typeof val === 'number') {
+      const parsed = XLSX.SSF.parse_date_code(val)
+      if (parsed) {
+        const y = parsed.y
+        const m = String(parsed.m).padStart(2, '0')
+        const d = String(parsed.d).padStart(2, '0')
+        return `${y}-${m}-${d}`
+      }
+    }
+    const str = String(val).trim()
+    const matchBR = str.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/)
+    if (matchBR) {
+      const [, d, m, y] = matchBR
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    }
+    const matchISO = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/)
+    if (matchISO) {
+      const [, y, m, d] = matchISO
+      return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    }
+    return new Date().toISOString().slice(0, 10)
+  }
+
+  const executarImportacao = async () => {
+    if (!colMap.descricao || !colMap.valor) {
+      toast('Mapeie pelo menos os campos Descrição e Valor!', 'error')
+      return
+    }
+    if (!empresaPadraoId) {
+      toast('Selecione uma Empresa Padrão!', 'error')
+      return
+    }
+
+    setImportando(true)
+    setProgresso({ atual: 0, total: sheetData.length })
+
+    try {
+      const payloadContas: any[] = []
+
+      for (const row of sheetData) {
+        const desc = String(row[colMap.descricao] || '').trim()
+        if (!desc) continue
+
+        const valRaw = row[colMap.valor]
+        const valorNum = parseCurrency(valRaw)
+
+        const dtVenc = colMap.data_vencimento ? parseExcelDateStr(row[colMap.data_vencimento]) : new Date().toISOString().slice(0, 10)
+
+        let st = statusPadrao
+        if (colMap.status && row[colMap.status]) {
+          const stStr = String(row[colMap.status]).toLowerCase()
+          if (/pago|quitado|liquidado|efetuado|realizado/i.test(stStr)) st = 'Pago'
+          else if (/pendente|aberto|a pagar/i.test(stStr)) st = 'Pendente'
+          else if (/bloqueado/i.test(stStr)) st = 'Bloqueado'
+        }
+
+        let tp = tipoPadrao
+        if (colMap.tipo && row[colMap.tipo]) {
+          const tpStr = String(row[colMap.tipo]).toLowerCase()
+          if (/receb|entrada|receita/i.test(tpStr)) tp = 'receber'
+          else if (/pag|saida|despesa/i.test(tpStr)) tp = 'pagar'
+        }
+
+        let fornId: string | null = null
+        let possuiForn = false
+        if (colMap.fornecedor && row[colMap.fornecedor]) {
+          const fornNome = String(row[colMap.fornecedor]).trim().toLowerCase()
+          const foundForn = fornecedores.find(f => 
+            (f.razao_social && f.razao_social.toLowerCase().includes(fornNome)) ||
+            (f.nome_fantasia && f.nome_fantasia.toLowerCase().includes(fornNome))
+          )
+          if (foundForn) {
+            fornId = foundForn.id
+            possuiForn = true
+          }
+        }
+
+        let obraId: string | null = null
+        if (colMap.obra && row[colMap.obra]) {
+          const obraNome = String(row[colMap.obra]).trim().toLowerCase()
+          const foundObra = obras.find(o => o.nome && o.nome.toLowerCase().includes(obraNome))
+          if (foundObra) obraId = foundObra.id
+        }
+
+        const cat = colMap.categoria && row[colMap.categoria] ? String(row[colMap.categoria]).trim() : 'Outros'
+        const obs = colMap.observacoes && row[colMap.observacoes] ? String(row[colMap.observacoes]).trim() : 'Importado via planilha retroativa'
+
+        payloadContas.push({
+          empresa_id: empresaPadraoId,
+          tipo: tp,
+          descricao: desc,
+          valor: valorNum,
+          data_vencimento: dtVenc,
+          data_previsao: dtVenc,
+          status: st,
+          pago_em: st === 'Pago' ? `${dtVenc}T12:00:00.000Z` : null,
+          fornecedor_id: fornId,
+          possui_fornecedor: possuiForn,
+          obra_id: obraId,
+          categoria: cat,
+          observacoes: obs,
+          criado_por: colaboradorAtivo?.nome || 'Importador Excel',
+          recorrencia: 'unico',
+        })
+      }
+
+      if (payloadContas.length === 0) {
+        toast('Nenhum registro válido encontrado para importação.', 'error')
+        setImportando(false)
+        return
+      }
+
+      const BATCH_SIZE = 50
+      let inseridos = 0
+      for (let i = 0; i < payloadContas.length; i += BATCH_SIZE) {
+        const batch = payloadContas.slice(i, i + BATCH_SIZE)
+        const { error } = await supabase.from('contas').insert(batch)
+        if (error) throw error
+        inseridos += batch.length
+        setProgresso({ atual: inseridos, total: payloadContas.length })
+      }
+
+      toast(`${inseridos} lançamento(s) importados com sucesso!`, 'success')
+      onSuccess()
+      onClose()
+    } catch (err: unknown) {
+      toast('Erro ao importar registros: ' + (err instanceof Error ? err.message : 'Falha no banco'), 'error')
+    } finally {
+      setImportando(false)
+      setProgresso(null)
+    }
+  }
+
+  if (!isOpen) return null
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 10, width: '100%', maxWidth: 750, maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <FileSpreadsheet size={22} color="#34D399" />
+            <div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>Importar Planilha Retroativa (Excel/CSV)</h3>
+              <p style={{ margin: 0, fontSize: 11, color: C.inkSoft }}>Importe dados de pagamentos antigos para transicionar totalmente para o sistema.</p>
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer' }}><X size={18} /></button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: 20, overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {!file ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ background: 'rgba(52,211,153,0.05)', border: `1px solid rgba(52,211,153,0.2)`, borderRadius: 8, padding: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#34D399', marginBottom: 2 }}>Precisa de uma estrutura pronta?</div>
+                  <div style={{ fontSize: 11, color: C.inkSoft }}>Baixe nosso modelo preenchido de exemplo e adicione seus lançamentos.</div>
+                </div>
+                <button onClick={baixarModeloExcel} style={{ ...btnGhost, color: '#34D399', borderColor: '#34D399', fontSize: 11, padding: '6px 14px', gap: 6, display: 'flex', alignItems: 'center' }}>
+                  <Download size={14} /> Baixar Planilha Modelo (.xlsx)
+                </button>
+              </div>
+
+              <div style={{ border: `2px dashed ${C.border}`, borderRadius: 10, padding: 40, textAlign: 'center', background: '#0B0C0E', cursor: 'pointer' }} onClick={() => document.getElementById('excel-input-file')?.click()}>
+                <input id="excel-input-file" type="file" accept=".xlsx, .xls, .csv" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && processarArquivo(e.target.files[0])} />
+                <Upload size={36} color={C.amber} style={{ marginBottom: 12 }} />
+                <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 4 }}>Clique para selecionar a planilha (.xlsx, .csv)</div>
+                <div style={{ fontSize: 11, color: C.inkSoft }}>Arraste seu arquivo ou selecione do computador</div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <FileSpreadsheet size={20} color={C.amber} />
+                  <div>
+                    <strong style={{ fontSize: 13, color: C.ink }}>{file.name}</strong>
+                    <span style={{ fontSize: 11, color: C.inkSoft, marginLeft: 10 }}>({sheetData.length} registros detectados)</span>
+                  </div>
+                </div>
+                <button onClick={() => { setFile(null); setSheetData([]); setColumns([]) }} style={{ ...btnGhost, color: '#EF4444', fontSize: 10, padding: '4px 10px' }}>Trocar arquivo</button>
+              </div>
+
+              <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, color: C.amber, textTransform: 'uppercase' }}>🔗 Mapeamento de Colunas da Planilha</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Descrição do Lançamento *</label>
+                    <select style={input} value={colMap.descricao} onChange={e => setColMap({ ...colMap, descricao: e.target.value })}>
+                      <option value="">-- Selecione --</option>
+                      {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Valor (R$) *</label>
+                    <select style={input} value={colMap.valor} onChange={e => setColMap({ ...colMap, valor: e.target.value })}>
+                      <option value="">-- Selecione --</option>
+                      {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Data Vencimento/Pagamento</label>
+                    <select style={input} value={colMap.data_vencimento} onChange={e => setColMap({ ...colMap, data_vencimento: e.target.value })}>
+                      <option value="">-- Usar Data Atual --</option>
+                      {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Status (Pago / Pendente)</label>
+                    <select style={input} value={colMap.status} onChange={e => setColMap({ ...colMap, status: e.target.value })}>
+                      <option value="">-- Usar Status Padrão --</option>
+                      {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Fornecedor / Cliente</label>
+                    <select style={input} value={colMap.fornecedor} onChange={e => setColMap({ ...colMap, fornecedor: e.target.value })}>
+                      <option value="">-- Opcional --</option>
+                      {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Obra</label>
+                    <select style={input} value={colMap.obra} onChange={e => setColMap({ ...colMap, obra: e.target.value })}>
+                      <option value="">-- Opcional --</option>
+                      {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Categoria</label>
+                    <select style={input} value={colMap.categoria} onChange={e => setColMap({ ...colMap, categoria: e.target.value })}>
+                      <option value="">-- Opcional --</option>
+                      {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Observações</label>
+                    <select style={input} value={colMap.observacoes} onChange={e => setColMap({ ...colMap, observacoes: e.target.value })}>
+                      <option value="">-- Opcional --</option>
+                      {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+                <h4 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, color: C.ink, textTransform: 'uppercase' }}>⚙️ Definições para os Lançamentos</h4>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Empresa Padrão *</label>
+                    <select style={input} value={empresaPadraoId} onChange={e => setEmpresaPadraoId(e.target.value)}>
+                      {empresas.map(emp => <option key={emp.id} value={emp.id}>{emp.razao_social || emp.nome_fantasia}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Status Padrão (caso não especificado na planilha)</label>
+                    <select style={input} value={statusPadrao} onChange={e => setStatusPadrao(e.target.value)}>
+                      <option value="Pago">Pago (Histórico Retroativo)</option>
+                      <option value="Pendente">Pendente / A Pagar</option>
+                      <option value="Lançado">Lançado</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, display: 'block', marginBottom: 4 }}>Tipo Padrão</label>
+                    <select style={input} value={tipoPadrao} onChange={e => setTipoPadrao(e.target.value as any)}>
+                      <option value="pagar">Contas a Pagar (Saída / Custos)</option>
+                      <option value="receber">Contas a Receber (Entrada / Faturamento)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {sheetData.length > 0 && (
+                <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>📋 Prévia dos primeiros lançamentos ({sheetData.length} total)</span>
+                  </div>
+                  <div style={{ overflowX: 'auto', maxHeight: 180, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, color: C.ink }}>
+                      <thead>
+                        <tr style={{ background: '#0B0C0E', borderBottom: `1px solid ${C.border}`, color: C.inkSoft, textAlign: 'left' }}>
+                          <th style={{ padding: '6px 10px' }}>Descrição</th>
+                          <th style={{ padding: '6px 10px' }}>Valor</th>
+                          <th style={{ padding: '6px 10px' }}>Data</th>
+                          <th style={{ padding: '6px 10px' }}>Fornecedor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sheetData.slice(0, 5).map((row, i) => (
+                          <tr key={i} style={{ borderBottom: `1px solid ${C.border}22` }}>
+                            <td style={{ padding: '6px 10px' }}>{String(row[colMap.descricao] || '—')}</td>
+                            <td style={{ padding: '6px 10px', color: C.amber, fontWeight: 700 }}>{fmt(parseCurrency(row[colMap.valor]))}</td>
+                            <td style={{ padding: '6px 10px' }}>{colMap.data_vencimento ? parseExcelDateStr(row[colMap.data_vencimento]) : 'Hoje'}</td>
+                            <td style={{ padding: '6px 10px', color: C.inkSoft }}>{colMap.fornecedor ? String(row[colMap.fornecedor] || '—') : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div style={{ padding: '14px 20px', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#0F1115' }}>
+          <button onClick={onClose} disabled={importando} style={{ ...btnGhost, fontSize: 11 }}>Cancelar</button>
+          {file && (
+            <button onClick={executarImportacao} disabled={importando || !colMap.descricao || !colMap.valor} style={{ ...btn(C.amber), padding: '8px 20px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}>
+              {importando ? (
+                <>Importando... ({progresso?.atual} / {progresso?.total})</>
+              ) : (
+                <><CheckCircle2 size={15} /> Confirmar Importação de {sheetData.length} Lançamento(s)</>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
