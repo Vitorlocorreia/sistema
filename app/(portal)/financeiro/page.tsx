@@ -2453,7 +2453,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
-  const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
+  const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'venc_prox' | 'venc_dist' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
   const [search, setSearch]           = useState('')
   const [showFiltros, setShowFiltros] = useState(false)
   const [modoExportacao, setModoExportacao] = useState(false)
@@ -2889,6 +2889,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     if (filtOrdem === 'menor_valor') return a.valor - b.valor
     if (filtOrdem === 'az') return a.descricao.localeCompare(b.descricao, 'pt-BR')
     if (filtOrdem === 'za') return b.descricao.localeCompare(a.descricao, 'pt-BR')
+    if (filtOrdem === 'venc_prox' || filtOrdem === 'venc_dist') {
+      const vA = new Date(a.data_vencimento || a.data_previsao || a.created_at || '').getTime()
+      const vB = new Date(b.data_vencimento || b.data_previsao || b.created_at || '').getTime()
+      return filtOrdem === 'venc_prox' ? vA - vB : vB - vA
+    }
     return filtOrdem === 'novo' ? db - da : da - db
   })
 
@@ -2951,9 +2956,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
                 <div style={{ display: 'grid', gap: 6 }}>
                   <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Ordenação</label>
-                  <select style={{ ...input }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as 'novo' | 'antigo' | 'maior_valor' | 'menor_valor' | 'az' | 'za')}>
-                    <option value="novo">↓ Mais recente primeiro</option>
-                    <option value="antigo">↑ Mais antigo primeiro</option>
+                  <select style={{ ...input }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as any)}>
+                    <option value="novo">↓ Lançamento mais recente</option>
+                    <option value="antigo">↑ Lançamento mais antigo</option>
+                    <option value="venc_prox">↓ Vencimento mais próximo</option>
+                    <option value="venc_dist">↑ Vencimento mais distante</option>
                     <option value="maior_valor">↓ Maior valor primeiro</option>
                     <option value="menor_valor">↑ Menor valor primeiro</option>
                     <option value="az">A → Z (descrição)</option>
