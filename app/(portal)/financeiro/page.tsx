@@ -1569,8 +1569,9 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   }, [colaboradorAtivo])
 
   useEffect(() => {
-    if (colaboradorAtivo.cargo === 'admin_empresa' && colaboradorAtivo.empresa_id) {
-      setForm(f => ({ ...f, empresa_id: colaboradorAtivo.empresa_id! }))
+    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+    if (ids.length === 1) {
+      setForm(f => ({ ...f, empresa_id: ids[0] }))
     }
   }, [colaboradorAtivo])
 
@@ -1960,8 +1961,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
-    if (colaboradorAtivo.cargo === 'admin_empresa' && colaboradorAtivo.empresa_id) {
-      setFiltEmpresa(colaboradorAtivo.empresa_id)
+    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+    if (ids.length === 1) {
+      setFiltEmpresa(ids[0])
     } else {
       setFiltEmpresa('')
     }
@@ -2208,7 +2210,17 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const podeEditar = (permissaoAtiva?.pode_lancar === true) || (permissaoAtiva?.pode_alterar_status === true) || (permissaoAtiva?.pode_pagar === true) || (permissaoAtiva?.pode_aprovar === true) || (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
 
   const activeFiltrosCount = [filtEmpresa, filtFornecedor, filtTipo !== 'todos' ? filtTipo : '', filtStatus !== 'todos' ? filtStatus : '', filtDataInicio, filtDataFim, filtOrdem !== 'novo' ? filtOrdem : ''].filter(Boolean).length
-  const clearFiltros = () => { setFiltEmpresa(colaboradorAtivo.cargo === 'admin_empresa' ? colaboradorAtivo.empresa_id || '' : ''); setFiltFornecedor(''); setFiltTipo('todos'); setFiltStatus('todos'); setFiltDataInicio(''); setFiltDataFim(''); setFiltOrdem('novo') }
+
+  const clearFiltros = () => {
+    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+    setFiltEmpresa(ids.length === 1 ? ids[0] : '')
+    setFiltFornecedor('')
+    setFiltTipo('todos')
+    setFiltStatus('todos')
+    setFiltDataInicio('')
+    setFiltDataFim('')
+    setFiltOrdem('novo')
+  }
 
   return (
     <div>
@@ -3335,7 +3347,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   // Se for admin por empresa, só vê os da mesma empresa
   const colaboradoresFiltrados = colaboradores.filter(c => {
     if (colaboradorAtivo.cargo === 'admin_geral') return true
-    return c.empresa_id === colaboradorAtivo.empresa_id
+    const idsAtivo = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+    if (idsAtivo.length === 0) return true
+    const idsColab = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
+    return idsColab.some(id => idsAtivo.includes(id)) || (c.empresa_id ? idsAtivo.includes(c.empresa_id) : false)
   })
 
   const isGeral = colaboradorAtivo.cargo === 'admin_geral'
