@@ -2418,8 +2418,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       </td>
                       <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
                       <td style={{ padding: '12px 14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
-                        <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13 }}>
-                          {fmt((pagoParcial || totalPagoHistorico > 0) ? valorCheioAbatido : c.valor)}
+                        <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>{fmt((pagoParcial || totalPagoHistorico > 0) ? valorCheioAbatido : valorBase)}</span>
+                          {ultimoDesconto?.valor_novo !== undefined && (
+                            <span style={{ fontSize: 9, color: '#34D399', background: '#34D39918', border: '1px solid #34D39933', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
+                              🏷️ C/ Desconto
+                            </span>
+                          )}
                         </div>
                         {valorNegociadoHoje !== undefined && valorNegociadoHoje > 0 && (
                           <div style={{ marginTop: 4 }}>
