@@ -202,19 +202,38 @@ export default function RDO() {
     return selectedRdo ? [selectedRdo] : []
   }, [overridePrintRdos, selectedRdoIds, rdos, selectedRdo])
 
-  const triggerPrintSingle = (rdo: RdoCompleto) => {
+  const waitForImagesAndPrint = async () => {
+    const printArea = document.getElementById('rdo-printable-area')
+    if (printArea) {
+      const imgs = Array.from(printArea.querySelectorAll('img'))
+      await Promise.all(
+        imgs.map(img => {
+          if (img.complete && img.naturalHeight !== 0) return Promise.resolve()
+          return new Promise(resolve => {
+            img.onload = resolve
+            img.onerror = resolve
+            setTimeout(resolve, 2500)
+          })
+        })
+      )
+    }
+    await new Promise(res => setTimeout(res, 150))
+    window.print()
+  }
+
+  const triggerPrintSingle = async (rdo: RdoCompleto) => {
     flushSync(() => {
       setOverridePrintRdos([rdo])
     })
-    window.print()
+    await waitForImagesAndPrint()
     setOverridePrintRdos(null)
   }
 
-  const triggerPrintBatch = () => {
+  const triggerPrintBatch = async () => {
     flushSync(() => {
       setOverridePrintRdos(null)
     })
-    window.print()
+    await waitForImagesAndPrint()
   }
 
   const handleDeleteBatch = async () => {
@@ -1329,15 +1348,18 @@ export default function RDO() {
             {/* Fotos anexadas */}
             {rdo.fotos && rdo.fotos.length > 0 && (
               <div className="print-section">
-                <h3 className="print-section-title">7. Registro Fotográfico de Campo</h3>
+                <h3 className="print-section-title">7. Registro Fotográfico de Campo ({rdo.fotos.length} foto{rdo.fotos.length > 1 ? 's' : ''})</h3>
                 <div className="print-photos-grid">
                   {rdo.fotos.map(foto => {
                     const url = foto.imagem_url?.startsWith('http')
                       ? foto.imagem_url
-                      : foto.imagem_url ? supabase.storage.from('rdo-fotos').getPublicUrl(foto.imagem_url).data.publicUrl : ''
+                      : foto.imagem_url
+                        ? supabase.storage.from(foto.imagem_url.includes('comprovantes') ? 'comprovantes' : 'rdo-fotos').getPublicUrl(foto.imagem_url).data.publicUrl
+                        : ''
+                    if (!url) return null
                     return (
                       <div key={foto.id} className="print-photo-item">
-                        <img src={url} alt={foto.legenda || 'Foto do RDO'} />
+                        <img src={url} alt={foto.legenda || 'Foto do RDO'} crossOrigin="anonymous" />
                         <span className="print-photo-caption">{foto.legenda || 'Sem legenda'}</span>
                       </div>
                     )
@@ -1383,7 +1405,12 @@ export default function RDO() {
 
       <style jsx global>{`
         .rdo-print-only {
-          display: none;
+          position: absolute;
+          left: -9999px;
+          top: -9999px;
+          width: 210mm;
+          opacity: 0;
+          pointer-events: none;
         }
 
         @media print {
@@ -1393,6 +1420,7 @@ export default function RDO() {
           
           #rdo-printable-area, #rdo-printable-area * {
             visibility: visible !important;
+            opacity: 1 !important;
           }
 
           #rdo-printable-area {
