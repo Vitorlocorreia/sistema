@@ -381,6 +381,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
   const [editFotoLegenda, setEditFotoLegenda] = useState('')
   const [editandoObra, setEditandoObra] = useState<Obra | null>(null)
   const [editObraForm, setEditObraForm] = useState({ nome: '', cliente: '', endereco: '', valor: '', status: 'Em dia' })
+  const [fotoExpandida, setFotoExpandida] = useState<any | null>(null)
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
   
   const load = useCallback(async (isBackground = false) => {
@@ -859,56 +860,62 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
               </div>
               
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-                {fotosObra.map(f => (
-                  <div key={f.id} style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden', background: '#12141C', position: 'relative' }}>
-                    <div style={{ position: 'relative' }}>
-                      <img src={f.imagem_url} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
-                      {podeGerenciar && (
-                        <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4, background: 'rgba(11,12,14,0.85)', padding: '2px 4px', borderRadius: 4, backdropFilter: 'blur(4px)' }}>
-                          <button
-                            onClick={() => { setEditandoFotoId(f.id); setEditFotoLegenda(f.legenda || '') }}
-                            style={{ background: 'none', border: 'none', color: C.ink, cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
-                            title="Editar legenda"
-                          >
-                            <Edit3 size={12} color={C.amber} />
-                          </button>
-                          <button
-                            onClick={() => excluirFoto(f.id)}
-                            style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
-                            title="Excluir foto"
-                          >
-                            <Trash2 size={12} color="#F87171" />
-                          </button>
+                {fotosObra.map(f => {
+                  const isRdo = Boolean(f.rdo_id)
+                  return (
+                    <div key={f.id} style={{ border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden', background: '#12141C', position: 'relative' }}>
+                      <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setFotoExpandida(f)}>
+                        <img src={f.imagem_url} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
+                        <div style={{ position: 'absolute', bottom: 6, left: 6, background: isRdo ? '#3B82F6DD' : '#10B981DD', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 800, color: '#fff', backdropFilter: 'blur(3px)' }}>
+                          {isRdo ? '📋 Foto RDO' : '💰 Financeiro'}
                         </div>
-                      )}
-                    </div>
-                    <div style={{ padding: '8px 10px' }}>
-                      {editandoFotoId === f.id ? (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          <input
-                            style={{ ...input, fontSize: 11, padding: '4px 6px' }}
-                            value={editFotoLegenda}
-                            onChange={e => setEditFotoLegenda(e.target.value)}
-                            placeholder="Legenda da foto..."
-                            autoFocus
-                          />
-                          <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                            <button onClick={() => salvarEdicaoFoto(f.id)} style={{ ...btn(C.amber), padding: '2px 8px', fontSize: 10 }}>Salvar</button>
-                            <button onClick={() => setEditandoFotoId(null)} style={{ ...btnGhost, padding: '2px 8px', fontSize: 10 }}>Cancelar</button>
+                        {podeGerenciar && (
+                          <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4, background: 'rgba(11,12,14,0.85)', padding: '2px 4px', borderRadius: 4, backdropFilter: 'blur(4px)' }} onClick={e => e.stopPropagation()}>
+                            <button
+                              onClick={() => { setEditandoFotoId(f.id); setEditFotoLegenda(f.legenda || '') }}
+                              style={{ background: 'none', border: 'none', color: C.ink, cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
+                              title="Editar legenda"
+                            >
+                              <Edit3 size={12} color={C.amber} />
+                            </button>
+                            <button
+                              onClick={() => excluirFoto(f.id)}
+                              style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
+                              title="Excluir foto"
+                            >
+                              <Trash2 size={12} color="#F87171" />
+                            </button>
                           </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda'}</div>
-                          <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>{new Date(f.data_iso).toLocaleDateString('pt-BR')}</div>
-                        </>
-                      )}
+                        )}
+                      </div>
+                      <div style={{ padding: '8px 10px' }}>
+                        {editandoFotoId === f.id ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <input
+                              style={{ ...input, fontSize: 11, padding: '4px 6px' }}
+                              value={editFotoLegenda}
+                              onChange={e => setEditFotoLegenda(e.target.value)}
+                              placeholder="Legenda da foto..."
+                              autoFocus
+                            />
+                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                              <button onClick={() => salvarEdicaoFoto(f.id)} style={{ ...btn(C.amber), padding: '2px 8px', fontSize: 10 }}>Salvar</button>
+                              <button onClick={() => setEditandoFotoId(null)} style={{ ...btnGhost, padding: '2px 8px', fontSize: 10 }}>Cancelar</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda'}</div>
+                            <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>{new Date(f.data_iso).toLocaleDateString('pt-BR')}</div>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
                 {fotosObra.length === 0 && (
                   <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', color: C.inkSoft, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
-                    Nenhuma foto anexada a esta obra pelo Financeiro.
+                    Nenhuma foto anexada a esta obra.
                   </div>
                 )}
               </div>
@@ -961,6 +968,55 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                   <button type="submit" style={{ ...btn(C.amber), padding: '8px 20px' }}>Salvar Alterações</button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL VISUALIZAR FOTO EXPANDIDA */}
+      <AnimatePresence>
+        {fotoExpandida && (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(5px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+            onClick={() => setFotoExpandida(null)}
+          >
+            <div style={{ position: 'absolute', top: 20, right: 20, display: 'flex', gap: 10, alignItems: 'center' }}>
+              <a
+                href={fotoExpandida.imagem_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                style={{ ...btnGhost, color: C.amber, border: `1px solid ${C.amber}40`, textDecoration: 'none', padding: '6px 14px', fontSize: 12 }}
+              >
+                Abrir em nova aba ↗
+              </a>
+              <button
+                onClick={() => setFotoExpandida(null)}
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              style={{ maxWidth: '90vw', maxHeight: '80vh', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <img
+                src={fotoExpandida.imagem_url}
+                alt={fotoExpandida.legenda || 'Foto da Obra'}
+                style={{ maxWidth: '100%', maxHeight: '75vh', borderRadius: 8, objectFit: 'contain', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', border: `1px solid ${C.border}` }}
+              />
+              <div style={{ textAlign: 'center', background: 'rgba(18,20,28,0.9)', padding: '10px 20px', borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{fotoExpandida.legenda || 'Sem legenda'}</span>
+                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: C.inkSoft }}>
+                  <span>📅 {new Date(fotoExpandida.data_iso).toLocaleDateString('pt-BR')}</span>
+                  <span>{fotoExpandida.rdo_id ? '📋 Foto enviada via RDO' : '💰 Anexada pelo Financeiro'}</span>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
