@@ -3390,9 +3390,33 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                     />
                   </th>
                 )}
-                {['Código', 'Tipo','Descrição','Empresa','Fornecedor','Vencimento','Valor','Status','Ações'].map(h => (
-                  <th key={h} style={{ padding: '12px 14px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: .6, whiteSpace: 'nowrap' }}>{h}</th>
-                ))}
+                {['Código', 'Tipo','Descrição','Empresa','Fornecedor','Vencimento','Valor','Status','Ações'].map(h => {
+                  const isAcoes = h === 'Ações'
+                  return (
+                    <th
+                      key={h}
+                      style={{
+                        padding: '12px 14px',
+                        textAlign: 'left',
+                        fontSize: 10,
+                        fontWeight: 800,
+                        color: C.inkSoft,
+                        textTransform: 'uppercase',
+                        letterSpacing: .6,
+                        whiteSpace: 'nowrap',
+                        ...(isAcoes ? {
+                          position: 'sticky',
+                          right: 0,
+                          background: '#0B0C0E',
+                          zIndex: 10,
+                          boxShadow: '-4px 0 8px rgba(0,0,0,0.5)'
+                        } : {})
+                      }}
+                    >
+                      {h}
+                    </th>
+                  )
+                })}
               </tr>
             </thead>
             <tbody>
@@ -3546,9 +3570,20 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                      <td
+                        style={{
+                          padding: '12px 14px',
+                          whiteSpace: 'nowrap',
+                          position: 'sticky',
+                          right: 0,
+                          background: c.status === 'Bloqueado' ? '#1F1918' : c.status === 'Aguardando aprovação' ? '#131A29' : (isExpanded ? '#12141C' : '#12141C'),
+                          zIndex: 5,
+                          boxShadow: '-4px 0 8px rgba(0,0,0,0.5)'
+                        }}
+                        onClick={e => e.stopPropagation()}
+                      >
                         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          {podeAlterarStatus && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, padding: '4px 6px', fontSize: 10 }}>
+                          {podeAlterarStatus && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 125, padding: '4px 6px', fontSize: 10 }}>
                             <option value="Lançado">Lançado</option>
                             <option value="Bloqueado">Bloqueado</option>
                             <option value="Aguardando aprovação">Aguardando aprovação</option>
