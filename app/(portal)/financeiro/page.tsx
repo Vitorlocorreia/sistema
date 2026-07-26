@@ -3375,7 +3375,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       {loading ? (
         <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando lançamentos...</p>
       ) : (
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+        <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#0B0C0E' }}>
@@ -3546,8 +3546,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           </div>
                         )}
                       </td>
-                      <td style={{ padding: '12px 14px' }} onClick={e => e.stopPropagation()}>
-                        <div style={{ display: 'flex', gap: 6 }}>
+                      <td style={{ padding: '12px 14px', whiteSpace: 'nowrap' }} onClick={e => e.stopPropagation()}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                           {podeAlterarStatus && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 150, padding: '4px 6px', fontSize: 10 }}>
                             <option value="Lançado">Lançado</option>
                             <option value="Bloqueado">Bloqueado</option>
