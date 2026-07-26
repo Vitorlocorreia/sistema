@@ -3512,7 +3512,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           {c.empresa?.nome_fantasia ?? c.empresa?.razao_social ?? '—'}
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px', color: C.inkSoft }}>
+                      <td style={{ padding: '12px 14px', color: C.inkSoft, maxWidth: 220, wordBreak: 'break-word' }}>
                         <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.razao_social ?? c.fornecedor?.nome_fantasia ?? 'Geral'}</div>
                         {c.obra && <div style={{ fontSize: 10, color: C.amber }}>Obra: {c.obra.nome}</div>}
                         {c.fornecedor?.pix && <div style={{ fontSize: 10, color: '#34D399', marginTop: 2 }}>PIX: {c.fornecedor.pix}</div>}
