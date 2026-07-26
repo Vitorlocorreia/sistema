@@ -2490,6 +2490,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [search, setSearch]           = useState('')
   const [showFiltros, setShowFiltros] = useState(false)
   const [modoExportacao, setModoExportacao] = useState(false)
+  const [modoSelecao, setModoSelecao] = useState(false)
+  const [statusEmLote, setStatusEmLote] = useState<ContaComRelacoes['status'] | ''>('')
+  const [aplicandoLote, setAplicandoLote] = useState(false)
   const [selecionadasContas, setSelecionadasContas] = useState<string[]>([])
   const [editandoConta, setEditandoConta] = useState<ContaComRelacoes | null>(null)
   const [formEdicao, setFormEdicao] = useState<Partial<ContaComRelacoes>>({})
@@ -2779,6 +2782,87 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     } catch {}
 
     await load()
+  }
+
+  const alterarStatusEmLote = async () => {
+    if (!statusEmLote || selecionadasContas.length === 0) return
+
+    const contasSelecionadas = contas.filter(c => selecionadasContas.includes(c.id))
+    const qtd = contasSelecionadas.length
+
+    // Status "Negado" requer justificativa única aplicada a todos
+    let justificativa: string | null = null
+    if (statusEmLote === 'Negado') {
+      const j = await prompt?.(
+        'Justificativa de Negação em Lote',
+        {
+          description: `Será aplicada a ${qtd} lançamento(s). Informe a justificativa (obrigatório).`,
+          placeholder: 'Ex: Documento inválido, valor incorreto…',
+          confirmLabel: `Negar ${qtd} Lançamento(s)`,
+        }
+      )
+      if (!j) return
+      justificativa = j
+    } else {
+      const ok = await confirm(
+        `Alterar ${qtd} lançamento(s)`,
+        `Deseja alterar o status de ${qtd} lançamento(s) para "${statusEmLote}"? Esta ação ficará registrada no histórico de cada lançamento.`,
+        { confirmLabel: `Alterar ${qtd} Lançamentos`, confirmColor: C.amber }
+      )
+      if (!ok) return
+    }
+
+    setAplicandoLote(true)
+    const autor = colaboradorAtivo.nome || 'Usuário'
+    const agora = new Date().toISOString()
+
+    try {
+      await Promise.all(
+        contasSelecionadas.map(async (conta) => {
+          const payload: Record<string, any> = { status: statusEmLote }
+          if (statusEmLote === 'Pago') payload.pago_em = agora
+          else payload.pago_em = null
+          if (justificativa) payload.justificativa_negacao = justificativa
+          else payload.justificativa_negacao = null
+
+          const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
+          const logItem: ItemNegociacao = {
+            id: Date.now().toString() + Math.random(),
+            data: agora,
+            autor,
+            tipo: 'alteracao_status',
+            descricao: `[Em lote] Status alterado de "${conta.status}" para "${statusEmLote}"${justificativa ? `. Motivo: ${justificativa}` : ''}`
+          }
+          payload.historico_negociacao = [...historicoAtual, logItem]
+
+          await supabase.from('contas').update(payload).eq('id', conta.id)
+        })
+      )
+
+      // Registro de auditoria em lote no historico_edicoes
+      try {
+        await supabase.from('historico_edicoes').insert(
+          contasSelecionadas.map(conta => ({
+            entidade: 'contas',
+            entidade_id: conta.id,
+            acao: 'UPDATE' as const,
+            dados_anteriores: { status: conta.status },
+            dados_novos: { status: statusEmLote, alterado_em_lote: true },
+            usuario_nome: autor
+          }))
+        )
+      } catch {}
+
+      toast(`✅ ${qtd} lançamento(s) alterado(s) para "${statusEmLote}".`, 'success')
+      setSelecionadasContas([])
+      setStatusEmLote('')
+      setModoSelecao(false)
+      await load()
+    } catch (err: any) {
+      toast(`Erro ao aplicar em lote: ${err?.message ?? 'tente novamente'}`, 'error')
+    } finally {
+      setAplicandoLote(false)
+    }
   }
 
   const excluir = async (id: string) => {
@@ -3107,6 +3191,30 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
             )}
           </div>
 
+          {/* Botão de Ativar Modo Seleção em Lote */}
+          {podeAlterarStatus && (
+            <button
+              onClick={() => {
+                if (modoSelecao) {
+                  setModoSelecao(false)
+                  setSelecionadasContas([])
+                  setStatusEmLote('')
+                } else {
+                  setModoSelecao(true)
+                  setModoExportacao(false)
+                  setSelecionadasContas([])
+                }
+              }}
+              style={{
+                ...btn(modoSelecao ? '#EF4444' : C.amber),
+                padding: '8px 14px',
+                fontSize: 11
+              }}
+            >
+              <CheckCircle2 size={13} /> {modoSelecao ? 'Cancelar Seleção' : 'Seleção em Lote'}
+            </button>
+          )}
+
           {/* Botão de Ativar Modo Exportar */}
           <button
             onClick={() => {
@@ -3115,6 +3223,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 setSelecionadasContas([])
               } else {
                 setModoExportacao(true)
+                setModoSelecao(false)
+                setSelecionadasContas([])
               }
             }}
             style={{
@@ -3199,6 +3309,69 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         </div>
       )}
 
+      {/* ── BARRA FLUTUANTE DE ALTERAÇÃO DE STATUS EM LOTE ── */}
+      {modoSelecao && (
+        <div style={{
+          background: '#1A1D26',
+          border: `1px solid ${C.amber}`,
+          borderRadius: 8,
+          padding: '10px 16px',
+          marginBottom: 14,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 10,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: C.amber, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <CheckCircle2 size={15} /> Seleção em Lote Ativa
+            </span>
+            <span style={{ fontSize: 11, color: C.inkSoft }}>
+              ({selecionadasContas.length} de {filtered.length} selecionados)
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => selecionarTodasContas(filtered)}
+              style={{ ...btnGhost, padding: '6px 12px', fontSize: 11, color: C.ink }}
+            >
+              {selecionadasContas.length === filtered.length ? 'Desmarcar Todos' : `Selecionar Todos (${filtered.length})`}
+            </button>
+
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <select
+                aria-label="Novo status para selecionados"
+                value={statusEmLote}
+                onChange={e => setStatusEmLote(e.target.value as any)}
+                style={{ ...input, width: 170, padding: '6px 10px', fontSize: 11 }}
+              >
+                <option value="">Selecione o Novo Status...</option>
+                {listaStatusOpcoes.filter(o => o.value !== 'todos').map(st => (
+                  <option key={st.value} value={st.value}>{st.label}</option>
+                ))}
+              </select>
+
+              <button
+                disabled={!statusEmLote || selecionadasContas.length === 0 || aplicandoLote}
+                onClick={alterarStatusEmLote}
+                style={{
+                  ...btn(C.amber),
+                  padding: '6px 14px',
+                  fontSize: 11,
+                  opacity: (!statusEmLote || selecionadasContas.length === 0 || aplicandoLote) ? 0.5 : 1,
+                  cursor: (!statusEmLote || selecionadasContas.length === 0 || aplicandoLote) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {aplicandoLote ? 'Aplicando...' : `Aplicar a ${selecionadasContas.length} selecionado(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {loading ? (
         <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando lançamentos...</p>
       ) : (
@@ -3206,7 +3379,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
               <tr style={{ background: '#0B0C0E' }}>
-                {modoExportacao && (
+                {(modoExportacao || modoSelecao) && (
                   <th style={{ padding: '12px 10px', textAlign: 'center', width: 40 }}>
                     <input
                       type="checkbox"
@@ -3266,7 +3439,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         transition: 'background 0.2s'
                       }}
                     >
-                      {modoExportacao && (
+                      {(modoExportacao || modoSelecao) && (
                         <td style={{ padding: '12px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
                           <input
                             type="checkbox"
