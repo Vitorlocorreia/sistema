@@ -28,29 +28,40 @@ export function KpiCard({ label, valor, delta, positivo, icon: Icon, active, onC
         padding: '18px 20px',
         border: active ? `1px solid ${C.amber}` : `1px solid ${C.border}`,
         flex: 1,
-        minWidth: '220px',
+        minWidth: 0,
+        overflow: 'hidden',
         cursor: isClickable ? 'pointer' : 'default',
         transition: 'border-color 0.2s ease, background-color 0.2s ease',
       }}
       className="group select-none"
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10, minWidth: 0 }}>
         <span style={{ 
           fontSize: 10, 
           color: active ? C.amber : C.inkSoft, 
           fontWeight: 800, 
           textTransform: 'uppercase', 
-          letterSpacing: 0.8 
+          letterSpacing: 0.8,
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis'
         }}>{label}</span>
-        <Icon size={16} color={active ? C.amber : C.inkSoft} className="group-hover:text-amber-500 transition-colors" />
+        <Icon size={16} color={active ? C.amber : C.inkSoft} className="group-hover:text-amber-500 transition-colors shrink-0" />
       </div>
-      <div style={{ 
-        fontSize: 28, 
-        fontWeight: 900, 
-        color: C.ink, 
-        letterSpacing: -0.5, 
-        fontFamily: 'var(--font-display)' 
-      }}>
+      <div 
+        style={{ 
+          fontSize: 20, 
+          fontWeight: 900, 
+          color: C.ink, 
+          letterSpacing: -0.5, 
+          fontFamily: 'var(--font-display)',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          wordBreak: 'break-all'
+        }}
+        title={valor}
+      >
         {valor}
       </div>
       {delta && (

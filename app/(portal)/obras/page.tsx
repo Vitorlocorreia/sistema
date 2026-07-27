@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Image as ImageIcon, Calendar, Eye, Sliders, Zap, X, Plus, Trash2, Edit3, MapPin, User, DollarSign, Check, Folder, ExternalLink, TrendingUp, TrendingDown, Receipt, Ruler, FilePlus2 } from 'lucide-react'
+import { Image as ImageIcon, Calendar, Eye, Sliders, Zap, X, Plus, Trash2, Edit3, MapPin, User, DollarSign, Check, Folder, ExternalLink, TrendingUp, TrendingDown, Receipt, Ruler, FilePlus2, CheckCircle2 } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { PageTitle } from '@/components/PageTitle'
 import { C } from '@/lib/tokens'
@@ -283,6 +283,26 @@ export default function Obras() {
     }
   }
 
+  const isObraConcluida = (status?: string) => ['concluída', 'concluida', 'concluído', 'concluido', 'finalizada'].includes(String(status || '').toLowerCase())
+
+  async function alternarStatusObra(o: Obra) {
+    const jaConcluida = isObraConcluida(o.status)
+    const novoStatus = jaConcluida ? 'Em dia' : 'Concluída'
+    const acao = jaConcluida ? 'reabrir a obra' : 'marcar a obra como Concluída'
+    const sub = jaConcluida 
+      ? `Ao reabrir a obra "${o.nome}", ela voltará a ser calculada no portfólio de obras ativas.` 
+      : `Ao concluir a obra "${o.nome}", ela sairá dos cálculos do portfólio de obras ativas.`
+    if (!(await confirm(jaConcluida ? 'Reabrir Obra' : 'Concluir Obra', sub, { confirmLabel: jaConcluida ? 'Reabrir Obra' : 'Concluir Obra', confirmColor: jaConcluida ? C.amber : C.green }))) return
+    try {
+      const { error } = await supabase.from('obras').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', o.id)
+      if (error) throw error
+      toast(jaConcluida ? 'Obra reaberta com sucesso!' : 'Obra marcada como Concluída!', 'success')
+      loadData()
+    } catch (err: any) {
+      toast('Erro ao atualizar status: ' + err.message, 'error')
+    }
+  }
+
   // Deletar Obra
   async function excluirObra(id: string, nome: string) {
     if (!(await confirm('Atenção', `Deseja realmente excluir a obra "${nome}"? Isso removerá as tarefas, diários e solicitações vinculados.`, { confirmLabel: 'Excluir', confirmColor: C.red }))) return
@@ -478,9 +498,25 @@ export default function Obras() {
         {podeGerenciar && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {obraAtual && (
-              <button onClick={() => excluirObra(obraAtual.id, obraAtual.nome)} style={{ ...btnGhost, gap: 6, color: '#EF4444' }}>
-                <Trash2 size={14} /> Excluir obra selecionada
-              </button>
+              <>
+                <button
+                  onClick={() => alternarStatusObra(obraAtual)}
+                  style={{
+                    ...btnGhost,
+                    gap: 6,
+                    color: isObraConcluida(obraAtual.status) ? C.amber : C.green,
+                    borderColor: isObraConcluida(obraAtual.status) ? `${C.amber}44` : `${C.green}44`,
+                    background: isObraConcluida(obraAtual.status) ? `${C.amber}11` : `${C.green}11`,
+                    fontWeight: 800
+                  }}
+                >
+                  <CheckCircle2 size={14} />
+                  {isObraConcluida(obraAtual.status) ? 'Reabrir obra' : 'Concluir obra'}
+                </button>
+                <button onClick={() => excluirObra(obraAtual.id, obraAtual.nome)} style={{ ...btnGhost, gap: 6, color: '#EF4444' }}>
+                  <Trash2 size={14} /> Excluir obra selecionada
+                </button>
+              </>
             )}
             <button onClick={() => { setIsGerenciarOpen(true); setShowFormNova(true); setFormObra({ id: '', nome: '', cliente: '', endereco: '', valor_contrato: '', data_inicio: '', data_fim: '', progresso: 0, status: 'Em dia', proximo_urb_data: '', proximo_urb_valor: '', proximo_urb_desc: '' }) }} style={{ ...btn(C.amber), gap: 6 }}>
               <Plus size={14} /> Nova obra
@@ -498,41 +534,43 @@ export default function Obras() {
         <>
           {/* ─── DASHBOARD GLOBAL ─────────────────────────────────────────── */}
           {(() => {
-            const totalContrato = obrasList.reduce((s, o) => s + Number(o.valor_contrato || 0), 0)
-            const totalMedido   = obrasList.reduce((s, o) => s + Number(o.medido_acumulado || 0), 0)
-            const totalPrevistoBM = obrasList.reduce((s, o) => s + Number(o.proximo_urb_valor || 0), 0)
+            const obrasAtivasList = obrasList.filter(o => !isObraConcluida(o.status))
+            const totalContrato = obrasAtivasList.reduce((s, o) => s + Number(o.valor_contrato || 0), 0)
+            const totalMedido   = obrasAtivasList.reduce((s, o) => s + Number(o.medido_acumulado || 0), 0)
+            const totalPrevistoBM = obrasAtivasList.reduce((s, o) => s + Number(o.proximo_urb_valor || 0), 0)
             const totalMedidoPrevisto = totalMedido + totalPrevistoBM
             const totalPago     = contas.filter(c => c.tipo === 'pagar' && c.status === 'Pago').reduce((s, c) => s + Number(c.valor), 0)
             const totalAberto   = contas.filter(c => c.tipo === 'pagar' && c.status !== 'Pago').reduce((s, c) => s + Number(c.valor), 0)
             const totalRecebido = contas.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + Number(c.valor), 0)
             const saldo         = totalRecebido - totalPago
-            const progressoMedio = obrasList.length ? obrasList.reduce((s, o) => s + Number(o.progresso || 0), 0) / obrasList.length : 0
+            const progressoMedio = obrasAtivasList.length ? obrasAtivasList.reduce((s, o) => s + Number(o.progresso || 0), 0) / obrasAtivasList.length : 0
             const totalObras    = obrasList.length
-            const obrasAtivas   = obrasList.filter(o => (o.status || 'Em dia') !== 'Concluído').length
+            const obrasAtivas   = obrasAtivasList.length
+            const obrasConcluidas = totalObras - obrasAtivas
             const saldoPct      = totalContrato > 0 ? (saldo / totalContrato) * 100 : 0
 
             const kpis = [
-              { label: 'Total de Obras',      value: String(totalObras),          sub: `${obrasAtivas} ativas`,                       color: C.amber,    icon: '🏗️' },
-              { label: 'Portfólio Contratos', value: fmtMoney(totalContrato),     sub: 'valor contratado total',                      color: '#60A5FA',  icon: '📋' },
-              { label: 'Medido Acumulado',    value: fmtMoney(totalMedido),       sub: `${totalContrato > 0 ? ((totalMedido/totalContrato)*100).toFixed(1) : 0}% do portfólio`, color: '#A78BFA', icon: '📐' },
+              { label: 'Total de Obras',      value: String(totalObras),          sub: `${obrasAtivas} ativas · ${obrasConcluidas} concluídas`, color: C.amber,    icon: '🏗️' },
+              { label: 'Portfólio Contratos', value: fmtMoney(totalContrato),     sub: 'obras ativas',                                color: '#60A5FA',  icon: '📋' },
+              { label: 'Medido Acumulado',    value: fmtMoney(totalMedido),       sub: `${totalContrato > 0 ? ((totalMedido/totalContrato)*100).toFixed(1) : 0}% das ativas`, color: '#A78BFA', icon: '📐' },
               { label: 'Medido Previsto (BMs)', value: fmtMoney(totalMedidoPrevisto), sub: `+${fmtMoney(totalPrevistoBM)} nos BMs previstos`, color: '#3B82F6', icon: '🔮' },
               { label: 'Total Pago (Custos)', value: fmtMoney(totalPago),         sub: `+ ${fmtMoney(totalAberto)} em aberto`,         color: C.red,      icon: '💸' },
               { label: 'Receita Recebida',    value: fmtMoney(totalRecebido),     sub: 'faturamento confirmado',                      color: C.green,    icon: '💰' },
               { label: 'Saldo do Portfólio',  value: fmtMoney(saldo),             sub: `${saldoPct >= 0 ? '+' : ''}${saldoPct.toFixed(1)}% sobre contratos`, color: saldo >= 0 ? C.green : C.red, icon: saldo >= 0 ? '📈' : '📉' },
-              { label: 'Progresso Médio',     value: `${progressoMedio.toFixed(1)}%`, sub: 'avanço físico ponderado',                color: C.amber,    icon: '⚡' },
+              { label: 'Progresso Médio',     value: `${progressoMedio.toFixed(1)}%`, sub: 'média física das ativas',                color: C.amber,    icon: '⚡' },
             ]
 
             return (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {/* KPI cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
                   {kpis.map(k => (
-                    <div key={k.label} style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <span style={{ fontSize: 18 }}>{k.icon}</span>
-                        <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>{k.label}</span>
+                    <div key={k.label} style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 10, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                        <span style={{ fontSize: 18, flexShrink: 0 }}>{k.icon}</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.label}</span>
                       </div>
-                      <span style={{ fontSize: 20, fontWeight: 900, color: k.color, lineHeight: 1.1 }}>{k.value}</span>
+                      <span style={{ fontSize: 15, fontWeight: 900, color: k.color, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', wordBreak: 'break-all' }} title={k.value}>{k.value}</span>
                       <span style={{ fontSize: 9, color: C.inkSoft }}>{k.sub}</span>
                     </div>
                   ))}
@@ -1009,6 +1047,7 @@ export default function Obras() {
                         >
                           <option value="Em dia">Em dia</option>
                           <option value="Atrasada">Atrasada</option>
+                          <option value="Concluída">Concluída</option>
                         </select>
                       </div>
                     </div>

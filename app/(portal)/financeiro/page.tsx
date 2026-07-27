@@ -578,6 +578,21 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
     toast('Medição registrada no histórico!', 'success')
   }
   
+  const isObraConcluida = (status?: string) => ['concluída', 'concluida', 'concluído', 'concluido', 'finalizada'].includes(String(status || '').toLowerCase())
+
+  async function alternarStatusObra(o: Obra) {
+    const jaConcluida = isObraConcluida(o.status)
+    const novoStatus = jaConcluida ? 'Em dia' : 'Concluída'
+    const acao = jaConcluida ? 'reabrir a obra' : 'marcar a obra como Concluída'
+    const sub = jaConcluida 
+      ? `Ao reabrir a obra "${o.nome}", ela voltará a ser calculada no portfólio de obras ativas.` 
+      : `Ao concluir a obra "${o.nome}", ela sairá dos cálculos do portfólio de obras ativas.`
+    if (!(await confirm(jaConcluida ? 'Reabrir Obra' : 'Concluir Obra', sub, { confirmLabel: jaConcluida ? 'Reabrir Obra' : 'Concluir Obra', confirmColor: jaConcluida ? C.amber : C.green }))) return
+    const { error } = await supabase.from('obras').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', o.id)
+    if (error) return toast(error.message, 'error')
+    await load(); toast(jaConcluida ? 'Obra reaberta com sucesso!' : 'Obra marcada como Concluída!', 'success')
+  }
+
   async function excluirObra(id: string, nome: string) {
     if (!(await confirm('Atenção', `Deseja realmente excluir a obra "${nome}"? Isso removerá os dados vinculados.`, { confirmLabel: 'Excluir', confirmColor: C.red }))) return
     const { error } = await supabase.from('obras').delete().eq('id', id)
@@ -657,35 +672,37 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
           
           {/* ─── DASHBOARD GLOBAL DE PORTFÓLIO ──────────────────────────── */}
           {obras.length > 0 && (() => {
-            const totalContrato  = obras.reduce((s, o) => s + Number(o.valor_contrato || 0), 0)
-            const totalMedido    = obras.reduce((s, o) => s + Number(o.medido_acumulado || 0), 0)
-            const totalPrevistoBM = obras.reduce((s, o) => s + Number(o.proximo_urb_valor || 0), 0)
+            const obrasAtivasList = obras.filter(o => !isObraConcluida(o.status))
+            const totalContrato  = obrasAtivasList.reduce((s, o) => s + Number(o.valor_contrato || 0), 0)
+            const totalMedido    = obrasAtivasList.reduce((s, o) => s + Number(o.medido_acumulado || 0), 0)
+            const totalPrevistoBM = obrasAtivasList.reduce((s, o) => s + Number(o.proximo_urb_valor || 0), 0)
             const totalMedidoPrevisto = totalMedido + totalPrevistoBM
             const saldoMedir     = Math.max(0, totalContrato - totalMedido)
-            const progressoMedio = obras.length ? obras.reduce((s, o) => s + Number(o.progresso || 0), 0) / obras.length : 0
-            const obrasAtivas    = obras.filter(o => o.status !== 'Concluído').length
+            const progressoMedio = obrasAtivasList.length ? obrasAtivasList.reduce((s, o) => s + Number(o.progresso || 0), 0) / obrasAtivasList.length : 0
+            const obrasAtivasCount = obrasAtivasList.length
+            const obrasConcluidasCount = obras.length - obrasAtivasCount
 
             const kpis = [
-              { label: 'Total de Obras',       value: String(obras.length),         sub: `${obrasAtivas} ativas`,                                                                                   color: C.amber,   icon: '🏗️' },
-              { label: 'Portfólio Contratos',  value: fmt(totalContrato),           sub: 'soma dos contratos',                                                                                      color: '#60A5FA', icon: '📋' },
-              { label: 'Medido Acumulado',     value: fmt(totalMedido),             sub: `${totalContrato > 0 ? ((totalMedido / totalContrato) * 100).toFixed(1) : 0}% do portfólio`,             color: '#A78BFA', icon: '📐' },
-              { label: 'Medido Previsto (BMs)', value: fmt(totalMedidoPrevisto),     sub: `+${fmt(totalPrevistoBM)} nos BMs previstos`,                                                              color: '#3B82F6', icon: '🔮' },
-              { label: 'Saldo a Medir',        value: fmt(saldoMedir),              sub: 'restante para medir',                                                                                     color: C.green,   icon: '💰' },
-              { label: 'Progresso Médio',      value: `${progressoMedio.toFixed(1)}%`, sub: 'média do avanço físico',                                                                              color: C.amber,   icon: '⚡' },
+              { label: 'Total de Obras',       value: String(obras.length),         sub: `${obrasAtivasCount} ativas · ${obrasConcluidasCount} concluídas`, color: C.amber,   icon: '🏗️' },
+              { label: 'Portfólio Contratos',  value: fmt(totalContrato),           sub: 'soma das ativas',                                                        color: '#60A5FA', icon: '📋' },
+              { label: 'Medido Acumulado',     value: fmt(totalMedido),             sub: `${totalContrato > 0 ? ((totalMedido / totalContrato) * 100).toFixed(1) : 0}% das ativas`, color: '#A78BFA', icon: '📐' },
+              { label: 'Medido Previsto (BMs)', value: fmt(totalMedidoPrevisto),     sub: `+${fmt(totalPrevistoBM)} nos BMs previstos`,                            color: '#3B82F6', icon: '🔮' },
+              { label: 'Saldo a Medir',        value: fmt(saldoMedir),              sub: 'obras ativas restantes',                                                 color: C.green,   icon: '💰' },
+              { label: 'Progresso Médio',      value: `${progressoMedio.toFixed(1)}%`, sub: 'média física das ativas',                                             color: C.amber,   icon: '⚡' },
             ]
 
             return (
               <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
                 {/* KPI cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
                   {kpis.map(k => (
-                    <div key={k.label} style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <span style={{ fontSize: 16 }}>{k.icon}</span>
-                        <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>{k.label}</span>
+                    <div key={k.label} style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0, overflow: 'hidden' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
+                        <span style={{ fontSize: 16, flexShrink: 0 }}>{k.icon}</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.label}</span>
                       </div>
-                      <span style={{ fontSize: 19, fontWeight: 900, color: k.color, lineHeight: 1.1 }}>{k.value}</span>
-                      <span style={{ fontSize: 9, color: C.inkSoft }}>{k.sub}</span>
+                      <span style={{ fontSize: 15, fontWeight: 900, color: k.color, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', wordBreak: 'break-all' }} title={k.value}>{k.value}</span>
+                      <span style={{ fontSize: 9, color: C.inkSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.sub}</span>
                     </div>
                   ))}
                 </div>
@@ -830,7 +847,21 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
             <div style={{ width: 1, height: 24, background: C.border }} />
             <h2 style={{ margin: 0, fontSize: 18, color: C.ink }}>{obraSelecionada.nome}</h2>
             {podeGerenciar && (
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  onClick={() => alternarStatusObra(obraSelecionada)}
+                  style={{
+                    ...btnGhost,
+                    color: isObraConcluida(obraSelecionada.status) ? C.amber : C.green,
+                    borderColor: isObraConcluida(obraSelecionada.status) ? `${C.amber}44` : `${C.green}44`,
+                    background: isObraConcluida(obraSelecionada.status) ? `${C.amber}11` : `${C.green}11`,
+                    padding: '6px 12px',
+                    fontWeight: 800
+                  }}
+                >
+                  <CheckCircle2 size={14} />
+                  {isObraConcluida(obraSelecionada.status) ? 'Reabrir Obra' : 'Concluir Obra'}
+                </button>
                 <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Edit3 size={14}/> Editar Obra</button>
                 <button onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)} style={{ ...btnGhost, color: '#EF4444', padding: '6px 12px' }}><Trash2 size={14}/> Excluir Obra</button>
               </div>
