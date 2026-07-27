@@ -4446,6 +4446,18 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       toast('Você não pode excluir o usuário conectado.', 'error')
       return
     }
+
+    const colabTarget = colaboradores.find(c => c.id === id)
+    const nomeColab = colabTarget?.nome ? `"${colabTarget.nome}"` : 'este colaborador'
+
+    const confirmado = await confirm(
+      'Excluir Colaborador',
+      `Tem certeza que deseja excluir ${nomeColab}? Esta ação removerá o acesso do usuário do sistema e não poderá ser desfeita.`,
+      { confirmLabel: 'Excluir', confirmColor: C.red }
+    )
+
+    if (!confirmado) return
+
     setSavingCol(true)
     try {
       const { data: result, error } = await supabase.functions.invoke('admin-users', {
