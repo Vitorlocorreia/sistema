@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   Plus, FileText, Calendar, Building, Sun, CloudRain, Cloud,
   UserCheck, AlertTriangle, Hammer, CheckCircle2, FileUp,
-  Search, X, Check, Eye, Printer, Award, Clock, Trash2, Edit3, History, Save
+  Search, X, Check, Eye, Printer, Award, Clock, Trash2, Edit3, History, Save,
+  ChevronDown, ChevronUp
 } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { PageTitle } from '@/components/PageTitle'
@@ -19,6 +20,64 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 type EfetivoTerceiroForm = { empresa_nome: string; funcao: string; quantidade: string; observacoes: string }
 type PlanejadoExecutadoForm = { servico: string; unidade: string; planejada: string; executada: string; observacoes: string }
 type HistoricoEdicao = { id: string; data: string; autor: string; resumo_alteracao: string; campos: { campo: string; antes: string; depois: string }[] }
+
+function TextoExpandivel({ text, maxLength = 120, textColor = C.ink }: { text: string | null | undefined; maxLength?: number; textColor?: string }) {
+  const [expanded, setExpanded] = useState(false)
+
+  if (!text) return null
+
+  const isLong = text.length > maxLength
+
+  if (!isLong) {
+    return (
+      <p title={text} style={{ fontSize: 12, color: textColor, wordBreak: 'break-word', lineHeight: 1.5, margin: 0 }}>
+        {text}
+      </p>
+    )
+  }
+
+  const displayText = expanded ? text : text.slice(0, maxLength) + '...'
+
+  return (
+    <div title={text} style={{ fontSize: 12, color: textColor, wordBreak: 'break-word', lineHeight: 1.5 }}>
+      <span>{displayText}</span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setExpanded(!expanded)
+        }}
+        title={expanded ? "Recolher texto" : "Ver relato completo (passe o mouse para ler tudo)"}
+        style={{
+          background: 'rgba(245, 158, 11, 0.12)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          color: C.amber,
+          borderRadius: 4,
+          padding: '1px 6px',
+          fontSize: 10,
+          fontWeight: 700,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          marginLeft: 6,
+          verticalAlign: 'middle',
+          transition: 'all 0.2s ease'
+        }}
+      >
+        {expanded ? (
+          <>
+            menos <ChevronUp size={10} />
+          </>
+        ) : (
+          <>
+            mais <ChevronDown size={10} />
+          </>
+        )}
+      </button>
+    </div>
+  )
+}
 
 // ─── STYLES ──────────────────────────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
@@ -645,7 +704,9 @@ export default function RDO() {
                           <span style={{ fontSize: 10, color: C.inkSoft }}>{new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
                         </div>
                         <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 4 }}>{r.obra?.nome ?? 'Sem Obra'}</div>
-                        <div style={{ fontSize: 11, color: C.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.resumo}</div>
+                        <div style={{ fontSize: 11, color: C.inkSoft }}>
+                          <TextoExpandivel text={r.resumo} maxLength={60} textColor={C.inkSoft} />
+                        </div>
                       </div>
                       <button
                         onClick={(e) => handleDeleteRdo(r.id, e)}
@@ -776,9 +837,34 @@ export default function RDO() {
                     </div>
                   ) : (
                     <>
-                      {selectedRdo.resumo && <div><span style={labelStyle}>Relato do dia</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.resumo}</p></div>}
-                      {selectedRdo.ocorrencias && <div><span style={labelStyle}>Ocorrências / Observações</span><div style={{ fontSize: 12, color: C.red, background: `${C.red}05`, border: `1px solid ${C.red}22`, padding: 10, borderRadius: 2 }}>{selectedRdo.ocorrencias}</div></div>}
-                      {(selectedRdo.definicao_servico || selectedRdo.liberacoes) && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}><div><span style={labelStyle}>Definição dos serviços</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.definicao_servico || '—'}</p></div><div><span style={labelStyle}>Liberações</span><p style={{ fontSize: 12, color: C.ink }}>{selectedRdo.liberacoes || '—'}</p></div></div>}
+                      {selectedRdo.resumo && (
+                        <div>
+                          <span style={labelStyle}>Relato do dia</span>
+                          <div style={{ marginTop: 2 }}>
+                            <TextoExpandivel text={selectedRdo.resumo} maxLength={140} />
+                          </div>
+                        </div>
+                      )}
+                      {selectedRdo.ocorrencias && (
+                        <div>
+                          <span style={labelStyle}>Ocorrências / Observações</span>
+                          <div style={{ fontSize: 12, color: C.red, background: `${C.red}05`, border: `1px solid ${C.red}22`, padding: 10, borderRadius: 2, marginTop: 2 }}>
+                            <TextoExpandivel text={selectedRdo.ocorrencias} maxLength={140} textColor={C.red} />
+                          </div>
+                        </div>
+                      )}
+                      {(selectedRdo.definicao_servico || selectedRdo.liberacoes) && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                          <div>
+                            <span style={labelStyle}>Definição dos serviços</span>
+                            <TextoExpandivel text={selectedRdo.definicao_servico || '—'} maxLength={100} />
+                          </div>
+                          <div>
+                            <span style={labelStyle}>Liberações</span>
+                            <TextoExpandivel text={selectedRdo.liberacoes || '—'} maxLength={100} />
+                          </div>
+                        </div>
+                      )}
                     </>
                   )}
 
