@@ -6,7 +6,8 @@ import {
   Building2, Users, FileText, CheckCircle, Clock, X,
   Search, RefreshCw, ArrowUpRight, ArrowDownRight, Calendar,
   Shield, Check, AlertTriangle, Paperclip, Eye, UserPlus, ToggleLeft, ToggleRight,
-  Edit3, Sliders, Camera, Trash2, FileSpreadsheet, Upload, Download, CheckCircle2
+  Edit3, Sliders, Camera, Trash2, FileSpreadsheet, Upload, Download, CheckCircle2,
+  ChevronDown, ChevronUp
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import { supabase } from '@/lib/supabase'
@@ -52,6 +53,72 @@ const isVencido = (d: string, status: string) => {
   hoje.setHours(0, 0, 0, 0);
   const vencimento = new Date(d + 'T00:00:00');
   return vencimento < hoje;
+}
+
+function ObservacaoExpandivel({ text, maxLength = 60, showTitleLabel = true }: { text: string | null | undefined; maxLength?: number; showTitleLabel?: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+
+  if (!text) return <span style={{ color: C.inkSoft, fontStyle: 'italic', fontSize: 11 }}>Nenhuma observação</span>
+
+  const isLong = text.length > maxLength
+
+  if (!isLong) {
+    return (
+      <div 
+        title={text} 
+        style={{ fontSize: 11, color: C.inkSoft, wordBreak: 'break-word', lineHeight: 1.4 }}
+      >
+        {showTitleLabel && <span style={{ color: C.amber, fontWeight: 700 }}>Obs: </span>}
+        {text}
+      </div>
+    )
+  }
+
+  const displayText = expanded ? text : text.slice(0, maxLength) + '...'
+
+  return (
+    <div 
+      title={text} 
+      style={{ fontSize: 11, color: C.inkSoft, wordBreak: 'break-word', lineHeight: 1.4 }}
+    >
+      {showTitleLabel && <span style={{ color: C.amber, fontWeight: 700 }}>Obs: </span>}
+      <span>{displayText}</span>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          setExpanded(!expanded)
+        }}
+        title={expanded ? "Recolher texto" : "Ver observação completa (passe o mouse para ler tudo)"}
+        style={{
+          background: 'rgba(245, 158, 11, 0.12)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          color: C.amber,
+          borderRadius: 4,
+          padding: '1px 6px',
+          fontSize: 10,
+          fontWeight: 700,
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 3,
+          marginLeft: 6,
+          verticalAlign: 'middle',
+          transition: 'all 0.2s ease'
+        }}
+      >
+        {expanded ? (
+          <>
+            menos <ChevronUp size={10} />
+          </>
+        ) : (
+          <>
+            mais <ChevronDown size={10} />
+          </>
+        )}
+      </button>
+    </div>
+  )
 }
 
 // ─── NAV TABS ────────────────────────────────────────────────────────────────
@@ -3551,6 +3618,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                             </span>
                           </div>
                         )}
+                        {c.observacoes && (
+                          <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                            <ObservacaoExpandivel text={c.observacoes} maxLength={55} />
+                          </div>
+                        )}
                       </td>
                       <td style={{ padding: '12px 14px', color: C.inkSoft }}>
                         <span style={{ borderLeft: `2px solid ${c.empresa?.cor ?? '#fff'}`, paddingLeft: 6 }}>
@@ -3681,7 +3753,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                   </div>
                                   <div>
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Observações do Lançamento</div>
-                                    <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>{c.observacoes || 'Nenhuma observação'}</div>
+                                    <div style={{ marginTop: 4 }}>
+                                      <ObservacaoExpandivel text={c.observacoes} maxLength={100} showTitleLabel={false} />
+                                    </div>
                                   </div>
                                   <div>
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 6 }}>Documento / Comprovante Anexo</div>
