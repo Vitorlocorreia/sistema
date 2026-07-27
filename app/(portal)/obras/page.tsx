@@ -500,6 +500,8 @@ export default function Obras() {
           {(() => {
             const totalContrato = obrasList.reduce((s, o) => s + Number(o.valor_contrato || 0), 0)
             const totalMedido   = obrasList.reduce((s, o) => s + Number(o.medido_acumulado || 0), 0)
+            const totalPrevistoBM = obrasList.reduce((s, o) => s + Number(o.proximo_urb_valor || 0), 0)
+            const totalMedidoPrevisto = totalMedido + totalPrevistoBM
             const totalPago     = contas.filter(c => c.tipo === 'pagar' && c.status === 'Pago').reduce((s, c) => s + Number(c.valor), 0)
             const totalAberto   = contas.filter(c => c.tipo === 'pagar' && c.status !== 'Pago').reduce((s, c) => s + Number(c.valor), 0)
             const totalRecebido = contas.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + Number(c.valor), 0)
@@ -513,6 +515,7 @@ export default function Obras() {
               { label: 'Total de Obras',      value: String(totalObras),          sub: `${obrasAtivas} ativas`,                       color: C.amber,    icon: '🏗️' },
               { label: 'Portfólio Contratos', value: fmtMoney(totalContrato),     sub: 'valor contratado total',                      color: '#60A5FA',  icon: '📋' },
               { label: 'Medido Acumulado',    value: fmtMoney(totalMedido),       sub: `${totalContrato > 0 ? ((totalMedido/totalContrato)*100).toFixed(1) : 0}% do portfólio`, color: '#A78BFA', icon: '📐' },
+              { label: 'Medido Previsto (BMs)', value: fmtMoney(totalMedidoPrevisto), sub: `+${fmtMoney(totalPrevistoBM)} nos BMs previstos`, color: '#3B82F6', icon: '🔮' },
               { label: 'Total Pago (Custos)', value: fmtMoney(totalPago),         sub: `+ ${fmtMoney(totalAberto)} em aberto`,         color: C.red,      icon: '💸' },
               { label: 'Receita Recebida',    value: fmtMoney(totalRecebido),     sub: 'faturamento confirmado',                      color: C.green,    icon: '💰' },
               { label: 'Saldo do Portfólio',  value: fmtMoney(saldo),             sub: `${saldoPct >= 0 ? '+' : ''}${saldoPct.toFixed(1)}% sobre contratos`, color: saldo >= 0 ? C.green : C.red, icon: saldo >= 0 ? '📈' : '📉' },

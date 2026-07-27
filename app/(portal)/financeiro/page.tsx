@@ -659,6 +659,8 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
           {obras.length > 0 && (() => {
             const totalContrato  = obras.reduce((s, o) => s + Number(o.valor_contrato || 0), 0)
             const totalMedido    = obras.reduce((s, o) => s + Number(o.medido_acumulado || 0), 0)
+            const totalPrevistoBM = obras.reduce((s, o) => s + Number(o.proximo_urb_valor || 0), 0)
+            const totalMedidoPrevisto = totalMedido + totalPrevistoBM
             const saldoMedir     = Math.max(0, totalContrato - totalMedido)
             const progressoMedio = obras.length ? obras.reduce((s, o) => s + Number(o.progresso || 0), 0) / obras.length : 0
             const obrasAtivas    = obras.filter(o => o.status !== 'Concluído').length
@@ -667,6 +669,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
               { label: 'Total de Obras',       value: String(obras.length),         sub: `${obrasAtivas} ativas`,                                                                                   color: C.amber,   icon: '🏗️' },
               { label: 'Portfólio Contratos',  value: fmt(totalContrato),           sub: 'soma dos contratos',                                                                                      color: '#60A5FA', icon: '📋' },
               { label: 'Medido Acumulado',     value: fmt(totalMedido),             sub: `${totalContrato > 0 ? ((totalMedido / totalContrato) * 100).toFixed(1) : 0}% do portfólio`,             color: '#A78BFA', icon: '📐' },
+              { label: 'Medido Previsto (BMs)', value: fmt(totalMedidoPrevisto),     sub: `+${fmt(totalPrevistoBM)} nos BMs previstos`,                                                              color: '#3B82F6', icon: '🔮' },
               { label: 'Saldo a Medir',        value: fmt(saldoMedir),              sub: 'restante para medir',                                                                                     color: C.green,   icon: '💰' },
               { label: 'Progresso Médio',      value: `${progressoMedio.toFixed(1)}%`, sub: 'média do avanço físico',                                                                              color: C.amber,   icon: '⚡' },
             ]
@@ -866,6 +869,17 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                 <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
                   <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Medido Acumulado (Total)</div>
                   <div style={{ fontSize: 16, color: C.ink, fontWeight: 800, marginTop: 4 }}>{fmt(Number(obraSelecionada.medido_acumulado || 0))}</div>
+                </div>
+                <div style={{ background: 'rgba(59,130,246,0.06)', padding: 12, borderRadius: 6, border: `1px solid rgba(59,130,246,0.2)` }}>
+                  <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Medido Previsto (BMs)</div>
+                  <div style={{ fontSize: 16, color: '#3B82F6', fontWeight: 800, marginTop: 4 }}>
+                    {fmt(Number(obraSelecionada.medido_acumulado || 0) + Number(obraSelecionada.proximo_urb_valor || 0))}
+                  </div>
+                  {obraSelecionada.proximo_urb_valor ? (
+                    <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 2 }}>
+                      +{fmt(Number(obraSelecionada.proximo_urb_valor))} próx. BM
+                    </div>
+                  ) : null}
                 </div>
                 <div style={{ background: 'rgba(52,211,153,0.06)', padding: 12, borderRadius: 6, border: `1px solid rgba(52,211,153,0.2)` }}>
                   <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Saldo a Medir</div>
