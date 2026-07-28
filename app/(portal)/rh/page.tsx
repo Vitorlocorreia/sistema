@@ -132,9 +132,9 @@ function ArchivePanel({ person, details, onBack, onDelete, onOpen }: { person: F
   </div>
 }
 
-// item_id especial usado para a guia que o RH envia ao candidato (distingue da devolucao)
-const GUIA_ITEM_ID = '__guia_rh__'
-const LAUDO_ITEM_ID = '__laudo_candidato__'
+// item_id usado para a guia do RH e laudo do candidato (compátivel com o checklist do Supabase)
+const GUIA_ITEM_ID = 'identificacao'
+const LAUDO_ITEM_ID = 'responsavel'
 
 function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke, onRegenerate, onCopy, onDelete, onRefresh }: {
   invite: Convite
@@ -153,9 +153,9 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
 
   const modeloEtapa4 = modelos.find(m => m.ordem === 4)
   // Guia enviada pelo RH
-  const guiaRH = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && d.item_id === GUIA_ITEM_ID) : null
+  const guiaRH = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && (d.item_id === GUIA_ITEM_ID || d.item_id === '__guia_rh__')) : null
   // Laudo de retorno enviado pelo candidato
-  const laudoCandidato = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && d.item_id === LAUDO_ITEM_ID) : null
+  const laudoCandidato = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && (d.item_id === LAUDO_ITEM_ID || d.item_id === '__laudo_candidato__')) : null
   // Dados Bancários e PIX cadastrados pelo funcionário
   const docPix = invite.documentos.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
 

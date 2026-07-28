@@ -298,9 +298,10 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
             // ── ETAPA 4: Guia de Exame Admissional (Baixar guia do RH + Anexar laudo médico) ──────
             if (modelo.ordem === 4) {
-              const guiaRH = fluxo.documentos.find(d => d.modelo_id === modelo.id && d.item_id === '__guia_rh__')
-              const laudoCandidato = fluxo.documentos.find(d => d.modelo_id === modelo.id && d.item_id === '__laudo_candidato__')
-              const uploadId = `${modelo.id}:__laudo_candidato__`
+              const itemLaudo = modelo.checklist.find(i => i.id === 'responsavel') || modelo.checklist[modelo.checklist.length - 1] || { id: 'responsavel', label: 'Laudo Médico', obrigatorio: true }
+              const guiaRH = fluxo.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === '__guia_rh__' || d.item_id === 'identificacao'))
+              const laudoCandidato = fluxo.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === '__laudo_candidato__' || d.item_id === 'responsavel' || d.item_id === itemLaudo.id))
+              const uploadId = `${modelo.id}:${itemLaudo.id}`
 
               return (
                 <article key={modelo.id} style={{ ...card, borderColor: laudoCandidato ? '#22C55E66' : C.border }}>
@@ -318,17 +319,20 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
                   <div style={{ marginTop: 12, padding: 12, background: '#0B0C0E', borderRadius: 5, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {/* Bloco 1: Download da Guia do RH */}
-                    <div>
-                      <strong style={{ fontSize: 11, color: C.ink, display: 'block', marginBottom: 4 }}>1. Sua Guia Médica Personalizada</strong>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <div>
+                        <strong style={{ fontSize: 11, display: 'block' }}>1. Guia Médica Emitida pelo RH</strong>
+                        <span style={{ fontSize: 9, color: C.inkSoft }}>
+                          {guiaRH ? 'Sua guia já está disponível para download abaixo.' : 'Aguardando o RH gerar e disponibilizar a sua guia médica.'}
+                        </span>
+                      </div>
                       {guiaRH ? (
-                        <a
-                          href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/rh-documentos/${guiaRH.storage_path || guiaRH.nome}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: C.amber, color: '#0B0C0E', fontWeight: 900, fontSize: 10, borderRadius: 4, textDecoration: 'none', marginTop: 4 }}
+                        <button
+                          onClick={() => void baixarGuiaRH(guiaRH)}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: C.amber, color: '#0B0C0E', fontWeight: 900, fontSize: 10, borderRadius: 4, border: 0, cursor: 'pointer' }}
                         >
                           <FileCheck2 size={13} /> Baixar Guia Médica ({guiaRH.nome})
-                        </a>
+                        </button>
                       ) : (
                         <p style={{ fontSize: 10, color: C.inkSoft, margin: 0 }}>
                           ⏳ O RH ainda está preenchendo sua guia de exame. Ela estará disponível aqui em breve.
