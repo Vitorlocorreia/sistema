@@ -31,7 +31,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
       if (!response.ok) throw new Error(body.error || 'Convite inválido.')
       setFluxo(body)
       // Carrega valor do PIX salvo previamente se existir
-      const docPix = (body.documentos as Documento[] | undefined)?.find(d => d.item_id === 'pix')
+      const docPix = (body.documentos as Documento[] | undefined)?.find(d => d.item_id === 'pix' || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
       if (docPix?.nome?.startsWith('Dados Bancários:')) {
         const parts = docPix.nome.replace('Dados Bancários:', '').split(' | ')
         setPixInput(parts[0]?.replace('PIX:', '').trim() || '')
@@ -39,6 +39,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
         setAgenciaContaInput(parts[2]?.replace('Agência/Conta:', '').trim() || '')
       } else if (docPix?.nome?.startsWith('Chave PIX:')) {
         setPixInput(docPix.nome.replace('Chave PIX:', '').trim())
+      } else if (docPix?.nome) {
+        setPixInput(docPix.nome)
       }
       setErro('')
     } catch (error) {
@@ -215,9 +217,9 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                                 onChange={e => setAgenciaContaInput(e.target.value)}
                               />
                               <button
-                                disabled={enviando === id || !pixInput.trim() || !agenciaContaInput.trim()}
+                                disabled={enviando === id || (!pixInput.trim() && !bancoInput.trim() && !agenciaContaInput.trim())}
                                 onClick={() => void salvarChavePix(modelo, item)}
-                                style={{ gridColumn: '1 / -1', padding: '9px 14px', background: C.amber, color: '#0B0C0E', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: (pixInput.trim() && agenciaContaInput.trim()) ? 1 : 0.5 }}
+                                style={{ gridColumn: '1 / -1', padding: '9px 14px', background: C.amber, color: '#0B0C0E', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: (pixInput.trim() || bancoInput.trim() || agenciaContaInput.trim()) ? 1 : 0.5 }}
                               >
                                 {enviando === id ? 'Salvando...' : accepted ? 'Atualizar Dados Bancários' : 'Salvar Dados Bancários'}
                               </button>
