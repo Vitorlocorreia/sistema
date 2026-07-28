@@ -14,6 +14,7 @@ import {
   Stethoscope,
   Stethoscope as MedIcon,
   Trash2,
+  CreditCard,
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { supabase } from '@/lib/supabase'
@@ -155,6 +156,8 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
   const guiaRH = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && d.item_id === GUIA_ITEM_ID) : null
   // Laudo de retorno enviado pelo candidato
   const laudoCandidato = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && d.item_id === LAUDO_ITEM_ID) : null
+  // Dados Bancários e PIX cadastrados pelo funcionário
+  const docPix = invite.documentos.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
 
   async function uploadGuiaMedica(file: File | undefined) {
     if (!file || !modeloEtapa4) return
@@ -252,6 +255,20 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
           )}
         </p>
         <button style={{ ...linkButton, marginTop: 6 }} onClick={onCopy}>Copiar link do candidato</button>
+
+        {docPix && (
+          <div style={{ marginTop: 10, padding: '10px 14px', background: '#0B0C0E', border: `1px solid ${C.amber}66`, borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <CreditCard size={18} color={C.amber} />
+            <div>
+              <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, textTransform: 'uppercase', display: 'block', letterSpacing: 0.5 }}>
+                💳 Dados Bancários e PIX Cadastrados pelo Funcionário:
+              </span>
+              <span style={{ fontSize: 12, color: C.ink, fontWeight: 700, marginTop: 3, display: 'block' }}>
+                {docPix.nome}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
@@ -441,7 +458,17 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                   <small style={{ display: 'block', color: C.inkSoft, marginTop: 3 }}>{modelo.nome}</small>
                 </div>
                 <div style={tableCell}>{label}</div>
-                <div style={tableCell}>{doc ? <button onClick={() => onOpen(doc)} style={linkButton}>↗ {doc.nome}</button> : <span style={{ color: C.inkSoft }}>Ainda não enviado</span>}</div>
+                <div style={tableCell}>
+                  {doc && (item.id === 'pix' || item.id?.includes('pix') || doc.nome?.includes('PIX') || doc.nome?.includes('Dados Bancários')) ? (
+                    <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, background: 'rgba(245, 158, 11, 0.12)', padding: '6px 10px', borderRadius: 4, border: `1px solid ${C.amber}33` }}>
+                      💳 {doc.nome}
+                    </div>
+                  ) : doc ? (
+                    <button onClick={() => onOpen(doc)} style={linkButton}>↗ {doc.nome}</button>
+                  ) : (
+                    <span style={{ color: C.inkSoft }}>Ainda não enviado</span>
+                  )}
+                </div>
                 <div style={tableCell}>
                   <span style={{ color: doc?.status === 'aprovado' ? '#4ADE80' : doc?.status === 'devolvido' ? '#F87171' : doc ? C.amber : C.inkSoft, fontWeight: 800 }}>
                     {doc?.status === 'aprovado' ? 'Aprovado' : doc?.status === 'devolvido' ? 'Devolvido' : doc ? 'Aguardando análise' : 'Pendente'}
@@ -914,6 +941,15 @@ export default function RhPage() {
                       </span>
                     )}
                   </div>
+                  {(() => {
+                    const docPix = invite.documentos?.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
+                    if (!docPix) return null
+                    return (
+                      <div style={{ fontSize: 9, color: C.amber, fontWeight: 800, marginTop: 4, display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        💳 {docPix.nome}
+                      </div>
+                    )
+                  })()}
                   <div style={{ color: invite.status === 'devolvido' || expired ? '#F87171' : C.amber, fontSize: 10, fontWeight: 800, marginTop: 7 }}>
                     {label}
                   </div>
