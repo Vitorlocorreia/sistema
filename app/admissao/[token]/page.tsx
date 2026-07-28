@@ -77,7 +77,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     setErro('')
     try {
       const mimeType = getMimeType(file)
-      const targetItemId = modelo.checklist.find(i => i.id === item.id)?.id || modelo.checklist[0]?.id || item.id
+      const targetItemId = modelo.checklist.find(i => i.id === item.id)?.id || item.id
       const request = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -405,10 +405,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                             type="file"
                             accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
                             disabled={!!enviando}
-                            onChange={event => {
-                              const dummyItem = { id: '__laudo_candidato__', label: 'Laudo / ASO Admissional', obrigatorio: true }
-                              void enviarArquivo(modelo, dummyItem, event.target.files?.[0])
-                            }}
+                            onChange={event => void enviarArquivo(modelo, itemLaudo, event.target.files?.[0])}
                           />
                         </label>
                       </div>
