@@ -1689,6 +1689,7 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   // Gerenciamento de acessos
   const [acessosEmpresa, setAcessosEmpresa] = useState<Empresa | null>(null)
   const [searchColab, setSearchColab] = useState('')
+  const [filtroAcesso, setFiltroAcesso] = useState<'todos' | 'com_acesso' | 'sem_acesso'>('todos')
   const [updatingColabId, setUpdatingColabId] = useState<string | null>(null)
 
   const load = useCallback(async (isBackground = false) => {
@@ -1963,6 +1964,42 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
               </button>
             </div>
 
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <button
+                type="button"
+                onClick={() => setFiltroAcesso('todos')}
+                style={{
+                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
+                  background: filtroAcesso === 'todos' ? C.amber : '#1A1D28',
+                  color: filtroAcesso === 'todos' ? '#0B0C0E' : C.inkSoft
+                }}
+              >
+                Todos ({colaboradores.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltroAcesso('com_acesso')}
+                style={{
+                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
+                  background: filtroAcesso === 'com_acesso' ? '#22C55E' : '#1A1D28',
+                  color: filtroAcesso === 'com_acesso' ? '#0B0C0E' : '#4ADE80'
+                }}
+              >
+                ✓ Com Acesso ({colaboradores.filter(c => c.cargo === 'admin_geral' || (c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])).includes(acessosEmpresa.id)).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltroAcesso('sem_acesso')}
+                style={{
+                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
+                  background: filtroAcesso === 'sem_acesso' ? '#EF4444' : '#1A1D28',
+                  color: filtroAcesso === 'sem_acesso' ? '#FFFFFF' : '#F87171'
+                }}
+              >
+                ✕ Sem Acesso ({colaboradores.filter(c => c.cargo !== 'admin_geral' && !(c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])).includes(acessosEmpresa.id)).length})
+              </button>
+            </div>
+
             <div style={{ marginBottom: 12 }}>
               <input
                 style={{ ...input, fontSize: 11, padding: '7px 10px' }}
@@ -1975,9 +2012,37 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
             <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gap: 8, paddingRight: 4 }}>
               {colaboradores
                 .filter(colab => {
+                  const isAdmin = colab.cargo === 'admin_geral'
+                  const ids: string[] = colab.empresas_ids || (colab.empresa_id ? [colab.empresa_id] : [])
+                  const hasAccess = isAdmin || ids.includes(acessosEmpresa.id)
+
+                  if (filtroAcesso === 'com_acesso' && !hasAccess) return false
+                  if (filtroAcesso === 'sem_acesso' && hasAccess) return false
+
                   if (!searchColab.trim()) return true
                   const q = searchColab.toLowerCase()
                   return colab.nome.toLowerCase().includes(q) || (colab.cargo || '').toLowerCase().includes(q) || (colab.email || '').toLowerCase().includes(q)
+                })
+                .sort((a, b) => {
+                  const aAdmin = a.cargo === 'admin_geral'
+                  const bAdmin = b.cargo === 'admin_geral'
+
+                  const aIds: string[] = a.empresas_ids || (a.empresa_id ? [a.empresa_id] : [])
+                  const bIds: string[] = b.empresas_ids || (b.empresa_id ? [b.empresa_id] : [])
+
+                  const aAccess = aAdmin || aIds.includes(acessosEmpresa.id)
+                  const bAccess = bAdmin || bIds.includes(acessosEmpresa.id)
+
+                  // 1. Admin Geral em primeiro
+                  if (aAdmin && !bAdmin) return -1
+                  if (!aAdmin && bAdmin) return 1
+
+                  // 2. Com Acesso em primeiro
+                  if (aAccess && !bAccess) return -1
+                  if (!aAccess && bAccess) return 1
+
+                  // 3. Ordem alfabética
+                  return a.nome.localeCompare(b.nome, 'pt-BR')
                 })
                 .map(colab => {
                   const isAdmin = colab.cargo === 'admin_geral'
