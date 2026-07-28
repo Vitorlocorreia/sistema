@@ -84,8 +84,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     setErro('')
     try {
       const textContent = `Dados Bancários: PIX: ${pixInput.trim()} | Banco: ${bancoInput.trim()} | Agência/Conta: ${agenciaContaInput.trim()}`
-      const textBlob = new Blob([textContent], { type: 'text/plain' })
-      const textFile = new File([textBlob], 'dados_bancarios.txt', { type: 'text/plain' })
+      const textBlob = new Blob([textContent], { type: 'application/pdf' })
+      const textFile = new File([textBlob], 'dados_bancarios.pdf', { type: 'application/pdf' })
 
       const request = await fetch(endpoint, {
         method: 'POST',
@@ -96,7 +96,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           modelo_id: modelo.id,
           item_id: item.id,
           nome: textContent,
-          mime_type: 'text/plain',
+          mime_type: 'application/pdf',
           tamanho_bytes: textBlob.size,
         }),
       })
@@ -105,7 +105,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
       const { error: uploadError } = await supabase.storage
         .from('rh-documentos')
-        .uploadToSignedUrl(prepared.path, prepared.upload_token, textFile, { contentType: 'text/plain' })
+        .uploadToSignedUrl(prepared.path, prepared.upload_token, textFile, { contentType: 'application/pdf' })
       if (uploadError) throw uploadError
 
       const confirm = await fetch(endpoint, {
