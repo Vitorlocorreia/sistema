@@ -1675,24 +1675,45 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 // ════════════════════════════════════════════════════════
 function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [loading, setLoading]   = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#C8A96E' })
   const [saving, setSaving] = useState(false)
 
+  // Edição de empresa
+  const [editingEmpresa, setEditingEmpresa] = useState<Empresa | null>(null)
+  const [editForm, setEditForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#C8A96E' })
+  const [savingEdit, setSavingEdit] = useState(false)
+
+  // Gerenciamento de acessos
+  const [acessosEmpresa, setAcessosEmpresa] = useState<Empresa | null>(null)
+  const [searchColab, setSearchColab] = useState('')
+  const [updatingColabId, setUpdatingColabId] = useState<string | null>(null)
+
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
-    const { data } = await supabase.from('empresas').select('*').order('razao_social')
-    setEmpresas(data ?? [])
+    const [{ data: empData }, { data: colabData }] = await Promise.all([
+      supabase.from('empresas').select('*').order('razao_social'),
+      supabase.from('colaboradores').select('*').order('nome')
+    ])
+    setEmpresas(empData ?? [])
+    setColaboradores((colabData as Colaborador[]) ?? [])
     setLoading(false)
   }, [])
+
   useRealtimeSync(load, 'financeiro-empresas')
-  useEffect(() => { load() }, [load])
+  useEffect(() => { void load() }, [load])
 
   const save = async () => {
-    if (!form.razao_social.trim()) return
+    if (!form.razao_social.trim()) return toast('Informe a Razão Social', 'error')
     setSaving(true)
-    const { error } = await supabase.from('empresas').insert({ ...form, razao_social: form.razao_social.trim(), nome_fantasia: form.nome_fantasia.trim() || null, cnpj: form.cnpj.trim() || null })
+    const { error } = await supabase.from('empresas').insert({
+      razao_social: form.razao_social.trim(),
+      nome_fantasia: form.nome_fantasia.trim() || null,
+      cnpj: form.cnpj.trim() || null,
+      cor: form.cor || '#C8A96E'
+    })
     if (error) {
       setSaving(false)
       return toast(`Não foi possível salvar a empresa: ${error.message}`, 'error')
@@ -1701,7 +1722,79 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
     setShowForm(false)
     setSaving(false)
     await load()
-    toast('Empresa cadastrada.', 'success')
+    toast('Empresa cadastrada com sucesso.', 'success')
+  }
+
+  const openEdit = (emp: Empresa) => {
+    setEditingEmpresa(emp)
+    setEditForm({
+      razao_social: emp.razao_social || '',
+      nome_fantasia: emp.nome_fantasia || '',
+      cnpj: emp.cnpj || '',
+      cor: emp.cor || '#C8A96E'
+    })
+  }
+
+  const saveEdit = async () => {
+    if (!editingEmpresa) return
+    if (!editForm.razao_social.trim()) return toast('Informe a Razão Social', 'error')
+    setSavingEdit(true)
+    try {
+      const { error } = await supabase
+        .from('empresas')
+        .update({
+          razao_social: editForm.razao_social.trim(),
+          nome_fantasia: editForm.nome_fantasia.trim() || null,
+          cnpj: editForm.cnpj.trim() || null,
+          cor: editForm.cor || '#C8A96E'
+        })
+        .eq('id', editingEmpresa.id)
+
+      if (error) throw error
+
+      toast('Empresa atualizada com sucesso!', 'success')
+      setEditingEmpresa(null)
+      await load()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao atualizar empresa'
+      toast(msg, 'error')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  const toggleAcessoColaborador = async (colab: Colaborador, empresaId: string) => {
+    if (colab.cargo === 'admin_geral') {
+      return toast('Administradores gerais possuem acesso automático a todas as empresas.', 'info')
+    }
+
+    setUpdatingColabId(colab.id)
+    try {
+      const currentIds: string[] = colab.empresas_ids || (colab.empresa_id ? [colab.empresa_id] : [])
+      const hasAccess = currentIds.includes(empresaId)
+
+      let nextIds: string[] = []
+      if (hasAccess) {
+        nextIds = currentIds.filter(id => id !== empresaId)
+      } else {
+        nextIds = Array.from(new Set([...currentIds, empresaId]))
+      }
+
+      const { error } = await supabase
+        .from('colaboradores')
+        .update({ empresas_ids: nextIds })
+        .eq('id', colab.id)
+
+      if (error) throw error
+
+      toast(hasAccess ? `Acesso revogado para ${colab.nome}` : `Acesso concedido para ${colab.nome}`, 'success')
+      await load()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao atualizar acesso'
+      toast(msg, 'error')
+    } finally {
+      setUpdatingColabId(null)
+    }
   }
 
   const remove = async (id: string) => {
@@ -1716,7 +1809,10 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.ink }}>Empresas Cadastradas</h2>
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.ink }}>Empresas e Filiais</h2>
+          <p style={{ margin: '4px 0 0', fontSize: 11, color: C.inkSoft }}>Gerencie os dados cadastrais e defina quais colaboradores possuem acesso a cada empresa.</p>
+        </div>
         {podeGerenciar && (
           <button style={btn()} onClick={() => setShowForm(v => !v)}>
             <Plus size={14} /> Nova Empresa
@@ -1726,6 +1822,7 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
 
       {showForm && podeGerenciar && (
         <div style={{ ...card, marginBottom: 20, borderColor: C.amber + '44' }}>
+          <div style={{ fontWeight: 800, fontSize: 12, color: C.amber, marginBottom: 12 }}>+ Cadastrar Nova Empresa</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
             <div>
               <label style={label}>Razão Social *</label>
@@ -1745,7 +1842,7 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Salvar'}</button>
+            <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Empresa'}</button>
             <button style={btnGhost} onClick={() => setShowForm(false)}>Cancelar</button>
           </div>
         </div>
@@ -1754,27 +1851,180 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
       {loading ? (
         <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando empresas...</p>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 14 }}>
           {empresas.filter(e => {
             if (colaboradorAtivo.cargo !== 'admin_empresa') return true
             const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
             return ids.includes(e.id)
-          }).map(e => (
-            <div key={e.id} style={{ ...card, borderLeft: `3px solid ${e.cor}`, position: 'relative' }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: e.cor + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                <Building2 size={16} color={e.cor} />
+          }).map(e => {
+            const colabsComAcesso = colaboradores.filter(c => {
+              if (c.cargo === 'admin_geral') return true
+              const ids: string[] = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
+              return ids.includes(e.id)
+            })
+
+            return (
+              <div key={e.id} style={{ ...card, borderLeft: `4px solid ${e.cor}`, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                    <div style={{ width: 38, height: 38, borderRadius: 8, background: e.cor + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Building2 size={18} color={e.cor} />
+                    </div>
+                    {podeGerenciar && (
+                      <button onClick={() => remove(e.id)} title="Excluir empresa" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ fontWeight: 900, color: C.ink, fontSize: 13, marginBottom: 2 }}>{e.nome_fantasia ?? e.razao_social}</div>
+                  {e.nome_fantasia && <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>{e.razao_social}</div>}
+                  {e.cnpj && <div style={{ fontSize: 10, color: C.inkSoft }}>CNPJ: <strong>{e.cnpj}</strong></div>}
+
+                  <div style={{ marginTop: 12, padding: '6px 10px', background: '#0B0C0E', borderRadius: 5, border: `1px solid ${C.border}`, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: C.inkSoft }}>
+                    <Users size={12} color={C.amber} />
+                    <span><strong>{colabsComAcesso.length}</strong> usuário(s) com acesso</span>
+                  </div>
+                </div>
+
+                {podeGerenciar && (
+                  <div style={{ display: 'flex', gap: 8, marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                    <button
+                      style={{ ...btnGhost, flex: 1, fontSize: 10, padding: '6px 10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                      onClick={() => openEdit(e)}
+                    >
+                      <Edit3 size={12} /> Editar
+                    </button>
+                    <button
+                      style={{ ...btnGhost, flex: 1, fontSize: 10, padding: '6px 10px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                      onClick={() => setAcessosEmpresa(e)}
+                    >
+                      <Shield size={12} /> Acessos
+                    </button>
+                  </div>
+                )}
               </div>
-              <div style={{ fontWeight: 900, color: C.ink, marginBottom: 2 }}>{e.nome_fantasia ?? e.razao_social}</div>
-              {e.nome_fantasia && <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>{e.razao_social}</div>}
-              {e.cnpj && <div style={{ fontSize: 11, color: C.inkSoft }}>CNPJ: {e.cnpj}</div>}
-              {podeGerenciar && (
-                <button onClick={() => remove(e.id)} style={{ position: 'absolute', top: 12, right: 12, background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                  <X size={14} />
-                </button>
-              )}
-            </div>
-          ))}
+            )
+          })}
           {empresas.length === 0 && <p style={{ color: C.inkSoft, fontSize: 13 }}>Nenhuma empresa cadastrada no sistema.</p>}
+        </div>
+      )}
+
+      {/* ── MODAL DE EDIÇÃO DE EMPRESA ── */}
+      {editingEmpresa && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#12141C', border: `1px solid ${C.amber}`, borderRadius: 8, padding: 20, maxWidth: 480, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+              ✏️ Editar Empresa / Filial
+            </h3>
+
+            <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
+              <div>
+                <label style={label}>Razão Social *</label>
+                <input style={input} value={editForm.razao_social} onChange={e => setEditForm({ ...editForm, razao_social: e.target.value })} placeholder="Nome legal da empresa" />
+              </div>
+              <div>
+                <label style={label}>Nome Fantasia</label>
+                <input style={input} value={editForm.nome_fantasia} onChange={e => setEditForm({ ...editForm, nome_fantasia: e.target.value })} placeholder="Como é conhecida" />
+              </div>
+              <div>
+                <label style={label}>CNPJ</label>
+                <input style={input} value={editForm.cnpj} onChange={e => setEditForm({ ...editForm, cnpj: e.target.value })} placeholder="00.000.000/0000-00" />
+              </div>
+              <div>
+                <label style={label}>Cor de Identificação</label>
+                <input type="color" value={editForm.cor} onChange={e => setEditForm({ ...editForm, cor: e.target.value })} style={{ height: 38, width: '100%', borderRadius: 6, border: `1px solid ${C.border}`, background: 'none', cursor: 'pointer', padding: 2 }} />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button style={btnGhost} onClick={() => setEditingEmpresa(null)} disabled={savingEdit}>Cancelar</button>
+              <button style={btn()} onClick={() => void saveEdit()} disabled={savingEdit}>{savingEdit ? 'Salvando...' : 'Salvar Alterações'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL DE GERENCIAMENTO DE ACESSOS ── */}
+      {acessosEmpresa && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#12141C', border: `1px solid ${C.amber}`, borderRadius: 8, padding: 20, maxWidth: 540, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  🔒 Acessos à Empresa: <span style={{ color: C.amber }}>{acessosEmpresa.nome_fantasia || acessosEmpresa.razao_social}</span>
+                </h3>
+                <p style={{ fontSize: 11, color: C.inkSoft, margin: '3px 0 0' }}>
+                  Marque ou desmarque os usuários autorizados a visualizar e gerenciar esta empresa.
+                </p>
+              </div>
+              <button style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer' }} onClick={() => setAcessosEmpresa(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <input
+                style={{ ...input, fontSize: 11, padding: '7px 10px' }}
+                placeholder="Buscar colaborador por nome, cargo ou e-mail..."
+                value={searchColab}
+                onChange={e => setSearchColab(e.target.value)}
+              />
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gap: 8, paddingRight: 4 }}>
+              {colaboradores
+                .filter(colab => {
+                  if (!searchColab.trim()) return true
+                  const q = searchColab.toLowerCase()
+                  return colab.nome.toLowerCase().includes(q) || (colab.cargo || '').toLowerCase().includes(q) || (colab.email || '').toLowerCase().includes(q)
+                })
+                .map(colab => {
+                  const isAdmin = colab.cargo === 'admin_geral'
+                  const ids: string[] = colab.empresas_ids || (colab.empresa_id ? [colab.empresa_id] : [])
+                  const hasAccess = isAdmin || ids.includes(acessosEmpresa.id)
+                  const isUpdating = updatingColabId === colab.id
+
+                  return (
+                    <div key={colab.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#0B0C0E', border: `1px solid ${hasAccess ? C.amber + '44' : C.border}`, borderRadius: 6 }}>
+                      <div>
+                        <strong style={{ fontSize: 12, color: C.ink, display: 'block' }}>{colab.nome}</strong>
+                        <span style={{ fontSize: 10, color: C.inkSoft }}>
+                          {colab.cargo || 'Sem cargo'} · {colab.email || 'Sem e-mail'}
+                        </span>
+                      </div>
+                      <div>
+                        {isAdmin ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '3px 8px', borderRadius: 4 }}>
+                            👑 Admin Geral
+                          </span>
+                        ) : (
+                          <button
+                            disabled={isUpdating}
+                            onClick={() => void toggleAcessoColaborador(colab, acessosEmpresa.id)}
+                            style={{
+                              borderRadius: 4, padding: '5px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                              background: hasAccess ? '#22C55E20' : '#EF444420',
+                              color: hasAccess ? '#4ADE80' : '#F87171',
+                              border: `1px solid ${hasAccess ? '#22C55E44' : '#EF444444'}`,
+                              opacity: isUpdating ? 0.5 : 1
+                            }}
+                          >
+                            {isUpdating ? 'Salvando...' : hasAccess ? '✓ Com Acesso' : '✕ Sem Acesso'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+              <button style={{ ...btn(), fontSize: 11, padding: '7px 14px' }} onClick={() => setAcessosEmpresa(null)}>
+                Concluir
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
