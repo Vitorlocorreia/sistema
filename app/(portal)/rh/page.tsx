@@ -195,7 +195,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
   const [savingEfetivo, setSavingEfetivo] = useState(false)
 
   function openModalEfetivo() {
-    setDataEfetivaInput(invite.data_inicio_efetivo || new Date().toISOString().slice(0, 10))
+    setDataEfetivaInput(invite.data_inicio_efetivo || '')
     setIsEfetivoCheck(!!invite.inicio_efetivo)
     setEditIniciandoOpen(true)
   }
@@ -237,9 +237,19 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
             </span>
           )}
         </div>
-        <p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>
-          Perfil temporário · {invite.cpf || 'CPF não informado'} · {invite.cargo || 'Cargo não informado'}
-          {invite.data_inicio_efetivo && ` · Data de Início Efetivo: ${new Date(invite.data_inicio_efetivo + 'T00:00:00').toLocaleDateString('pt-BR')}`}
+        <p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span>{invite.cpf ? `CPF: ${invite.cpf}` : 'CPF não informado'}</span>
+          <span>·</span>
+          <span style={{ color: C.ink, fontWeight: 700 }}>Profissão: {invite.cargo || 'Não informada'}</span>
+          {invite.obra && <><span>·</span><span>Obra: <strong>{invite.obra}</strong></span></>}
+          {invite.data_inicio_efetivo && (
+            <>
+              <span>·</span>
+              <span style={{ color: '#60A5FA', fontWeight: 800 }}>
+                📅 Início Efetivo: {new Date(invite.data_inicio_efetivo + 'T00:00:00').toLocaleDateString('pt-BR')}
+              </span>
+            </>
+          )}
         </p>
         <button style={{ ...linkButton, marginTop: 6 }} onClick={onCopy}>Copiar link do candidato</button>
       </div>
@@ -895,10 +905,14 @@ export default function RhPage() {
                       </span>
                     )}
                   </div>
-                  <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5 }}>
-                    {invite.cargo || 'Cargo não informado'}
-                    {invite.obra ? ` · ${invite.obra}` : ''}
-                    {invite.data_inicio_efetivo && ` · Início: ${new Date(invite.data_inicio_efetivo + 'T00:00:00').toLocaleDateString('pt-BR')}`}
+                  <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ color: C.ink, fontWeight: 700 }}>Profissão: {invite.cargo || 'Não informada'}</span>
+                    {invite.obra && <span>· Obra: <strong>{invite.obra}</strong></span>}
+                    {invite.data_inicio_efetivo && (
+                      <span style={{ color: '#60A5FA', fontWeight: 800 }}>
+                        · Início Efetivo: {new Date(invite.data_inicio_efetivo + 'T00:00:00').toLocaleDateString('pt-BR')}
+                      </span>
+                    )}
                   </div>
                   <div style={{ color: invite.status === 'devolvido' || expired ? '#F87171' : C.amber, fontSize: 10, fontWeight: 800, marginTop: 7 }}>
                     {label}

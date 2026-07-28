@@ -2165,8 +2165,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   const [obras, setObras]               = useState<Obra[]>([])
   const [saving, setSaving]             = useState(false)
   const [ok, setOk]                     = useState(false)
-  const [anexoFile, setAnexoFile]       = useState<File | null>(null)
-  const [anexoNome, setAnexoNome]       = useState('')
+  const [anexoFiles, setAnexoFiles]     = useState<File[]>([])
   const [showNovoFornModal, setShowNovoFornModal] = useState(false)
   const [salvandoForn, setSalvandoForn] = useState(false)
   const [fornForm, setFornForm]         = useState({ razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ' as 'PJ'|'PF', pix: '', categoria: '' })
@@ -2245,22 +2244,25 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     }
     setSaving(true)
 
-    // Upload real do comprovante para o Supabase Storage
+    // Upload real de múltiplos comprovantes/documentos para o Supabase Storage
     let comprovanteUrl: string | null = null
-    if (anexoFile) {
-      const ext = anexoFile.name.split('.').pop()
-      const fileName = `comprovante_${Date.now()}.${ext}`
-      const uploadPath = form.empresa_id ? `${form.empresa_id}/${fileName}` : fileName
-      const { data: uploadData, error: uploadErr } = await supabase.storage
-        .from('comprovantes')
-        .upload(uploadPath, anexoFile, { upsert: true })
-      if (uploadErr) {
-        toast('Erro ao enviar o comprovante. Verifique o bucket "comprovantes" no Supabase.', 'error')
-        setSaving(false)
-        return
+    if (anexoFiles.length > 0) {
+      const urls: string[] = []
+      for (const file of anexoFiles) {
+        const ext = file.name.split('.').pop()
+        const fileName = `comprovante_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`
+        const uploadPath = form.empresa_id ? `${form.empresa_id}/${fileName}` : fileName
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('comprovantes')
+          .upload(uploadPath, file, { upsert: true })
+        if (!uploadErr && uploadData?.path) {
+          const { data: { publicUrl } } = supabase.storage.from('comprovantes').getPublicUrl(uploadData.path)
+          urls.push(publicUrl)
+        }
       }
-      const { data: { publicUrl } } = supabase.storage.from('comprovantes').getPublicUrl(uploadData.path)
-      comprovanteUrl = publicUrl
+      if (urls.length > 0) {
+        comprovanteUrl = JSON.stringify(urls)
+      }
     }
 
     const valorNum = parseCurrency(form.valor)
@@ -2488,17 +2490,31 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
             </div>
 
             <div style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '14px 18px', background: '#0B0C0E33' }}>
-              <label style={{ ...label, marginBottom: 4 }}>Anexar Boleto / Nota Fiscal</label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <label style={{ ...btnGhost, cursor: 'pointer', background: '#111' }}>
+              <label style={{ ...label, marginBottom: 4 }}>Anexar Boletos / Notas Fiscais / Documentos</label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label style={{ ...btnGhost, cursor: 'pointer', background: '#111', alignSelf: 'flex-start' }}>
                   <Paperclip size={13} />
-                  Selecionar arquivo
-                  <input type="file" onChange={handleFileChange} style={{ display: 'none' }} accept="image/*,application/pdf" />
+                  Selecionar arquivo(s)
+                  <input type="file" multiple onChange={handleFileChange} style={{ display: 'none' }} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" />
                 </label>
-                {anexoNome && (
-                  <span style={{ fontSize: 11, color: '#34D399', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <Check size={12} /> {anexoNome}
-                  </span>
+                {anexoFiles.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
+                    {anexoFiles.map((file, idx) => (
+                      <div key={idx} style={{ fontSize: 11, color: '#34D399', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0F1115', border: `1px solid ${C.border}`, padding: '4px 10px', borderRadius: 4 }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <Check size={12} /> {file.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeAnexoFile(idx)}
+                          style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '2px 4px' }}
+                          title="Remover este arquivo"
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>
@@ -2992,24 +3008,55 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     load()
   }
 
-  async function anexarComprovantePosterior(contaId: string, empresaId: string, file: File) {
-    if (!file) return
-    const ext = file.name.split('.').pop()
-    const fileName = `comprovante_posterior_${Date.now()}.${ext}`
-    const uploadPath = empresaId ? `${empresaId}/${fileName}` : fileName
-    
-    const { data: uploadData, error: uploadErr } = await supabase.storage
-      .from('comprovantes')
-      .upload(uploadPath, file, { upsert: true })
-      
-    if (uploadErr) return toast(`Erro ao enviar anexo: ${uploadErr.message}`, 'error')
-    
-    const { data: { publicUrl } } = supabase.storage.from('comprovantes').getPublicUrl(uploadData.path || uploadPath)
-    
-    const { error } = await supabase.from('contas').update({ comprovante_url: publicUrl }).eq('id', contaId)
-    if (error) return toast(`Erro ao salvar anexo no lançamento: ${error.message}`, 'error')
-    
-    toast('Comprovante anexado com sucesso.', 'success')
+  async function anexarComprovantePosterior(contaId: string, empresaId: string, filesInput: FileList | File[] | File) {
+    const filesArray = filesInput instanceof File ? [filesInput] : Array.from(filesInput)
+    if (!filesArray.length) return
+
+    const { data: contaAtual } = await supabase.from('contas').select('comprovante_url').eq('id', contaId).maybeSingle()
+    const existentes = parseAnexos(contaAtual?.comprovante_url)
+
+    const novasUrls: string[] = []
+
+    for (const file of filesArray) {
+      const ext = file.name.split('.').pop()
+      const fileName = `comprovante_posterior_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${ext}`
+      const uploadPath = empresaId ? `${empresaId}/${fileName}` : fileName
+
+      const { data: uploadData, error: uploadErr } = await supabase.storage
+        .from('comprovantes')
+        .upload(uploadPath, file, { upsert: true })
+
+      if (!uploadErr && uploadData?.path) {
+        const { data: { publicUrl } } = supabase.storage.from('comprovantes').getPublicUrl(uploadData.path)
+        novasUrls.push(publicUrl)
+      }
+    }
+
+    if (novasUrls.length === 0) {
+      return toast('Erro ao enviar anexo(s).', 'error')
+    }
+
+    const todasUrls = [...existentes, ...novasUrls]
+    const finalUrlValue = todasUrls.length === 1 ? todasUrls[0] : JSON.stringify(todasUrls)
+
+    const { error } = await supabase.from('contas').update({ comprovante_url: finalUrlValue }).eq('id', contaId)
+    if (error) return toast(`Erro ao salvar anexo(s): ${error.message}`, 'error')
+
+    toast(`${novasUrls.length} anexo(s) adicionado(s) com sucesso.`, 'success')
+    void load()
+  }
+
+  async function removerAnexoPosterior(contaId: string, urlParaRemover: string) {
+    const { data: contaAtual } = await supabase.from('contas').select('comprovante_url').eq('id', contaId).maybeSingle()
+    const existentes = parseAnexos(contaAtual?.comprovante_url)
+    const filtradas = existentes.filter(u => u !== urlParaRemover)
+
+    const finalUrlValue = filtradas.length === 0 ? null : (filtradas.length === 1 ? filtradas[0] : JSON.stringify(filtradas))
+
+    const { error } = await supabase.from('contas').update({ comprovante_url: finalUrlValue }).eq('id', contaId)
+    if (error) return toast(`Erro ao remover anexo: ${error.message}`, 'error')
+
+    toast('Anexo removido com sucesso.', 'success')
     void load()
   }
 
@@ -3598,18 +3645,28 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       <td style={{ padding: '12px 14px', color: C.ink, fontWeight: 600, maxWidth: 260 }}>
                         <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                           <span>{c.descricao}</span>
-                          {c.comprovante_url && (
-                            <a
-                              href={c.comprovante_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="Ver comprovante"
-                              onClick={e => e.stopPropagation()}
-                              style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', marginTop: 2, flexShrink: 0 }}
-                            >
-                              <Eye size={12} />
-                            </a>
-                          )}
+                          {(() => {
+                            const anexos = parseAnexos(c.comprovante_url)
+                            if (anexos.length === 0) return null
+                            return (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                                {anexos.map((url, idx) => (
+                                  <a
+                                    key={idx}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={`Abrir Anexo ${idx + 1}`}
+                                    onClick={e => e.stopPropagation()}
+                                    style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'none', background: 'rgba(245, 158, 11, 0.12)', padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 700 }}
+                                  >
+                                    <Eye size={11} />
+                                    <span>{anexos.length > 1 ? `${idx + 1}` : ''}</span>
+                                  </a>
+                                ))}
+                              </div>
+                            )
+                          })()}
                         </div>
                         {c.categoria && (
                           <div style={{ marginTop: 4 }}>
@@ -3717,9 +3774,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                <Edit3 size={13} />
                              </button>
                           )}
-                          <label title="Anexar Comprovante Posterior" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
+                          <label title="Anexar Comprovantes / Documentos" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
                             <Paperclip size={13} />
-                            <input hidden type="file" accept="image/*,application/pdf" onChange={e => { const f = e.target.files?.[0]; if(f) void anexarComprovantePosterior(c.id, c.empresa_id, f); e.currentTarget.value = '' }} />
+                            <input hidden type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" onChange={e => { const files = e.target.files; if(files && files.length > 0) void anexarComprovantePosterior(c.id, c.empresa_id, files); e.currentTarget.value = '' }} />
                           </label>
                           {podeDeletar && (
                             <button onClick={() => excluir(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}><X size={13} /></button>
@@ -3758,23 +3815,61 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                     </div>
                                   </div>
                                   <div>
-                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 6 }}>Documento / Comprovante Anexo</div>
-                                    {c.comprovante_url ? (
-                                      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                                        <a href={c.comprovante_url} target="_blank" rel="noopener noreferrer" style={{ ...btnGhost, fontSize: 11, color: C.amber, border: `1px solid ${C.amber}40`, textDecoration: 'none', padding: '6px 12px' }}>
-                                          <Paperclip size={13} /> Visualizar Documento ↗
-                                        </a>
-                                        <label style={{ ...btnGhost, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, color: C.inkSoft, padding: '6px 12px' }}>
-                                          Substituir Anexo
-                                          <input hidden type="file" accept="image/*,application/pdf" onChange={e => { const f = e.target.files?.[0]; if(f) void anexarComprovantePosterior(c.id, c.empresa_id, f); e.currentTarget.value = '' }} />
-                                        </label>
-                                      </div>
-                                    ) : (
-                                      <label style={{ ...btnGhost, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, color: C.amber, border: `1px solid ${C.amber}40`, padding: '6px 12px' }}>
-                                        <Paperclip size={13} /> Anexar Comprovante / Documento
-                                        <input hidden type="file" accept="image/*,application/pdf" onChange={e => { const f = e.target.files?.[0]; if(f) void anexarComprovantePosterior(c.id, c.empresa_id, f); e.currentTarget.value = '' }} />
-                                      </label>
-                                    )}
+                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 6 }}>
+                                      Documentos / Comprovantes Anexados ({parseAnexos(c.comprovante_url).length})
+                                    </div>
+                                    {(() => {
+                                      const anexos = parseAnexos(c.comprovante_url)
+                                      return (
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                          {anexos.length > 0 ? (
+                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                              {anexos.map((url, idx) => {
+                                                const isImg = /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(url)
+                                                return (
+                                                  <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#0B0C0E', border: `1px solid ${C.border}`, padding: '5px 9px', borderRadius: 5 }}>
+                                                    <a
+                                                      href={url}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      style={{ ...btnGhost, fontSize: 11, color: C.amber, border: 'none', padding: 0, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                                                    >
+                                                      <Paperclip size={13} />
+                                                      <span>{isImg ? `Imagem ${idx + 1}` : `Documento ${idx + 1}`} ↗</span>
+                                                    </a>
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => void removerAnexoPosterior(c.id, url)}
+                                                      title="Remover este anexo"
+                                                      style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '2px 4px', display: 'inline-flex', alignItems: 'center' }}
+                                                    >
+                                                      <X size={12} />
+                                                    </button>
+                                                  </div>
+                                                )
+                                              })}
+                                            </div>
+                                          ) : (
+                                            <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic' }}>Nenhum documento anexado.</div>
+                                          )}
+
+                                          <label style={{ ...btnGhost, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, color: C.amber, border: `1px solid ${C.amber}40`, padding: '6px 12px', alignSelf: 'flex-start', marginTop: 4 }}>
+                                            <Paperclip size={13} /> + Adicionar Anexo(s)
+                                            <input
+                                              hidden
+                                              type="file"
+                                              multiple
+                                              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                                              onChange={e => {
+                                                const files = e.target.files
+                                                if (files && files.length > 0) void anexarComprovantePosterior(c.id, c.empresa_id, files)
+                                                e.currentTarget.value = ''
+                                              }}
+                                            />
+                                          </label>
+                                        </div>
+                                      )
+                                    })()}
                                   </div>
                                   <div style={{ background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: `1px solid rgba(255,255,255,0.05)` }}>
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 8 }}>Resumo Financeiro</div>

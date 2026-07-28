@@ -962,7 +962,45 @@ export default function RDO() {
 
                   {/* Registro Fotográfico na tela */}
                   <div>
-                    <span style={labelStyle}>📷 Registro Fotográfico ({selectedRdo.fotos?.length || 0})</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <span style={labelStyle}>📷 Registro Fotográfico e Documentos ({selectedRdo.fotos?.length || 0})</span>
+                      <label style={{ fontSize: 10, color: C.amber, background: 'rgba(245, 158, 11, 0.1)', border: `1px solid ${C.amber}40`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        + Anexar Foto(s) / Documento(s)
+                        <input
+                          hidden
+                          type="file"
+                          multiple
+                          accept="image/*,application/pdf"
+                          onChange={e => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              void (async () => {
+                                const filesArray = Array.from(e.target.files || [])
+                                let count = 0
+                                for (const file of filesArray) {
+                                  const path = `${selectedRdo.obra_id}/${selectedRdo.id}/${crypto.randomUUID()}-${file.name}`
+                                  const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, file)
+                                  if (!uploadError) {
+                                    await supabase.from('fotos').insert({
+                                      obra_id: selectedRdo.obra_id,
+                                      rdo_id: selectedRdo.id,
+                                      legenda: file.name,
+                                      imagem_url: path,
+                                      data_iso: selectedRdo.data
+                                    })
+                                    count++
+                                  }
+                                }
+                                if (count > 0) {
+                                  toast(`${count} anexo(s) adicionado(s)!`, 'success')
+                                  void load()
+                                }
+                              })()
+                              e.currentTarget.value = ''
+                            }
+                          }}
+                        />
+                      </label>
+                    </div>
                     {selectedRdo.fotos && selectedRdo.fotos.length > 0 ? (
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, marginTop: 8 }}>
                         {selectedRdo.fotos.map(foto => {
@@ -972,23 +1010,57 @@ export default function RDO() {
                               ? supabase.storage.from(foto.imagem_url.includes('comprovantes') ? 'comprovantes' : 'rdo-fotos').getPublicUrl(foto.imagem_url).data.publicUrl
                               : ''
                           if (!url) return null
+                          const isPdf = foto.imagem_url?.toLowerCase().endsWith('.pdf') || foto.legenda?.toLowerCase().endsWith('.pdf')
                           return (
                             <div
                               key={foto.id}
-                              onClick={() => setFotoExpandida({ url, legenda: foto.legenda || 'Foto do RDO' })}
-                              style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', padding: 6, cursor: 'pointer', transition: 'transform 0.15s ease, border-color 0.15s ease' }}
-                              title="Clique para expandir a imagem"
+                              style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', padding: 6, position: 'relative', transition: 'transform 0.15s ease, border-color 0.15s ease' }}
                             >
-                              <img src={url} alt={foto.legenda || 'Foto RDO'} style={{ width: '100%', height: 95, objectFit: 'cover', borderRadius: 2 }} />
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  void (async () => {
+                                    const { error } = await supabase.from('fotos').delete().eq('id', foto.id)
+                                    if (!error) {
+                                      toast('Anexo removido do RDO.', 'success')
+                                      void load()
+                                    }
+                                  })()
+                                }}
+                                title="Excluir este anexo do RDO"
+                                style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.75)', border: 'none', color: '#F87171', borderRadius: 3, padding: 3, cursor: 'pointer', zIndex: 5, display: 'flex', alignItems: 'center' }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                              {isPdf ? (
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 95, background: '#111', borderRadius: 2 }}
+                                >
+                                  <FileText size={24} color={C.amber} />
+                                  <span style={{ fontSize: 9, color: C.ink, marginTop: 4, fontWeight: 700 }}>Documento PDF ↗</span>
+                                </a>
+                              ) : (
+                                <img
+                                  src={url}
+                                  alt={foto.legenda || 'Foto RDO'}
+                                  onClick={() => setFotoExpandida({ url, legenda: foto.legenda || 'Foto do RDO' })}
+                                  style={{ width: '100%', height: 95, objectFit: 'cover', borderRadius: 2, cursor: 'pointer' }}
+                                  title="Clique para expandir a imagem"
+                                />
+                              )}
                               <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginTop: 4, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                🔍 {foto.legenda || 'Foto em campo'}
+                                {foto.legenda || 'Foto em campo'}
                               </span>
                             </div>
                           )
                         })}
                       </div>
                     ) : (
-                      <p style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>Nenhuma foto anexada a este RDO.</p>
+                      <p style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>Nenhuma foto ou documento anexado a este RDO.</p>
                     )}
                   </div>
 
@@ -1292,7 +1364,7 @@ export default function RDO() {
                     </div>
                     <div><label style={labelStyle}>Definição dos serviços</label><textarea rows={2} style={inputStyle} value={newDefinicaoServico} onChange={e => setNewDefinicaoServico(e.target.value)} /></div>
                     <div><label style={labelStyle}>Liberações</label><textarea rows={2} style={inputStyle} value={newLiberacoes} onChange={e => setNewLiberacoes(e.target.value)} placeholder="Frentes, áreas, projetos ou serviços liberados" /></div>
-                    <div><label style={labelStyle}>Fotos do RDO</label><input type="file" multiple accept="image/jpeg,image/png,image/webp" style={inputStyle} onChange={e => setNewFotos(Array.from(e.target.files || []))} />{newFotos.length > 0 && <small style={{ color: C.green }}>{newFotos.length} foto(s) selecionada(s)</small>}</div>
+                    <div><label style={labelStyle}>Fotos e Documentos do RDO</label><input type="file" multiple accept="image/*,application/pdf" style={inputStyle} onChange={e => setNewFotos(Array.from(e.target.files || []))} />{newFotos.length > 0 && <small style={{ color: C.green }}>{newFotos.length} arquivo(s) selecionado(s)</small>}</div>
                   </>
                 )}
 
