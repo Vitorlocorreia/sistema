@@ -55,6 +55,22 @@ const isVencido = (d: string, status: string) => {
   return vencimento < hoje;
 }
 
+export function parseAnexos(url: string | null | undefined): string[] {
+  if (!url) return []
+  const trimmed = url.trim()
+  if (!trimmed) return []
+  if (trimmed.startsWith('[')) {
+    try {
+      const arr = JSON.parse(trimmed)
+      if (Array.isArray(arr)) return arr.filter(Boolean).map(s => String(s).trim())
+    } catch {}
+  }
+  if (trimmed.includes(',')) {
+    return trimmed.split(',').map(s => s.trim()).filter(Boolean)
+  }
+  return [trimmed]
+}
+
 function ObservacaoExpandivel({ text, maxLength = 60, showTitleLabel = true }: { text: string | null | undefined; maxLength?: number; showTitleLabel?: boolean }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -2328,8 +2344,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
     setSaving(false)
     setOk(true)
-    setAnexoFile(null)
-    setAnexoNome('')
+    setAnexoFiles([])
     setTimeout(() => setOk(false), 4000)
     
     setForm({
@@ -2349,10 +2364,15 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setAnexoFile(e.target.files[0])
-      setAnexoNome(e.target.files[0].name)
+    if (e.target.files && e.target.files.length > 0) {
+      const newFiles = Array.from(e.target.files)
+      setAnexoFiles(prev => [...prev, ...newFiles])
+      e.target.value = ''
     }
+  }
+
+  const removeAnexoFile = (index: number) => {
+    setAnexoFiles(prev => prev.filter((_, i) => i !== index))
   }
 
   const podeRegistrar = permissaoAtiva?.pode_lancar

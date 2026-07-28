@@ -992,7 +992,7 @@ export default function RDO() {
                                 }
                                 if (count > 0) {
                                   toast(`${count} anexo(s) adicionado(s)!`, 'success')
-                                  void load()
+                                  void loadData()
                                 }
                               })()
                               e.currentTarget.value = ''
@@ -1024,7 +1024,7 @@ export default function RDO() {
                                     const { error } = await supabase.from('fotos').delete().eq('id', foto.id)
                                     if (!error) {
                                       toast('Anexo removido do RDO.', 'success')
-                                      void load()
+                                      void loadData()
                                     }
                                   })()
                                 }}
