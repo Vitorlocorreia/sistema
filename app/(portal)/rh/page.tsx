@@ -159,6 +159,81 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
   // Dados Bancários e PIX cadastrados pelo funcionário
   const docPix = invite.documentos.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
 
+  const [editPixOpen, setEditPixOpen] = useState(false)
+  const [inputPix, setInputPix] = useState('')
+  const [inputBanco, setInputBanco] = useState('')
+  const [inputAgenciaConta, setInputAgenciaConta] = useState('')
+  const [savingPix, setSavingPix] = useState(false)
+
+  function parseDadosBancarios(nome?: string | null) {
+    if (!nome) return { pix: '', banco: '', agenciaConta: '' }
+    if (nome.startsWith('Dados Bancários:')) {
+      const parts = nome.replace('Dados Bancários:', '').split(' | ')
+      return {
+        pix: parts[0]?.replace('PIX:', '').trim() || '',
+        banco: parts[1]?.replace('Banco:', '').trim() || '',
+        agenciaConta: parts[2]?.replace('Agência/Conta:', '').trim() || ''
+      }
+    }
+    if (nome.startsWith('Chave PIX:')) {
+      return { pix: nome.replace('Chave PIX:', '').trim(), banco: '', agenciaConta: '' }
+    }
+    return { pix: nome, banco: '', agenciaConta: '' }
+  }
+
+  function openModalPix() {
+    const parsed = parseDadosBancarios(docPix?.nome)
+    setInputPix(parsed.pix)
+    setInputBanco(parsed.banco)
+    setInputAgenciaConta(parsed.agenciaConta)
+    setEditPixOpen(true)
+  }
+
+  async function handleSavePixRH() {
+    if (!inputPix.trim() && !inputBanco.trim() && !inputAgenciaConta.trim()) {
+      return toast('Preencha ao menos a chave PIX ou banco/conta', 'error')
+    }
+    setSavingPix(true)
+    try {
+      const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+      if (!modeloEtapa1) throw new Error('Modelo de admissão não encontrado')
+
+      const formattedNome = `Dados Bancários: PIX: ${inputPix.trim()} | Banco: ${inputBanco.trim()} | Agência/Conta: ${inputAgenciaConta.trim()}`
+
+      if (docPix) {
+        const { error } = await supabase
+          .from('rh_admissao_documentos')
+          .update({
+            nome: formattedNome,
+            status: 'aprovado',
+            revisado_em: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', docPix.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('rh_admissao_documentos').insert({
+          convite_id: invite.id,
+          modelo_id: modeloEtapa1.id,
+          item_id: 'pix',
+          nome: formattedNome,
+          mime_type: 'text/plain',
+          tamanho_bytes: 10,
+          status: 'aprovado'
+        })
+        if (error) throw error
+      }
+      toast('Dados bancários e PIX salvos com sucesso!', 'success')
+      setEditPixOpen(false)
+      await onRefresh?.()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao salvar PIX'
+      toast(msg, 'error')
+    } finally {
+      setSavingPix(false)
+    }
+  }
+
   async function uploadGuiaMedica(file: File | undefined) {
     if (!file || !modeloEtapa4) return
     setUploadingGuia(true)
@@ -256,19 +331,25 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
         </p>
         <button style={{ ...linkButton, marginTop: 6 }} onClick={onCopy}>Copiar link do candidato</button>
 
-        {docPix && (
-          <div style={{ marginTop: 10, padding: '10px 14px', background: '#0B0C0E', border: `1px solid ${C.amber}66`, borderRadius: 6, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <CreditCard size={18} color={C.amber} />
+        <div style={{ marginTop: 10, padding: '10px 14px', background: '#0B0C0E', border: `1px solid ${docPix ? C.amber + '66' : C.border}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <CreditCard size={18} color={docPix ? C.amber : C.inkSoft} />
             <div>
-              <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, textTransform: 'uppercase', display: 'block', letterSpacing: 0.5 }}>
-                💳 Dados Bancários e PIX Cadastrados pelo Funcionário:
+              <span style={{ fontSize: 10, fontWeight: 900, color: docPix ? C.amber : C.inkSoft, textTransform: 'uppercase', display: 'block', letterSpacing: 0.5 }}>
+                💳 Dados Bancários, Banco e Chave PIX:
               </span>
-              <span style={{ fontSize: 12, color: C.ink, fontWeight: 700, marginTop: 3, display: 'block' }}>
-                {docPix.nome}
+              <span style={{ fontSize: 12, color: docPix ? C.ink : C.inkSoft, fontWeight: 700, marginTop: 3, display: 'block' }}>
+                {docPix ? docPix.nome : 'Pendente de preenchimento pelo candidato (clique ao lado para coletar/preencher)'}
               </span>
             </div>
           </div>
-        )}
+          <button
+            style={{ ...outlineBtn, borderColor: C.amber, color: C.amber, fontSize: 10, padding: '4px 10px' }}
+            onClick={openModalPix}
+          >
+            ✏️ {docPix ? 'Editar Dados Bancários' : '+ Coletar / Informar PIX e Banco'}
+          </button>
+        </div>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
@@ -857,7 +938,20 @@ export default function RhPage() {
           <strong style={{ fontSize: 12 }}>Pré-cadastro e convite temporário</strong>
           <p style={{ color: C.inkSoft, fontSize: 10, margin: '6px 0 12px' }}>Preencha os dados que o RH já possui. O candidato receberá o link apenas para enviar os documentos das quatro etapas.</p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10 }}>
-            {([['nome', 'Nome do candidato *'], ['cpf', 'CPF'], ['matricula', 'Matrícula'], ['email', 'E-mail'], ['telefone', 'Telefone'], ['endereco', 'Endereço'], ['cargo', 'Cargo'], ['obra', 'Obra']] as const).map(([key, placeholder]) => <input key={key} style={input} placeholder={placeholder} value={inviteForm[key]} onChange={event => setInviteForm({ ...inviteForm, [key]: event.target.value })} />)}
+            {([
+              ['nome', 'Nome do candidato *'], ['cpf', 'CPF'], ['matricula', 'Matrícula'],
+              ['email', 'E-mail'], ['telefone', 'Telefone'], ['endereco', 'Endereço'],
+              ['cargo', 'Cargo / Profissão'], ['obra', 'Obra'],
+              ['pix', 'Chave PIX (opcional)'], ['banco', 'Banco (opcional)'], ['agencia_conta', 'Agência e Conta (opcional)']
+            ] as const).map(([key, placeholder]) => (
+              <input
+                key={key}
+                style={input}
+                placeholder={placeholder}
+                value={inviteForm[key as keyof typeof inviteForm] as string || ''}
+                onChange={event => setInviteForm({ ...inviteForm, [key]: event.target.value })}
+              />
+            ))}
             <label style={{ fontSize: 10, color: C.inkSoft }}>
               Data de início efetivo
               {inviteForm.data_inicio_efetivo && (
