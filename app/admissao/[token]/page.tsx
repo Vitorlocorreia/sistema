@@ -77,6 +77,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     setErro('')
     try {
       const mimeType = getMimeType(file)
+      const targetItemId = modelo.checklist.find(i => i.id === item.id)?.id || modelo.checklist[0]?.id || item.id
       const request = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,7 +85,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           action: 'request_upload',
           token,
           modelo_id: modelo.id,
-          item_id: item.id,
+          item_id: targetItemId,
           nome: file.name,
           mime_type: mimeType,
           tamanho_bytes: file.size,
