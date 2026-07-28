@@ -327,12 +327,14 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                         </span>
                       </div>
                       {guiaRH ? (
-                        <button
-                          onClick={() => void baixarGuiaRH(guiaRH)}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: C.amber, color: '#0B0C0E', fontWeight: 900, fontSize: 10, borderRadius: 4, border: 0, cursor: 'pointer' }}
+                        <a
+                          href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/rh-documentos/${guiaRH.storage_path || guiaRH.nome}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: C.amber, color: '#0B0C0E', fontWeight: 900, fontSize: 10, borderRadius: 4, textDecoration: 'none' }}
                         >
                           <FileCheck2 size={13} /> Baixar Guia Médica ({guiaRH.nome})
-                        </button>
+                        </a>
                       ) : (
                         <p style={{ fontSize: 10, color: C.inkSoft, margin: 0 }}>
                           ⏳ O RH ainda está preenchendo sua guia de exame. Ela estará disponível aqui em breve.
