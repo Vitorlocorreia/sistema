@@ -73,11 +73,18 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
   }
 
   async function salvarChavePix(modelo: Modelo, item: ChecklistItem) {
-    if (!pixInput.trim()) return
+    if (!pixInput.trim() && !bancoInput.trim() && !agenciaContaInput.trim()) {
+      setErro('Preencha a chave PIX ou os dados bancários.')
+      return
+    }
     const uploadId = `${modelo.id}:${item.id}`
     setEnviando(uploadId)
     setErro('')
     try {
+      const textContent = `Dados Bancários: PIX: ${pixInput.trim()} | Banco: ${bancoInput.trim()} | Agência/Conta: ${agenciaContaInput.trim()}`
+      const textBlob = new Blob([textContent], { type: 'text/plain' })
+      const textFile = new File([textBlob], 'dados_bancarios.txt', { type: 'text/plain' })
+
       const request = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -86,19 +93,27 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           token,
           modelo_id: modelo.id,
           item_id: item.id,
-          nome: `Dados Bancários: PIX: ${pixInput.trim()} | Banco: ${bancoInput.trim()} | Agência/Conta: ${agenciaContaInput.trim()}`,
+          nome: textContent,
           mime_type: 'text/plain',
-          tamanho_bytes: 10,
+          tamanho_bytes: textBlob.size,
         }),
       })
       const prepared = await request.json()
       if (!request.ok) throw new Error(prepared.error || 'Não foi possível preparar o salvamento.')
+
+      const { error: uploadError } = await supabase.storage
+        .from('rh-documentos')
+        .uploadToSignedUrl(prepared.path, prepared.upload_token, textFile, { contentType: 'text/plain' })
+      if (uploadError) throw uploadError
+
       const confirm = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'confirm_upload', token, document_id: prepared.document_id }),
       })
-      if (!confirm.ok) throw new Error('Não foi possível confirmar a chave PIX.')
+      const confirmed = await confirm.json()
+      if (!confirm.ok) throw new Error(confirmed.error || 'Não foi possível confirmar os dados bancários.')
+
       await carregar()
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Falha ao salvar PIX.')
