@@ -2634,6 +2634,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
+  const [filtTipoData, setFiltTipoData] = useState<'previsao_vencimento' | 'vencimento' | 'previsao' | 'pago_em' | 'created_at'>('previsao_vencimento')
   const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'venc_prox' | 'venc_dist' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
   const [search, setSearch]           = useState('')
   const [showFiltros, setShowFiltros] = useState(false)
@@ -3166,9 +3167,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
     const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
     const matchStatus  = filtStatus === 'todos' || c.status === filtStatus
-    const data = c.data_previsao || c.data_vencimento
-    const matchInicio = !filtDataInicio || data >= filtDataInicio
-    const matchFim = !filtDataFim || data <= filtDataFim
+    let data = c.data_previsao || c.data_vencimento || ''
+    if (filtTipoData === 'vencimento') data = c.data_vencimento || ''
+    else if (filtTipoData === 'previsao') data = c.data_previsao || ''
+    else if (filtTipoData === 'pago_em') data = c.pago_em ? c.pago_em.slice(0, 10) : ''
+    else if (filtTipoData === 'created_at') data = c.created_at ? c.created_at.slice(0, 10) : ''
+
+    const matchInicio = !filtDataInicio || (data !== '' && data >= filtDataInicio)
+    const matchFim = !filtDataFim || (data !== '' && data <= filtDataFim)
     const codFormatted = fmtCodigo(c)
     const matchSearch  = !search ||
       c.descricao.toLowerCase().includes(search.toLowerCase()) ||
@@ -3201,9 +3207,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
     const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
     const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
-    const data = c.data_previsao || c.data_vencimento
-    const matchInicio = !filtDataInicio || data >= filtDataInicio
-    const matchFim = !filtDataFim || data <= filtDataFim
+    let data = c.data_previsao || c.data_vencimento || ''
+    if (filtTipoData === 'vencimento') data = c.data_vencimento || ''
+    else if (filtTipoData === 'previsao') data = c.data_previsao || ''
+    else if (filtTipoData === 'pago_em') data = c.pago_em ? c.pago_em.slice(0, 10) : ''
+    else if (filtTipoData === 'created_at') data = c.created_at ? c.created_at.slice(0, 10) : ''
+
+    const matchInicio = !filtDataInicio || (data !== '' && data >= filtDataInicio)
+    const matchFim = !filtDataFim || (data !== '' && data <= filtDataFim)
     const codFormatted = fmtCodigo(c)
     const matchSearch  = !search ||
       c.descricao.toLowerCase().includes(search.toLowerCase()) ||
@@ -3246,7 +3257,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const podeDeletar = (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
   const podeEditar = (permissaoAtiva?.pode_lancar === true) || (permissaoAtiva?.pode_alterar_status === true) || (permissaoAtiva?.pode_pagar === true) || (permissaoAtiva?.pode_aprovar === true) || (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
 
-  const activeFiltrosCount = [filtEmpresa, filtFornecedor, filtTipo !== 'todos' ? filtTipo : '', filtStatus !== 'todos' ? filtStatus : '', filtDataInicio, filtDataFim, filtOrdem !== 'novo' ? filtOrdem : ''].filter(Boolean).length
+  const activeFiltrosCount = [filtEmpresa, filtFornecedor, filtTipo !== 'todos' ? filtTipo : '', filtStatus !== 'todos' ? filtStatus : '', filtTipoData !== 'previsao_vencimento' ? filtTipoData : '', filtDataInicio, filtDataFim, filtOrdem !== 'novo' ? filtOrdem : ''].filter(Boolean).length
 
   const clearFiltros = () => {
     const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -3254,6 +3265,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     setFiltFornecedor('')
     setFiltTipo('todos')
     setFiltStatus('todos')
+    setFiltTipoData('previsao_vencimento')
     setFiltDataInicio('')
     setFiltDataFim('')
     setFiltOrdem('novo')
@@ -3359,7 +3371,18 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 </div>
 
                 <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Vencimento (intervalo)</label>
+                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Filtrar por qual data?</label>
+                  <select style={{ ...input }} value={filtTipoData} onChange={e => setFiltTipoData(e.target.value as any)}>
+                    <option value="previsao_vencimento">📅 Previsão / Vencimento (Padrão)</option>
+                    <option value="vencimento">📆 Data de Vencimento</option>
+                    <option value="previsao">🗓️ Data Prevista de Pagamento</option>
+                    <option value="pago_em">✅ Data em que foi Pago (Pagamento Efetivo)</option>
+                    <option value="created_at">📝 Data de Lançamento / Criação</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Intervalo de datas</label>
                   <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     <input title="De" aria-label="Vencimento de" style={{ ...input, flex: 1 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
                     <span style={{ color: C.inkSoft, fontSize: 11 }}>até</span>
