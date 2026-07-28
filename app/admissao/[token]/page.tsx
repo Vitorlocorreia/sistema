@@ -52,20 +52,60 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
   useEffect(() => { void carregar() }, [carregar])
 
+  function getMimeType(file: File): string {
+    if (file.type && file.type !== 'application/octet-stream') {
+      return file.type
+    }
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    switch (ext) {
+      case 'png': return 'image/png'
+      case 'jpg':
+      case 'jpeg': return 'image/jpeg'
+      case 'pdf': return 'application/pdf'
+      case 'doc': return 'application/msword'
+      case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      case 'xls': return 'application/vnd.ms-excel'
+      case 'xlsx': return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      default: return 'image/png'
+    }
+  }
+
   async function enviarArquivo(modelo: Modelo, item: ChecklistItem, file: File | undefined) {
     if (!file) return
     const uploadId = `${modelo.id}:${item.id}`
     setEnviando(uploadId)
     setErro('')
     try {
-      const request = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'request_upload', token, modelo_id: modelo.id, item_id: item.id, nome: file.name, mime_type: file.type, tamanho_bytes: file.size }) })
+      const mimeType = getMimeType(file)
+      const request = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request_upload',
+          token,
+          modelo_id: modelo.id,
+          item_id: item.id,
+          nome: file.name,
+          mime_type: mimeType,
+          tamanho_bytes: file.size,
+        }),
+      })
       const prepared = await request.json()
       if (!request.ok) throw new Error(prepared.error || 'Não foi possível preparar o envio.')
-      const { error: uploadError } = await supabase.storage.from('rh-documentos').uploadToSignedUrl(prepared.path, prepared.upload_token, file, { contentType: file.type })
+
+      const { error: uploadError } = await supabase.storage
+        .from('rh-documentos')
+        .uploadToSignedUrl(prepared.path, prepared.upload_token, file, { contentType: mimeType })
       if (uploadError) throw uploadError
-      const confirm = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'confirm_upload', token, document_id: prepared.document_id }) })
+
+      const confirm = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm_upload', token, document_id: prepared.document_id }),
+      })
       const confirmed = await confirm.json()
       if (!confirm.ok) throw new Error(confirmed.error || 'Arquivo enviado, mas não foi confirmado.')
+
       await carregar()
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Falha ao enviar documento.')
