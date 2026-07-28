@@ -459,7 +459,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                 </div>
                 <div style={tableCell}>{label}</div>
                 <div style={tableCell}>
-                  {doc && (item.id === 'pix' || item.id?.includes('pix') || doc.nome?.includes('PIX') || doc.nome?.includes('Dados Bancários')) ? (
+                  {doc && (doc.item_id === 'pix' || doc.item_id?.includes('pix') || doc.nome?.includes('PIX') || doc.nome?.includes('Dados Bancários')) ? (
                     <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, background: 'rgba(245, 158, 11, 0.12)', padding: '6px 10px', borderRadius: 4, border: `1px solid ${C.amber}33` }}>
                       💳 {doc.nome}
                     </div>
