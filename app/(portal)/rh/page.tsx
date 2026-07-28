@@ -205,6 +205,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
           .from('rh_admissao_documentos')
           .update({
             nome: formattedNome,
+            storage_path: docPix.storage_path || 'pix-dados-bancarios',
             status: 'aprovado',
             revisado_em: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -217,6 +218,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
           modelo_id: modeloEtapa1.id,
           item_id: 'pix',
           nome: formattedNome,
+          storage_path: 'pix-dados-bancarios',
           mime_type: 'text/plain',
           tamanho_bytes: 10,
           status: 'aprovado'
@@ -688,7 +690,7 @@ export default function RhPage() {
     const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
     const tokenHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
     const expiresAt = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString()
-    const { error } = await supabase.from('rh_admissao_convites').insert({
+    const { data: createdConvite, error } = await supabase.from('rh_admissao_convites').insert({
       nome_destinatario: inviteForm.nome.trim(),
       cpf: inviteForm.cpf.trim() || null,
       matricula: inviteForm.matricula.trim() || null,
@@ -704,13 +706,35 @@ export default function RhPage() {
       expires_at: expiresAt,
       status: 'ativo',
       etapa_atual: 1
-    })
+    }).select().single()
+
+    if (error) {
+      setInviteSaving(false)
+      return toast(`Não foi possível gerar o convite: ${error.message}`, 'error')
+    }
+
+    if (createdConvite && (inviteForm.pix.trim() || inviteForm.banco.trim() || inviteForm.agencia_conta.trim())) {
+      const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+      if (modeloEtapa1) {
+        const formattedNome = `Dados Bancários: PIX: ${inviteForm.pix.trim()} | Banco: ${inviteForm.banco.trim()} | Agência/Conta: ${inviteForm.agencia_conta.trim()}`
+        await supabase.from('rh_admissao_documentos').insert({
+          convite_id: createdConvite.id,
+          modelo_id: modeloEtapa1.id,
+          item_id: 'pix',
+          nome: formattedNome,
+          storage_path: 'pix-dados-bancarios',
+          mime_type: 'text/plain',
+          tamanho_bytes: 10,
+          status: 'aprovado'
+        })
+      }
+    }
+
     setInviteSaving(false)
-    if (error) return toast(`Não foi possível gerar o convite: ${error.message}`, 'error')
     const link = `${window.location.origin}/admissao/${token}`
     await navigator.clipboard?.writeText(link)
     setInviteOpen(false)
-    setInviteForm({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false, validade: '72' })
+    setInviteForm({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false, validade: '72', pix: '', banco: '', agencia_conta: '' })
     await load()
     toast(`Link criado e copiado. Expira em ${hours} hora(s).`, 'success')
   }
