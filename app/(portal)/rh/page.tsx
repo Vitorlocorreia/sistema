@@ -330,26 +330,6 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
           )}
         </p>
         <button style={{ ...linkButton, marginTop: 6 }} onClick={onCopy}>Copiar link do candidato</button>
-
-        <div style={{ marginTop: 10, padding: '10px 14px', background: '#0B0C0E', border: `1px solid ${docPix ? C.amber + '66' : C.border}`, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <CreditCard size={18} color={docPix ? C.amber : C.inkSoft} />
-            <div>
-              <span style={{ fontSize: 10, fontWeight: 900, color: docPix ? C.amber : C.inkSoft, textTransform: 'uppercase', display: 'block', letterSpacing: 0.5 }}>
-                💳 Dados Bancários, Banco e Chave PIX:
-              </span>
-              <span style={{ fontSize: 12, color: docPix ? C.ink : C.inkSoft, fontWeight: 700, marginTop: 3, display: 'block' }}>
-                {docPix ? docPix.nome : 'Pendente de preenchimento pelo candidato (clique ao lado para coletar/preencher)'}
-              </span>
-            </div>
-          </div>
-          <button
-            style={{ ...outlineBtn, borderColor: C.amber, color: C.amber, fontSize: 10, padding: '4px 10px' }}
-            onClick={openModalPix}
-          >
-            ✏️ {docPix ? 'Editar Dados Bancários' : '+ Coletar / Informar PIX e Banco'}
-          </button>
-        </div>
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
         <button
@@ -516,6 +496,8 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
               return [{
                 key: `${modelo.id}-unico`,
                 modelo,
+                itemId: itemUnico.id,
+                isPixItem: false,
                 label: `Documento Preenchido: ${modelo.nome}`,
                 doc,
               }]
@@ -524,25 +506,46 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
             return modelo.checklist.map(item => {
               const docs = invite.documentos.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
               const doc = docs[docs.length - 1]
+              const isPixItem = item.id === 'pix' || item.id?.includes('pix') || item.label.toLowerCase().includes('pix')
               return {
                 key: `${modelo.id}-${item.id}`,
                 modelo,
+                itemId: item.id,
+                isPixItem,
                 label: item.label + (item.obrigatorio ? ' *' : ''),
                 doc,
               }
             })
-          }).map(({ key, modelo, label, doc }) => {
+          }).map(({ key, modelo, isPixItem, label, doc }) => {
+            const parsedPix = isPixItem ? parseDadosBancarios(doc?.nome) : null
             return (
               <div key={key} style={{ display: 'contents' }}>
                 <div style={tableCell}>
                   <span style={{ color: C.amber, fontWeight: 900 }}>ETAPA {modelo.ordem}</span>
                   <small style={{ display: 'block', color: C.inkSoft, marginTop: 3 }}>{modelo.nome}</small>
                 </div>
-                <div style={tableCell}>{label}</div>
                 <div style={tableCell}>
-                  {doc && (doc.item_id === 'pix' || doc.item_id?.includes('pix') || doc.nome?.includes('PIX') || doc.nome?.includes('Dados Bancários')) ? (
-                    <div style={{ fontSize: 11, color: C.amber, fontWeight: 700, background: 'rgba(245, 158, 11, 0.12)', padding: '6px 10px', borderRadius: 4, border: `1px solid ${C.amber}33` }}>
-                      💳 {doc.nome}
+                  <div>{label}</div>
+                  {isPixItem && (
+                    <span style={{ fontSize: 8, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '1px 5px', borderRadius: 3, marginTop: 4, display: 'inline-block', fontWeight: 800 }}>
+                      [Caixa de Texto · Dados Bancários]
+                    </span>
+                  )}
+                </div>
+                <div style={tableCell}>
+                  {isPixItem ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {doc && parsedPix ? (
+                        <div style={{ fontSize: 11, background: '#12141C', padding: '8px 10px', borderRadius: 5, border: `1px solid ${C.amber}44`, display: 'grid', gap: 3 }}>
+                          <div><span style={{ color: C.inkSoft, fontSize: 10 }}>🔑 Chave PIX: </span><strong style={{ color: C.amber }}>{parsedPix.pix || 'Não informada'}</strong></div>
+                          <div><span style={{ color: C.inkSoft, fontSize: 10 }}>🏦 Banco: </span><strong style={{ color: C.ink }}>{parsedPix.banco || 'Não informado'}</strong></div>
+                          <div><span style={{ color: C.inkSoft, fontSize: 10 }}>🔢 Agência/Conta: </span><strong style={{ color: C.ink }}>{parsedPix.agenciaConta || 'Não informada'}</strong></div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 10, color: C.inkSoft, fontStyle: 'italic', background: '#0B0C0E', padding: '6px 8px', borderRadius: 4, border: `1px dashed ${C.border}` }}>
+                          💬 Caixa de texto pendente (o candidato digitará pelo link ou o RH pode preencher pelo botão ao lado)
+                        </div>
+                      )}
                     </div>
                   ) : doc ? (
                     <button onClick={() => onOpen(doc)} style={linkButton}>↗ {doc.nome}</button>
@@ -551,16 +554,27 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                   )}
                 </div>
                 <div style={tableCell}>
-                  <span style={{ color: doc?.status === 'aprovado' ? '#4ADE80' : doc?.status === 'devolvido' ? '#F87171' : doc ? C.amber : C.inkSoft, fontWeight: 800 }}>
-                    {doc?.status === 'aprovado' ? 'Aprovado' : doc?.status === 'devolvido' ? 'Devolvido' : doc ? 'Aguardando análise' : 'Pendente'}
+                  <span style={{ color: isPixItem && doc ? '#4ADE80' : doc?.status === 'aprovado' ? '#4ADE80' : doc?.status === 'devolvido' ? '#F87171' : doc ? C.amber : C.inkSoft, fontWeight: 800 }}>
+                    {isPixItem && doc ? '✓ Preenchido' : doc?.status === 'aprovado' ? 'Aprovado' : doc?.status === 'devolvido' ? 'Devolvido' : doc ? 'Aguardando análise' : 'Pendente'}
                   </span>
                   {doc?.observacao_rh && <small style={{ display: 'block', color: '#F87171', marginTop: 4 }}>{doc.observacao_rh}</small>}
                 </div>
-                <div style={{ ...tableCell, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                  {doc ? <>
-                    <button style={{ ...outlineBtn, padding: '5px 7px', fontSize: 8 }} onClick={() => onReview(doc, 'aprovado')}>Aprovar</button>
-                    <button style={{ ...outlineBtn, padding: '5px 7px', fontSize: 8, color: '#F87171' }} onClick={() => onReview(doc, 'devolvido')}>Negar</button>
-                  </> : <span style={{ color: C.inkSoft, fontSize: 9 }}>Aguardando envio</span>}
+                <div style={{ ...tableCell, display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {isPixItem ? (
+                    <button
+                      style={{ ...outlineBtn, borderColor: C.amber, color: C.amber, padding: '5px 9px', fontSize: 9, fontWeight: 800 }}
+                      onClick={openModalPix}
+                    >
+                      ✏️ {doc ? 'Editar Caixa de Texto' : 'Preencher Caixa de Texto'}
+                    </button>
+                  ) : doc ? (
+                    <>
+                      <button style={{ ...outlineBtn, padding: '5px 7px', fontSize: 8 }} onClick={() => onReview(doc, 'aprovado')}>Aprovar</button>
+                      <button style={{ ...outlineBtn, padding: '5px 7px', fontSize: 8, color: '#F87171' }} onClick={() => onReview(doc, 'devolvido')}>Negar</button>
+                    </>
+                  ) : (
+                    <span style={{ color: C.inkSoft, fontSize: 9 }}>Aguardando envio</span>
+                  )}
                 </div>
               </div>
             )
