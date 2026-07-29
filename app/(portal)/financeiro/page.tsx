@@ -2263,8 +2263,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
 
   const filtered = useMemo(() =>
     fornecedores.filter(f => {
-      // Regra de Permissões: se for admin_empresa, filtra pela empresa do usuário
-      if (colaboradorAtivo.cargo === 'admin_empresa') {
+      // Regra de Permissões: se for diferente de admin_geral, exibe fornecedores compartilhados (empresa_id null) e das empresas autorizadas
+      if (colaboradorAtivo.cargo !== 'admin_geral') {
         if (f.empresa_id && !empresasIds.includes(f.empresa_id)) {
           return false
         }
@@ -3104,7 +3104,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       if (ids.length > 0) {
         qC = qC.in('empresa_id', ids)
         qE = qE.in('id', ids)
-        qF = qF.in('empresa_id', ids)
+        qF = qF.or(`empresa_id.in.(${ids.join(',')}),empresa_id.is.null`)
       }
     }
 
