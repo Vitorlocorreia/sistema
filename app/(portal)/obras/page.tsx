@@ -287,7 +287,7 @@ export default function Obras() {
 
   async function alternarStatusObra(o: Obra) {
     const jaConcluida = isObraConcluida(o.status)
-    const novoStatus = jaConcluida ? 'Em dia' : 'Concluída'
+    const novoStatus = jaConcluida ? 'Em dia' : 'Concluído'
     const acao = jaConcluida ? 'reabrir a obra' : 'marcar a obra como Concluída'
     const sub = jaConcluida 
       ? `Ao reabrir a obra "${o.nome}", ela voltará a ser calculada no portfólio de obras ativas.` 
@@ -1046,8 +1046,9 @@ export default function Obras() {
                           onChange={e => setFormObra(o => ({ ...o, status: e.target.value }))}
                         >
                           <option value="Em dia">Em dia</option>
-                          <option value="Atrasada">Atrasada</option>
-                          <option value="Concluída">Concluída</option>
+                          <option value="Atenção">Atenção</option>
+                          <option value="Atrasado">Atrasado</option>
+                          <option value="Concluído">Concluído</option>
                         </select>
                       </div>
                     </div>
