@@ -3166,33 +3166,52 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     await load()
   }
 
-  const restaurarValorCheio = async (conta: ContaComRelacoes) => {
-    const inputVal = window.prompt(`Informe o valor cheio original para restaurar esta conta (Valor atual: R$ ${conta.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}):`, String(conta.valor))
-    if (!inputVal) return
+  // ── Restauração de Valor Cheio via Modal React ──
+  const [restaurarContaModal, setRestaurarContaModal] = useState<ContaComRelacoes | null>(null)
+  const [formRestaurarValor, setFormRestaurarValor] = useState('')
+  const [formRestaurarObs, setFormRestaurarObs] = useState('')
+  const [savingRestaurar, setSavingRestaurar] = useState(false)
 
-    const numValor = parseCurrency(inputVal)
-    if (isNaN(numValor) || numValor <= 0) return toast('Informe um valor válido maior que zero.', 'error')
+  const openRestaurarValorCheioModal = (conta: ContaComRelacoes) => {
+    setRestaurarContaModal(conta)
+    setFormRestaurarValor(conta.valor_original ? String(conta.valor_original) : String(conta.valor))
+    setFormRestaurarObs('')
+  }
 
-    if (!(await confirm('Restaurar Valor Cheio', `Confirma cancelar os acordos e restaurar esta conta para o valor cheio de R$ ${numValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`, { confirmLabel: 'Restaurar Valor Cheio', confirmColor: C.amber }))) return
-
-    const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
-    const logItem = {
-      id: crypto.randomUUID(),
-      data: new Date().toISOString(),
-      autor: colaboradorAtivo.nome,
-      tipo: 'observacao',
-      descricao: `🔄 Acordo cancelado por ${colaboradorAtivo.nome}. Lançamento retornado ao valor cheio original de R$ ${numValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+  const confirmarRestaurarValorCheio = async () => {
+    if (!restaurarContaModal) return
+    const numValor = parseCurrency(formRestaurarValor)
+    if (isNaN(numValor) || numValor <= 0) {
+      return toast('Informe um valor válido maior que zero.', 'error')
     }
 
-    const { error } = await supabase.from('contas').update({
-      valor: numValor,
-      historico_negociacao: [...historicoAtual, logItem]
-    }).eq('id', conta.id)
+    setSavingRestaurar(true)
+    try {
+      const historicoAtual = Array.isArray(restaurarContaModal.historico_negociacao) ? restaurarContaModal.historico_negociacao : []
+      const obsTexto = formRestaurarObs.trim() ? ` Motivo: ${formRestaurarObs.trim()}` : ''
+      const logItem = {
+        id: crypto.randomUUID(),
+        data: new Date().toISOString(),
+        autor: colaboradorAtivo.nome,
+        tipo: 'observacao',
+        descricao: `🔄 Acordo cancelado por ${colaboradorAtivo.nome}. Lançamento retornado ao valor cheio original de R$ ${numValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.${obsTexto}`
+      }
 
-    if (error) return toast('Erro ao restaurar valor cheio: ' + error.message, 'error')
+      const { error } = await supabase.from('contas').update({
+        valor: numValor,
+        historico_negociacao: [...historicoAtual, logItem]
+      }).eq('id', restaurarContaModal.id)
 
-    toast('Valor cheio restaurado com sucesso!', 'success')
-    await load()
+      if (error) throw error
+
+      toast('Valor cheio restaurado com sucesso!', 'success')
+      setRestaurarContaModal(null)
+      await load()
+    } catch (err: any) {
+      toast('Erro ao restaurar valor cheio: ' + (err?.message || err), 'error')
+    } finally {
+      setSavingRestaurar(false)
+    }
   }
 
   const [obras, setObras]       = useState<Obra[]>([])
@@ -4389,6 +4408,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                         {formNegociacao.tipo === 'pagamento_parcial' && (
                                           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                             <input style={input} type="number" step="0.01" placeholder="Valor Pago Agora (R$)" value={formNegociacao.valor_pago} onChange={e => setFormNegociacao(f => ({ ...f, valor_pago: e.target.value }))} />
+                                            <button
+                                             type="button"
+                                             onClick={() => openRestaurarValorCheioModal(c)}
+                                             style={{ ...btnGhost, fontSize: 9, padding: '3px 8px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                           >
+                                             <RefreshCw size={10} /> Restaurar Valor Cheio
+                                           </button>
                                             {formNegociacao.valor_pago && (
                                               <div style={{ fontSize: 11, color: '#34D399', fontWeight: 600 }}>
                                                 Saldo Devedor Calculado: {fmt(c.valor - Number(formNegociacao.valor_pago))}
@@ -4423,7 +4449,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                           <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Histórico da Conta</div>
                                           <button
                                             type="button"
-                                            onClick={() => void restaurarValorCheio(c)}
+                                            onClick={() => openRestaurarValorCheioModal(c)}
                                             style={{ ...btnGhost, fontSize: 9, padding: '3px 8px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                           >
                                             <RefreshCw size={10} /> Restaurar Valor Cheio
@@ -4735,6 +4761,62 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               </button>
               <button style={btn()} onClick={() => void salvarEdicaoNegociacao()} disabled={savingEditNegociacao}>
                 {savingEditNegociacao ? 'Salvando...' : 'Salvar Alterações'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Restauração de Valor Cheio (Cancelar Acordo) */}
+      {restaurarContaModal && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20 }}>
+          <div style={{ ...card, padding: 24, width: '100%', maxWidth: 480, boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12, marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: C.amber, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <RefreshCw size={16} /> Cancelar Acordo & Restaurar Valor Cheio
+              </h3>
+              <button onClick={() => setRestaurarContaModal(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
+            </div>
+
+            <div style={{ padding: 12, background: 'rgba(245, 158, 11, 0.06)', border: `1px solid ${C.amber}33`, borderRadius: 6, marginBottom: 16 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 4 }}>
+                {restaurarContaModal.descricao}
+              </div>
+              <div style={{ fontSize: 11, color: C.inkSoft }}>
+                {restaurarContaModal.fornecedor?.razao_social || restaurarContaModal.fornecedor?.nome_fantasia || 'Sem fornecedor'} · Valor Atual: <span style={{ color: C.amber, fontWeight: 800 }}>{fmt(restaurarContaModal.valor)}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 14, marginBottom: 20 }}>
+              <div>
+                <label style={label}>Informe o Valor Cheio Original (R$) *</label>
+                <input
+                  style={input}
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={formRestaurarValor}
+                  onChange={e => setFormRestaurarValor(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label style={label}>Motivo / Justificativa do Cancelamento do Acordo (Opcional)</label>
+                <textarea
+                  style={{ ...input, minHeight: 65, resize: 'vertical' }}
+                  value={formRestaurarObs}
+                  onChange={e => setFormRestaurarObs(e.target.value)}
+                  placeholder="Ex: Fornecedor não aceitou o parcelamento e solicitou pagamento integral..."
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+              <button style={btnGhost} onClick={() => setRestaurarContaModal(null)} disabled={savingRestaurar}>
+                Cancelar
+              </button>
+              <button style={btn(C.amber)} onClick={() => void confirmarRestaurarValorCheio()} disabled={savingRestaurar}>
+                {savingRestaurar ? 'Restaurando...' : 'Confirmar e Restaurar Valor Cheio'}
               </button>
             </div>
           </div>
