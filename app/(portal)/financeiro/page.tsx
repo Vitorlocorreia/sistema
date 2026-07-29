@@ -4271,6 +4271,82 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                       {c.criado_por ? <span style={{ color: C.inkSoft, fontSize: 11 }}> por {c.criado_por}</span> : ''}
                                     </div>
                                   </div>
+
+                                  {/* Right: Histórico */}
+                                  <div>
+                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                      <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Histórico da Conta</div>
+                                      <button
+                                        type="button"
+                                        onClick={() => void restaurarValorCheio(c)}
+                                        style={{ ...btnGhost, fontSize: 9, padding: '3px 8px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                      >
+                                        <RefreshCw size={10} /> Restaurar Valor Cheio
+                                      </button>
+                                    </div>
+
+                                    {(!c.historico_negociacao || c.historico_negociacao.length === 0) ? (
+                                      <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic', padding: 12, background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
+                                        Nenhum acordo ou negociação registrado.
+                                      </div>
+                                    ) : (
+                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto', paddingRight: 8 }}>
+                                        {[...c.historico_negociacao].reverse().map(hist => {
+                                          const isStatus = hist.tipo === 'alteracao_status'
+                                          const borderColor = isStatus ? '#3B82F6' : hist.tipo === 'desconto' ? '#10B981' : hist.tipo === 'pagamento_parcial' ? '#34D399' : C.amber
+                                          const tipoTitulo = isStatus ? 'Alteração / Status' : hist.tipo === 'desconto' ? 'Desconto' : hist.tipo === 'pagamento_parcial' ? 'Pgto Parcial' : hist.tipo === 'prorrogacao' ? 'Prorrogação' : 'Observação'
+                                          return (
+                                            <div key={hist.id} style={{ background: isStatus ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, borderLeft: `3px solid ${borderColor}` }}>
+                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                                <strong style={{ fontSize: 11, color: borderColor }}>
+                                                  {tipoTitulo}
+                                                </strong>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                  <span style={{ fontSize: 10, color: C.inkSoft }}>
+                                                    {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                  </span>
+                                                  {!isStatus && (
+                                                    <>
+                                                      <button
+                                                        onClick={() => openEditNegociacao(c.id, hist)}
+                                                        title="Editar negociação"
+                                                        style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                                                      >
+                                                        <Edit3 size={11} />
+                                                      </button>
+                                                      <button
+                                                        onClick={() => void excluirNegociacaoItem(c, hist.id)}
+                                                        title="Excluir negociação"
+                                                        style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                                                      >
+                                                        <X size={11} />
+                                                      </button>
+                                                    </>
+                                                  )}
+                                                </div>
+                                              </div>
+                                              <div style={{ fontSize: 11, color: C.amber, fontWeight: 600, marginBottom: 4 }}>
+                                                👤 Por: {hist.autor || 'Usuário'}
+                                                {hist.editado_por && <span style={{ color: C.inkSoft, fontSize: 9, marginLeft: 6 }}>(editado por {hist.editado_por})</span>}
+                                              </div>
+                                              <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>{hist.descricao}</div>
+                                              
+                                              {hist.tipo === 'desconto' && hist.valor_novo && (
+                                                <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Novo Valor: {fmt(hist.valor_novo)}</div>
+                                              )}
+                                              {hist.tipo === 'pagamento_parcial' && hist.valor_pago && (
+                                                <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Pago: {fmt(hist.valor_pago)}</div>
+                                              )}
+                                              {hist.tipo === 'prorrogacao' && hist.nova_data && (
+                                                <div style={{ marginTop: 4, fontSize: 11, color: C.amber, fontWeight: 600 }}>Nova Data: {fmtDate(hist.nova_data)}</div>
+                                              )}
+                                            </div>
+                                          )
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+
                                   <div>
                                     <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Observações do Lançamento</div>
                                     <div style={{ marginTop: 4 }}>
@@ -4445,10 +4521,34 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                                     <strong style={{ fontSize: 11, color: borderColor }}>
                                                       {tipoTitulo}
                                                     </strong>
-                                                      {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
+                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                                      <span style={{ fontSize: 10, color: C.inkSoft }}>
+                                                        {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                      </span>
+                                                      {!isStatus && (
+                                                        <>
+                                                          <button
+                                                            onClick={() => openEditNegociacao(c.id, hist)}
+                                                            title="Editar negociação"
+                                                            style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                                                          >
+                                                            <Edit3 size={11} />
+                                                          </button>
+                                                          <button
+                                                            onClick={() => void excluirNegociacaoItem(c, hist.id)}
+                                                            title="Excluir negociação"
+                                                            style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                                                          >
+                                                            <X size={11} />
+                                                          </button>
+                                                        </>
+                                                      )}
+                                                    </div>
                                                   </div>
-                                                  <div style={{ fontSize: 11, color: C.amber, fontWeight: 600, marginBottom: 4 }}>👤 Por: {hist.autor || 'Usuário'}</div>
+                                                  <div style={{ fontSize: 11, color: C.amber, fontWeight: 600, marginBottom: 4 }}>
+                                                    👤 Por: {hist.autor || 'Usuário'}
+                                                    {hist.editado_por && <span style={{ color: C.inkSoft, fontSize: 9, marginLeft: 6 }}>(editado por {hist.editado_por})</span>}
+                                                  </div>
                                                   <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>{hist.descricao}</div>
                                                   
                                                   {hist.tipo === 'desconto' && hist.valor_novo && (

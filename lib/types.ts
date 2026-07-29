@@ -223,6 +223,8 @@ export interface ItemNegociacao {
   valor_pago?: number
   valor_novo?: number
   nova_data?: string
+  editado_em?: string
+  editado_por?: string
 }
 
 export interface Conta {
