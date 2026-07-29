@@ -3090,6 +3090,111 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     }
   }
 
+  // ── Edição, Exclusão e Restauração de Valor Cheio das Negociações ──
+  const [editingNegociacaoItem, setEditingNegociacaoItem] = useState<{ contaId: string; item: any } | null>(null)
+  const [formEditNegociacao, setFormEditNegociacao] = useState({ tipo: 'observacao', descricao: '', valor_pago: '', valor_novo: '', nova_data: '' })
+  const [savingEditNegociacao, setSavingEditNegociacao] = useState(false)
+
+  const openEditNegociacao = (contaId: string, item: any) => {
+    setEditingNegociacaoItem({ contaId, item })
+    setFormEditNegociacao({
+      tipo: item.tipo || 'observacao',
+      descricao: item.descricao || '',
+      valor_pago: item.valor_pago ? String(item.valor_pago) : '',
+      valor_novo: item.valor_novo ? String(item.valor_novo) : '',
+      nova_data: item.nova_data || ''
+    })
+  }
+
+  const salvarEdicaoNegociacao = async () => {
+    if (!editingNegociacaoItem) return
+    const { contaId, item: targetItem } = editingNegociacaoItem
+    const conta = contas.find(c => c.id === contaId)
+    if (!conta) return
+
+    setSavingEditNegociacao(true)
+    try {
+      const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
+      const novoHistorico = historicoAtual.map(item => {
+        if (item.id === targetItem.id) {
+          return {
+            ...item,
+            tipo: formEditNegociacao.tipo,
+            descricao: formEditNegociacao.descricao.trim(),
+            valor_pago: formEditNegociacao.tipo === 'pagamento_parcial' ? Number(formEditNegociacao.valor_pago) : undefined,
+            valor_novo: formEditNegociacao.tipo === 'desconto' ? Number(formEditNegociacao.valor_novo) : undefined,
+            nova_data: formEditNegociacao.tipo === 'prorrogacao' ? formEditNegociacao.nova_data : undefined,
+            editado_em: new Date().toISOString(),
+            editado_por: colaboradorAtivo.nome
+          }
+        }
+        return item
+      })
+
+      const updatePayload: Record<string, any> = { historico_negociacao: novoHistorico }
+
+      if (formEditNegociacao.tipo === 'desconto' && formEditNegociacao.valor_novo) {
+        updatePayload.valor = Number(formEditNegociacao.valor_novo)
+      }
+      if (formEditNegociacao.tipo === 'prorrogacao' && formEditNegociacao.nova_data) {
+        updatePayload.data_vencimento = formEditNegociacao.nova_data
+      }
+
+      const { error: dbError } = await supabase.from('contas').update(updatePayload).eq('id', contaId)
+      if (dbError) throw dbError
+
+      toast('Registro de negociação atualizado com sucesso!', 'success')
+      setEditingNegociacaoItem(null)
+      await load()
+    } catch (err: any) {
+      toast('Erro ao atualizar negociação: ' + (err?.message || err), 'error')
+    } finally {
+      setSavingEditNegociacao(false)
+    }
+  }
+
+  const excluirNegociacaoItem = async (conta: ContaComRelacoes, itemId: string) => {
+    if (!(await confirm('Remover Acordo', 'Deseja remover este registro do histórico da conta?', { confirmLabel: 'Remover', confirmColor: C.red }))) return
+
+    const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
+    const novoHistorico = historicoAtual.filter(item => item.id !== itemId)
+
+    const { error } = await supabase.from('contas').update({ historico_negociacao: novoHistorico }).eq('id', conta.id)
+    if (error) return toast('Erro ao excluir negociação: ' + error.message, 'error')
+
+    toast('Registro removido do histórico.', 'success')
+    await load()
+  }
+
+  const restaurarValorCheio = async (conta: ContaComRelacoes) => {
+    const inputVal = window.prompt(`Informe o valor cheio original para restaurar esta conta (Valor atual: R$ ${conta.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}):`, String(conta.valor))
+    if (!inputVal) return
+
+    const numValor = parseCurrency(inputVal)
+    if (isNaN(numValor) || numValor <= 0) return toast('Informe um valor válido maior que zero.', 'error')
+
+    if (!(await confirm('Restaurar Valor Cheio', `Confirma cancelar os acordos e restaurar esta conta para o valor cheio de R$ ${numValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}?`, { confirmLabel: 'Restaurar Valor Cheio', confirmColor: C.amber }))) return
+
+    const historicoAtual = Array.isArray(conta.historico_negociacao) ? conta.historico_negociacao : []
+    const logItem = {
+      id: crypto.randomUUID(),
+      data: new Date().toISOString(),
+      autor: colaboradorAtivo.nome,
+      tipo: 'observacao',
+      descricao: `🔄 Acordo cancelado por ${colaboradorAtivo.nome}. Lançamento retornado ao valor cheio original de R$ ${numValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.`
+    }
+
+    const { error } = await supabase.from('contas').update({
+      valor: numValor,
+      historico_negociacao: [...historicoAtual, logItem]
+    }).eq('id', conta.id)
+
+    if (error) return toast('Erro ao restaurar valor cheio: ' + error.message, 'error')
+
+    toast('Valor cheio restaurado com sucesso!', 'success')
+    await load()
+  }
+
   const [obras, setObras]       = useState<Obra[]>([])
 
   const load = useCallback(async (isBackground = false) => {
@@ -4313,7 +4418,17 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
                                       {/* Right: Histórico */}
                                       <div>
-                                        <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, marginBottom: 12 }}>Histórico da Conta</div>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                                          <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Histórico da Conta</div>
+                                          <button
+                                            type="button"
+                                            onClick={() => void restaurarValorCheio(c)}
+                                            style={{ ...btnGhost, fontSize: 9, padding: '3px 8px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                          >
+                                            <RefreshCw size={10} /> Restaurar Valor Cheio
+                                          </button>
+                                        </div>
+
                                         {(!c.historico_negociacao || c.historico_negociacao.length === 0) ? (
                                           <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic', padding: 12, background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
                                             Nenhum acordo ou negociação registrado.
@@ -4326,11 +4441,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                               const tipoTitulo = isStatus ? 'Alteração / Status' : hist.tipo === 'desconto' ? 'Desconto' : hist.tipo === 'pagamento_parcial' ? 'Pgto Parcial' : hist.tipo === 'prorrogacao' ? 'Prorrogação' : 'Observação'
                                               return (
                                                 <div key={hist.id} style={{ background: isStatus ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, borderLeft: `3px solid ${borderColor}` }}>
-                                                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                                                     <strong style={{ fontSize: 11, color: borderColor }}>
                                                       {tipoTitulo}
                                                     </strong>
-                                                    <span style={{ fontSize: 10, color: C.inkSoft }}>
                                                       {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                     </span>
                                                   </div>
@@ -4508,6 +4622,95 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
               <button onClick={() => setEditandoConta(null)} style={{ ...btnGhost, color: C.inkSoft }}>Cancelar</button>
               <button onClick={() => void salvarEdicaoConta()} style={btn(C.amber)}>Salvar Alterações</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Registro de Negociação */}
+      {editingNegociacaoItem && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20 }}>
+          <div style={{ ...card, padding: 24, width: '100%', maxWidth: 480, boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12, marginBottom: 16 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+                ✏️ Editar Registro de Negociação
+              </h3>
+              <button onClick={() => setEditingNegociacaoItem(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
+            </div>
+
+            <div style={{ display: 'grid', gap: 12, marginBottom: 18 }}>
+              <div>
+                <label style={label}>Tipo de Registro</label>
+                <select
+                  style={input}
+                  value={formEditNegociacao.tipo}
+                  onChange={e => setFormEditNegociacao({ ...formEditNegociacao, tipo: e.target.value })}
+                >
+                  <option value="observacao">📝 Observação / Registro</option>
+                  <option value="desconto">💰 Desconto / Novo Valor Negociado</option>
+                  <option value="pagamento_parcial">💳 Pagamento Parcial</option>
+                  <option value="prorrogacao">📆 Prorrogação de Vencimento</option>
+                </select>
+              </div>
+
+              {formEditNegociacao.tipo === 'desconto' && (
+                <div>
+                  <label style={label}>Novo Valor Negociado (R$)</label>
+                  <input
+                    style={input}
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={formEditNegociacao.valor_novo}
+                    onChange={e => setFormEditNegociacao({ ...formEditNegociacao, valor_novo: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {formEditNegociacao.tipo === 'pagamento_parcial' && (
+                <div>
+                  <label style={label}>Valor Pago Parcialmente (R$)</label>
+                  <input
+                    style={input}
+                    type="number"
+                    step="0.01"
+                    placeholder="0.00"
+                    value={formEditNegociacao.valor_pago}
+                    onChange={e => setFormEditNegociacao({ ...formEditNegociacao, valor_pago: e.target.value })}
+                  />
+                </div>
+              )}
+
+              {formEditNegociacao.tipo === 'prorrogacao' && (
+                <div>
+                  <label style={label}>Nova Data Prorrogada</label>
+                  <input
+                    style={input}
+                    type="date"
+                    value={formEditNegociacao.nova_data}
+                    onChange={e => setFormEditNegociacao({ ...formEditNegociacao, nova_data: e.target.value })}
+                  />
+                </div>
+              )}
+
+              <div>
+                <label style={label}>Descrição / Detalhes da Negociação</label>
+                <textarea
+                  style={{ ...input, minHeight: 70, resize: 'vertical' }}
+                  value={formEditNegociacao.descricao}
+                  onChange={e => setFormEditNegociacao({ ...formEditNegociacao, descricao: e.target.value })}
+                  placeholder="Informe os detalhes do acordo..."
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button style={btnGhost} onClick={() => setEditingNegociacaoItem(null)} disabled={savingEditNegociacao}>
+                Cancelar
+              </button>
+              <button style={btn()} onClick={() => void salvarEdicaoNegociacao()} disabled={savingEditNegociacao}>
+                {savingEditNegociacao ? 'Salvando...' : 'Salvar Alterações'}
+              </button>
             </div>
           </div>
         </div>
