@@ -218,7 +218,7 @@ export interface ItemNegociacao {
   id: string
   data: string
   autor: string
-  tipo: 'pagamento_parcial' | 'desconto' | 'prorrogacao' | 'observacao' | 'alteracao_status'
+  tipo: 'pagamento_parcial' | 'desconto' | 'prorrogacao' | 'observacao' | 'alteracao_status' | 'restauracao'
   descricao: string
   valor_pago?: number
   valor_novo?: number
@@ -336,6 +336,7 @@ export interface Colaborador {
   cargo: string
   empresa_id: string | null
   empresas_ids?: string[] | null
+  obras_ids?: string[] | null
   email: string | null
   senha?: string | null
   created_at?: string

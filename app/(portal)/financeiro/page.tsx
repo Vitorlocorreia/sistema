@@ -447,7 +447,7 @@ export default function FinanceiroPage() {
           initialFornecedorId={activeFornecedorId}
         />
       )}
-      {tab === 'obras' && abasVisiveis.includes('obras') && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} confirm={confirm} />}
+      {tab === 'obras' && abasVisiveis.includes('obras') && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} confirm={confirm} colaboradores={colaboradores} />}
       {tab === 'permissoes' && abasVisiveis.includes('permissoes') && (
         <PermissoesTab 
 
@@ -477,7 +477,7 @@ export default function FinanceiroPage() {
 // ════════════════════════════════════════════════════════
 //  TAB: DASHBOARD
 // ════════════════════════════════════════════════════════
-function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
+function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colaboradores = [] }: TabProps) {
   const [obras, setObras] = useState<Obra[]>([])
   const [obraId, setObraId] = useState<string>('todas')
   const [fotos, setFotos] = useState<any[]>([])
@@ -494,7 +494,45 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
   const [fotoExpandida, setFotoExpandida] = useState<any | null>(null)
   const [selecionadasFotos, setSelecionadasFotos] = useState<string[]>([])
   const [processandoLote, setProcessandoLote] = useState(false)
+  
+  // Acessos
+  const [acessosObra, setAcessosObra] = useState<Obra | null>(null)
+  const [searchColab, setSearchColab] = useState('')
+  const [filtroAcesso, setFiltroAcesso] = useState<'todos' | 'com_acesso' | 'sem_acesso'>('todos')
+  const [updatingColabId, setUpdatingColabId] = useState<string | null>(null)
+
   const podeGerenciar = Boolean(permissaoAtiva?.pode_lancar || permissaoAtiva?.pode_aprovar)
+
+  const toggleAcessoColaboradorObra = async (colab: Colaborador, obraId: string) => {
+    if (colab.cargo === 'admin_geral') {
+      return toast('Administradores gerais possuem acesso automático a todas as obras.', 'info')
+    }
+    setUpdatingColabId(colab.id)
+    try {
+      const currentIds: string[] = colab.obras_ids || []
+      const hasAccess = currentIds.includes(obraId)
+      let nextIds: string[] = []
+      if (hasAccess) {
+        nextIds = currentIds.filter(id => id !== obraId)
+      } else {
+        nextIds = Array.from(new Set([...currentIds, obraId]))
+      }
+      const { error } = await supabase
+        .from('colaboradores')
+        .update({ obras_ids: nextIds })
+        .eq('id', colab.id)
+      if (error) throw error
+      colab.obras_ids = nextIds // Update local object
+      toast(hasAccess ? `Acesso revogado para ${colab.nome}` : `Acesso concedido para ${colab.nome}`, 'success')
+      // Trigger a re-render
+      setAcessosObra(prev => prev ? { ...prev } : null)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao atualizar acesso'
+      toast(msg, 'error')
+    } finally {
+      setUpdatingColabId(null)
+    }
+  }
 
   const toggleFotoSelecionada = (id: string) => {
     setSelecionadasFotos(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -553,8 +591,13 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
       supabase.from('obras').select('*').order('nome'),
       supabase.from('fotos').select('*').not('obra_id', 'is', null).order('created_at', { ascending: false }).limit(60),
     ])
-    setObras((o as Obra[]) || []); setFotos(f || []);
-  }, [])
+    let obrasList = (o as Obra[]) || []
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const allowedIds = colaboradorAtivo.obras_ids || []
+      obrasList = obrasList.filter(obra => allowedIds.includes(obra.id))
+    }
+    setObras(obrasList); setFotos(f || []);
+  }, [colaboradorAtivo])
   
   useRealtimeSync(load, 'financeiro-obras')
   useEffect(() => { void load() }, [load])
@@ -947,6 +990,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
                 </button>
                 <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Edit3 size={14}/> Editar Obra</button>
                 <button onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)} style={{ ...btnGhost, color: '#EF4444', padding: '6px 12px' }}><Trash2 size={14}/> Excluir Obra</button>
+                <button onClick={() => setAcessosObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Shield size={14}/> Acessos</button>
               </div>
             )}
           </div>
@@ -1423,6 +1467,149 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabPr
           </div>
         )}
       </AnimatePresence>
+
+      {/* ── MODAL DE GERENCIAMENTO DE ACESSOS (OBRAS) ── */}
+      {acessosObra && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: '#12141C', border: `1px solid ${C.amber}`, borderRadius: 8, padding: 20, maxWidth: 540, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  🔒 Acessos à Obra: <span style={{ color: C.amber }}>{acessosObra.nome}</span>
+                </h3>
+                <p style={{ fontSize: 11, color: C.inkSoft, margin: '3px 0 0' }}>
+                  Marque ou desmarque os usuários autorizados a visualizar esta obra.
+                </p>
+              </div>
+              <button style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer' }} onClick={() => setAcessosObra(null)}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
+              <button
+                type="button"
+                onClick={() => setFiltroAcesso('todos')}
+                style={{
+                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
+                  background: filtroAcesso === 'todos' ? C.amber : '#1A1D28',
+                  color: filtroAcesso === 'todos' ? '#0B0C0E' : C.inkSoft
+                }}
+              >
+                Todos ({colaboradores.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltroAcesso('com_acesso')}
+                style={{
+                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
+                  background: filtroAcesso === 'com_acesso' ? '#22C55E' : '#1A1D28',
+                  color: filtroAcesso === 'com_acesso' ? '#0B0C0E' : '#4ADE80'
+                }}
+              >
+                ✓ Com Acesso ({colaboradores.filter(c => c.cargo === 'admin_geral' || (c.obras_ids || []).includes(acessosObra.id)).length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFiltroAcesso('sem_acesso')}
+                style={{
+                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
+                  background: filtroAcesso === 'sem_acesso' ? '#EF4444' : '#1A1D28',
+                  color: filtroAcesso === 'sem_acesso' ? '#FFFFFF' : '#F87171'
+                }}
+              >
+                ✕ Sem Acesso ({colaboradores.filter(c => c.cargo !== 'admin_geral' && !(c.obras_ids || []).includes(acessosObra.id)).length})
+              </button>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <input
+                style={{ ...input, fontSize: 11, padding: '7px 10px' }}
+                placeholder="Buscar colaborador por nome, cargo ou e-mail..."
+                value={searchColab}
+                onChange={e => setSearchColab(e.target.value)}
+              />
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gap: 8, paddingRight: 4 }}>
+              {colaboradores
+                .filter(colab => {
+                  const isAdmin = colab.cargo === 'admin_geral'
+                  const ids: string[] = colab.obras_ids || []
+                  const hasAccess = isAdmin || ids.includes(acessosObra.id)
+
+                  if (filtroAcesso === 'com_acesso' && !hasAccess) return false
+                  if (filtroAcesso === 'sem_acesso' && hasAccess) return false
+
+                  if (!searchColab.trim()) return true
+                  const q = searchColab.toLowerCase()
+                  return colab.nome.toLowerCase().includes(q) || (colab.cargo || '').toLowerCase().includes(q) || (colab.email || '').toLowerCase().includes(q)
+                })
+                .sort((a, b) => {
+                  const aAdmin = a.cargo === 'admin_geral'
+                  const bAdmin = b.cargo === 'admin_geral'
+
+                  const aIds: string[] = a.obras_ids || []
+                  const bIds: string[] = b.obras_ids || []
+
+                  const aAccess = aAdmin || aIds.includes(acessosObra.id)
+                  const bAccess = bAdmin || bIds.includes(acessosObra.id)
+
+                  if (aAdmin && !bAdmin) return -1
+                  if (!aAdmin && bAdmin) return 1
+                  if (aAccess && !bAccess) return -1
+                  if (!aAccess && bAccess) return 1
+
+                  return a.nome.localeCompare(b.nome, 'pt-BR')
+                })
+                .map(colab => {
+                  const isAdmin = colab.cargo === 'admin_geral'
+                  const ids: string[] = colab.obras_ids || []
+                  const hasAccess = isAdmin || ids.includes(acessosObra.id)
+                  const isUpdating = updatingColabId === colab.id
+
+                  return (
+                    <div key={colab.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#0B0C0E', border: `1px solid ${hasAccess ? C.amber + '44' : C.border}`, borderRadius: 6 }}>
+                      <div>
+                        <strong style={{ fontSize: 12, color: C.ink, display: 'block' }}>{colab.nome}</strong>
+                        <span style={{ fontSize: 10, color: C.inkSoft }}>
+                          {colab.cargo || 'Sem cargo'} · {colab.email || 'Sem e-mail'}
+                        </span>
+                      </div>
+                      <div>
+                        {isAdmin ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '3px 8px', borderRadius: 4 }}>
+                            👑 Admin Geral
+                          </span>
+                        ) : (
+                          <button
+                            disabled={isUpdating}
+                            onClick={() => void toggleAcessoColaboradorObra(colab, acessosObra.id)}
+                            style={{
+                              borderRadius: 4, padding: '5px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer',
+                              background: hasAccess ? '#22C55E20' : '#EF444420',
+                              color: hasAccess ? '#4ADE80' : '#F87171',
+                              border: `1px solid ${hasAccess ? '#22C55E44' : '#EF444444'}`,
+                              opacity: isUpdating ? 0.5 : 1
+                            }}
+                          >
+                            {isUpdating ? 'Salvando...' : hasAccess ? '✓ Com Acesso' : '✕ Sem Acesso'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+
+            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+              <button style={{ ...btn(), fontSize: 11, padding: '7px 14px' }} onClick={() => setAcessosObra(null)}>
+                Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1434,6 +1621,7 @@ interface TabProps {
   prompt?: (title: string, options?: { description?: string; placeholder?: string; confirmLabel?: string }) => Promise<string | null>
   goToHistoricoByFornecedor?: (idFornecedor: string) => void
   initialFornecedorId?: string
+  colaboradores?: Colaborador[]
 }
 
 function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
@@ -2556,7 +2744,13 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     Promise.all([qE, qF, qO]).then(([{ data: e }, { data: f }, { data: o }]) => {
       setEmpresas(e ?? [])
       setFornecedores(f ?? [])
-      setObras(o ?? [])
+      
+      let oList = o ?? []
+      if (colaboradorAtivo.cargo !== 'admin_geral') {
+        const oIds = colaboradorAtivo.obras_ids || []
+        oList = oList.filter(ob => oIds.includes(ob.id))
+      }
+      setObras(oList)
     })
   }, [colaboradorAtivo])
 
@@ -3193,13 +3387,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         id: crypto.randomUUID(),
         data: new Date().toISOString(),
         autor: colaboradorAtivo.nome,
-        tipo: 'observacao',
+        tipo: 'restauracao',
         descricao: `🔄 Acordo cancelado por ${colaboradorAtivo.nome}. Lançamento retornado ao valor cheio original de R$ ${numValor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}.${obsTexto}`
       }
 
       const { error } = await supabase.from('contas').update({
         valor: numValor,
-        historico_negociacao: [...historicoAtual, logItem]
+        historico_negociacao: [logItem] // Ignora (apaga) todas as negociações anteriores
       }).eq('id', restaurarContaModal.id)
 
       if (error) throw error
@@ -3236,7 +3430,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
     setFornecedores(f ?? [])
-    setObras(o ?? [])
+    
+    let oList = o ?? []
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const oIds = colaboradorAtivo.obras_ids || []
+      oList = oList.filter(ob => oIds.includes(ob.id))
+    }
+    setObras(oList)
+    
     setLoading(false)
   }, [colaboradorAtivo])
 
@@ -3685,7 +3886,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     { value: 'A pagar', label: 'A pagar' },
     { value: 'Pago Parcial', label: 'Pago Parcial' },
     { value: 'Pago', label: 'Pago' },
-    { value: 'Pago sem Nota Fiscal', label: 'Pago sem Nota Fiscal' },
+    { value: 'Pago sem Nota Fiscal', label: 'Paga S/NF' },
     { value: 'Negado', label: 'Negado' },
   ]
 
@@ -4074,15 +4275,21 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
                 const historico = c.historico_negociacao || []
                 
+                // Ignora histórico antes da última restauração
+                const indexUltimaRestauracao = [...historico].reverse().findIndex(h => h.tipo === 'restauracao' || h.descricao?.includes('🔄 Acordo cancelado'))
+                const historicoAtivo = indexUltimaRestauracao !== -1 
+                  ? historico.slice(historico.length - indexUltimaRestauracao) 
+                  : historico;
+                
                 // Soma todos os pagamentos parciais registrados no histórico
-                const totalPagoHistorico = historico
+                const totalPagoHistorico = historicoAtivo
                   .reduce((acc, h) => {
                     const val = Number(h.valor_pago || (h.tipo === 'pagamento_parcial' ? h.valor_novo : 0) || 0)
                     return acc + (val > 0 ? val : 0)
                   }, 0)
 
                 // Verifica se há desconto aplicado
-                const ultimoDesconto = [...historico].reverse().find(h => h.tipo === 'desconto' && h.valor_novo)
+                const ultimoDesconto = [...historicoAtivo].reverse().find(h => h.tipo === 'desconto' && h.valor_novo)
                 const valorBase = ultimoDesconto?.valor_novo !== undefined ? Number(ultimoDesconto.valor_novo) : Number(c.valor || 0)
                 
                 // Valor restante a pagar/receber (saldo devedor)
@@ -4204,7 +4411,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Aguardando aprovação' ? '1px solid #3B82F644' : 'none',
                           boxShadow: c.status === 'Bloqueado' ? '0 0 8px #F9731633' : 'none'
                         }}>
-                          {c.status === 'Bloqueado' ? '🔒 BLOQUEADO' : c.status === 'Aguardando aprovação' ? '⏳ AGUARDANDO APROVAÇÃO' : c.status.toUpperCase()}
+                          {c.status === 'Bloqueado' ? '🔒 BLOQUEADO' : c.status === 'Aguardando aprovação' ? '⏳ AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : c.status.toUpperCase()}
                         </span>
                         {c.criado_por && (
                           <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
@@ -4248,6 +4455,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                             <option value="A pagar">A pagar</option>
                             <option value="Pago Parcial">Pago Parcial</option>
                             <option value="Pago">Pago</option>
+                            <option value="Pago sem Nota Fiscal">Paga S/NF</option>
                             <option value="Negado">Negado</option>
                           </select>}
 
@@ -6134,10 +6342,17 @@ function ImportarExcelModal({
       const empList = e ?? []
       setEmpresas(empList)
       setFornecedores(f ?? [])
-      setObras(o ?? [])
+      
+      let oList = o ?? []
+      if (colaboradorAtivo.cargo !== 'admin_geral') {
+        const oIds = colaboradorAtivo.obras_ids || []
+        oList = oList.filter(ob => oIds.includes(ob.id))
+      }
+      setObras(oList)
+      
       if (empList.length > 0) setEmpresaPadraoId(empList[0].id)
     })
-  }, [isOpen])
+  }, [isOpen, colaboradorAtivo])
 
   const baixarModeloExcel = () => {
     const modelo = [

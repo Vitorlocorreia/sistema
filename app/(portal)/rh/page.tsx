@@ -609,7 +609,49 @@ export default function RhPage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteForm, setInviteForm] = useState({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false, validade: '72', pix: '', banco: '', agencia_conta: '' })
   const [inviteSaving, setInviteSaving] = useState(false)
+  const [inviteSaving, setInviteSaving] = useState(false)
   const [archiveFilter, setArchiveFilter] = useState('')
+
+  const [buscaConvite, setBuscaConvite] = useState('')
+  const [filtroEfetivoConvite, setFiltroEfetivoConvite] = useState<'todos' | 'efetivos' | 'nao_efetivos'>('todos')
+  const [ordemConvite, setOrdemConvite] = useState<'novo' | 'velho'>('novo')
+
+  const [buscaPessoas, setBuscaPessoas] = useState('')
+  const [ordemPessoas, setOrdemPessoas] = useState<'alfabetica' | 'novo' | 'velho'>('alfabetica')
+
+  const convitesFiltrados = useMemo(() => {
+    let arr = [...convites]
+    if (buscaConvite.trim()) {
+      const q = buscaConvite.toLowerCase()
+      arr = arr.filter(c => c.nome_destinatario.toLowerCase().includes(q) || (c.cpf && c.cpf.includes(q)) || (c.cargo && c.cargo.toLowerCase().includes(q)) || (c.obra && c.obra.toLowerCase().includes(q)))
+    }
+    if (filtroEfetivoConvite === 'efetivos') {
+      arr = arr.filter(c => c.inicio_efetivo)
+    } else if (filtroEfetivoConvite === 'nao_efetivos') {
+      arr = arr.filter(c => !c.inicio_efetivo)
+    }
+    arr.sort((a, b) => {
+      const da = new Date(a.created_at).getTime()
+      const db = new Date(b.created_at).getTime()
+      return ordemConvite === 'novo' ? db - da : da - db
+    })
+    return arr
+  }, [convites, buscaConvite, filtroEfetivoConvite, ordemConvite])
+
+  const pessoasFiltradas = useMemo(() => {
+    let arr = [...pessoas]
+    if (buscaPessoas.trim()) {
+      const q = buscaPessoas.toLowerCase()
+      arr = arr.filter(p => p.nome.toLowerCase().includes(q) || (p.cpf && p.cpf.includes(q)) || (p.cargo && p.cargo.toLowerCase().includes(q)) || ((p as any).obra && (p as any).obra.toLowerCase().includes(q)))
+    }
+    arr.sort((a, b) => {
+      if (ordemPessoas === 'alfabetica') return a.nome.localeCompare(b.nome)
+      const da = a.data_admissao ? new Date(a.data_admissao).getTime() : 0
+      const db = b.data_admissao ? new Date(b.data_admissao).getTime() : 0
+      return ordemPessoas === 'novo' ? db - da : da - db
+    })
+    return arr
+  }, [pessoas, buscaPessoas, ordemPessoas])
 
   const load = useCallback(async (isBackground = false) => {
     const [{ data: peopleData, error: peopleError }, { data: modelData, error: modelError }, { data: inviteData, error: inviteError }] = await Promise.all([
@@ -1034,10 +1076,22 @@ export default function RhPage() {
         <section style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
             <strong style={{ fontSize: 12 }}>Em cadastro</strong>
-            <span style={{ color: C.inkSoft, fontSize: 10 }}>{convites.length}</span>
+            <span style={{ color: C.inkSoft, fontSize: 10 }}>{convitesFiltrados.length}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <input style={{...input, flex: 1, minWidth: 140}} placeholder="Buscar candidato (nome, CPF, cargo)..." value={buscaConvite} onChange={e => setBuscaConvite(e.target.value)} />
+            <select style={{...input, width: 'auto'}} value={filtroEfetivoConvite} onChange={e => setFiltroEfetivoConvite(e.target.value as any)}>
+              <option value="todos">Todos os status</option>
+              <option value="efetivos">Com Início Efetivo</option>
+              <option value="nao_efetivos">Sem Início Efetivo</option>
+            </select>
+            <select style={{...input, width: 'auto'}} value={ordemConvite} onChange={e => setOrdemConvite(e.target.value as any)}>
+              <option value="novo">Mais novos primeiro</option>
+              <option value="velho">Mais antigos primeiro</option>
+            </select>
           </div>
           <div style={{ display: 'grid', gap: 8 }}>
-            {convites.map(invite => {
+            {convitesFiltrados.map(invite => {
               const expired = new Date(invite.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(invite.status);
               const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link gerado';
               return (
@@ -1121,9 +1175,17 @@ export default function RhPage() {
         <section style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <strong style={{ fontSize: 12 }}>Funcionários aprovados</strong>
-            <span style={{ fontSize: 10, color: C.inkSoft }}>{pessoas.length} registros</span>
+            <span style={{ fontSize: 10, color: C.inkSoft }}>{pessoasFiltradas.length} registros</span>
           </div>
-          {pessoas.map(person => (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <input style={{...input, flex: 1, minWidth: 140}} placeholder="Buscar funcionário (nome, CPF, cargo)..." value={buscaPessoas} onChange={e => setBuscaPessoas(e.target.value)} />
+            <select style={{...input, width: 'auto'}} value={ordemPessoas} onChange={e => setOrdemPessoas(e.target.value as any)}>
+              <option value="alfabetica">A-Z (Alfabética)</option>
+              <option value="novo">Admissão: Mais novos</option>
+              <option value="velho">Admissão: Mais antigos</option>
+            </select>
+          </div>
+          {pessoasFiltradas.map(person => (
             <button key={person.id} onClick={() => void loadDetails(person)} style={{ width: '100%', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: `1px solid ${C.border}`, padding: 12, color: C.ink, cursor: 'pointer' }}>
               <strong>{person.nome}</strong>
               <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>{person.cargo || 'Sem cargo'} · {person.matricula || 'Sem matrícula'} · {person.status}</div>
