@@ -436,6 +436,7 @@ export default function FinanceiroPage() {
           colaboradorAtivo={colaboradorAtivo!} 
           permissaoAtiva={permissaoAtiva!} 
           confirm={confirm}
+          colaboradores={colaboradores}
         />
       )}
       {tab === 'historico' && abasVisiveis.includes('historico') && (
@@ -445,6 +446,7 @@ export default function FinanceiroPage() {
           confirm={confirm}
           prompt={prompt}
           initialFornecedorId={activeFornecedorId}
+          colaboradores={colaboradores}
         />
       )}
       {tab === 'obras' && abasVisiveis.includes('obras') && <ObrasFinanceiroTab colaboradorAtivo={colaboradorAtivo!} permissaoAtiva={permissaoAtiva!} confirm={confirm} colaboradores={colaboradores} />}
@@ -2680,7 +2682,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
 // ════════════════════════════════════════════════════════
 //  TAB: LANÇAR CONTA
 // ════════════════════════════════════════════════════════
-function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
+function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: TabProps) {
   const [empresas, setEmpresas]         = useState<Empresa[]>([])
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [obras, setObras]               = useState<Obra[]>([])
@@ -2732,13 +2734,10 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     usuarios_permitidos: [] as string[],
   })
 
-  const [colaboradores, setColaboradores] = useState<any[]>([])
-
-  useEffect(() => {
+  const load = useCallback(() => {
     let qE = supabase.from('empresas').select('*').order('razao_social')
     let qF = supabase.from('fornecedores').select('*').order('razao_social')
     let qO = supabase.from('obras').select('*').order('nome')
-    let qColab = supabase.from('colaboradores').select('id, nome, cargo').eq('ativo', true).order('nome')
     
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -2748,10 +2747,9 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       }
     }
 
-    Promise.all([qE, qF, qO, qColab]).then(([{ data: e }, { data: f }, { data: o }, { data: colabs }]) => {
+    Promise.all([qE, qF, qO]).then(([{ data: e }, { data: f }, { data: o }]) => {
       setEmpresas(e ?? [])
       setFornecedores(f ?? [])
-      setColaboradores(colabs ?? [])
       
       let oList = o ?? []
       if (colaboradorAtivo.cargo !== 'admin_geral') {
@@ -2761,6 +2759,8 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       setObras(oList)
     })
   }, [colaboradorAtivo])
+
+  useEffect(() => { load() }, [load])
 
   useEffect(() => {
     const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -3187,7 +3187,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 // ════════════════════════════════════════════════════════
 //  TAB: CONTAS / HISTÓRICO
 // ════════════════════════════════════════════════════════
-function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initialFornecedorId }: TabProps) {
+function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initialFornecedorId, colaboradores = [] }: TabProps) {
   const [contas, setContas]     = useState<ContaComRelacoes[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [fornecedores, setFornecedores] = useState<any[]>([])
@@ -3473,7 +3473,6 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     let qE = supabase.from('empresas').select('*').order('razao_social')
     let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social')
     let qO = supabase.from('obras').select('*').order('nome')
-    let qColab = supabase.from('colaboradores').select('id, nome, cargo').eq('ativo', true).order('nome')
 
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -3485,11 +3484,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       qC = qC.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
     }
 
-    const [{ data: c }, { data: e }, { data: f }, { data: o }, { data: colabs }] = await Promise.all([qC, qE, qF, qO, qColab])
+    const [{ data: c }, { data: e }, { data: f }, { data: o }] = await Promise.all([qC, qE, qF, qO])
     setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
     setFornecedores(f ?? [])
-    setColaboradores(colabs ?? [])
     
     let oList = o ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
