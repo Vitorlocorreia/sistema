@@ -609,7 +609,6 @@ export default function RhPage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [inviteForm, setInviteForm] = useState({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false, validade: '72', pix: '', banco: '', agencia_conta: '' })
   const [inviteSaving, setInviteSaving] = useState(false)
-  const [inviteSaving, setInviteSaving] = useState(false)
   const [archiveFilter, setArchiveFilter] = useState('')
 
   const [buscaConvite, setBuscaConvite] = useState('')
