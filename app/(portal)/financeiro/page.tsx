@@ -1640,6 +1640,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         qC = qC.in('empresa_id', ids)
         qE = qE.in('id', ids)
       }
+      qC = qC.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
     }
     
     const [{ data: c }, { data: e }] = await Promise.all([qC, qE])
@@ -2338,6 +2339,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
         qE = qE.in('id', ids)
         qC = qC.in('empresa_id', ids)
       }
+      qC = qC.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
     }
 
     const [{ data: f }, { data: e }, { data: c }] = await Promise.all([qF, qE, qC])
@@ -2726,6 +2728,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     possui_fornecedor: false,
     observacoes: '',
     recorrencia: 'unico' as 'unico'|'mensal'|'semanal',
+    is_privada: false,
   })
 
   useEffect(() => {
@@ -2834,6 +2837,8 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         obra_id: form.obra_id || null,
         categoria: form.categoria || null,
         comprovante_url: comprovanteUrl,
+        is_privada: form.is_privada,
+        usuarios_permitidos: form.is_privada ? [colaboradorAtivo.id] : [],
         criado_por: colaboradorAtivo.nome,
         historico_negociacao: [{
           id: Date.now().toString(),
@@ -2868,7 +2873,8 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       data_vencimento: '',
       possui_fornecedor: false,
       observacoes: '',
-      recorrencia: 'unico'
+      recorrencia: 'unico',
+      is_privada: false
     })
   }
 
@@ -3048,6 +3054,18 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
               </div>
             </div>
 
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: form.is_privada ? '#F59E0B11' : '#111', border: `1px solid ${form.is_privada ? '#F59E0B44' : C.border}`, borderRadius: 8, cursor: 'pointer' }} onClick={() => setForm(f => ({ ...f, is_privada: !f.is_privada }))}>
+              <div style={{ width: 16, height: 16, border: `1px solid ${form.is_privada ? C.amber : C.border}`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: form.is_privada ? C.amber : 'transparent' }}>
+                {form.is_privada && <Check size={12} color="#000" />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: form.is_privada ? C.amber : C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Shield size={14} /> Lançamento Confidencial / Privado
+                </span>
+                <span style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginTop: 2 }}>Apenas o Admin Geral e as pessoas que você marcar poderão ver este lançamento.</span>
+              </div>
+            </div>
+
             {/* Exibe aviso de aprovação necessário caso ultrapasse limite */}
             {form.tipo === 'pagar' && form.valor && (permissaoAtiva?.limite_valor ?? 5000) !== 0 && parseFloat(form.valor) > (permissaoAtiva?.limite_valor ?? 5000) && !permissaoAtiva?.pode_aprovar && (
               <div style={{ background: '#3B82F618', border: '1px solid #3B82F633', color: '#3B82F6', borderRadius: 6, padding: '10px 14px', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -3154,6 +3172,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [selecionadasContas, setSelecionadasContas] = useState<string[]>([])
   const [editandoConta, setEditandoConta] = useState<ContaComRelacoes | null>(null)
   const [formEdicao, setFormEdicao] = useState<Partial<ContaComRelacoes>>({})
+  const [acessosContaPrivada, setAcessosContaPrivada] = useState<ContaComRelacoes | null>(null)
+  const [colaboradores, setColaboradores] = useState<any[]>([])
 
   const toggleContaSelecionada = (id: string) => {
     setSelecionadasContas(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
@@ -3416,6 +3436,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     let qE = supabase.from('empresas').select('*').order('razao_social')
     let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social')
     let qO = supabase.from('obras').select('*').order('nome')
+    let qColab = supabase.from('colaboradores').select('id, nome, cargo').eq('ativo', true).order('nome')
 
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -3424,12 +3445,14 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         qE = qE.in('id', ids)
         qF = qF.or(`empresa_id.in.(${ids.join(',')}),empresa_id.is.null`)
       }
+      qC = qC.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
     }
 
-    const [{ data: c }, { data: e }, { data: f }, { data: o }] = await Promise.all([qC, qE, qF, qO])
+    const [{ data: c }, { data: e }, { data: f }, { data: o }, { data: colabs }] = await Promise.all([qC, qE, qF, qO, qColab])
     setContas((c as ContaComRelacoes[]) ?? [])
     setEmpresas(e ?? [])
     setFornecedores(f ?? [])
+    setColaboradores(colabs ?? [])
     
     let oList = o ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
@@ -3440,6 +3463,18 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     
     setLoading(false)
   }, [colaboradorAtivo])
+
+  const toggleAcessoColaboradorContaPrivada = async (colaboradorId: string) => {
+    if (!acessosContaPrivada) return
+    const atuais = acessosContaPrivada.usuarios_permitidos || []
+    const novoArray = atuais.includes(colaboradorId) ? atuais.filter(id => id !== colaboradorId) : [...atuais, colaboradorId]
+
+    const { error } = await supabase.from('contas').update({ usuarios_permitidos: novoArray }).eq('id', acessosContaPrivada.id)
+    if (error) return toast('Erro ao atualizar permissão: ' + error.message, 'error')
+
+    setAcessosContaPrivada({ ...acessosContaPrivada, usuarios_permitidos: novoArray })
+    toast('Acesso atualizado', 'success')
+  }
 
   const podeLancar = permissaoAtiva?.pode_lancar;
 
@@ -3754,6 +3789,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     if (editandoConta.valor !== valorEditadoNum) mudancas.push(`valor para ${fmt(valorEditadoNum)}`)
     if (editandoConta.data_vencimento !== formEdicao.data_vencimento) mudancas.push(`vencimento para ${formEdicao.data_vencimento}`)
     if (editandoConta.categoria !== (formEdicao.categoria || null)) mudancas.push(`categoria`)
+    if (editandoConta.is_privada !== formEdicao.is_privada) mudancas.push(`confidencialidade para ${formEdicao.is_privada ? 'Privado' : 'Público'}`)
 
     const historicoAtual = Array.isArray(editandoConta.historico_negociacao) ? editandoConta.historico_negociacao : []
     let novoHistorico = historicoAtual
@@ -3782,7 +3818,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       observacoes: formEdicao.observacoes || null,
       recorrencia: formEdicao.recorrencia || 'unico',
       possui_fornecedor: Boolean(formEdicao.fornecedor_id),
-      historico_negociacao: novoHistorico
+      historico_negociacao: novoHistorico,
+      is_privada: formEdicao.is_privada,
+      ...(formEdicao.is_privada && !editandoConta.is_privada ? { usuarios_permitidos: [colaboradorAtivo.id] } : {}),
+      ...(!formEdicao.is_privada ? { usuarios_permitidos: [] } : {})
     }).eq('id', editandoConta.id)
     if (error) return toast(error.message, 'error')
 
@@ -4460,6 +4499,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           </select>}
 
 
+                          {c.is_privada && (
+                            <button onClick={() => setAcessosContaPrivada(c)} title="Gerenciar Acessos" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
+                              <Shield size={13} />
+                            </button>
+                          )}
                           {podeEditar && (
                              <button onClick={() => iniciarEdicao(c)} title="Editar Lançamento" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
                                <Edit3 size={13} />
@@ -4879,6 +4923,18 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               </div>
             </div>
 
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: formEdicao.is_privada ? '#F59E0B11' : '#111', border: `1px solid ${formEdicao.is_privada ? '#F59E0B44' : C.border}`, borderRadius: 8, cursor: 'pointer', marginBottom: 20 }} onClick={() => setFormEdicao(f => ({ ...f, is_privada: !f.is_privada }))}>
+              <div style={{ width: 16, height: 16, border: `1px solid ${formEdicao.is_privada ? C.amber : C.border}`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: formEdicao.is_privada ? C.amber : 'transparent' }}>
+                {formEdicao.is_privada && <Check size={12} color="#000" />}
+              </div>
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: formEdicao.is_privada ? C.amber : C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Shield size={14} /> Lançamento Confidencial / Privado
+                </span>
+                <span style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginTop: 2 }}>Apenas o Admin Geral e as pessoas que você marcar poderão ver este lançamento.</span>
+              </div>
+            </div>
+
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
               <button onClick={() => setEditandoConta(null)} style={{ ...btnGhost, color: C.inkSoft }}>Cancelar</button>
               <button onClick={() => void salvarEdicaoConta()} style={btn(C.amber)}>Salvar Alterações</button>
@@ -5027,6 +5083,40 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               <button style={btn(C.amber)} onClick={() => void confirmarRestaurarValorCheio()} disabled={savingRestaurar}>
                 {savingRestaurar ? 'Restaurando...' : 'Confirmar e Restaurar Valor Cheio'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {acessosContaPrivada && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setAcessosContaPrivada(null)}>
+          <div style={{ background: '#0F1115', border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: '100%', maxWidth: 500 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, color: C.ink }}>Gerenciar Acessos</h3>
+                <p style={{ margin: '4px 0 0 0', fontSize: 12, color: C.inkSoft }}>Lançamento Confidencial: {acessosContaPrivada.descricao}</p>
+              </div>
+              <button onClick={() => setAcessosContaPrivada(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={20} /></button>
+            </div>
+            <div style={{ background: '#12141C', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
+              {colaboradores.map(colab => {
+                const isPermitido = acessosContaPrivada.usuarios_permitidos?.includes(colab.id) || false;
+                const isAdmin = colab.cargo === 'admin_geral';
+                return (
+                  <label key={colab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 6, background: isPermitido ? '#34D39910' : 'transparent', border: `1px solid ${isPermitido ? '#34D39930' : 'transparent'}`, cursor: isAdmin ? 'not-allowed' : 'pointer' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={isPermitido || isAdmin} 
+                      disabled={isAdmin}
+                      onChange={() => toggleAcessoColaboradorContaPrivada(colab.id)} 
+                    />
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontSize: 13, color: isPermitido || isAdmin ? '#34D399' : C.ink }}>{colab.nome}</span>
+                      <span style={{ fontSize: 11, color: C.inkSoft, marginLeft: 8 }}>({colab.cargo.replace('_', ' ')})</span>
+                      {isAdmin && <span style={{ fontSize: 10, marginLeft: 8, color: C.amber }}>(Acesso obrigatório)</span>}
+                    </div>
+                  </label>
+                )
+              })}
             </div>
           </div>
         </div>

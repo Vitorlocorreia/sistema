@@ -256,6 +256,8 @@ export interface Conta {
   criado_por?: string | null
   historico_negociacao?: ItemNegociacao[] | null
   codigo_sequencial?: number | null
+  is_privada?: boolean
+  usuarios_permitidos?: string[]
   created_at: string
 }
 
