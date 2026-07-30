@@ -48,7 +48,7 @@ const parseCurrency = (val: string | number | undefined | null): number => {
 export const CATEGORIAS = ['Material de Construção', 'Serviço Terceirizado', 'Equipamento', 'Locação', 'Imposto', 'Mão de Obra / CLT', 'Energia / Água', 'Escritório', 'Reembolso', 'Medição Recebida', 'Outros']
 
 const isVencido = (d: string, status: string) => {
-  if (status === 'Pago') return false;
+  if (status === 'Pago' || status === 'Pago sem Nota Fiscal') return false;
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const vencimento = new Date(d + 'T00:00:00');
@@ -1470,8 +1470,8 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
   }, [contas, colaboradorAtivo])
 
   const { receitas, despesas, resultado } = useMemo(() => {
-    const rec = filtered.filter(c => c.tipo === 'receber' && c.status === 'Pago').reduce((s, c) => s + c.valor, 0)
-    const des = filtered.filter(c => c.tipo === 'pagar'   && c.status === 'Pago').reduce((s, c) => s + c.valor, 0)
+    const rec = filtered.filter(c => c.tipo === 'receber' && (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal')).reduce((s, c) => s + c.valor, 0)
+    const des = filtered.filter(c => c.tipo === 'pagar'   && (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal')).reduce((s, c) => s + c.valor, 0)
     return { receitas: rec, despesas: des, resultado: rec - des }
   }, [filtered])
 
@@ -1484,12 +1484,12 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
     const v = filtered.filter(c => isVencido(c.data_previsao || c.data_vencimento, c.status))
     const v7 = filtered.filter(c => {
-      if (c.status === 'Pago') return false
+      if (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') return false
       const d = new Date((c.data_previsao || c.data_vencimento) + 'T00:00:00')
       return d >= hoje && d <= mais7
     })
     const v30 = filtered.filter(c => {
-      if (c.status === 'Pago') return false
+      if (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') return false
       const d = new Date((c.data_previsao || c.data_vencimento) + 'T00:00:00')
       return d >= hoje && d <= mais30
     })
@@ -1520,7 +1520,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     })
 
     filtered.forEach(c => {
-      if (c.status === 'Pago' && c.pago_em) {
+      if ((c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.pago_em) {
         const dt = new Date(c.pago_em)
         const m = dt.getMonth()
         const mesData = ultimos6.find(u => u.mesNum === m)
@@ -1541,7 +1541,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     const categoriasReceita: Record<string, number> = {}
     const categoriasDespesa: Record<string, number> = {}
 
-    filtered.filter(c => c.status === 'Pago').forEach(c => {
+    filtered.filter(c => c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal').forEach(c => {
       const cat = c.categoria || 'Outros'
       if (c.tipo === 'receber') {
         categoriasReceita[cat] = (categoriasReceita[cat] || 0) + c.valor
@@ -2287,7 +2287,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
         map[c.fornecedor_id] = { totalEmAberto: 0, totalPago: 0, totalPagasCount: 0, temVencidas: false }
       }
       const item = map[c.fornecedor_id]
-      if (c.status === 'Pago') {
+      if (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') {
         item.totalPago += Number(c.valor || 0)
         item.totalPagasCount += 1
       } else {
@@ -2946,7 +2946,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtEmpresa, setFiltEmpresa] = useState('')
   const [filtFornecedor, setFiltFornecedor] = useState(initialFornecedorId || '')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
-  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Negado'>('todos')
+  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Pago sem Nota Fiscal'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [filtTipoData, setFiltTipoData] = useState<'previsao_vencimento' | 'vencimento' | 'previsao' | 'pago_em' | 'created_at'>('previsao_vencimento')
@@ -3324,8 +3324,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     if (!conta) return
 
     const payload: Record<string, any> = { status }
-    if (status === 'Pago') payload.pago_em = new Date().toISOString()
-    if (status !== 'Pago') payload.pago_em = null
+    if (status === 'Pago' || status === 'Pago sem Nota Fiscal') payload.pago_em = new Date().toISOString()
+    if (status !== 'Pago' && status !== 'Pago sem Nota Fiscal') payload.pago_em = null
     
     let descLog = `Status alterado de "${conta.status}" para "${status}"`
 
@@ -3408,7 +3408,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       await Promise.all(
         contasSelecionadas.map(async (conta) => {
           const payload: Record<string, any> = { status: statusEmLote }
-          if (statusEmLote === 'Pago') payload.pago_em = agora
+          if (statusEmLote === 'Pago' || statusEmLote === 'Pago sem Nota Fiscal') payload.pago_em = agora
           else payload.pago_em = null
           if (justificativa) payload.justificativa_negacao = justificativa
           else payload.justificativa_negacao = null
@@ -3638,8 +3638,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     return filtOrdem === 'novo' ? db - da : da - db
   })
 
-  const totalPago     = filtered.filter(c => c.status === 'Pago' && c.tipo === 'pagar').reduce((s, c) => s + c.valor, 0)
-  const totalRecebido = filtered.filter(c => c.status === 'Pago' && c.tipo === 'receber').reduce((s, c) => s + c.valor, 0)
+  const totalPago     = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'pagar').reduce((s, c) => s + c.valor, 0)
+  const totalRecebido = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'receber').reduce((s, c) => s + c.valor, 0)
 
   // Filtro base para cálculo dinâmico de estatísticas dos botões/select de status
   const contasBaseFiltro = contas.filter(c => {
@@ -3673,8 +3673,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   }
 
   const totalValorFiltrado = filtered.reduce((s, c) => s + (c.valor || 0), 0)
-  const totalAPagarFiltrado = filtered.filter(c => c.status !== 'Pago' && c.status !== 'Negado' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
-  const totalPagoFiltrado   = filtered.filter(c => c.status === 'Pago' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
+  const totalAPagarFiltrado = filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
+  const totalPagoFiltrado   = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
 
   const listaStatusOpcoes = [
     { value: 'todos', label: 'Todos os Status' },
@@ -3685,6 +3685,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     { value: 'A pagar', label: 'A pagar' },
     { value: 'Pago Parcial', label: 'Pago Parcial' },
     { value: 'Pago', label: 'Pago' },
+    { value: 'Pago sem Nota Fiscal', label: 'Pago sem Nota Fiscal' },
     { value: 'Negado', label: 'Negado' },
   ]
 
@@ -4065,7 +4066,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 const dataReferencia = c.tipo === 'pagar' ? (c.data_vencimento || c.data_previsao) : (c.data_previsao || c.data_vencimento)
                 const dataPrevisao = dataReferencia || ''
                 const venc = isVencido(dataReferencia || '', c.status)
-                const pago = c.status === 'Pago'
+                const pago = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal'
                 const pagoParcial = c.status === 'Pago Parcial'
                 const aguardandoAprovacao = c.status === 'Bloqueado' || c.status === 'Aguardando aprovação'
                 
@@ -6309,7 +6310,7 @@ function ImportarExcelModal({
           data_vencimento: dtVenc,
           data_previsao: dtVenc,
           status: st,
-          pago_em: st === 'Pago' ? `${dtVenc}T12:00:00.000Z` : null,
+          pago_em: (st === 'Pago' || st === 'Pago sem Nota Fiscal') ? `${dtVenc}T12:00:00.000Z` : null,
           fornecedor_id: fornId,
           possui_fornecedor: possuiForn,
           obra_id: obraId,

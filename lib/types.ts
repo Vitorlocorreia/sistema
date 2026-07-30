@@ -239,7 +239,7 @@ export interface Conta {
   valor_original?: number | null
   data_vencimento: string
   data_previsao: string | null
-  status: 'Lançado' | 'Bloqueado' | 'Aguardando aprovação' | 'Liberado/OK' | 'A pagar' | 'Pago Parcial' | 'Pago' | 'Negado'
+  status: 'Lançado' | 'Bloqueado' | 'Aguardando aprovação' | 'Liberado/OK' | 'A pagar' | 'Pago Parcial' | 'Pago' | 'Pago sem Nota Fiscal' | 'Negado'
   observacoes: string | null
   possui_fornecedor: boolean
   pagamento_antecipado: boolean

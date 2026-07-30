@@ -165,6 +165,52 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     }
   }
 
+  async function salvarSemVem(modelo: Modelo, item: ChecklistItem) {
+    const uploadId = `${modelo.id}:${item.id}`
+    setEnviando(uploadId)
+    setErro('')
+    try {
+      const textContent = `O funcionário declarou que não possui VEM.`
+      const textBlob = new Blob([textContent], { type: 'application/pdf' })
+      const textFile = new File([textBlob], 'nao_possui_vem.pdf', { type: 'application/pdf' })
+
+      const request = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request_upload',
+          token,
+          modelo_id: modelo.id,
+          item_id: item.id,
+          nome: textContent,
+          mime_type: 'application/pdf',
+          tamanho_bytes: textBlob.size,
+        }),
+      })
+      const prepared = await request.json()
+      if (!request.ok) throw new Error(prepared.error || 'Não foi possível preparar o salvamento.')
+
+      const { error: uploadError } = await supabase.storage
+        .from('rh-documentos')
+        .uploadToSignedUrl(prepared.path, prepared.upload_token, textFile, { contentType: 'application/pdf' })
+      if (uploadError) throw uploadError
+
+      const confirm = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm_upload', token, document_id: prepared.document_id }),
+      })
+      const confirmed = await confirm.json()
+      if (!confirm.ok) throw new Error(confirmed.error || 'Não foi possível confirmar a declaração.')
+
+      await carregar()
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Falha ao salvar declaração.')
+    } finally {
+      setEnviando('')
+    }
+  }
+
   async function finalizar() {
     setEnviando('finalizar')
     setErro('')
@@ -229,6 +275,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                       const pending = docs.find(documento => documento.status === 'devolvido')
                       const id = `${modelo.id}:${item.id}`
                       const isPix = item.id === 'pix' || item.label.toLowerCase().includes('pix')
+                      const isVem = item.id === 'vem' || item.label.toLowerCase().includes('vem')
 
                       // Última box: Campo de texto para digitar Chave PIX
                       if (isPix) {
@@ -266,6 +313,33 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                               </button>
                             </div>
                             {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 6 }}>✓ {accepted.nome}</div>}
+                          </div>
+                        )
+                      }
+
+                      if (isVem) {
+                        return (
+                          <div key={item.id} style={{ padding: 10, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                              <div>
+                                <strong style={{ fontSize: 10 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
+                                {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>✓ {accepted.nome === 'O funcionário declarou que não possui VEM.' || accepted.nome === 'nao_possui_vem.pdf' ? 'Declarou não possuir VEM' : accepted.nome}</div>}
+                                {pending && <div style={{ color: '#F87171', fontSize: 9, marginTop: 4 }}>Pendência: {pending.observacao_rh || 'envie novamente com melhor qualidade'}</div>}
+                              </div>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <button
+                                  disabled={!!enviando}
+                                  onClick={() => void salvarSemVem(modelo, item)}
+                                  style={{ padding: '6px 10px', background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 9, cursor: 'pointer', opacity: enviando === id ? 0.6 : 1 }}
+                                >
+                                  {enviando === id ? 'Salvando...' : 'Não possuo VEM'}
+                                </button>
+                                <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1 }}>
+                                  <FileUp size={12} />{enviando === id ? 'Enviando…' : accepted && accepted.nome !== 'nao_possui_vem.pdf' && accepted.nome !== 'O funcionário declarou que não possui VEM.' ? 'Substituir' : 'Anexar'}
+                                  <input hidden type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => void enviarArquivo(modelo, item, event.target.files?.[0])} />
+                                </label>
+                              </div>
+                            </div>
                           </div>
                         )
                       }
