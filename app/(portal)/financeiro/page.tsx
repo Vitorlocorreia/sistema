@@ -2729,12 +2729,16 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     observacoes: '',
     recorrencia: 'unico' as 'unico'|'mensal'|'semanal',
     is_privada: false,
+    usuarios_permitidos: [] as string[],
   })
+
+  const [colaboradores, setColaboradores] = useState<any[]>([])
 
   useEffect(() => {
     let qE = supabase.from('empresas').select('*').order('razao_social')
     let qF = supabase.from('fornecedores').select('*').order('razao_social')
     let qO = supabase.from('obras').select('*').order('nome')
+    let qColab = supabase.from('colaboradores').select('id, nome, cargo').eq('ativo', true).order('nome')
     
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -2744,9 +2748,10 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       }
     }
 
-    Promise.all([qE, qF, qO]).then(([{ data: e }, { data: f }, { data: o }]) => {
+    Promise.all([qE, qF, qO, qColab]).then(([{ data: e }, { data: f }, { data: o }, { data: colabs }]) => {
       setEmpresas(e ?? [])
       setFornecedores(f ?? [])
+      setColaboradores(colabs ?? [])
       
       let oList = o ?? []
       if (colaboradorAtivo.cargo !== 'admin_geral') {
@@ -2838,7 +2843,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
         categoria: form.categoria || null,
         comprovante_url: comprovanteUrl,
         is_privada: form.is_privada,
-        usuarios_permitidos: form.is_privada ? [colaboradorAtivo.id] : [],
+        usuarios_permitidos: form.is_privada ? Array.from(new Set([...form.usuarios_permitidos, colaboradorAtivo.id])) : [],
         criado_por: colaboradorAtivo.nome,
         historico_negociacao: [{
           id: Date.now().toString(),
@@ -2874,7 +2879,8 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
       possui_fornecedor: false,
       observacoes: '',
       recorrencia: 'unico',
-      is_privada: false
+      is_privada: false,
+      usuarios_permitidos: []
     })
   }
 
@@ -3065,6 +3071,37 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
                 <span style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginTop: 2 }}>Apenas o Admin Geral e as pessoas que você marcar poderão ver este lançamento.</span>
               </div>
             </div>
+
+            {form.is_privada && (
+              <div style={{ background: '#12141C', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 250, overflowY: 'auto', marginTop: -6, marginBottom: 14 }}>
+                <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Marque quem poderá visualizar este lançamento:</div>
+                {colaboradores.map(colab => {
+                  const isPermitido = (form.usuarios_permitidos || []).includes(colab.id);
+                  const isAdmin = colab.cargo === 'admin_geral';
+                  return (
+                    <label key={colab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 6, background: isPermitido ? '#34D39910' : 'transparent', border: `1px solid ${isPermitido ? '#34D39930' : 'transparent'}`, cursor: isAdmin ? 'not-allowed' : 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={isPermitido || isAdmin} 
+                        disabled={isAdmin}
+                        onChange={() => {
+                          if (isAdmin) return
+                          setForm(f => {
+                            const atuais = f.usuarios_permitidos || []
+                            return { ...f, usuarios_permitidos: atuais.includes(colab.id) ? atuais.filter(x => x !== colab.id) : [...atuais, colab.id] }
+                          })
+                        }} 
+                      />
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 13, color: isPermitido || isAdmin ? '#34D399' : C.ink }}>{colab.nome}</span>
+                        <span style={{ fontSize: 11, color: C.inkSoft, marginLeft: 8 }}>({colab.cargo.replace('_', ' ')})</span>
+                        {isAdmin && <span style={{ fontSize: 10, marginLeft: 8, color: C.amber }}>(Acesso obrigatório)</span>}
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Exibe aviso de aprovação necessário caso ultrapasse limite */}
             {form.tipo === 'pagar' && form.valor && (permissaoAtiva?.limite_valor ?? 5000) !== 0 && parseFloat(form.valor) > (permissaoAtiva?.limite_valor ?? 5000) && !permissaoAtiva?.pode_aprovar && (
@@ -4923,7 +4960,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: formEdicao.is_privada ? '#F59E0B11' : '#111', border: `1px solid ${formEdicao.is_privada ? '#F59E0B44' : C.border}`, borderRadius: 8, cursor: 'pointer', marginBottom: 20 }} onClick={() => setFormEdicao(f => ({ ...f, is_privada: !f.is_privada }))}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: formEdicao.is_privada ? '#F59E0B11' : '#111', border: `1px solid ${formEdicao.is_privada ? '#F59E0B44' : C.border}`, borderRadius: 8, cursor: 'pointer', marginBottom: formEdicao.is_privada ? 6 : 20 }} onClick={() => setFormEdicao(f => ({ ...f, is_privada: !f.is_privada }))}>
               <div style={{ width: 16, height: 16, border: `1px solid ${formEdicao.is_privada ? C.amber : C.border}`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: formEdicao.is_privada ? C.amber : 'transparent' }}>
                 {formEdicao.is_privada && <Check size={12} color="#000" />}
               </div>
@@ -4934,6 +4971,37 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 <span style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginTop: 2 }}>Apenas o Admin Geral e as pessoas que você marcar poderão ver este lançamento.</span>
               </div>
             </div>
+
+            {formEdicao.is_privada && (
+              <div style={{ background: '#12141C', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 250, overflowY: 'auto', marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Marque quem poderá visualizar este lançamento:</div>
+                {colaboradores.map(colab => {
+                  const isPermitido = (formEdicao.usuarios_permitidos || []).includes(colab.id);
+                  const isAdmin = colab.cargo === 'admin_geral';
+                  return (
+                    <label key={colab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 6, background: isPermitido ? '#34D39910' : 'transparent', border: `1px solid ${isPermitido ? '#34D39930' : 'transparent'}`, cursor: isAdmin ? 'not-allowed' : 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        checked={isPermitido || isAdmin} 
+                        disabled={isAdmin}
+                        onChange={() => {
+                          if (isAdmin) return
+                          setFormEdicao(f => {
+                            const atuais = f.usuarios_permitidos || []
+                            return { ...f, usuarios_permitidos: atuais.includes(colab.id) ? atuais.filter(x => x !== colab.id) : [...atuais, colab.id] }
+                          })
+                        }} 
+                      />
+                      <div style={{ flex: 1 }}>
+                        <span style={{ fontSize: 13, color: isPermitido || isAdmin ? '#34D399' : C.ink }}>{colab.nome}</span>
+                        <span style={{ fontSize: 11, color: C.inkSoft, marginLeft: 8 }}>({colab.cargo.replace('_', ' ')})</span>
+                        {isAdmin && <span style={{ fontSize: 10, marginLeft: 8, color: C.amber }}>(Acesso obrigatório)</span>}
+                      </div>
+                    </label>
+                  )
+                })}
+              </div>
+            )}
 
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
               <button onClick={() => setEditandoConta(null)} style={{ ...btnGhost, color: C.inkSoft }}>Cancelar</button>
