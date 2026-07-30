@@ -3210,7 +3210,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [editandoConta, setEditandoConta] = useState<ContaComRelacoes | null>(null)
   const [formEdicao, setFormEdicao] = useState<Partial<ContaComRelacoes>>({})
   const [acessosContaPrivada, setAcessosContaPrivada] = useState<ContaComRelacoes | null>(null)
-  const [colaboradores, setColaboradores] = useState<any[]>([])
+
 
   const toggleContaSelecionada = (id: string) => {
     setSelecionadasContas(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
