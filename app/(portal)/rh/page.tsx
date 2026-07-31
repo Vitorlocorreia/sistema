@@ -1098,7 +1098,7 @@ export default function RhPage() {
               return (
                 <div key={invite.id}>
                   <button
-                    onClick={() => setSelectedInvite(selectedInvite?.id === invite.id ? null : invite)}
+                    onClick={() => setSelectedInvite(selectedInvite?.id === invite.id ? (null as unknown as Convite) : invite)}
                   style={{
                     width: '100%',
                     display: 'block',
