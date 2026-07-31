@@ -24,6 +24,9 @@ type QuadroComentario = { id: string; cartao_id: string; autor_nome: string; tex
 type QuadroCampo = { id: string; quadro_id: string; nome: string; tipo: string; opcoes: string[]; ordem: number }
 type QuadroAutomacao = { id: string; quadro_id: string; nome: string; gatilho: string; acao: string; ativo: boolean }
 
+import { useConfirm } from '@/hooks/useConfirm'
+import { usePrompt } from '@/hooks/usePrompt'
+
 export default function QuadrosPage() {
   const { confirm, ConfirmDialog } = useConfirm()
   const { prompt, PromptDialog } = usePrompt()
