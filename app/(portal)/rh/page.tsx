@@ -1100,6 +1100,8 @@ export default function RhPage() {
                   <button
                     onClick={() => setSelectedInvite(invite)}
                   style={{
+                    width: '100%',
+                    display: 'block',
                     textAlign: 'left',
                     padding: '12px 13px',
                     background: selectedInvite?.id === invite.id ? '#F59E0B18' : '#0B0C0E',
