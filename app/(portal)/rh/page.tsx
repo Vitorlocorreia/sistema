@@ -1098,7 +1098,7 @@ export default function RhPage() {
               return (
                 <div key={invite.id}>
                   <button
-                    onClick={() => setSelectedInvite(invite)}
+                    onClick={() => setSelectedInvite(selectedInvite?.id === invite.id ? null : invite)}
                   style={{
                     width: '100%',
                     display: 'block',
@@ -1225,7 +1225,7 @@ export default function RhPage() {
           </div>
           {pessoasFiltradas.map(person => (
             <div key={person.id}>
-              <button onClick={() => void loadDetails(person)} style={{ width: '100%', display: 'block', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: selected?.id === person.id ? 0 : `1px solid ${C.border}`, padding: '12px 14px', color: C.ink, cursor: 'pointer' }}>
+              <button onClick={() => selected?.id === person.id ? setSelected(null) : void loadDetails(person)} style={{ width: '100%', display: 'block', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: selected?.id === person.id ? 0 : `1px solid ${C.border}`, padding: '12px 14px', color: C.ink, cursor: 'pointer' }}>
                 <strong>{person.nome}</strong>
                 <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>{person.cargo || 'Sem cargo'} · {person.matricula || 'Sem matrícula'} · {person.status}</div>
               </button>
