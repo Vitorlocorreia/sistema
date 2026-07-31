@@ -15,6 +15,8 @@ import {
   Stethoscope as MedIcon,
   Trash2,
   CreditCard,
+  Clock,
+  AlertTriangle,
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { supabase } from '@/lib/supabase'
@@ -1135,9 +1137,36 @@ export default function RhPage() {
                       </div>
                     )
                   })()}
-                  <div style={{ color: invite.status === 'devolvido' || expired ? '#F87171' : C.amber, fontSize: 10, fontWeight: 800, marginTop: 7 }}>
-                    {label}
-                  </div>
+                  {(() => {
+                    const msLeft = new Date(invite.expires_at).getTime() - Date.now()
+                    const hoursLeft = Math.floor(msLeft / (1000 * 60 * 60))
+                    const minLeft = Math.floor((msLeft % (1000 * 60 * 60)) / (1000 * 60))
+                    let timeLeftStr = ''
+                    if (msLeft > 0) {
+                      timeLeftStr = hoursLeft > 0 ? `${hoursLeft}h ${minLeft}m restantes` : `${minLeft}m restantes`
+                    }
+
+                    return (
+                      <div style={{ color: invite.status === 'devolvido' || expired ? '#F87171' : C.amber, fontSize: 10, fontWeight: 800, marginTop: 7, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {expired && <AlertTriangle size={12} />}
+                          {label}
+                          {msLeft > 0 && ['ativo', 'em_preenchimento'].includes(invite.status) && (
+                            <span style={{ color: C.inkSoft, fontWeight: 500 }}>· ⏳ {timeLeftStr}</span>
+                          )}
+                        </div>
+                        {['ativo', 'em_preenchimento', 'revogado'].includes(invite.status) && (
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); void regenerateInvite(invite) }} 
+                            style={{ border: `1px solid ${C.border}`, background: 'transparent', color: C.ink, borderRadius: 4, padding: '3px 8px', fontSize: 9, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+                            title="Prorrogar tempo do link"
+                          >
+                            <Clock size={10} /> Prorrogar
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })()}
                   {invite.status === 'devolvido' && invite.justificativa_devolucao && (
                     <div style={{ color: '#FCA5A5', fontSize: 9, marginTop: 4, lineHeight: 1.35 }}>{invite.justificativa_devolucao}</div>
                   )}
