@@ -528,8 +528,8 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
       toast(hasAccess ? `Acesso revogado para ${colab.nome}` : `Acesso concedido para ${colab.nome}`, 'success')
       // Trigger a re-render
       setAcessosObra(prev => prev ? { ...prev } : null)
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erro ao atualizar acesso'
+    } catch (err: any) {
+      const msg = err?.message || 'Erro ao atualizar acesso'
       toast(msg, 'error')
     } finally {
       setUpdatingColabId(null)
@@ -1981,8 +1981,8 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
 
       toast(hasAccess ? `Acesso revogado para ${colab.nome}` : `Acesso concedido para ${colab.nome}`, 'success')
       await load()
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Erro ao atualizar acesso'
+    } catch (err: any) {
+      const msg = err?.message || 'Erro ao atualizar acesso'
       toast(msg, 'error')
     } finally {
       setUpdatingColabId(null)
