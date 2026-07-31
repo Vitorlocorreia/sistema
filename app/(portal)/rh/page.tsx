@@ -1096,16 +1096,19 @@ export default function RhPage() {
               const expired = new Date(invite.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(invite.status);
               const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link gerado';
               return (
-                <button
-                  key={invite.id}
-                  onClick={() => setSelectedInvite(invite)}
+                <div key={invite.id}>
+                  <button
+                    onClick={() => setSelectedInvite(invite)}
                   style={{
                     textAlign: 'left',
                     padding: '12px 13px',
                     background: selectedInvite?.id === invite.id ? '#F59E0B18' : '#0B0C0E',
                     color: C.ink,
                     border: `1px solid ${selectedInvite?.id === invite.id ? '#F59E0B66' : invite.inicio_efetivo ? '#3B82F6AA' : C.border}`,
+                    borderBottomColor: selectedInvite?.id === invite.id ? 'transparent' : undefined,
                     borderRadius: 5,
+                    borderBottomLeftRadius: selectedInvite?.id === invite.id ? 0 : 5,
+                    borderBottomRightRadius: selectedInvite?.id === invite.id ? 0 : 5,
                     cursor: 'pointer',
                     minHeight: 78,
                     position: 'relative'
@@ -1171,11 +1174,16 @@ export default function RhPage() {
                     <div style={{ color: '#FCA5A5', fontSize: 9, marginTop: 4, lineHeight: 1.35 }}>{invite.justificativa_devolucao}</div>
                   )}
                 </button>
+                  {selectedInvite?.id === invite.id && (
+                    <div style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderTop: 0, borderBottomLeftRadius: 5, borderBottomRightRadius: 5, padding: 16, marginTop: -6 }}>
+                      <CadastroTable invite={selectedInvite} modelos={modelos} onOpen={documento => void openCadastroDocument(documento)} onReview={(documento, status) => void reviewCadastroDocument(selectedInvite, documento, status)} onApprove={() => void approveInvite(selectedInvite)} onRevoke={() => void revokeInvite(selectedInvite)} onRegenerate={() => void regenerateInvite(selectedInvite)} onCopy={() => void copyInviteCode(selectedInvite)} onDelete={() => void deleteInvite(selectedInvite)} onRefresh={() => load()} />
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>
         </section>
-        <section style={card}>{selectedInvite ? <CadastroTable invite={selectedInvite} modelos={modelos} onOpen={documento => void openCadastroDocument(documento)} onReview={(documento, status) => void reviewCadastroDocument(selectedInvite, documento, status)} onApprove={() => void approveInvite(selectedInvite)} onRevoke={() => void revokeInvite(selectedInvite)} onRegenerate={() => void regenerateInvite(selectedInvite)} onCopy={() => void copyInviteCode(selectedInvite)} onDelete={() => void deleteInvite(selectedInvite)} onRefresh={() => load()} /> : <p style={{ color: C.inkSoft, fontSize: 11 }}>Selecione um cadastro para revisar documentos, copiar o código do convite e acompanhar as quatro etapas.</p>}</section>
       </div>}
 
       {false && selectedInviteForRender && (
@@ -1199,7 +1207,7 @@ export default function RhPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(300px,1fr))', gap: 14, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, alignItems: 'start' }}>
         <section style={card}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <strong style={{ fontSize: 12 }}>Funcionários aprovados</strong>
@@ -1214,94 +1222,18 @@ export default function RhPage() {
             </select>
           </div>
           {pessoasFiltradas.map(person => (
-            <button key={person.id} onClick={() => void loadDetails(person)} style={{ width: '100%', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: `1px solid ${C.border}`, padding: 12, color: C.ink, cursor: 'pointer' }}>
-              <strong>{person.nome}</strong>
-              <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>{person.cargo || 'Sem cargo'} · {person.matricula || 'Sem matrícula'} · {person.status}</div>
-            </button>
+            <div key={person.id}>
+              <button onClick={() => void loadDetails(person)} style={{ width: '100%', display: 'block', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: selected?.id === person.id ? 0 : `1px solid ${C.border}`, padding: '12px 14px', color: C.ink, cursor: 'pointer' }}>
+                <strong>{person.nome}</strong>
+                <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>{person.cargo || 'Sem cargo'} · {person.matricula || 'Sem matrícula'} · {person.status}</div>
+              </button>
+              {selected?.id === person.id && (
+                <div style={{ background: '#0B0C0E', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '16px 14px' }}>
+                  <ArchivePanel person={selected} details={details} onBack={() => { setSelected(null); setDetails(emptyDetails) }} onDelete={() => void deleteEmployee(selected)} onOpen={documento => void openDocument(documento)} />
+                </div>
+              )}
+            </div>
           ))}
-        </section>
-
-        <section style={{ ...card, gridColumn: 'span 2' }}>
-          {false && selected ? (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'start', flexWrap: 'wrap' }}>
-                <div>
-                  <h3 style={{ margin: 0 }}>{selectedPersonForRender.nome}</h3>
-                  <p style={{ margin: '5px 0 0', fontSize: 11, color: C.inkSoft }}>{selectedPersonForRender.cargo || 'Cargo não informado'} · {selectedPersonForRender.cpf || 'CPF não informado'}</p>
-                </div>
-                <div style={{ minWidth: 190 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, marginBottom: 5 }}><span>Progresso da admissão</span><strong>{progress}%</strong></div>
-                  <div style={{ height: 7, borderRadius: 99, background: '#FFFFFF0D', overflow: 'hidden' }}><div style={{ width: `${progress}%`, height: '100%', background: progress === 100 ? '#22C55E' : C.amber }} /></div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', margin: '14px 0 18px' }}>
-                <button style={outlineBtn} onClick={addHistory}><ClipboardPlus size={13} />Histórico</button>
-                <button style={outlineBtn} onClick={addDocument}><FileText size={13} />Documento</button>
-                <button style={outlineBtn} onClick={addExam}><Stethoscope size={13} />Guia/Exame</button>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}><ClipboardCheck size={16} color={C.amber} /><strong style={{ fontSize: 12 }}>Fluxo de admissão</strong></div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, margin: '0 0 10px', flexWrap: 'wrap' }}>
-                <p style={{ fontSize: 10, color: C.inkSoft, margin: 0 }}>Envie vários arquivos de uma vez e mantenha cada documento vinculado à etapa correta.</p>
-                {details.etapas[0] && <label style={{ ...btn, cursor: uploading === details.etapas[0].id ? 'wait' : 'pointer', opacity: uploading === details.etapas[0].id ? 0.6 : 1 }}><FileUp size={13} />{uploading === details.etapas[0].id ? 'Enviando...' : 'Captura rápida'}<input hidden type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!uploading} onChange={event => void uploadDocuments(details.etapas[0], event.target.files)} /></label>}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 10 }}>
-                {details.etapas.map(stage => {
-                  const action = actionFor(stage.status)
-                  const colors = statusColors[stage.status]
-                  const SpreadsheetIcon = stage.modelo.tipo_arquivo === 'XLSX' ? FileSpreadsheet : FileText
-                  return (
-                    <article key={stage.id} style={{ background: '#0B0C0E', border: `1px solid ${stage.status === 'Concluída' ? '#22C55E55' : C.border}`, borderRadius: 6, padding: 13 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'start' }}>
-                        <span style={{ fontSize: 10, color: C.amber, fontWeight: 900 }}>ETAPA {stage.modelo.ordem}</span>
-                        <span style={{ fontSize: 9, fontWeight: 800, background: colors.bg, color: colors.color, padding: '4px 7px', borderRadius: 99 }}>{stage.status}</span>
-                      </div>
-                      <h4 style={{ margin: '9px 0 6px', fontSize: 13 }}>{stage.modelo.nome}</h4>
-                      <p style={{ margin: 0, color: C.inkSoft, fontSize: 10, lineHeight: 1.5, minHeight: 45 }}>{stage.modelo.descricao}</p>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 0', color: C.inkSoft, fontSize: 9 }}><SpreadsheetIcon size={13} />{stage.modelo.tipo_arquivo} · {stage.modelo.campos.length} grupos de informação</div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '10px 0', color: C.inkSoft, fontSize: 9 }}><SpreadsheetIcon size={13} />{stage.modelo.tipo_arquivo} · {stage.modelo.campos.length} grupos de informação · {details.documentos.filter(documento => documento.etapa_id === stage.id).length} anexos</div>
-                      {stage.observacoes && <p style={{ fontSize: 9, color: C.amber, margin: '0 0 10px' }}>{stage.observacoes}</p>}
-                      <div style={{ background: '#FFFFFF05', borderRadius: 4, padding: 9, marginBottom: 10 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, color: C.inkSoft, marginBottom: 6 }}><span>Checklist de conferência</span><strong>{(stage.checklist ?? []).filter(item => item.concluido).length}/{(stage.checklist ?? []).length}</strong></div>
-                        {(stage.checklist ?? []).map(item => <label key={item.id} style={{ display: 'flex', gap: 6, alignItems: 'start', fontSize: 9, color: item.concluido ? '#86EFAC' : C.inkSoft, marginTop: 5, cursor: 'pointer' }}><input type="checkbox" checked={!!item.concluido} onChange={() => void toggleChecklist(stage, item.id)} /> <span>{item.label}{item.obrigatorio ? ' *' : ''}</span></label>)}
-                      </div>
-                      <label style={{ ...outlineBtn, width: '100%', marginBottom: 8, cursor: uploading === stage.id ? 'wait' : 'pointer', opacity: uploading === stage.id ? 0.6 : 1 }}><FileUp size={12} />{uploading === stage.id ? 'Enviando arquivos...' : 'Anexar documentos'}<input hidden type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!uploading} onChange={event => void uploadDocuments(stage, event.target.files)} /></label>
-                      {details.documentos.filter(documento => documento.etapa_id === stage.id).slice(0, 4).map(documento => <button key={documento.id} onClick={() => void openDocument(documento)} style={{ display: 'block', width: '100%', textAlign: 'left', background: 'transparent', color: C.amber, border: 0, padding: '3px 0', fontSize: 9, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>↗ {documento.nome}</button>)}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7 }}>
-                        <a href={stage.modelo.arquivo_url} download style={{ ...outlineBtn, textDecoration: 'none', padding: '8px 9px' }}><Download size={12} />Baixar modelo</a>
-                        <button style={{ ...btn, padding: '8px 9px' }} onClick={() => void updateStage(stage, action.next)}>
-                          {stage.status === 'Concluída' ? <RotateCcw size={12} /> : <CheckCircle2 size={12} />}{action.label}
-                        </button>
-                      </div>
-                    </article>
-                  )
-                })}
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 16, marginTop: 20 }}>
-                {([
-                  ['Histórico', details.historico],
-                  ['Documentos anexados', details.documentos],
-                  ['Exames ocupacionais', details.exames],
-                ] as const).map(([title, list]) => (
-                  <div key={title}>
-                    <strong style={{ fontSize: 10, textTransform: 'uppercase', color: C.inkSoft }}>{title}</strong>
-                    {list.length ? list.slice(0, 6).map(item => (
-                      <div key={item.id ?? `${title}-${item.nome}-${item.tipo}`} style={{ padding: '8px 0', borderBottom: `1px solid ${C.border}`, fontSize: 10 }}>
-                        {item.descricao || item.nome || item.tipo}
-                        <span style={{ color: C.amber }}> · {item.status || item.data_evento}</span>
-                      </div>
-                    )) : <p style={{ fontSize: 10, color: C.inkSoft }}>Nenhum registro.</p>}
-                  </div>
-                ))}
-              </div>
-            </>
-          ) : selected ? (
-            <ArchivePanel person={selected} details={details} onBack={() => { setSelected(null); setDetails(emptyDetails) }} onDelete={() => void deleteEmployee(selected)} onOpen={documento => void openDocument(documento)} />
-          ) : (
-            <p style={{ color: C.inkSoft }}>Selecione um funcionário aprovado para abrir suas quatro pastas documentais.</p>
-          )}
         </section>
       </div>
 
