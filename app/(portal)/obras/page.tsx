@@ -134,9 +134,11 @@ function BeforeAfterSlider({ antes, depois, fmtDate }: BeforeAfterSliderProps) {
 }
 
 import { useConfirm } from '@/hooks/useConfirm'
+import { usePrompt } from '@/hooks/usePrompt'
 
-export default function Obras() {
+export default function ObrasPage() {
   const { confirm, ConfirmDialog } = useConfirm()
+  const { prompt, PromptDialog } = usePrompt()
   const [fotosList, setFotosList] = useState<any[]>([])
   const [obrasList, setObrasList] = useState<Obra[]>([])
   const [loading, setLoading] = useState(true)
@@ -388,17 +390,26 @@ export default function Obras() {
   const criarPasta = async (parent_id: string | null = null) => {
     const obra = obrasList.find(o => o.nome === obraSelecionada) || obrasList[0]
     if (!obra) return toast('Cadastre uma obra primeiro.', 'error')
-    const nome = prompt(parent_id ? 'Nome da subpasta:' : 'Nome da pasta:')?.trim()
+    let nome = await prompt(parent_id ? 'Nome da subpasta:' : 'Nome da pasta:')
+    if (nome === null) return
+    nome = nome.trim()
     if (!nome) return
-    const drive_url = prompt('Link da pasta no Google Drive (opcional):')?.trim() || null
+    let drive_url = await prompt('Google Drive', { description: 'Link da pasta no Google Drive (opcional):' })
+    if (drive_url === null) return
+    drive_url = drive_url.trim() || null
     const { error } = await supabase.from('galeria_pastas').insert({ obra_id: obra.id, parent_id, nome, drive_url, ordem: pastas.length })
     if (error) return toast('As pastas exigem uma sessão Supabase Auth.', 'error')
     loadData()
   }
 
   const editarPasta = async (pasta: any) => {
-    const nome = prompt('Novo nome:', pasta.nome)?.trim(); if (!nome) return
-    const drive_url = prompt('Link do Google Drive:', pasta.drive_url || '')?.trim() || null
+    let nome = await prompt('Novo nome', { defaultValue: pasta.nome })
+    if (nome === null) return
+    nome = nome.trim()
+    if (!nome) return
+    let drive_url = await prompt('Link do Google Drive', { defaultValue: pasta.drive_url || '' })
+    if (drive_url === null) return
+    drive_url = drive_url.trim() || null
     await supabase.from('galeria_pastas').update({ nome, drive_url, updated_at: new Date().toISOString() }).eq('id', pasta.id); loadData()
   }
 
@@ -1132,6 +1143,7 @@ export default function Obras() {
         )}
       </AnimatePresence>
       {ConfirmDialog}
+      {PromptDialog}
     </div>
   )
 }

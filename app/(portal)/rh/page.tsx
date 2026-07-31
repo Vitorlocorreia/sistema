@@ -594,9 +594,11 @@ const tableCell: React.CSSProperties = { minWidth: 0, padding: '9px 8px', border
 const linkButton: React.CSSProperties = { border: 0, background: 'transparent', color: C.amber, padding: 0, cursor: 'pointer', fontSize: 9, textAlign: 'left' }
 
 import { useConfirm } from '@/hooks/useConfirm'
+import { usePrompt } from '@/hooks/usePrompt'
 
 export default function RhPage() {
   const { confirm, ConfirmDialog } = useConfirm()
+  const { prompt, PromptDialog } = usePrompt()
   const [activeTab, setActiveTab] = useState<'ativos' | 'admissao'>('ativos')
   const [pessoas, setPessoas] = useState<Funcionario[]>([])
   const [modelos, setModelos] = useState<ModeloAdmissao[]>([])
@@ -815,7 +817,9 @@ export default function RhPage() {
   }
 
   async function regenerateInvite(invite: Convite) {
-    const hours = Number(prompt('Validade do novo link em horas:', '72') || 72)
+    const hoursStr = await prompt('Validade do novo link', { description: 'Informe o número de horas de validade do novo link:', defaultValue: '72' })
+    if (hoursStr === null) return
+    const hours = Number(hoursStr) || 72
     const bytes = new Uint8Array(32)
     crypto.getRandomValues(bytes)
     const token = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
@@ -849,8 +853,12 @@ export default function RhPage() {
 
   async function reviewCadastroDocument(invite: Convite, documento: DocumentoCadastro, status: 'aprovado' | 'devolvido' | 'pendencia') {
     const devolvendo = status === 'devolvido' || status === 'pendencia'
-    const observacao = devolvendo ? prompt('Explique ao candidato o que precisa corrigir:')?.trim() : null
-    if (devolvendo && !observacao) return
+    let observacao: string | null = null
+    if (devolvendo) {
+      observacao = await prompt('Solicitar correção', { description: 'Explique ao candidato o que precisa ser corrigido neste documento:' })
+      if (observacao === null) return
+      observacao = observacao.trim()
+    }
     const { error } = await supabase.from('rh_admissao_documentos').update({ status, observacao_rh: observacao, revisado_em: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', documento.id)
     if (error) return toast(error.message, 'error')
     await supabase.from('rh_admissao_convites').update(devolvendo ? { status: 'devolvido', justificativa_devolucao: observacao, updated_at: new Date().toISOString() } : { justificativa_devolucao: null, updated_at: new Date().toISOString() }).eq('id', invite.id)
@@ -955,7 +963,9 @@ export default function RhPage() {
 
   async function addHistory() {
     if (!selected) return
-    const descricao = prompt('Descrição do evento no histórico:')?.trim()
+    let descricao = await prompt('Adicionar histórico', { description: 'Descrição do evento no histórico:' })
+    if (descricao === null) return
+    descricao = descricao.trim()
     if (!descricao) return
     const { error } = await supabase.from('funcionario_historico').insert({ funcionario_id: selected.id, tipo: 'Registro', descricao })
     if (error) return toast(error.message, 'error')
@@ -964,7 +974,9 @@ export default function RhPage() {
 
   async function addDocument() {
     if (!selected) return
-    const nome = prompt('Nome do documento:')?.trim()
+    let nome = await prompt('Adicionar documento extra', { description: 'Nome do documento:' })
+    if (nome === null) return
+    nome = nome.trim()
     if (!nome) return
     const { error } = await supabase.from('funcionario_documentos').insert({ funcionario_id: selected.id, tipo: 'Documento', nome, status: 'Pendente' })
     if (error) return toast(error.message, 'error')
@@ -973,7 +985,9 @@ export default function RhPage() {
 
   async function addExam() {
     if (!selected) return
-    const tipo = prompt('Tipo do exame (admissional, periódico, demissional):')?.trim()
+    let tipo = await prompt('Adicionar exame', { description: 'Tipo do exame (ex: admissional, periódico, demissional):' })
+    if (tipo === null) return
+    tipo = tipo.trim()
     if (!tipo) return
     const { error } = await supabase.from('exames_ocupacionais').insert({ funcionario_id: selected.id, tipo, status: 'A agendar' })
     if (error) return toast(error.message, 'error')
@@ -1240,6 +1254,7 @@ export default function RhPage() {
       </div>
 
       {ConfirmDialog}
+      {PromptDialog}
     </>
   )
 }

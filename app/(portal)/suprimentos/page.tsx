@@ -24,10 +24,9 @@ type QuadroComentario = { id: string; cartao_id: string; autor_nome: string; tex
 type QuadroCampo = { id: string; quadro_id: string; nome: string; tipo: string; opcoes: string[]; ordem: number }
 type QuadroAutomacao = { id: string; quadro_id: string; nome: string; gatilho: string; acao: string; ativo: boolean }
 
-import { useConfirm } from '@/hooks/useConfirm'
-
 export default function QuadrosPage() {
   const { confirm, ConfirmDialog } = useConfirm()
+  const { prompt, PromptDialog } = usePrompt()
   const [boards, setBoards] = useState<Quadro[]>([])
   const [boardId, setBoardId] = useState('')
   const [columns, setColumns] = useState<QuadroColuna[]>([])
@@ -104,7 +103,9 @@ export default function QuadrosPage() {
   const cardsByColumn = useMemo(() => Object.fromEntries(columns.map(c => [c.id, filteredCards.filter(x => x.coluna_id === c.id)])), [columns, filteredCards])
 
   async function createBoard() {
-    const nome = prompt('Nome do novo quadro:')?.trim()
+    let nome = await prompt('Novo quadro', { description: 'Nome do novo quadro:' })
+    if (nome === null) return
+    nome = nome.trim()
     if (!nome) return
     const { data, error } = await supabase.from('quadros').insert({ nome, ordem: boards.length }).select().single()
     if (error) return toast(error.message, 'error')
@@ -113,8 +114,10 @@ export default function QuadrosPage() {
 
   async function renameBoard() {
     if (!selectedBoard) return
-    const nome = prompt('Novo nome do quadro:', selectedBoard.nome)?.trim()
-    if (!nome) return
+    let nome = await prompt('Renomear quadro', { description: 'Novo nome do quadro:', defaultValue: selectedBoard.nome })
+    if (nome === null) return
+    nome = nome.trim()
+    if (!nome || nome === selectedBoard.nome) return
     const { error } = await supabase.from('quadros').update({ nome, updated_at: new Date().toISOString() }).eq('id', boardId)
     if (error) return toast(error.message, 'error')
     setBoards(v => v.map(b => b.id === boardId ? { ...b, nome } : b))
@@ -137,16 +140,21 @@ export default function QuadrosPage() {
   }
 
   async function addColumn() {
-    const titulo = prompt('Título da coluna:')?.trim()
-    if (!titulo || !boardId) return
+    if (!boardId) return
+    let titulo = await prompt('Nova coluna', { description: 'Título da coluna:' })
+    if (titulo === null) return
+    titulo = titulo.trim()
+    if (!titulo) return
     const { data, error } = await supabase.from('quadro_colunas').insert({ quadro_id: boardId, titulo, ordem: columns.length }).select().single()
     if (error) return toast(error.message, 'error')
     setColumns(v => [...v, data as QuadroColuna])
   }
 
   async function editColumn(col: QuadroColuna) {
-    const titulo = prompt('Título da coluna:', col.titulo)?.trim()
-    if (!titulo) return
+    let titulo = await prompt('Renomear coluna', { description: 'Título da coluna:', defaultValue: col.titulo })
+    if (titulo === null) return
+    titulo = titulo.trim()
+    if (!titulo || titulo === col.titulo) return
     const { error } = await supabase.from('quadro_colunas').update({ titulo, updated_at: new Date().toISOString() }).eq('id', col.id)
     if (error) return toast(error.message, 'error')
     setColumns(v => v.map(c => c.id === col.id ? { ...c, titulo } : c))
@@ -229,7 +237,9 @@ export default function QuadrosPage() {
 
   async function addCustomField() {
     if (!boardId) return
-    const nome = prompt('Nome do campo personalizado:')?.trim()
+    let nome = await prompt('Campo personalizado', { description: 'Nome do campo personalizado:' })
+    if (nome === null) return
+    nome = nome.trim()
     if (!nome) return
     const { data, error } = await supabase.from('quadro_campos').insert({ quadro_id: boardId, nome, tipo: 'texto', ordem: customFields.length }).select().single()
     if (error) return toast(error.message, 'error')
@@ -238,7 +248,9 @@ export default function QuadrosPage() {
 
   async function addAutomation() {
     if (!boardId) return
-    const nome = prompt('Nome da automação:', 'Ao mover para concluído')?.trim()
+    let nome = await prompt('Nova automação', { description: 'Nome da automação:', defaultValue: 'Ao mover para concluído' })
+    if (nome === null) return
+    nome = nome.trim()
     if (!nome) return
     const { data, error } = await supabase.from('quadro_automacoes').insert({ quadro_id: boardId, nome, gatilho: 'card_moved', acao: 'notify', configuracao: {} }).select().single()
     if (error) return toast(error.message, 'error')
@@ -286,6 +298,7 @@ export default function QuadrosPage() {
     {draft?.id && <div style={{ ...overlay, zIndex: 99 }}><div style={{ ...modal, width: 'min(620px, 100%)' }}><header style={modalHeader}><strong>Colaboração: {draft.titulo}</strong><button style={iconButton} onClick={() => setDraft(null)}><X size={17}/></button></header><section><label style={label}>Checklist avançado</label><div style={{ display: 'grid', gap: 5, marginBottom: 8 }}>{(cards.find(item => item.id === draft.id)?.checklist || []).map((item, index) => <label key={index} style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 11, color: C.ink }}><input type="checkbox" checked={item.concluido} onChange={async e => { const card = cards.find(item => item.id === draft.id); if (!card) return; const checklist = (card.checklist || []).map((x, i) => i === index ? { ...x, concluido: e.target.checked } : x); await supabase.from('quadro_cartoes').update({ checklist }).eq('id', card.id); setCards(items => items.map(x => x.id === card.id ? { ...x, checklist } : x)) }} />{item.texto}</label>)}</div><div style={{ display: 'flex', gap: 7 }}><input style={field} placeholder="Novo item" value={checklistText} onChange={e => setChecklistText(e.target.value)} /><button style={button} onClick={() => void addChecklistItem()}>Adicionar</button></div></section><section><label style={label}>Comentários</label><div style={{ maxHeight: 170, overflow: 'auto', display: 'grid', gap: 6, marginBottom: 8 }}>{comments.map(comment => <div key={comment.id} style={{ border: `1px solid ${C.border}`, padding: 8, fontSize: 11 }}><strong>{comment.autor_nome}</strong><div style={{ color: C.inkSoft, marginTop: 3 }}>{comment.texto}</div></div>)}</div><div style={{ display: 'flex', gap: 7 }}><input style={field} placeholder="Escreva um comentário" value={commentText} onChange={e => setCommentText(e.target.value)} /><button style={button} onClick={() => void addComment()}>Enviar</button></div></section><section><label style={label}>Campos personalizados</label>{customFields.length ? customFields.map(fieldItem => <div key={fieldItem.id} style={{ fontSize: 11, color: C.inkSoft, padding: 5, borderBottom: `1px solid ${C.border}` }}>{fieldItem.nome} <span style={{ float: 'right' }}>{fieldItem.tipo}</span></div>) : <p style={{ color: C.inkSoft, fontSize: 11 }}>Nenhum campo. Use “+ Campo” no cabeçalho.</p>}</section></div></div>}
     {showHistory && <div style={overlay}><div style={{ ...modal, width: 650 }}><header style={modalHeader}><strong>Histórico de edição</strong><button style={iconButton} onClick={() => setShowHistory(false)}><X size={17}/></button></header><div style={{ maxHeight: '65vh', overflow: 'auto', display: 'grid', gap: 8 }}>{history.length ? history.map(h => <div key={h.id} style={{ border: `1px solid ${C.border}`, padding: 10 }}><strong style={{ fontSize: 11 }}>{h.acao} · {h.entidade}</strong><div style={{ color: C.inkSoft, fontSize: 10, marginTop: 4 }}>{h.usuario_nome} · {new Date(h.created_at).toLocaleString('pt-BR')}</div></div>) : <p style={{ color: C.inkSoft }}>Nenhuma alteração registrada.</p>}</div></div></div>}
     {ConfirmDialog}
+    {PromptDialog}
   </>
 }
 

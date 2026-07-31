@@ -42,14 +42,14 @@ export function usePrompt() {
   } | null>(null)
 
   const prompt = useCallback(
-    (title: string, options?: { description?: string; placeholder?: string; confirmLabel?: string }): Promise<string | null> => {
+    (title: string, options?: { description?: string; placeholder?: string; confirmLabel?: string; defaultValue?: string }): Promise<string | null> => {
       return new Promise((resolve) => {
         setState({
           title,
           description: options?.description,
           placeholder: options?.placeholder ?? 'Digite aqui…',
           confirmLabel: options?.confirmLabel ?? 'Confirmar',
-          value: '',
+          value: options?.defaultValue ?? '',
           resolve,
         })
       })
