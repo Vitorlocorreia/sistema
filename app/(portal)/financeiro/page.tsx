@@ -594,6 +594,9 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
       supabase.from('fotos').select('*').not('obra_id', 'is', null).order('created_at', { ascending: false }).limit(60),
     ])
     let obrasList = (o as Obra[]) || []
+    const obraGeral = { id: 'geral', nome: 'Geral / Administrativo', cliente: '', endereco: '', valor_contrato: 0, progresso: 0, status: 'Em dia' } as Obra
+    obrasList = [obraGeral, ...obrasList]
+    
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const allowedIds = colaboradorAtivo.obras_ids || []
       obrasList = obrasList.filter(obra => allowedIds.includes(obra.id))
@@ -976,22 +979,26 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
             <h2 style={{ margin: 0, fontSize: 18, color: C.ink }}>{obraSelecionada.nome}</h2>
             {podeGerenciar && (
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  onClick={() => alternarStatusObra(obraSelecionada)}
-                  style={{
-                    ...btnGhost,
-                    color: isObraConcluida(obraSelecionada.status) ? C.amber : C.green,
-                    borderColor: isObraConcluida(obraSelecionada.status) ? `${C.amber}44` : `${C.green}44`,
-                    background: isObraConcluida(obraSelecionada.status) ? `${C.amber}11` : `${C.green}11`,
-                    padding: '6px 12px',
-                    fontWeight: 800
-                  }}
-                >
-                  <CheckCircle2 size={14} />
-                  {isObraConcluida(obraSelecionada.status) ? 'Reabrir Obra' : 'Concluir Obra'}
-                </button>
-                <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Edit3 size={14}/> Editar Obra</button>
-                <button onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)} style={{ ...btnGhost, color: '#EF4444', padding: '6px 12px' }}><Trash2 size={14}/> Excluir Obra</button>
+                {obraSelecionada.id !== 'geral' && (
+                  <>
+                    <button
+                      onClick={() => alternarStatusObra(obraSelecionada)}
+                      style={{
+                        ...btnGhost,
+                        color: isObraConcluida(obraSelecionada.status) ? C.amber : C.green,
+                        borderColor: isObraConcluida(obraSelecionada.status) ? `${C.amber}44` : `${C.green}44`,
+                        background: isObraConcluida(obraSelecionada.status) ? `${C.amber}11` : `${C.green}11`,
+                        padding: '6px 12px',
+                        fontWeight: 800
+                      }}
+                    >
+                      <CheckCircle2 size={14} />
+                      {isObraConcluida(obraSelecionada.status) ? 'Reabrir Obra' : 'Concluir Obra'}
+                    </button>
+                    <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Edit3 size={14}/> Editar Obra</button>
+                    <button onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)} style={{ ...btnGhost, color: '#EF4444', padding: '6px 12px' }}><Trash2 size={14}/> Excluir Obra</button>
+                  </>
+                )}
                 <button onClick={() => setAcessosObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Shield size={14}/> Acessos</button>
               </div>
             )}
@@ -1646,7 +1653,14 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     }
     
     const [{ data: c }, { data: e }] = await Promise.all([qC, qE])
-    setContas((c as ContaComRelacoes[]) ?? [])
+    
+    let fetchedContas = (c as ContaComRelacoes[]) ?? []
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const oIds = colaboradorAtivo.obras_ids || []
+      fetchedContas = fetchedContas.filter(conta => conta.obra_id ? oIds.includes(conta.obra_id) : oIds.includes('geral'))
+    }
+    
+    setContas(fetchedContas)
     setEmpresas(e ?? [])
     setLoading(false)
   }, [colaboradorAtivo])
@@ -2347,7 +2361,13 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     const [{ data: f }, { data: e }, { data: c }] = await Promise.all([qF, qE, qC])
     setFornecedores(f ?? [])
     setEmpresas(e ?? [])
-    setContasFornecedores(c ?? [])
+    
+    let fetchedContasFornecedores = c ?? []
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const oIds = colaboradorAtivo.obras_ids || []
+      fetchedContasFornecedores = fetchedContasFornecedores.filter(conta => conta.obra_id ? oIds.includes(conta.obra_id) : oIds.includes('geral'))
+    }
+    setContasFornecedores(fetchedContasFornecedores)
     setLoading(false)
   }, [colaboradorAtivo])
 
@@ -3485,7 +3505,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     }
 
     const [{ data: c }, { data: e }, { data: f }, { data: o }] = await Promise.all([qC, qE, qF, qO])
-    setContas((c as ContaComRelacoes[]) ?? [])
+    
+    let fetchedContas = (c as ContaComRelacoes[]) ?? []
+    if (colaboradorAtivo.cargo !== 'admin_geral') {
+      const oIds = colaboradorAtivo.obras_ids || []
+      fetchedContas = fetchedContas.filter(conta => conta.obra_id ? oIds.includes(conta.obra_id) : oIds.includes('geral'))
+    }
+    setContas(fetchedContas)
     setEmpresas(e ?? [])
     setFornecedores(f ?? [])
     
@@ -3806,7 +3832,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       categoria: c.categoria || '',
       observacoes: c.observacoes || '',
       recorrencia: c.recorrencia || 'unico',
-      possui_fornecedor: Boolean(c.fornecedor_id)
+      possui_fornecedor: Boolean(c.fornecedor_id),
+      is_privada: c.is_privada || false,
+      usuarios_permitidos: c.usuarios_permitidos || []
     })
   }
 
@@ -3854,9 +3882,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       recorrencia: formEdicao.recorrencia || 'unico',
       possui_fornecedor: Boolean(formEdicao.fornecedor_id),
       historico_negociacao: novoHistorico,
-      is_privada: formEdicao.is_privada,
-      ...(formEdicao.is_privada && !editandoConta.is_privada ? { usuarios_permitidos: [colaboradorAtivo.id] } : {}),
-      ...(!formEdicao.is_privada ? { usuarios_permitidos: [] } : {})
+      is_privada: Boolean(formEdicao.is_privada),
+      usuarios_permitidos: formEdicao.is_privada ? (formEdicao.usuarios_permitidos || []) : []
     }).eq('id', editandoConta.id)
     if (error) return toast(error.message, 'error')
 
@@ -4958,7 +4985,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: formEdicao.is_privada ? '#F59E0B11' : '#111', border: `1px solid ${formEdicao.is_privada ? '#F59E0B44' : C.border}`, borderRadius: 8, cursor: 'pointer', marginBottom: formEdicao.is_privada ? 6 : 20 }} onClick={() => setFormEdicao(f => ({ ...f, is_privada: !f.is_privada }))}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: formEdicao.is_privada ? '#F59E0B11' : '#111', border: `1px solid ${formEdicao.is_privada ? '#F59E0B44' : C.border}`, borderRadius: 8, cursor: 'pointer', marginBottom: formEdicao.is_privada ? 6 : 20 }} onClick={() => setFormEdicao(f => ({ ...f, is_privada: !f.is_privada, usuarios_permitidos: !f.is_privada ? Array.from(new Set([...(f.usuarios_permitidos || []), colaboradorAtivo.id])) : [] }))}>
               <div style={{ width: 16, height: 16, border: `1px solid ${formEdicao.is_privada ? C.amber : C.border}`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: formEdicao.is_privada ? C.amber : 'transparent' }}>
                 {formEdicao.is_privada && <Check size={12} color="#000" />}
               </div>
