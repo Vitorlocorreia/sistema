@@ -523,10 +523,11 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
         .from('colaboradores')
         .update({ obras_ids: nextIds })
         .eq('id', colab.id)
-        .select()
+        .select('id, obras_ids')
       console.log('Update obras_ids result:', { data, error })
       if (error) throw error
       if (!data || data.length === 0) throw new Error('Acesso não atualizado no banco (possível bloqueio de permissão).')
+      if (data[0].obras_ids === undefined) throw new Error('A coluna obras_ids não está ativa no banco de dados. Atualize o cache do Supabase.')
       colab.obras_ids = nextIds // Update local object
       toast(hasAccess ? `Acesso revogado para ${colab.nome}` : `Acesso concedido para ${colab.nome}`, 'success')
       // Trigger a re-render
