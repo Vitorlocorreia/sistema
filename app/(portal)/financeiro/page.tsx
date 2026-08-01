@@ -309,7 +309,7 @@ export default function FinanceiroPage() {
     // Carrega lista de colaboradores para a aba de permissões
     const { data: cols } = await supabase
       .from('colaboradores')
-      .select('id, nome, email, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento')
+      .select('id, nome, email, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento, obras_ids')
       .order('nome')
     setColaboradores(cols ?? [])
 
