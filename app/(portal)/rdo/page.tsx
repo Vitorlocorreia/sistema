@@ -206,12 +206,21 @@ export default function RDO() {
       supabase.from('obras').select('*').order('nome')
     ])
 
-    const rdosList = (r as RdoCompleto[]) ?? []
-    setRdos(rdosList)
-    setObras(o ?? [])
+    let rdosList = (r as RdoCompleto[]) ?? []
+    let oList = o ?? []
 
-    if (o && o.length > 0) {
-      setNewObraId(prev => prev || o[0].id)
+    // Filtrar por acesso à obra
+    if (colab && colab.cargo !== 'admin_geral') {
+      const oIds = colab.obras_ids || []
+      oList = oList.filter((ob: any) => oIds.includes(ob.id))
+      rdosList = rdosList.filter((rdo: any) => oIds.includes(rdo.obra_id))
+    }
+
+    setRdos(rdosList)
+    setObras(oList)
+
+    if (oList && oList.length > 0) {
+      setNewObraId(prev => prev || oList[0].id)
     }
 
     if (rdosList.length > 0) {
