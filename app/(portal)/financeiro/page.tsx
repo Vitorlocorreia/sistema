@@ -519,11 +519,14 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
       } else {
         nextIds = Array.from(new Set([...currentIds, obraId]))
       }
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('colaboradores')
         .update({ obras_ids: nextIds })
         .eq('id', colab.id)
+        .select()
+      console.log('Update obras_ids result:', { data, error })
       if (error) throw error
+      if (!data || data.length === 0) throw new Error('Acesso não atualizado no banco (possível bloqueio de permissão).')
       colab.obras_ids = nextIds // Update local object
       toast(hasAccess ? `Acesso revogado para ${colab.nome}` : `Acesso concedido para ${colab.nome}`, 'success')
       // Trigger a re-render
