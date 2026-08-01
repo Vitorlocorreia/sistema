@@ -5307,8 +5307,77 @@ function SeletorMultiEmpresas({
   )
 }
 
+function SeletorMultiObras({
+  obras,
+  selectedIds,
+  onChange
+}: {
+  obras: Obra[]
+  selectedIds: string[]
+  onChange: (newIds: string[]) => void
+}) {
+  const todasSelecionadas = obras.length > 0 && obras.every(o => selectedIds.includes(o.id))
+
+  const toggleAll = () => {
+    if (todasSelecionadas) {
+      onChange([])
+    } else {
+      onChange(obras.map(o => o.id))
+    }
+  }
+
+  const toggleOne = (id: string) => {
+    if (selectedIds.includes(id)) {
+      onChange(selectedIds.filter(x => x !== id))
+    } else {
+      onChange([...selectedIds, id])
+    }
+  }
+
+  return (
+    <div style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, marginTop: 6, width: '100%' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
+        <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft }}>
+          OBRAS VINCULADAS ({selectedIds.length}/{obras.length})
+        </span>
+        <button
+          type="button"
+          onClick={toggleAll}
+          style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
+        >
+          {todasSelecionadas ? 'Desmarcar todas' : '✓ Selecionar todas'}
+        </button>
+      </div>
+      
+      {obras.length === 0 ? (
+        <div style={{ fontSize: 11, color: C.inkSoft, padding: '10px 0', textAlign: 'center' }}>Nenhuma obra cadastrada</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
+          {obras.map(o => {
+            const isSel = selectedIds.includes(o.id)
+            return (
+              <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: isSel ? C.amber : C.ink, cursor: 'pointer', background: isSel ? '#F59E0B11' : 'transparent', border: `1px solid ${isSel ? '#F59E0B44' : 'transparent'}`, padding: '4px 6px', borderRadius: 4 }}>
+                <input
+                  type="checkbox"
+                  checked={isSel}
+                  onChange={() => toggleOne(o.id)}
+                  style={{ accentColor: C.amber, cursor: 'pointer' }}
+                />
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {o.nome}
+                </span>
+              </label>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: PermissoesTabProps) {
   const [empresas, setEmpresas] = useState<Empresa[]>([])
+  const [obras, setObras] = useState<Obra[]>([])
   const [configPermissoes, setConfigPermissoes] = useState<ConfigPermissao[]>([])
   const [cargos, setCargos] = useState<CargoSistema[]>([])
   const [solicitacoes, setSolicitacoes] = useState<SolicitacaoAcesso[]>([])
@@ -5355,13 +5424,15 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   const loadData = useCallback(async () => {
     setLoading(true)
     try {
-      const [{ data: e }, { data: p }, { data: c }] = await Promise.all([
+      const [{ data: e }, { data: p }, { data: c }, { data: o }] = await Promise.all([
         supabase.from('empresas').select('*').order('razao_social'),
         supabase.from('config_permissoes').select('*').order('cargo'),
-        supabase.from('cargos_sistema').select('*').eq('ativo', true).order('nome')
+        supabase.from('cargos_sistema').select('*').eq('ativo', true).order('nome'),
+        supabase.from('obras').select('*').order('nome')
       ])
       
       setEmpresas(e ?? [])
+      setObras(o ?? [])
       setConfigPermissoes((p as ConfigPermissao[]) ?? [])
       setCargos((c as CargoSistema[]) ?? [])
       if (p && (p as ConfigPermissao[]).length > 0) {
@@ -5583,6 +5654,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
           abas_financeiro: editColForm.abas_financeiro || null,
           pode_alterar_status: editColForm.pode_alterar_status ?? true,
           pode_excluir_lancamento: editColForm.pode_excluir_lancamento ?? false,
+          obras_ids: editColForm.cargo === 'admin_geral' ? null : (editColForm.obras_ids || []),
         })
         .eq('id', editColForm.id)
 
@@ -6336,6 +6408,21 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                         ...editColForm,
                         empresas_ids: newIds,
                         empresa_id: newIds[0] || null
+                      })}
+                    />
+                  </div>
+                )}
+
+                {/* Obras vinculadas (para cargos nao-gerais) */}
+                {editColForm.cargo !== 'admin_geral' && (
+                  <div>
+                    <label style={label}>Obras Vinculadas</label>
+                    <SeletorMultiObras
+                      obras={obras}
+                      selectedIds={editColForm.obras_ids || []}
+                      onChange={newIds => setEditColForm({
+                        ...editColForm,
+                        obras_ids: newIds
                       })}
                     />
                   </div>
