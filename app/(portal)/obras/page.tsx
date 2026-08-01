@@ -206,19 +206,44 @@ export default function ObrasPage() {
       supabase.from('faturamentos').select('*').order('data_previsao', { ascending: false })
     ])
 
-    const list = f ?? []
+    let list = f ?? []
+    let oList = o ?? []
+    let pList = p ?? []
+    let mList = m ?? []
+    let cList = c ?? []
+    let fatList = fat ?? []
+
+    // Filtrar por acesso à obra
+    if (typeof window !== 'undefined') {
+      const sessao = localStorage.getItem('colaborador_sessao')
+      if (sessao) {
+        try {
+          const colab = JSON.parse(sessao)
+          if (colab.cargo !== 'admin_geral') {
+            const oIds = colab.obras_ids || []
+            oList = oList.filter((ob: any) => oIds.includes(ob.id))
+            list = list.filter((ft: any) => oIds.includes(ft.obra_id))
+            pList = pList.filter((pt: any) => oIds.includes(pt.obra_id))
+            mList = mList.filter((md: any) => oIds.includes(md.obra_id))
+            cList = cList.filter((ct: any) => oIds.includes(ct.obra_id))
+            fatList = fatList.filter((fa: any) => oIds.includes(fa.obra_id))
+          }
+        } catch {}
+      }
+    }
+
     setFotosList(list)
-    setObrasList(o ?? [])
-    setPastas(p ?? [])
-    setMedicoes(m ?? [])
-    setContas(c ?? [])
-    setFaturamentos(fat ?? [])
+    setObrasList(oList)
+    setPastas(pList)
+    setMedicoes(mList)
+    setContas(cList)
+    setFaturamentos(fatList)
 
     const obrasWithPhotos = [...new Set(list.map((item: any) => item.obra?.nome).filter(Boolean))] as string[]
     if (obrasWithPhotos.length > 0) {
       setObraSelecionada(prev => prev || obrasWithPhotos[0])
-    } else if (o && o.length > 0) {
-      setObraSelecionada(prev => prev || o[0].nome)
+    } else if (oList && oList.length > 0) {
+      setObraSelecionada(prev => prev || oList[0].nome)
     }
     setLoading(false)
   }, [])
