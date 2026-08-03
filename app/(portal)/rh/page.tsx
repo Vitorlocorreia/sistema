@@ -615,6 +615,7 @@ export default function RhPage() {
   const [inviteSaving, setInviteSaving] = useState(false)
   const [archiveFilter, setArchiveFilter] = useState('')
 
+  const [buscaConvite, setBuscaConvite] = useState('')
   const [filtroStatusConvite, setFiltroStatusConvite] = useState<'todos' | 'expirados' | 'ativos' | 'aguardando' | 'devolvidos' | 'efetivos' | 'nao_efetivos'>('todos')
   const [ordemConvite, setOrdemConvite] = useState<'novo' | 'velho'>('novo')
 
