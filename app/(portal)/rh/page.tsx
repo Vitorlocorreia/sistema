@@ -615,8 +615,7 @@ export default function RhPage() {
   const [inviteSaving, setInviteSaving] = useState(false)
   const [archiveFilter, setArchiveFilter] = useState('')
 
-  const [buscaConvite, setBuscaConvite] = useState('')
-  const [filtroEfetivoConvite, setFiltroEfetivoConvite] = useState<'todos' | 'efetivos' | 'nao_efetivos'>('todos')
+  const [filtroStatusConvite, setFiltroStatusConvite] = useState<'todos' | 'expirados' | 'ativos' | 'aguardando' | 'devolvidos' | 'efetivos' | 'nao_efetivos'>('todos')
   const [ordemConvite, setOrdemConvite] = useState<'novo' | 'velho'>('novo')
 
   const [buscaPessoas, setBuscaPessoas] = useState('')
@@ -628,9 +627,17 @@ export default function RhPage() {
       const q = buscaConvite.toLowerCase()
       arr = arr.filter(c => c.nome_destinatario.toLowerCase().includes(q) || (c.cpf && c.cpf.includes(q)) || (c.cargo && c.cargo.toLowerCase().includes(q)) || (c.obra && c.obra.toLowerCase().includes(q)))
     }
-    if (filtroEfetivoConvite === 'efetivos') {
+    if (filtroStatusConvite === 'expirados') {
+      arr = arr.filter(c => new Date(c.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(c.status))
+    } else if (filtroStatusConvite === 'ativos') {
+      arr = arr.filter(c => new Date(c.expires_at).getTime() > Date.now() && ['ativo', 'em_preenchimento'].includes(c.status))
+    } else if (filtroStatusConvite === 'aguardando') {
+      arr = arr.filter(c => c.status === 'aguardando_aprovacao')
+    } else if (filtroStatusConvite === 'devolvidos') {
+      arr = arr.filter(c => c.status === 'devolvido')
+    } else if (filtroStatusConvite === 'efetivos') {
       arr = arr.filter(c => c.inicio_efetivo)
-    } else if (filtroEfetivoConvite === 'nao_efetivos') {
+    } else if (filtroStatusConvite === 'nao_efetivos') {
       arr = arr.filter(c => !c.inicio_efetivo)
     }
     arr.sort((a, b) => {
@@ -639,7 +646,7 @@ export default function RhPage() {
       return ordemConvite === 'novo' ? db - da : da - db
     })
     return arr
-  }, [convites, buscaConvite, filtroEfetivoConvite, ordemConvite])
+  }, [convites, buscaConvite, filtroStatusConvite, ordemConvite])
 
   const pessoasFiltradas = useMemo(() => {
     let arr = [...pessoas]
@@ -1095,9 +1102,13 @@ export default function RhPage() {
           </div>
           <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
             <input style={{...input, flex: 1, minWidth: 140}} placeholder="Buscar candidato (nome, CPF, cargo)..." value={buscaConvite} onChange={e => setBuscaConvite(e.target.value)} />
-            <select style={{...input, width: 'auto'}} value={filtroEfetivoConvite} onChange={e => setFiltroEfetivoConvite(e.target.value as any)}>
+            <select style={{...input, width: 'auto'}} value={filtroStatusConvite} onChange={e => setFiltroStatusConvite(e.target.value as any)}>
               <option value="todos">Todos os status</option>
-              <option value="efetivos">Com Início Efetivo</option>
+              <option value="expirados">⏰ Expirados</option>
+              <option value="ativos">🟢 Ativos / Em Preenchimento</option>
+              <option value="aguardando">⏳ Aguardando aprovação</option>
+              <option value="devolvidos">⚠️ Devolvidos / Correção</option>
+              <option value="efetivos">🚀 Com Início Efetivo</option>
               <option value="nao_efetivos">Sem Início Efetivo</option>
             </select>
             <select style={{...input, width: 'auto'}} value={ordemConvite} onChange={e => setOrdemConvite(e.target.value as any)}>
