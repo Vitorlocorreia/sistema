@@ -1281,8 +1281,25 @@ export default function RhPage() {
               const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link gerado';
               const isChecked = selectedInviteIds.includes(invite.id);
               return (
-                    padding: '12px 13px',
-                    background: selectedInvite?.id === invite.id ? '#F59E0B18' : '#0B0C0E',
+                <div key={invite.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={e => {
+                      e.stopPropagation()
+                      setSelectedInviteIds(prev => prev.includes(invite.id) ? prev.filter(x => x !== invite.id) : [...prev, invite.id])
+                    }}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: C.amber, flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <button
+                      onClick={() => setSelectedInvite(selectedInvite?.id === invite.id ? (null as unknown as Convite) : invite)}
+                      style={{
+                        width: '100%',
+                        display: 'block',
+                        textAlign: 'left',
+                        padding: '12px 13px',
+                        background: selectedInvite?.id === invite.id ? '#F59E0B18' : '#0B0C0E',
                     color: C.ink,
                     border: `1px solid ${selectedInvite?.id === invite.id ? '#F59E0B66' : invite.inicio_efetivo ? '#3B82F6AA' : C.border}`,
                     borderBottomColor: selectedInvite?.id === invite.id ? 'transparent' : undefined,
@@ -1360,6 +1377,7 @@ export default function RhPage() {
                     </div>
                   )}
                 </div>
+              </div>
               )
             })}
           </div>
