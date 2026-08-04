@@ -129,7 +129,7 @@ function ArchivePanel({ person, details, onBack, onDelete, onOpen }: { person: F
   const [filter, setFilter] = useState('')
   const documents = details.documentos.filter(documento => `${documento.nome || ''} ${documento.tipo || ''}`.toLowerCase().includes(filter.toLowerCase()))
   return <div>
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start', flexWrap: 'wrap', marginBottom: 14 }}><div><strong style={{ fontSize: 14 }}>{person.nome}</strong><p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>{person.cargo || 'Cargo não informado'} · {person.cpf || 'CPF não informado'}</p></div><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}><button style={outlineBtn} onClick={onBack}>← Voltar</button><button style={{ ...outlineBtn, color: '#F87171' }} onClick={onDelete}><Trash2 size={12} />Excluir</button></div></div>
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start', flexWrap: 'wrap', marginBottom: 14 }}><div><strong style={{ fontSize: 14 }}>{person.nome}</strong><p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>{person.cargo || 'Cargo não informado'} · {person.cpf || 'CPF não informado'} · <span style={{ color: C.amber }}>✉️ {person.email || 'E-mail não informado'}</span> {(person as any).telefone ? `· 📞 ${(person as any).telefone}` : ''}</p></div><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}><button style={outlineBtn} onClick={onBack}>← Voltar</button><button style={{ ...outlineBtn, color: '#F87171' }} onClick={onDelete}><Trash2 size={12} />Excluir</button></div></div>
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}><div><strong style={{ fontSize: 12 }}>Baú documental</strong><p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>Arquivo permanente, organizado nas quatro pastas de admissão.</p></div><input style={{ ...input, width: 210 }} placeholder="Buscar documento" value={filter} onChange={event => setFilter(event.target.value)} /></div>
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 9 }}>{[1, 2, 3, 4].map(order => { const etapa = details.etapas.find(item => item.modelo.ordem === order); const docs = documents.filter(documento => documento.etapa_id === etapa?.id); return <article key={order} style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5, padding: 11 }}><span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>PASTA {order}</span><h4 style={{ margin: '5px 0 9px', fontSize: 11 }}>{etapa?.modelo.nome || `Etapa ${order}`}</h4>{docs.length ? docs.map(documento => <button key={documento.id} onClick={() => onOpen(documento)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 0, borderTop: `1px solid ${C.border}`, padding: '8px 0', background: 'transparent', color: C.amber, fontSize: 9, cursor: 'pointer' }}>↗ {documento.nome || 'Documento'}<span style={{ display: 'block', color: C.inkSoft, marginTop: 2 }}>{documento.status || 'Arquivado'}</span></button>) : <p style={{ color: C.inkSoft, fontSize: 9 }}>Nenhum arquivo nesta pasta.</p>}</article> })}</div>
   </div>
@@ -321,7 +321,10 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
           )}
         </div>
         <p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ color: C.amber, fontWeight: 700 }}>✉️ {invite.email_destinatario || 'E-mail não informado'}</span>
+          <span>·</span>
           <span>{invite.cpf ? `CPF: ${invite.cpf}` : 'CPF não informado'}</span>
+          {invite.telefone_destinatario && <><span>·</span><span>📞 {invite.telefone_destinatario}</span></>}
           <span>·</span>
           <span style={{ color: C.ink, fontWeight: 700 }}>Profissão: {invite.cargo || 'Não informada'}</span>
           {invite.obra && <><span>·</span><span>Obra: <strong>{invite.obra}</strong></span></>}
@@ -1506,6 +1509,8 @@ export default function RhPage() {
                     )}
                   </div>
                   <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <span style={{ color: C.amber, fontWeight: 700 }}>✉️ {invite.email_destinatario || 'E-mail não informado'}</span>
+                    <span>·</span>
                     <span style={{ color: C.ink, fontWeight: 700 }}>Profissão: {invite.cargo || 'Não informada'}</span>
                     {invite.obra && <span>· Obra: <strong>{invite.obra}</strong></span>}
                     {invite.data_inicio_efetivo && (
@@ -1624,7 +1629,9 @@ export default function RhPage() {
                 <div style={{ flex: 1 }}>
                   <button onClick={() => selected?.id === person.id ? setSelected(null) : void loadDetails(person)} style={{ width: '100%', display: 'block', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: selected?.id === person.id ? 0 : `1px solid ${C.border}`, padding: '12px 14px', color: C.ink, cursor: 'pointer' }}>
                     <strong>{person.nome}</strong>
-                    <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>{person.cargo || 'Sem cargo'} · {person.matricula || 'Sem matrícula'} · {person.status}</div>
+                    <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>
+                      {person.cargo || 'Sem cargo'} · <span style={{ color: C.amber }}>✉️ {person.email || 'Sem e-mail'}</span> · {person.cpf || 'Sem CPF'} · {person.status}
+                    </div>
                   </button>
                   {selected?.id === person.id && (
                     <div style={{ background: '#0B0C0E', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '16px 14px' }}>
