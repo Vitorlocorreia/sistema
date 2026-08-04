@@ -668,7 +668,7 @@ export default function RhPage() {
     const [{ data: peopleData, error: peopleError }, { data: modelData, error: modelError }, { data: inviteData, error: inviteError }] = await Promise.all([
       supabase.from('funcionarios').select('*').order('nome'),
       supabase.from('rh_modelos_admissao').select('*').eq('ativo', true).order('ordem'),
-      supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*, modelo:rh_modelos_admissao(id,ordem,nome))').neq('status', 'aprovado').order('created_at', { ascending: false }).limit(50),
+      supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*, modelo:rh_modelos_admissao(id,ordem,nome))').neq('status', 'aprovado').order('created_at', { ascending: false }),
     ])
     if (peopleError || modelError || inviteError) {
       toast(peopleError?.message || modelError?.message || 'Não foi possível carregar o RH.', 'error')
