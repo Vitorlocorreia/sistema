@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   CheckCircle2,
+  CheckSquare,
   ClipboardCheck,
   ClipboardPlus,
   Download,
@@ -623,6 +624,7 @@ export default function RhPage() {
   const [ordemPessoas, setOrdemPessoas] = useState<'alfabetica' | 'novo' | 'velho'>('alfabetica')
 
   // Bulk selection states
+  const [modoSelecao, setModoSelecao] = useState(false)
   const [selectedInviteIds, setSelectedInviteIds] = useState<string[]>([])
   const [selectedPessoaIds, setSelectedPessoaIds] = useState<string[]>([])
   const [showExportModal, setShowExportModal] = useState(false)
@@ -1109,10 +1111,12 @@ export default function RhPage() {
     let targetInvites: Convite[] = []
     let targetPessoas: Funcionario[] = []
 
+    const temFiltroAtivo = !!buscaConvite.trim() || !!buscaPessoas.trim() || filtroStatusConvite !== 'todos'
+
     if (tipo === 'selecionados') {
       targetInvites = convites.filter(c => selectedInviteIds.includes(c.id))
       targetPessoas = pessoas.filter(p => selectedPessoaIds.includes(p.id))
-    } else if (tipo === 'filtrados') {
+    } else if (tipo === 'filtrados' || temFiltroAtivo) {
       targetInvites = convitesFiltrados
       targetPessoas = pessoasFiltradas
     } else {
@@ -1126,11 +1130,14 @@ export default function RhPage() {
       return
     }
 
-    const ok = await confirm(
-      'Excluir em Massa',
-      `Tem certeza que deseja excluir permanentemente ${total} registro(s) (${targetInvites.length} convite(s) e ${targetPessoas.length} funcionário(s))? Esta ação não pode ser desfeita.`,
-      { confirmLabel: `Excluir ${total} registro(s)`, confirmColor: '#EF4444' }
-    )
+    const mensgDesc = (tipo === 'filtrados' || temFiltroAtivo)
+      ? `Tem certeza que deseja excluir os ${total} registro(s) FILTRADOS NA TELA (${targetInvites.length} convite(s) e ${targetPessoas.length} funcionário(s))?`
+      : `Tem certeza que deseja excluir permanentemente TODOS os ${total} registro(s) do sistema (${targetInvites.length} convite(s) e ${targetPessoas.length} funcionário(s))? Esta ação não pode ser desfeita.`
+
+    const ok = await confirm('Excluir Registros', mensgDesc, {
+      confirmLabel: `Excluir ${total} registro(s)`,
+      confirmColor: '#EF4444'
+    })
     if (!ok) return
 
     let deletedCount = 0
@@ -1147,6 +1154,7 @@ export default function RhPage() {
 
     setSelectedInviteIds([])
     setSelectedPessoaIds([])
+    setModoSelecao(false)
     setShowDeleteModal(false)
     await load()
     toast(`${deletedCount} registro(s) excluído(s) com sucesso!`, 'success')
@@ -1184,6 +1192,19 @@ export default function RhPage() {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button style={{ ...outlineBtn, color: '#34D399', borderColor: '#34D39966', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowExportModal(true)}>
             <FileSpreadsheet size={14} /> Exportar Excel...
+          </button>
+          <button
+            style={{ ...outlineBtn, color: modoSelecao ? C.amber : C.ink, borderColor: modoSelecao ? C.amber : C.border, display: 'flex', alignItems: 'center', gap: 6 }}
+            onClick={() => {
+              const next = !modoSelecao
+              setModoSelecao(next)
+              if (!next) {
+                setSelectedInviteIds([])
+                setSelectedPessoaIds([])
+              }
+            }}
+          >
+            <CheckSquare size={14} /> {modoSelecao ? 'Sair do Modo Seleção' : 'Selecionar Vários'}
           </button>
           <button style={{ ...outlineBtn, color: '#F87171', borderColor: '#F8717166', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowDeleteModal(true)}>
             <Trash2 size={14} /> Excluir em Massa...
@@ -1280,17 +1301,20 @@ export default function RhPage() {
               const expired = new Date(invite.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(invite.status);
               const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link gerado';
               const isChecked = selectedInviteIds.includes(invite.id);
+              const exibirCheckbox = modoSelecao || selectedInviteIds.length > 0 || selectedPessoaIds.length > 0;
               return (
                 <div key={invite.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={isChecked}
-                    onChange={e => {
-                      e.stopPropagation()
-                      setSelectedInviteIds(prev => prev.includes(invite.id) ? prev.filter(x => x !== invite.id) : [...prev, invite.id])
-                    }}
-                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: C.amber, flexShrink: 0 }}
-                  />
+                  {exibirCheckbox && (
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={e => {
+                        e.stopPropagation()
+                        setSelectedInviteIds(prev => prev.includes(invite.id) ? prev.filter(x => x !== invite.id) : [...prev, invite.id])
+                      }}
+                      style={{ width: 18, height: 18, cursor: 'pointer', accentColor: C.amber, flexShrink: 0 }}
+                    />
+                  )}
                   <div style={{ flex: 1 }}>
                     <button
                       onClick={() => setSelectedInvite(selectedInvite?.id === invite.id ? (null as unknown as Convite) : invite)}
@@ -1421,17 +1445,20 @@ export default function RhPage() {
           </div>
           {pessoasFiltradas.map(person => {
             const isChecked = selectedPessoaIds.includes(person.id);
+            const exibirCheckbox = modoSelecao || selectedInviteIds.length > 0 || selectedPessoaIds.length > 0;
             return (
               <div key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={isChecked}
-                  onChange={e => {
-                    e.stopPropagation()
-                    setSelectedPessoaIds(prev => prev.includes(person.id) ? prev.filter(x => x !== person.id) : [...prev, person.id])
-                  }}
-                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: C.amber, flexShrink: 0 }}
-                />
+                {exibirCheckbox && (
+                  <input
+                    type="checkbox"
+                    checked={isChecked}
+                    onChange={e => {
+                      e.stopPropagation()
+                      setSelectedPessoaIds(prev => prev.includes(person.id) ? prev.filter(x => x !== person.id) : [...prev, person.id])
+                    }}
+                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: C.amber, flexShrink: 0 }}
+                  />
+                )}
                 <div style={{ flex: 1 }}>
                   <button onClick={() => selected?.id === person.id ? setSelected(null) : void loadDetails(person)} style={{ width: '100%', display: 'block', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: selected?.id === person.id ? 0 : `1px solid ${C.border}`, padding: '12px 14px', color: C.ink, cursor: 'pointer' }}>
                     <strong>{person.nome}</strong>
@@ -1562,7 +1589,7 @@ export default function RhPage() {
       )}
 
       {/* Floating Selection Bar */}
-      {(selectedInviteIds.length > 0 || selectedPessoaIds.length > 0) && (
+      {(modoSelecao || selectedInviteIds.length > 0 || selectedPessoaIds.length > 0) && (
         <div style={{
           position: 'fixed',
           bottom: 20,
@@ -1588,33 +1615,34 @@ export default function RhPage() {
               setSelectedInviteIds(convitesFiltrados.map(c => c.id))
               setSelectedPessoaIds(pessoasFiltradas.map(p => p.id))
             }}
-            style={{ ...outlineBtn, fontSize: 10, padding: '5px 10px' }}
+            style={{ ...outlineBtn, fontSize: 10, padding: '5px 10px', color: C.amber, borderColor: C.amber }}
           >
-            Selecionar visíveis ({convitesFiltrados.length + pessoasFiltradas.length})
+            ☑️ Selecionar Tudo (Visíveis: {convitesFiltrados.length + pessoasFiltradas.length})
           </button>
 
           <button
             onClick={() => {
               setSelectedInviteIds([])
               setSelectedPessoaIds([])
+              setModoSelecao(false)
             }}
             style={{ ...outlineBtn, fontSize: 10, padding: '5px 10px', color: C.inkSoft }}
           >
-            Limpar
+            Limpar / Fechar
           </button>
 
           <button
-            onClick={() => exportarFuncionariosCSV('selecionados')}
+            onClick={() => exportarFuncionariosCSV(selectedInviteIds.length + selectedPessoaIds.length > 0 ? 'selecionados' : 'filtrados')}
             style={{ ...btn, background: '#10B981', color: '#0B0C0E', fontSize: 11, padding: '7px 14px', gap: 6, display: 'flex', alignItems: 'center' }}
           >
-            <FileSpreadsheet size={14} /> Exportar ({selectedInviteIds.length + selectedPessoaIds.length})
+            <FileSpreadsheet size={14} /> Exportar ({selectedInviteIds.length + selectedPessoaIds.length || convitesFiltrados.length + pessoasFiltradas.length})
           </button>
 
           <button
-            onClick={() => void excluirEmMassa('selecionados')}
+            onClick={() => void excluirEmMassa(selectedInviteIds.length + selectedPessoaIds.length > 0 ? 'selecionados' : 'filtrados')}
             style={{ ...btn, background: '#EF4444', color: '#FFFFFF', fontSize: 11, padding: '7px 14px', gap: 6, display: 'flex', alignItems: 'center' }}
           >
-            <Trash2 size={14} /> Excluir ({selectedInviteIds.length + selectedPessoaIds.length})
+            <Trash2 size={14} /> Excluir Selecionados ({selectedInviteIds.length + selectedPessoaIds.length})
           </button>
         </div>
       )}
