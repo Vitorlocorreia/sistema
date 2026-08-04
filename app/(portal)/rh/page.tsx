@@ -168,6 +168,41 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
   const [inputAgenciaConta, setInputAgenciaConta] = useState('')
   const [savingPix, setSavingPix] = useState(false)
 
+  const [editEmailOpen, setEditEmailOpen] = useState(false)
+  const [inputEmail, setInputEmail] = useState('')
+  const [savingEmail, setSavingEmail] = useState(false)
+
+  function openModalEmail() {
+    setInputEmail(invite.email_destinatario || '')
+    setEditEmailOpen(true)
+  }
+
+  async function handleSaveEmailRH() {
+    if (!inputEmail.trim() || !inputEmail.includes('@')) {
+      return toast('Informe um e-mail válido.', 'error')
+    }
+    setSavingEmail(true)
+    try {
+      const { error } = await supabase
+        .from('rh_admissao_convites')
+        .update({
+          email_destinatario: inputEmail.trim(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', invite.id)
+
+      if (error) throw error
+      toast('E-mail do candidato atualizado com sucesso!', 'success')
+      setEditEmailOpen(false)
+      await onRefresh?.()
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro ao salvar e-mail'
+      toast(msg, 'error')
+    } finally {
+      setSavingEmail(false)
+    }
+  }
+
   function parseDadosBancarios(nome?: string | null) {
     if (!nome) return { pix: '', banco: '', agenciaConta: '' }
     if (nome.startsWith('Dados Bancários:')) {
@@ -425,6 +460,32 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
       </div>
     )}
 
+    {/* MODAL REACT DE ALTERAÇÃO DE E-MAIL DO CANDIDATO */}
+    {editEmailOpen && (
+      <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <div style={{ background: '#12141C', border: `1px solid ${C.amber}`, borderRadius: 8, maxWidth: 420, width: '100%', padding: 20, display: 'flex', flexDirection: 'column', gap: 14, boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
+          <h3 style={{ margin: 0, fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+            ✉️ E-mail do Candidato (Etapa 1)
+          </h3>
+          <p style={{ fontSize: 11, color: C.inkSoft, margin: 0, lineHeight: 1.4 }}>
+            Digite ou atualize o e-mail principal do candidato para a ficha de admissão.
+          </p>
+          <input
+            style={input}
+            placeholder="exemplo@email.com"
+            value={inputEmail}
+            onChange={e => setInputEmail(e.target.value)}
+          />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
+            <button style={outlineBtn} onClick={() => setEditEmailOpen(false)} disabled={savingEmail}>Cancelar</button>
+            <button style={{ ...btn, background: C.amber, color: '#0B0C0E' }} disabled={savingEmail} onClick={() => void handleSaveEmailRH()}>
+              {savingEmail ? 'Salvando...' : 'Salvar E-mail'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
     {/* ETAPA 4 — GUIA MÉDICA BIDIRECIONAL */}
     {modeloEtapa4 && (
       <div style={{ marginBottom: 14, background: '#0B0C0E', border: `1px solid ${laudoCandidato?.status === 'aprovado' ? '#22C55E55' : guiaRH ? C.amber + '44' : C.border}`, borderRadius: 6, padding: 14 }}>
@@ -485,7 +546,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
       <nav style={{ display: 'grid', gap: 6, padding: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5 }}>
         {modelos.filter(m => m.ordem <= 3).slice().sort((a, b) => a.ordem - b.ordem).map(modelo => (
           <button key={modelo.id} onClick={() => setActiveFolder(modelo.ordem)} style={{ ...outlineBtn, width: '100%', justifyContent: 'flex-start', padding: '9px 10px', fontSize: 9, color: activeFolder === modelo.ordem ? C.amber : C.inkSoft, borderColor: activeFolder === modelo.ordem ? C.amber : C.border }}>
-            📁 Etapa {modelo.ordem}<span style={{ marginLeft: 'auto', fontSize: 8 }}>{modelo.ordem === 2 || modelo.ordem === 3 ? 1 : modelo.checklist.length}</span>
+            📁 Etapa {modelo.ordem}<span style={{ marginLeft: 'auto', fontSize: 8 }}>{modelo.ordem === 2 || modelo.ordem === 3 ? 1 : modelo.checklist.length + (modelo.ordem === 1 ? 1 : 0)}</span>
           </button>
         ))}
       </nav>
@@ -506,25 +567,39 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                 modelo,
                 itemId: itemUnico.id,
                 isPixItem: false,
+                isEmailItem: false,
                 label: `Documento Preenchido: ${modelo.nome}`,
                 doc,
               }]
             }
-            // Na Etapa 1: Renderiza cada item da checklist (incluindo PIX)
-            return modelo.checklist.map(item => {
-              const docs = invite.documentos.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
-              const doc = docs[docs.length - 1]
-              const isPixItem = item.id === 'pix' || item.id?.includes('pix') || item.label.toLowerCase().includes('pix')
-              return {
-                key: `${modelo.id}-${item.id}`,
+            // Na Etapa 1: Renderiza cada item da checklist + Item de E-mail do Candidato
+            const items = [
+              ...modelo.checklist.map(item => {
+                const docs = invite.documentos.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
+                const doc = docs[docs.length - 1]
+                const isPixItem = item.id === 'pix' || item.id?.includes('pix') || item.label.toLowerCase().includes('pix')
+                return {
+                  key: `${modelo.id}-${item.id}`,
+                  modelo,
+                  itemId: item.id,
+                  isPixItem,
+                  isEmailItem: false,
+                  label: item.label + (item.obrigatorio ? ' *' : ''),
+                  doc,
+                }
+              }),
+              {
+                key: `${modelo.id}-email-candidato`,
                 modelo,
-                itemId: item.id,
-                isPixItem,
-                label: item.label + (item.obrigatorio ? ' *' : ''),
-                doc,
+                itemId: 'email_destinatario',
+                isPixItem: false,
+                isEmailItem: true,
+                label: 'E-mail do Candidato *',
+                doc: null,
               }
-            })
-          }).map(({ key, modelo, isPixItem, label, doc }) => {
+            ]
+            return items
+          }).map(({ key, modelo, isPixItem, isEmailItem, label, doc }) => {
             const parsedPix = isPixItem ? parseDadosBancarios(doc?.nome) : null
             return (
               <div key={key} style={{ display: 'contents' }}>
@@ -537,6 +612,11 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                   {isPixItem && (
                     <span style={{ fontSize: 8, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '1px 5px', borderRadius: 3, marginTop: 4, display: 'inline-block', fontWeight: 800 }}>
                       [Caixa de Texto · Dados Bancários]
+                    </span>
+                  )}
+                  {isEmailItem && (
+                    <span style={{ fontSize: 8, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '1px 5px', borderRadius: 3, marginTop: 4, display: 'inline-block', fontWeight: 800 }}>
+                      [Caixa de Texto · E-mail do Candidato]
                     </span>
                   )}
                 </div>
@@ -555,6 +635,18 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                         </div>
                       )}
                     </div>
+                  ) : isEmailItem ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      {invite.email_destinatario ? (
+                        <div style={{ fontSize: 11, background: '#12141C', padding: '8px 10px', borderRadius: 5, border: `1px solid ${C.amber}44`, display: 'grid', gap: 3 }}>
+                          <div><span style={{ color: C.inkSoft, fontSize: 10 }}>✉️ E-mail Cadastrado: </span><strong style={{ color: C.amber }}>{invite.email_destinatario}</strong></div>
+                        </div>
+                      ) : (
+                        <div style={{ fontSize: 10, color: C.inkSoft, fontStyle: 'italic', background: '#0B0C0E', padding: '6px 8px', borderRadius: 4, border: `1px dashed ${C.border}` }}>
+                          💬 E-mail pendente (o candidato digitará na Etapa 1 pelo link ou o RH pode preencher pelo botão ao lado)
+                        </div>
+                      )}
+                    </div>
                   ) : doc ? (
                     <button onClick={() => onOpen(doc)} style={linkButton}>↗ {doc.nome}</button>
                   ) : (
@@ -562,8 +654,8 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                   )}
                 </div>
                 <div style={tableCell}>
-                  <span style={{ color: isPixItem && doc ? '#4ADE80' : doc?.status === 'aprovado' ? '#4ADE80' : doc?.status === 'devolvido' ? '#F87171' : doc ? C.amber : C.inkSoft, fontWeight: 800 }}>
-                    {isPixItem && doc ? '✓ Preenchido' : doc?.status === 'aprovado' ? 'Aprovado' : doc?.status === 'devolvido' ? 'Devolvido' : doc ? 'Aguardando análise' : 'Pendente'}
+                  <span style={{ color: (isPixItem && doc) || (isEmailItem && invite.email_destinatario) ? '#4ADE80' : doc?.status === 'aprovado' ? '#4ADE80' : doc?.status === 'devolvido' ? '#F87171' : doc ? C.amber : C.inkSoft, fontWeight: 800 }}>
+                    {isPixItem && doc ? '✓ Preenchido' : isEmailItem && invite.email_destinatario ? '✓ Preenchido' : doc?.status === 'aprovado' ? 'Aprovado' : doc?.status === 'devolvido' ? 'Devolvido' : doc ? 'Aguardando análise' : 'Pendente'}
                   </span>
                   {doc?.observacao_rh && <small style={{ display: 'block', color: '#F87171', marginTop: 4 }}>{doc.observacao_rh}</small>}
                 </div>
@@ -574,6 +666,13 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                       onClick={openModalPix}
                     >
                       ✏️ {doc ? 'Editar Caixa de Texto' : 'Preencher Caixa de Texto'}
+                    </button>
+                  ) : isEmailItem ? (
+                    <button
+                      style={{ ...outlineBtn, borderColor: C.amber, color: C.amber, padding: '5px 9px', fontSize: 9, fontWeight: 800 }}
+                      onClick={openModalEmail}
+                    >
+                      ✏️ {invite.email_destinatario ? 'Editar E-mail' : 'Preencher E-mail'}
                     </button>
                   ) : doc ? (
                     <>
