@@ -1605,14 +1605,14 @@ export default function RhPage() {
 
           <button
             onClick={() => exportarFuncionariosCSV('selecionados')}
-            style={{ ...btn('#10B981'), fontSize: 11, padding: '7px 14px', gap: 6, display: 'flex', alignItems: 'center' }}
+            style={{ ...btn, background: '#10B981', color: '#0B0C0E', fontSize: 11, padding: '7px 14px', gap: 6, display: 'flex', alignItems: 'center' }}
           >
             <FileSpreadsheet size={14} /> Exportar ({selectedInviteIds.length + selectedPessoaIds.length})
           </button>
 
           <button
             onClick={() => void excluirEmMassa('selecionados')}
-            style={{ ...btn('#EF4444'), fontSize: 11, padding: '7px 14px', gap: 6, display: 'flex', alignItems: 'center' }}
+            style={{ ...btn, background: '#EF4444', color: '#FFFFFF', fontSize: 11, padding: '7px 14px', gap: 6, display: 'flex', alignItems: 'center' }}
           >
             <Trash2 size={14} /> Excluir ({selectedInviteIds.length + selectedPessoaIds.length})
           </button>
