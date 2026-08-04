@@ -20,6 +20,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
   const [pixInput, setPixInput] = useState('')
   const [bancoInput, setBancoInput] = useState('')
   const [agenciaContaInput, setAgenciaContaInput] = useState('')
+  const [emailInput, setEmailInput] = useState('')
   const [finalizado, setFinalizado] = useState(false)
   const endpoint = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/rh-admissao`
 
@@ -41,6 +42,9 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
         setPixInput(docPix.nome.replace('Chave PIX:', '').trim())
       } else if (docPix?.nome) {
         setPixInput(docPix.nome)
+      }
+      if (body.convite?.email_destinatario) {
+        setEmailInput(prev => prev || body.convite.email_destinatario)
       }
       setErro('')
     } catch (error) {
@@ -269,6 +273,36 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                   </div>
 
                   <div style={{ display: 'grid', gap: 7, marginTop: 13 }}>
+                    {/* Campo Obrigatório: E-mail do Funcionário */}
+                    <div style={{ padding: 12, background: '#0B0C0E', border: `1px solid ${emailInput.trim() ? '#22C55E55' : C.border}`, borderRadius: 5 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <strong style={{ fontSize: 11 }}>E-mail do Funcionário *</strong>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <input
+                          type="email"
+                          style={{ flex: 1, background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                          placeholder="Digite seu e-mail de contato (obrigatório)"
+                          value={emailInput}
+                          onChange={e => setEmailInput(e.target.value)}
+                        />
+                        <button
+                          disabled={enviando === 'email' || !emailInput.trim()}
+                          onClick={async () => {
+                            if (!emailInput.trim()) return
+                            setEnviando('email')
+                            try {
+                              await supabase.from('rh_admissao_convites').update({ email_destinatario: emailInput.trim() }).eq('token_code', token)
+                              await carregar()
+                            } catch {}
+                            setEnviando('')
+                          }}
+                          style={{ padding: '7px 12px', background: C.amber, color: '#0B0C0E', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: emailInput.trim() ? 1 : 0.5 }}
+                        >
+                          {enviando === 'email' ? 'Salvando...' : 'Salvar E-mail'}
+                        </button>
+                      </div>
+                    </div>
                     {modelo.checklist.map(item => {
                       const docs = fluxo.documentos.filter(documento => documento.modelo_id === modelo.id && documento.item_id === item.id)
                       const accepted = docs.find(documento => ['enviado', 'aprovado'].includes(documento.status))

@@ -1002,6 +1002,91 @@ export default function RhPage() {
     await loadDetails(selected)
   }
 
+  const exportarFuncionariosCSV = () => {
+    const rows: string[][] = []
+
+    const headers = [
+      'Nome Completo',
+      'CPF',
+      'Matrícula',
+      'Cargo',
+      'Obra / Local',
+      'Situação no Sistema',
+      'E-mail',
+      'Telefone',
+      'Endereço',
+      'Data Admissão / Início',
+      'Chave PIX / Dados Bancários'
+    ]
+
+    // 1. Cadastros em Admissão (Convites)
+    convites.forEach(c => {
+      const docPix = c.documentos?.find(d => d.item_id === 'pix' || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
+      const dadosBancarios = docPix?.nome || ''
+      const expired = new Date(c.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(c.status)
+      const situacao = c.inicio_efetivo
+        ? 'Efetivado em Campo (Sem Registro)'
+        : expired
+        ? 'Link Expirado'
+        : c.status === 'aguardando_aprovacao'
+        ? 'Aguardando Aprovação RH'
+        : c.status === 'em_preenchimento'
+        ? `Preenchendo Etapa ${c.etapa_atual}/4`
+        : 'Em Admissão'
+
+      rows.push([
+        `"${(c.nome_destinatario || '').replace(/"/g, '""')}"`,
+        `"${(c.cpf || '').replace(/"/g, '""')}"`,
+        `"${(c.matricula || '').replace(/"/g, '""')}"`,
+        `"${(c.cargo || '').replace(/"/g, '""')}"`,
+        `"${(c.obra || '').replace(/"/g, '""')}"`,
+        `"${situacao}"`,
+        `"${(c.email_destinatario || '').replace(/"/g, '""')}"`,
+        `"${(c.telefone_destinatario || '').replace(/"/g, '""')}"`,
+        `"${(c.endereco || '').replace(/"/g, '""')}"`,
+        `"${c.data_admissao || c.data_inicio_efetivo || ''}"`,
+        `"${dadosBancarios.replace(/"/g, '""')}"`
+      ])
+    })
+
+    // 2. Funcionários Cadastrados
+    pessoas.forEach(p => {
+      const jaExiste = convites.some(c => c.funcionario_id === p.id || (c.cpf && p.cpf && c.cpf.replace(/\D/g, '') === p.cpf.replace(/\D/g, '')))
+      if (!jaExiste) {
+        rows.push([
+          `"${(p.nome || '').replace(/"/g, '""')}"`,
+          `"${(p.cpf || '').replace(/"/g, '""')}"`,
+          `"${(p.matricula || '').replace(/"/g, '""')}"`,
+          `"${(p.cargo || '').replace(/"/g, '""')}"`,
+          '""',
+          `"${p.status || 'Ativo'}"`,
+          `"${(p.email || '').replace(/"/g, '""')}"`,
+          '""',
+          '""',
+          `"${p.data_admissao || ''}"`,
+          '""'
+        ])
+      }
+    })
+
+    if (rows.length === 0) {
+      toast('Nenhum funcionário cadastrado para exportar.', 'error')
+      return
+    }
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `relatorio_funcionarios_rh_${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast(`${rows.length} funcionário(s) exportado(s) com sucesso!`, 'success')
+  }
+
   const completed = useMemo(() => details.etapas.filter(etapa => etapa.status === 'Concluída' || etapa.status === 'Dispensada').length, [details.etapas])
   const progress = details.etapas.length ? Math.round((completed / details.etapas.length) * 100) : 0
   const selectedInviteForRender = selectedInvite as Convite
@@ -1032,7 +1117,12 @@ export default function RhPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 18, flexWrap: 'wrap' }}>
         <p style={{ color: C.inkSoft, fontSize: 12, margin: 0 }}>Admissão em quatro etapas, ficha de registro, histórico, documentos e exames ocupacionais.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button style={outlineBtn} onClick={() => setInviteOpen(value => !value)}><ClipboardPlus size={14} />Gerar link de admissão</button>
+          <button style={{ ...outlineBtn, color: '#34D399', borderColor: '#34D39966' }} onClick={exportarFuncionariosCSV}>
+            <FileSpreadsheet size={14} /> Exportar Excel (CSV)
+          </button>
+          <button style={outlineBtn} onClick={() => setInviteOpen(value => !value)}>
+            <ClipboardPlus size={14} /> Gerar link de admissão
+          </button>
         </div>
       </div>
 
