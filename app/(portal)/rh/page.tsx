@@ -677,14 +677,17 @@ export default function RhPage() {
       supabase.from('rh_modelos_admissao').select('*').eq('ativo', true).order('ordem'),
       supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*, modelo:rh_modelos_admissao(id,ordem,nome))').neq('status', 'aprovado').order('created_at', { ascending: false }).limit(5000),
     ])
-    if (peopleError || modelError || inviteError) {
-      toast(peopleError?.message || modelError?.message || 'Não foi possível carregar o RH.', 'error')
-      return
+
+    if (peopleData) setPessoas(peopleData as Funcionario[])
+    if (modelData) setModelos(modelData as ModeloAdmissao[])
+    if (inviteData) {
+      setConvites(inviteData as Convite[])
+      setSelectedInvite(current => current ? ((inviteData).find(item => item.id === current.id) as Convite | undefined) ?? (null as unknown as Convite) : (null as unknown as Convite))
     }
-    setPessoas((peopleData ?? []) as Funcionario[])
-    setModelos((modelData ?? []) as ModeloAdmissao[])
-    setConvites((inviteData ?? []) as Convite[])
-    setSelectedInvite(current => current ? ((inviteData ?? []).find(item => item.id === current.id) as Convite | undefined) ?? (null as unknown as Convite) : (null as unknown as Convite))
+
+    if (peopleError || modelError || inviteError) {
+      console.warn('RH Load warnings:', { peopleError, modelError, inviteError })
+    }
   }, [])
 
   useRealtimeSync(load, 'rh-sync', ['funcionarios', 'rh_modelos_admissao', 'rh_admissao_convites', 'funcionario_historico', 'exames_ocupacionais'])
