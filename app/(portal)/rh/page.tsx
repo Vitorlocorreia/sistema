@@ -1246,6 +1246,134 @@ export default function RhPage() {
         </div>
       </div>
 
+      {/* ── CARD DE AÇÃO: MODO EXPORTAÇÃO (Igual ao Financeiro) ── */}
+      {modoExportacao && (
+        <div style={{
+          background: '#1A1D26',
+          border: `1px solid ${C.amber}`,
+          borderRadius: 8,
+          padding: '12px 18px',
+          marginBottom: 14,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: C.amber, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FileSpreadsheet size={16} /> Modo Exportação Ativo
+            </span>
+            <span style={{ fontSize: 12, color: C.ink, fontWeight: 700, background: 'rgba(245, 158, 11, 0.1)', padding: '3px 10px', borderRadius: 4, border: `1px solid ${C.amber}44` }}>
+              {selectedInviteIds.length + selectedPessoaIds.length} selecionado(s) de {convitesFiltrados.length + pessoasFiltradas.length}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => {
+                const totalVisiveis = convitesFiltrados.length + pessoasFiltradas.length
+                const todosMarcados = (selectedInviteIds.length + selectedPessoaIds.length) === totalVisiveis
+                if (todosMarcados) {
+                  setSelectedInviteIds([])
+                  setSelectedPessoaIds([])
+                } else {
+                  setSelectedInviteIds(convitesFiltrados.map(c => c.id))
+                  setSelectedPessoaIds(pessoasFiltradas.map(p => p.id))
+                }
+              }}
+              style={{ ...outlineBtn, padding: '7px 14px', fontSize: 11, color: C.ink }}
+            >
+              {(selectedInviteIds.length + selectedPessoaIds.length) === (convitesFiltrados.length + pessoasFiltradas.length)
+                ? 'Desmarcar Todos'
+                : `Selecionar Todos (${convitesFiltrados.length + pessoasFiltradas.length})`}
+            </button>
+
+            {selectedInviteIds.length + selectedPessoaIds.length > 0 && (
+              <button
+                onClick={() => exportarFuncionariosCSV('selecionados')}
+                style={{ ...btn, background: '#34D399', color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
+              >
+                Baixar Selecionados ({selectedInviteIds.length + selectedPessoaIds.length}) 📥
+              </button>
+            )}
+
+            <button
+              onClick={() => exportarFuncionariosCSV('filtrados')}
+              style={{ ...btn, background: C.amber, color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
+              title="Baixar todos os funcionários e candidatos visíveis no filtro atual"
+            >
+              Baixar Todos os Filtrados ({convitesFiltrados.length + pessoasFiltradas.length}) 📥
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── CARD DE AÇÃO: MODO EXCLUSÃO EM MASSA (Igual ao Financeiro) ── */}
+      {modoExclusao && (
+        <div style={{
+          background: '#1A1D26',
+          border: '1px solid #EF4444',
+          borderRadius: 8,
+          padding: '12px 18px',
+          marginBottom: 14,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: '#F87171', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Trash2 size={16} /> Modo Exclusão em Massa Ativo
+            </span>
+            <span style={{ fontSize: 12, color: '#F87171', fontWeight: 700, background: 'rgba(239, 68, 68, 0.1)', padding: '3px 10px', borderRadius: 4, border: '1px solid #EF444444' }}>
+              {selectedInviteIds.length + selectedPessoaIds.length} selecionado(s) de {convitesFiltrados.length + pessoasFiltradas.length}
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => {
+                const totalVisiveis = convitesFiltrados.length + pessoasFiltradas.length
+                const todosMarcados = (selectedInviteIds.length + selectedPessoaIds.length) === totalVisiveis
+                if (todosMarcados) {
+                  setSelectedInviteIds([])
+                  setSelectedPessoaIds([])
+                } else {
+                  setSelectedInviteIds(convitesFiltrados.map(c => c.id))
+                  setSelectedPessoaIds(pessoasFiltradas.map(p => p.id))
+                }
+              }}
+              style={{ ...outlineBtn, padding: '7px 14px', fontSize: 11, color: C.ink }}
+            >
+              {(selectedInviteIds.length + selectedPessoaIds.length) === (convitesFiltrados.length + pessoasFiltradas.length)
+                ? 'Desmarcar Todos'
+                : `Selecionar Todos (${convitesFiltrados.length + pessoasFiltradas.length})`}
+            </button>
+
+            {selectedInviteIds.length + selectedPessoaIds.length > 0 && (
+              <button
+                onClick={() => void excluirEmMassa('selecionados')}
+                style={{ ...btn, background: '#EF4444', color: '#FFFFFF', padding: '7px 16px', fontSize: 11 }}
+              >
+                Excluir Selecionados ({selectedInviteIds.length + selectedPessoaIds.length}) 🗑️
+              </button>
+            )}
+
+            <button
+              onClick={() => void excluirEmMassa('filtrados')}
+              style={{ ...btn, background: '#DC2626', color: '#FFFFFF', padding: '7px 16px', fontSize: 11 }}
+              title="Excluir todos os funcionários e candidatos visíveis no filtro atual"
+            >
+              Excluir Todos os Filtrados ({convitesFiltrados.length + pessoasFiltradas.length}) ⚠️
+            </button>
+          </div>
+        </div>
+      )}
+
       {inviteOpen && (
         <div style={{ ...card, marginBottom: 14 }}>
           <strong style={{ fontSize: 12 }}>Pré-cadastro e convite temporário</strong>
