@@ -622,6 +622,12 @@ export default function RhPage() {
   const [buscaPessoas, setBuscaPessoas] = useState('')
   const [ordemPessoas, setOrdemPessoas] = useState<'alfabetica' | 'novo' | 'velho'>('alfabetica')
 
+  // Bulk selection states
+  const [selectedInviteIds, setSelectedInviteIds] = useState<string[]>([])
+  const [selectedPessoaIds, setSelectedPessoaIds] = useState<string[]>([])
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+
   const convitesFiltrados = useMemo(() => {
     let arr = [...convites]
     if (buscaConvite.trim()) {
@@ -1002,9 +1008,27 @@ export default function RhPage() {
     await loadDetails(selected)
   }
 
-  const exportarFuncionariosCSV = () => {
-    const rows: string[][] = []
+  const exportarFuncionariosCSV = (tipo: 'todos' | 'filtrados' | 'selecionados' = 'todos') => {
+    let targetInvites: Convite[] = []
+    let targetPessoas: Funcionario[] = []
 
+    if (tipo === 'selecionados') {
+      targetInvites = convites.filter(c => selectedInviteIds.includes(c.id))
+      targetPessoas = pessoas.filter(p => selectedPessoaIds.includes(p.id))
+    } else if (tipo === 'filtrados') {
+      targetInvites = convitesFiltrados
+      targetPessoas = pessoasFiltradas
+    } else {
+      targetInvites = convites
+      targetPessoas = pessoas
+    }
+
+    if (targetInvites.length === 0 && targetPessoas.length === 0) {
+      toast('Nenhum registro selecionado para exportar.', 'error')
+      return
+    }
+
+    const rows: string[][] = []
     const headers = [
       'Nome Completo',
       'CPF',
@@ -1019,8 +1043,7 @@ export default function RhPage() {
       'Chave PIX / Dados Bancários'
     ]
 
-    // 1. Cadastros em Admissão (Convites)
-    convites.forEach(c => {
+    targetInvites.forEach(c => {
       const docPix = c.documentos?.find(d => d.item_id === 'pix' || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
       const dadosBancarios = docPix?.nome || ''
       const expired = new Date(c.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(c.status)
@@ -1049,9 +1072,8 @@ export default function RhPage() {
       ])
     })
 
-    // 2. Funcionários Cadastrados
-    pessoas.forEach(p => {
-      const jaExiste = convites.some(c => c.funcionario_id === p.id || (c.cpf && p.cpf && c.cpf.replace(/\D/g, '') === p.cpf.replace(/\D/g, '')))
+    targetPessoas.forEach(p => {
+      const jaExiste = targetInvites.some(c => c.funcionario_id === p.id || (c.cpf && p.cpf && c.cpf.replace(/\D/g, '') === p.cpf.replace(/\D/g, '')))
       if (!jaExiste) {
         rows.push([
           `"${(p.nome || '').replace(/"/g, '""')}"`,
@@ -1069,22 +1091,65 @@ export default function RhPage() {
       }
     })
 
-    if (rows.length === 0) {
-      toast('Nenhum funcionário cadastrado para exportar.', 'error')
-      return
-    }
-
     const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    link.download = `relatorio_funcionarios_rh_${new Date().toISOString().slice(0, 10)}.csv`
+    link.download = `relatorio_funcionarios_rh_${tipo}_${new Date().toISOString().slice(0, 10)}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    toast(`${rows.length} funcionário(s) exportado(s) com sucesso!`, 'success')
+    setShowExportModal(false)
+    toast(`${rows.length} registro(s) exportado(s) com sucesso!`, 'success')
+  }
+
+  async function excluirEmMassa(tipo: 'selecionados' | 'filtrados' | 'todos') {
+    let targetInvites: Convite[] = []
+    let targetPessoas: Funcionario[] = []
+
+    if (tipo === 'selecionados') {
+      targetInvites = convites.filter(c => selectedInviteIds.includes(c.id))
+      targetPessoas = pessoas.filter(p => selectedPessoaIds.includes(p.id))
+    } else if (tipo === 'filtrados') {
+      targetInvites = convitesFiltrados
+      targetPessoas = pessoasFiltradas
+    } else {
+      targetInvites = convites
+      targetPessoas = pessoas
+    }
+
+    const total = targetInvites.length + targetPessoas.length
+    if (total === 0) {
+      toast('Nenhum registro selecionado para excluir.', 'error')
+      return
+    }
+
+    const ok = await confirm(
+      'Excluir em Massa',
+      `Tem certeza que deseja excluir permanentemente ${total} registro(s) (${targetInvites.length} convite(s) e ${targetPessoas.length} funcionário(s))? Esta ação não pode ser desfeita.`,
+      { confirmLabel: `Excluir ${total} registro(s)`, confirmColor: '#EF4444' }
+    )
+    if (!ok) return
+
+    let deletedCount = 0
+    if (targetInvites.length > 0) {
+      const ids = targetInvites.map(c => c.id)
+      const { error } = await supabase.from('rh_admissao_convites').delete().in('id', ids)
+      if (!error) deletedCount += targetInvites.length
+    }
+    if (targetPessoas.length > 0) {
+      const ids = targetPessoas.map(p => p.id)
+      const { error } = await supabase.from('funcionarios').delete().in('id', ids)
+      if (!error) deletedCount += targetPessoas.length
+    }
+
+    setSelectedInviteIds([])
+    setSelectedPessoaIds([])
+    setShowDeleteModal(false)
+    await load()
+    toast(`${deletedCount} registro(s) excluído(s) com sucesso!`, 'success')
   }
 
   const completed = useMemo(() => details.etapas.filter(etapa => etapa.status === 'Concluída' || etapa.status === 'Dispensada').length, [details.etapas])
@@ -1117,8 +1182,11 @@ export default function RhPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center', marginBottom: 18, flexWrap: 'wrap' }}>
         <p style={{ color: C.inkSoft, fontSize: 12, margin: 0 }}>Admissão em quatro etapas, ficha de registro, histórico, documentos e exames ocupacionais.</p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button style={{ ...outlineBtn, color: '#34D399', borderColor: '#34D39966' }} onClick={exportarFuncionariosCSV}>
-            <FileSpreadsheet size={14} /> Exportar Excel (CSV)
+          <button style={{ ...outlineBtn, color: '#34D399', borderColor: '#34D39966', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowExportModal(true)}>
+            <FileSpreadsheet size={14} /> Exportar Excel...
+          </button>
+          <button style={{ ...outlineBtn, color: '#F87171', borderColor: '#F8717166', display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowDeleteModal(true)}>
+            <Trash2 size={14} /> Excluir em Massa...
           </button>
           <button style={outlineBtn} onClick={() => setInviteOpen(value => !value)}>
             <ClipboardPlus size={14} /> Gerar link de admissão
@@ -1211,14 +1279,8 @@ export default function RhPage() {
             {convitesFiltrados.map(invite => {
               const expired = new Date(invite.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(invite.status);
               const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link gerado';
+              const isChecked = selectedInviteIds.includes(invite.id);
               return (
-                <div key={invite.id}>
-                  <button
-                    onClick={() => setSelectedInvite(selectedInvite?.id === invite.id ? (null as unknown as Convite) : invite)}
-                  style={{
-                    width: '100%',
-                    display: 'block',
-                    textAlign: 'left',
                     padding: '12px 13px',
                     background: selectedInvite?.id === invite.id ? '#F59E0B18' : '#0B0C0E',
                     color: C.ink,
@@ -1339,21 +1401,205 @@ export default function RhPage() {
               <option value="velho">Admissão: Mais antigos</option>
             </select>
           </div>
-          {pessoasFiltradas.map(person => (
-            <div key={person.id}>
-              <button onClick={() => selected?.id === person.id ? setSelected(null) : void loadDetails(person)} style={{ width: '100%', display: 'block', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: selected?.id === person.id ? 0 : `1px solid ${C.border}`, padding: '12px 14px', color: C.ink, cursor: 'pointer' }}>
-                <strong>{person.nome}</strong>
-                <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>{person.cargo || 'Sem cargo'} · {person.matricula || 'Sem matrícula'} · {person.status}</div>
-              </button>
-              {selected?.id === person.id && (
-                <div style={{ background: '#0B0C0E', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '16px 14px' }}>
-                  <ArchivePanel person={selected} details={details} onBack={() => { setSelected(null); setDetails(emptyDetails) }} onDelete={() => void deleteEmployee(selected)} onOpen={documento => void openDocument(documento)} />
+          {pessoasFiltradas.map(person => {
+            const isChecked = selectedPessoaIds.includes(person.id);
+            return (
+              <div key={person.id} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={isChecked}
+                  onChange={e => {
+                    e.stopPropagation()
+                    setSelectedPessoaIds(prev => prev.includes(person.id) ? prev.filter(x => x !== person.id) : [...prev, person.id])
+                  }}
+                  style={{ width: 18, height: 18, cursor: 'pointer', accentColor: C.amber, flexShrink: 0 }}
+                />
+                <div style={{ flex: 1 }}>
+                  <button onClick={() => selected?.id === person.id ? setSelected(null) : void loadDetails(person)} style={{ width: '100%', display: 'block', textAlign: 'left', background: selected?.id === person.id ? '#F59E0B18' : 'transparent', border: 0, borderBottom: selected?.id === person.id ? 0 : `1px solid ${C.border}`, padding: '12px 14px', color: C.ink, cursor: 'pointer' }}>
+                    <strong>{person.nome}</strong>
+                    <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>{person.cargo || 'Sem cargo'} · {person.matricula || 'Sem matrícula'} · {person.status}</div>
+                  </button>
+                  {selected?.id === person.id && (
+                    <div style={{ background: '#0B0C0E', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '16px 14px' }}>
+                      <ArchivePanel person={selected} details={details} onBack={() => { setSelected(null); setDetails(emptyDetails) }} onDelete={() => void deleteEmployee(selected)} onOpen={documento => void openDocument(documento)} />
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))}
+              </div>
+            )
+          })}
         </section>
       </div>
+
+      {/* Modal de Exportação */}
+      {showExportModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, maxWidth: 440, width: '100%', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: C.ink, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <FileSpreadsheet color={C.green} size={18} /> Exportar Funcionários (Excel/CSV)
+              </h3>
+              <button onClick={() => setShowExportModal(false)} style={{ background: 'none', border: 0, color: C.inkSoft, cursor: 'pointer', fontSize: 16 }}>✕</button>
+            </div>
+
+            <p style={{ color: C.inkSoft, fontSize: 11, margin: 0, lineHeight: 1.5 }}>
+              Escolha qual grupo de funcionários você deseja exportar para a planilha:
+            </p>
+
+            <div style={{ display: 'grid', gap: 10 }}>
+              <button
+                onClick={() => exportarFuncionariosCSV('todos')}
+                style={{ ...outlineBtn, padding: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div>
+                  <strong style={{ display: 'block', fontSize: 12, color: C.ink }}>🌐 Exportar TODOS no Sistema</strong>
+                  <span style={{ fontSize: 10, color: C.inkSoft }}>Exporta todos os {convites.length + pessoas.length} registros cadastrados</span>
+                </div>
+                <span style={{ fontSize: 11, color: C.green, fontWeight: 900 }}>{convites.length + pessoas.length} registros →</span>
+              </button>
+
+              <button
+                onClick={() => exportarFuncionariosCSV('filtrados')}
+                style={{ ...outlineBtn, padding: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div>
+                  <strong style={{ display: 'block', fontSize: 12, color: C.ink }}>🔍 Exportar Apenas FILTRADOS na Tela</strong>
+                  <span style={{ fontSize: 10, color: C.inkSoft }}>Exporta apenas os {convitesFiltrados.length + pessoasFiltradas.length} resultados da busca atual</span>
+                </div>
+                <span style={{ fontSize: 11, color: C.amber, fontWeight: 900 }}>{convitesFiltrados.length + pessoasFiltradas.length} resultados →</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (selectedInviteIds.length === 0 && selectedPessoaIds.length === 0) {
+                    toast('Selecione ao menos um funcionário através das caixas (checkbox) na lista.', 'error')
+                    return
+                  }
+                  exportarFuncionariosCSV('selecionados')
+                }}
+                style={{ ...outlineBtn, padding: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: (selectedInviteIds.length + selectedPessoaIds.length) > 0 ? C.amber : C.border }}
+              >
+                <div>
+                  <strong style={{ display: 'block', fontSize: 12, color: C.ink }}>☑️ Exportar Apenas SELECIONADOS (Checkbox)</strong>
+                  <span style={{ fontSize: 10, color: C.inkSoft }}>Exporta apenas os {selectedInviteIds.length + selectedPessoaIds.length} marcados manualmente</span>
+                </div>
+                <span style={{ fontSize: 11, color: C.amber, fontWeight: 900 }}>{selectedInviteIds.length + selectedPessoaIds.length} marcados →</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Exclusão em Massa */}
+      {showDeleteModal && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, maxWidth: 440, width: '100%', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 900, color: '#F87171', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Trash2 color="#F87171" size={18} /> Excluir em Massa
+              </h3>
+              <button onClick={() => setShowDeleteModal(false)} style={{ background: 'none', border: 0, color: C.inkSoft, cursor: 'pointer', fontSize: 16 }}>✕</button>
+            </div>
+
+            <p style={{ color: C.inkSoft, fontSize: 11, margin: 0, lineHeight: 1.5 }}>
+              Escolha quais registros deseja excluir do sistema:
+            </p>
+
+            <div style={{ display: 'grid', gap: 10 }}>
+              <button
+                onClick={() => void excluirEmMassa('selecionados')}
+                style={{ ...outlineBtn, padding: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: '#EF444466' }}
+              >
+                <div>
+                  <strong style={{ display: 'block', fontSize: 12, color: C.ink }}>☑️ Excluir Apenas SELECIONADOS (Checkbox)</strong>
+                  <span style={{ fontSize: 10, color: C.inkSoft }}>Exclui os {selectedInviteIds.length + selectedPessoaIds.length} marcados manualmente</span>
+                </div>
+                <span style={{ fontSize: 11, color: '#F87171', fontWeight: 900 }}>{selectedInviteIds.length + selectedPessoaIds.length} marcados →</span>
+              </button>
+
+              <button
+                onClick={() => void excluirEmMassa('filtrados')}
+                style={{ ...outlineBtn, padding: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: '#EF444466' }}
+              >
+                <div>
+                  <strong style={{ display: 'block', fontSize: 12, color: C.ink }}>🔍 Excluir Apenas FILTRADOS na Tela</strong>
+                  <span style={{ fontSize: 10, color: C.inkSoft }}>Exclui os {convitesFiltrados.length + pessoasFiltradas.length} resultados da busca atual</span>
+                </div>
+                <span style={{ fontSize: 11, color: '#F87171', fontWeight: 900 }}>{convitesFiltrados.length + pessoasFiltradas.length} resultados →</span>
+              </button>
+
+              <button
+                onClick={() => void excluirEmMassa('todos')}
+                style={{ ...outlineBtn, padding: 14, textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderColor: '#EF4444AA' }}
+              >
+                <div>
+                  <strong style={{ display: 'block', fontSize: 12, color: '#F87171' }}>⚠️ Excluir TODOS os Cadastros</strong>
+                  <span style={{ fontSize: 10, color: C.inkSoft }}>Exclui todos os {convites.length + pessoas.length} registros do sistema</span>
+                </div>
+                <span style={{ fontSize: 11, color: '#F87171', fontWeight: 900 }}>{convites.length + pessoas.length} todos →</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Selection Bar */}
+      {(selectedInviteIds.length > 0 || selectedPessoaIds.length > 0) && (
+        <div style={{
+          position: 'fixed',
+          bottom: 20,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          zIndex: 9999,
+          background: '#0F1117',
+          border: `1px solid ${C.amber}`,
+          borderRadius: 8,
+          padding: '12px 20px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.85)',
+          flexWrap: 'wrap'
+        }}>
+          <span style={{ fontSize: 12, fontWeight: 900, color: C.ink }}>
+            ☑️ {selectedInviteIds.length + selectedPessoaIds.length} selecionado(s)
+          </span>
+
+          <button
+            onClick={() => {
+              setSelectedInviteIds(convitesFiltrados.map(c => c.id))
+              setSelectedPessoaIds(pessoasFiltradas.map(p => p.id))
+            }}
+            style={{ ...outlineBtn, fontSize: 10, padding: '5px 10px' }}
+          >
+            Selecionar visíveis ({convitesFiltrados.length + pessoasFiltradas.length})
+          </button>
+
+          <button
+            onClick={() => {
+              setSelectedInviteIds([])
+              setSelectedPessoaIds([])
+            }}
+            style={{ ...outlineBtn, fontSize: 10, padding: '5px 10px', color: C.inkSoft }}
+          >
+            Limpar
+          </button>
+
+          <button
+            onClick={() => exportarFuncionariosCSV('selecionados')}
+            style={{ ...btn('#10B981'), fontSize: 11, padding: '7px 14px', gap: 6, display: 'flex', alignItems: 'center' }}
+          >
+            <FileSpreadsheet size={14} /> Exportar ({selectedInviteIds.length + selectedPessoaIds.length})
+          </button>
+
+          <button
+            onClick={() => void excluirEmMassa('selecionados')}
+            style={{ ...btn('#EF4444'), fontSize: 11, padding: '7px 14px', gap: 6, display: 'flex', alignItems: 'center' }}
+          >
+            <Trash2 size={14} /> Excluir ({selectedInviteIds.length + selectedPessoaIds.length})
+          </button>
+        </div>
+      )}
 
       {ConfirmDialog}
       {PromptDialog}
