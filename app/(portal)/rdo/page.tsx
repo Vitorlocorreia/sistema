@@ -141,6 +141,7 @@ export default function RDO() {
   const [newDefinicaoServico, setNewDefinicaoServico] = useState('')
   const [newLiberacoes, setNewLiberacoes] = useState('')
   const [newFotos, setNewFotos] = useState<File[]>([])
+  const [isCreatingRdo, setIsCreatingRdo] = useState(false)
 
   // Equipments state in form
   const [equipForm, setEquipForm] = useState<{ nome: string; status: 'OPERANDO' | 'PARADO' | 'MANUTENÇÃO' }[]>([
@@ -344,93 +345,114 @@ export default function RDO() {
   const handleCreateRdo = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newObraId || !newResponsavel) return
+    if (isCreatingRdo) return
 
-    // 1. Insert RDO
-    const { data: rdoData, error: rdoErr } = await supabase.from('rdos').insert({
-      obra_id: newObraId,
-      data: newData,
-      responsavel: newResponsavel,
-      cargo: newCargo,
-      crea: newCrea,
-      clima_manha: newClimaManha,
-      clima_tarde: newClimaTarde,
-      condicao_solo: newCondicaoSolo,
-      efetivo_proprio: parseInt(newEfetivoProprio) || 0,
-      efetivo_terceiros: temTerceirizados ? (parseInt(newEfetivoTerceiros) || 0) : 0,
-      status: 'Rascunho',
-      resumo: newResumo || `Diário preenchido por ${newResponsavel}.`,
-      ocorrencias: newOcorrencias || null,
-      definicao_servico: newDefinicaoServico || null,
-      liberacoes: newLiberacoes || null
-    }).select().single()
+    setIsCreatingRdo(true)
+    try {
+      // Trava de duplicidade: verifica se ja existe RDO para esta mesma obra nesta mesma data
+      const { data: existingRdo } = await supabase
+        .from('rdos')
+        .select('id')
+        .eq('obra_id', newObraId)
+        .eq('data', newData)
+        .limit(1)
 
-    if (rdoErr || !rdoData) {
-      toast('Erro ao criar diário de obra', 'error')
-      return
-    }
+      if (existingRdo && existingRdo.length > 0) {
+        toast('Atenção: Já existe um Diário de Obra lançado para esta obra nesta mesma data!', 'error')
+        return
+      }
 
-    // 2. Insert activities
-    const validActivities = actForm.filter(a => a.trim() !== '')
-    if (validActivities.length > 0) {
-      await supabase.from('rdo_atividades').insert(
-        validActivities.map(desc => ({ rdo_id: rdoData.id, descricao: desc }))
-      )
-    }
+      // 1. Insert RDO
+      const { data: rdoData, error: rdoErr } = await supabase.from('rdos').insert({
+        obra_id: newObraId,
+        data: newData,
+        responsavel: newResponsavel,
+        cargo: newCargo,
+        crea: newCrea,
+        clima_manha: newClimaManha,
+        clima_tarde: newClimaTarde,
+        condicao_solo: newCondicaoSolo,
+        efetivo_proprio: parseInt(newEfetivoProprio) || 0,
+        efetivo_terceiros: temTerceirizados ? (parseInt(newEfetivoTerceiros) || 0) : 0,
+        status: 'Rascunho',
+        resumo: newResumo || `Diário preenchido por ${newResponsavel}.`,
+        ocorrencias: newOcorrencias || null,
+        definicao_servico: newDefinicaoServico || null,
+        liberacoes: newLiberacoes || null
+      }).select().single()
 
-    // 3. Insert equipments
-    const validEquips = equipForm.filter(eq => eq.nome.trim() !== '')
-    if (validEquips.length > 0) {
-      await supabase.from('rdo_equipamentos').insert(
-        validEquips.map(eq => ({ rdo_id: rdoData.id, nome: eq.nome, status: eq.status }))
-      )
-    }
+      if (rdoErr || !rdoData) {
+        toast('Erro ao criar diário de obra: ' + (rdoErr?.message || ''), 'error')
+        return
+      }
 
-    if (temTerceirizados) {
-      const validTerceiros = newTerceiros.filter(item => item.empresa_nome.trim() !== '')
-      if (validTerceiros.length > 0) {
-        await supabase.from('rdo_efetivos_terceiros').insert(validTerceiros.map(item => ({
+      // 2. Insert activities
+      const validActivities = actForm.filter(a => a.trim() !== '')
+      if (validActivities.length > 0) {
+        await supabase.from('rdo_atividades').insert(
+          validActivities.map(desc => ({ rdo_id: rdoData.id, descricao: desc }))
+        )
+      }
+
+      // 3. Insert equipments
+      const validEquips = equipForm.filter(eq => eq.nome.trim() !== '')
+      if (validEquips.length > 0) {
+        await supabase.from('rdo_equipamentos').insert(
+          validEquips.map(eq => ({ rdo_id: rdoData.id, nome: eq.nome, status: eq.status }))
+        )
+      }
+
+      if (temTerceirizados) {
+        const validTerceiros = newTerceiros.filter(item => item.empresa_nome.trim() !== '')
+        if (validTerceiros.length > 0) {
+          await supabase.from('rdo_efetivos_terceiros').insert(validTerceiros.map(item => ({
+            rdo_id: rdoData.id,
+            empresa_nome: item.empresa_nome.trim(),
+            funcao: item.funcao.trim() || null,
+            quantidade: parseInt(item.quantidade) || 1,
+            observacoes: item.observacoes.trim() || null,
+            pagamento_status: 'pendente'
+          })))
+        }
+      }
+
+      const validPlanejamento = newPlanejadoExecutado.filter(item => item.servico.trim() !== '')
+      if (validPlanejamento.length > 0) {
+        await supabase.from('rdo_planejado_executado').insert(validPlanejamento.map(item => ({
           rdo_id: rdoData.id,
-          empresa_nome: item.empresa_nome.trim(),
-          funcao: item.funcao.trim() || null,
-          quantidade: parseInt(item.quantidade) || 1,
+          servico: item.servico.trim(),
+          unidade: item.unidade.trim() || null,
+          quantidade_planejada: parseFloat(item.planejada) || 0,
+          quantidade_executada: parseFloat(item.executada) || 0,
           observacoes: item.observacoes.trim() || null,
-          pagamento_status: 'pendente'
         })))
       }
+
+      for (const foto of newFotos) {
+        const path = `${newObraId}/${rdoData.id}/${crypto.randomUUID()}-${foto.name}`
+        const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, foto)
+        if (!uploadError) await supabase.from('fotos').insert({ obra_id: newObraId, rdo_id: rdoData.id, legenda: `Foto do RDO ${newData}`, imagem_url: path, data_iso: newData })
+      }
+
+      setIsCreateOpen(false)
+      toast('Diário de Obra criado com sucesso!', 'success')
+
+      // Reset form
+      setActForm([''])
+      setNewResumo(''); setNewOcorrencias(''); setNewDefinicaoServico(''); setNewLiberacoes(''); setNewFotos([])
+      setTemTerceirizados(false)
+      setNewEfetivoTerceiros('0')
+      setNewTerceiros([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '' }])
+      setNewPlanejadoExecutado([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
+      setEquipForm([{ nome: '', status: 'OPERANDO' }])
+
+      // Refresh
+      await loadData()
+    } catch (err: any) {
+      toast('Falha ao criar RDO: ' + (err.message || 'Erro inesperado'), 'error')
+    } finally {
+      setIsCreatingRdo(false)
     }
-
-    const validPlanejamento = newPlanejadoExecutado.filter(item => item.servico.trim() !== '')
-    if (validPlanejamento.length > 0) {
-      await supabase.from('rdo_planejado_executado').insert(validPlanejamento.map(item => ({
-        rdo_id: rdoData.id,
-        servico: item.servico.trim(),
-        unidade: item.unidade.trim() || null,
-        quantidade_planejada: parseFloat(item.planejada) || 0,
-        quantidade_executada: parseFloat(item.executada) || 0,
-        observacoes: item.observacoes.trim() || null,
-      })))
-    }
-
-    for (const foto of newFotos) {
-      const path = `${newObraId}/${rdoData.id}/${crypto.randomUUID()}-${foto.name}`
-      const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, foto)
-      if (!uploadError) await supabase.from('fotos').insert({ obra_id: newObraId, rdo_id: rdoData.id, legenda: `Foto do RDO ${newData}`, imagem_url: path, data_iso: newData })
-    }
-
-    setIsCreateOpen(false)
-    toast('Diário de Obra criado com sucesso!', 'success')
-
-    // Reset form
-    setActForm([''])
-    setNewResumo(''); setNewOcorrencias(''); setNewDefinicaoServico(''); setNewLiberacoes(''); setNewFotos([])
-    setTemTerceirizados(false)
-    setNewEfetivoTerceiros('0')
-    setNewTerceiros([{ empresa_nome: '', funcao: '', quantidade: '1', observacoes: '' }])
-    setNewPlanejadoExecutado([{ servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])
-    setEquipForm([{ nome: '', status: 'OPERANDO' }])
-
-    // Refresh
-    loadData()
   }
 
   async function handleUpdateRdo() {
@@ -1378,8 +1400,24 @@ export default function RDO() {
                 )}
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                  <button type="button" onClick={() => setIsCreateOpen(false)} style={btnGhost}>Cancelar</button>
-                  <button type="submit" style={{ ...inputStyle, background: C.amber, color: '#0b0c0e', border: 'none', fontWeight: 900, width: 'auto', padding: '8px 18px', cursor: 'pointer' }}>Salvar Diário</button>
+                  <button type="button" onClick={() => setIsCreateOpen(false)} style={btnGhost} disabled={isCreatingRdo}>Cancelar</button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingRdo}
+                    style={{
+                      ...inputStyle,
+                      background: C.amber,
+                      color: '#0b0c0e',
+                      border: 'none',
+                      fontWeight: 900,
+                      width: 'auto',
+                      padding: '8px 18px',
+                      cursor: isCreatingRdo ? 'not-allowed' : 'pointer',
+                      opacity: isCreatingRdo ? 0.6 : 1
+                    }}
+                  >
+                    {isCreatingRdo ? 'Criando Diário...' : 'Salvar Diário'}
+                  </button>
                 </div>
               </form>
             </motion.div>
