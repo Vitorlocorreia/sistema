@@ -3907,7 +3907,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     void load()
   }
 
-  const filtered = contas.filter(c => {
+  const contasDaEmpresa = useMemo(() => {
+    if (colaboradorAtivo.cargo === 'admin_geral') return contas
+    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+    return ids.length > 0 ? contas.filter(c => ids.includes(c.empresa_id)) : contas
+  }, [contas, colaboradorAtivo])
+
+  const filtered = contasDaEmpresa.filter(c => {
     const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
     const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
     const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
