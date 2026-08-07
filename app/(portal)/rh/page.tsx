@@ -73,7 +73,7 @@ type Details = {
   etapas: EtapaAdmissao[]
 }
 type DocumentoCadastro = { id: string; modelo_id: string; item_id: string; nome: string; storage_path: string; status: string; observacao_rh: string | null; enviado_em: string | null; created_at?: string | null; revisado_em?: string | null; modelo?: { id: string; ordem: number; nome: string } }
-type Convite = { id: string; nome_destinatario: string; email_destinatario: string | null; telefone_destinatario: string | null; cpf: string | null; matricula: string | null; endereco: string | null; data_admissao: string | null; data_inicio_efetivo: string | null; inicio_efetivo: boolean; cargo: string | null; obra: string | null; etapa_atual: number; expires_at: string; status: string; token_code: string | null; justificativa_devolucao: string | null; created_at: string; revogado_em: string | null; aprovado_em: string | null; funcionario_id: string | null; documentos: DocumentoCadastro[] }
+type Convite = { id: string; nome_destinatario: string; email_destinatario: string | null; telefone_destinatario: string | null; cpf: string | null; matricula: string | null; endereco: string | null; data_admissao: string | null; data_inicio_efetivo: string | null; inicio_efetivo: boolean; cargo: string | null; obra: string | null; etapa_atual: number; expires_at: string; status: string; token_code: string | null; justificativa_devolucao: string | null; created_at: string; revogado_em: string | null; aprovado_em: string | null; funcionario_id: string | null; criado_por?: string | null; documentos: DocumentoCadastro[] }
 
 const emptyDetails: Details = { historico: [], documentos: [], exames: [], etapas: [] }
 const emptyForm = { nome: '', cpf: '', matricula: '', cargo: '', data_admissao: '', telefone: '', email: '', endereco: '' }
@@ -139,7 +139,7 @@ function ArchivePanel({ person, details, onBack, onDelete, onOpen }: { person: F
 const GUIA_ITEM_ID = 'identificacao'
 const LAUDO_ITEM_ID = 'responsavel'
 
-function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke, onRegenerate, onCopy, onDelete, onRefresh }: {
+function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke, onRegenerate, onCopy, onDelete, onRefresh, colaboradorAtivo, colaboradores = [] }: {
   invite: Convite
   modelos: ModeloAdmissao[]
   onOpen: (documento: DocumentoCadastro) => void
@@ -150,6 +150,8 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
   onCopy: () => void
   onDelete: () => void
   onRefresh?: () => Promise<void> | void
+  colaboradorAtivo?: any
+  colaboradores?: Array<{ id: string; nome: string; email?: string }>
 }) {
   const [activeFolder, setActiveFolder] = useState(1)
   const [uploadingGuia, setUploadingGuia] = useState(false)
@@ -702,16 +704,23 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
 
         <div style={{ display: 'grid', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
           {/* Evento 1: Criação do Convite pelo RH */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, padding: '7px 9px', background: '#12141C', borderRadius: 4, border: `1px solid ${C.border}` }}>
-            <div>
-              <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginRight: 6, fontWeight: 800 }}>[Empresa / RH]</span>
-              <strong style={{ color: C.ink }}>Convite de Admissão Gerado</strong>
-              <span style={{ color: C.inkSoft, marginLeft: 6 }}>({invite.cargo || 'Cargo n/i'}{invite.obra ? ` · Obra: ${invite.obra}` : ''})</span>
-            </div>
-            <span style={{ color: C.inkSoft, fontSize: 9 }}>
-              📅 {new Date(invite.created_at).toLocaleString('pt-BR')}
-            </span>
-          </div>
+          {(() => {
+            const criadorObj = colaboradores.find(c => c.id === invite.criado_por)
+            const nomeCriador = criadorObj?.nome || (colaboradorAtivo?.nome ? colaboradorAtivo.nome : null)
+            return (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, padding: '7px 9px', background: '#12141C', borderRadius: 4, border: `1px solid ${C.border}` }}>
+                <div>
+                  <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginRight: 6, fontWeight: 800 }}>[Empresa / RH]</span>
+                  <strong style={{ color: C.ink }}>Convite de Admissão Gerado</strong>
+                  {nomeCriador && <span style={{ color: C.amber, fontWeight: 700, marginLeft: 6 }}>· Usuário: {nomeCriador}</span>}
+                  <span style={{ color: C.inkSoft, marginLeft: 6 }}>({invite.cargo || 'Cargo n/i'}{invite.obra ? ` · Obra: ${invite.obra}` : ''})</span>
+                </div>
+                <span style={{ color: C.inkSoft, fontSize: 9 }}>
+                  📅 {new Date(invite.created_at).toLocaleString('pt-BR')}
+                </span>
+              </div>
+            )
+          })()}
 
           {/* Eventos dos Documentos Enviados pelo Candidato ou pelo RH */}
           {invite.documentos.slice().sort((a, b) => new Date(b.enviado_em || b.created_at || 0).getTime() - new Date(a.enviado_em || a.created_at || 0).getTime()).map(doc => {
@@ -720,6 +729,11 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
             const badgeColor = isRH ? '#3B82F6' : '#F59E0B'
             const dataAnexo = doc.enviado_em || doc.created_at || invite.created_at
 
+            const criadorConviteObj = colaboradores.find(c => c.id === invite.criado_por)
+            const nomeAutorAnexo = isRH 
+              ? (criadorConviteObj?.nome || colaboradorAtivo?.nome || 'RH / Empresa') 
+              : (invite.nome_destinatario || 'Candidato')
+
             return (
               <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, fontSize: 10, padding: '7px 9px', background: '#12141C', borderRadius: 4, border: `1px solid ${C.border}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -727,13 +741,20 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                     {autorBadge}
                   </span>
                   <strong style={{ color: C.ink }}>{doc.nome}</strong>
+                  <span style={{ fontSize: 9, color: C.inkSoft }}>
+                    · Por: <strong style={{ color: C.ink }}>{nomeAutorAnexo}</strong>
+                  </span>
                   <span style={{ fontSize: 9, color: doc.status === 'aprovado' ? '#4ADE80' : doc.status === 'devolvido' ? '#F87171' : C.amber, fontWeight: 700 }}>
                     · {doc.status === 'aprovado' ? '✓ Aprovado' : doc.status === 'devolvido' ? '⚠️ Devolvido' : '⏳ Aguardando análise'}
                   </span>
                 </div>
                 <div style={{ fontSize: 9, color: C.inkSoft, textAlign: 'right' }}>
                   <div>Anexado em: <strong>{new Date(dataAnexo).toLocaleString('pt-BR')}</strong></div>
-                  {doc.revisado_em && <div style={{ color: C.amber, fontSize: 8, marginTop: 2 }}>Analisado pelo RH em: {new Date(doc.revisado_em).toLocaleString('pt-BR')}</div>}
+                  {doc.revisado_em && (
+                    <div style={{ color: C.amber, fontSize: 8, marginTop: 2 }}>
+                      {doc.observacao_rh || 'Analisado pelo RH'} em: {new Date(doc.revisado_em).toLocaleString('pt-BR')}
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -825,15 +846,29 @@ export default function RhPage() {
     return arr
   }, [pessoas, buscaPessoas, ordemPessoas])
 
+  const [colaboradorAtivo, setColaboradorAtivo] = useState<any>(null)
+  const [colaboradores, setColaboradores] = useState<Array<{ id: string; nome: string; email?: string }>>([])
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem('colaborador_sessao')
+      if (raw) {
+        try { setColaboradorAtivo(JSON.parse(raw)) } catch (e) {}
+      }
+    }
+  }, [])
+
   const load = useCallback(async (isBackground = false) => {
-    const [{ data: peopleData, error: peopleError }, { data: modelData, error: modelError }, { data: inviteData, error: inviteError }] = await Promise.all([
+    const [{ data: peopleData, error: peopleError }, { data: modelData, error: modelError }, { data: inviteData, error: inviteError }, { data: colabsData }] = await Promise.all([
       supabase.from('funcionarios').select('*').order('nome').limit(5000),
       supabase.from('rh_modelos_admissao').select('*').eq('ativo', true).order('ordem'),
       supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*, modelo:rh_modelos_admissao(id,ordem,nome))').neq('status', 'aprovado').order('created_at', { ascending: false }).limit(5000),
+      supabase.from('colaboradores').select('id, nome, email'),
     ])
 
     if (peopleData) setPessoas(peopleData as Funcionario[])
     if (modelData) setModelos(modelData as ModeloAdmissao[])
+    if (colabsData) setColaboradores(colabsData as any[])
     if (inviteData) {
       setConvites(inviteData as Convite[])
       setSelectedInvite(current => current ? ((inviteData).find(item => item.id === current.id) as Convite | undefined) ?? (null as unknown as Convite) : (null as unknown as Convite))
@@ -951,7 +986,8 @@ export default function RhPage() {
       token_code: token,
       expires_at: expiresAt,
       status: 'ativo',
-      etapa_atual: 1
+      etapa_atual: 1,
+      criado_por: authData.user.id
     }).select().single()
 
     if (error) {
@@ -1060,9 +1096,14 @@ export default function RhPage() {
       if (observacao === null) return
       observacao = observacao.trim()
     }
-    const { error } = await supabase.from('rh_admissao_documentos').update({ status, observacao_rh: observacao, revisado_em: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', documento.id)
+    const nomeUsuario = colaboradorAtivo?.nome || 'RH'
+    const obsComUsuario = devolvendo 
+      ? (observacao ? `[${nomeUsuario}]: ${observacao}` : `Devolvido por ${nomeUsuario}`)
+      : `Aprovado por ${nomeUsuario}`
+
+    const { error } = await supabase.from('rh_admissao_documentos').update({ status, observacao_rh: obsComUsuario, revisado_em: new Date().toISOString(), updated_at: new Date().toISOString() }).eq('id', documento.id)
     if (error) return toast(error.message, 'error')
-    await supabase.from('rh_admissao_convites').update(devolvendo ? { status: 'devolvido', justificativa_devolucao: observacao, updated_at: new Date().toISOString() } : { justificativa_devolucao: null, updated_at: new Date().toISOString() }).eq('id', invite.id)
+    await supabase.from('rh_admissao_convites').update(devolvendo ? { status: 'devolvido', justificativa_devolucao: obsComUsuario, updated_at: new Date().toISOString() } : { justificativa_devolucao: null, updated_at: new Date().toISOString() }).eq('id', invite.id)
     await load()
     toast(status === 'aprovado' ? 'Documento aprovado.' : 'Pendência enviada ao candidato.', 'success')
   }
@@ -1744,7 +1785,7 @@ export default function RhPage() {
                 </button>
                   {selectedInvite?.id === invite.id && (
                     <div style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderTop: 0, borderBottomLeftRadius: 5, borderBottomRightRadius: 5, padding: 16, marginTop: -6 }}>
-                      <CadastroTable invite={selectedInvite} modelos={modelos} onOpen={documento => void openCadastroDocument(documento)} onReview={(documento, status) => void reviewCadastroDocument(selectedInvite, documento, status)} onApprove={() => void approveInvite(selectedInvite)} onRevoke={() => void revokeInvite(selectedInvite)} onRegenerate={() => void regenerateInvite(selectedInvite)} onCopy={() => void copyInviteCode(selectedInvite)} onDelete={() => void deleteInvite(selectedInvite)} onRefresh={() => load()} />
+                      <CadastroTable invite={selectedInvite} modelos={modelos} onOpen={documento => void openCadastroDocument(documento)} onReview={(documento, status) => void reviewCadastroDocument(selectedInvite, documento, status)} onApprove={() => void approveInvite(selectedInvite)} onRevoke={() => void revokeInvite(selectedInvite)} onRegenerate={() => void regenerateInvite(selectedInvite)} onCopy={() => void copyInviteCode(selectedInvite)} onDelete={() => void deleteInvite(selectedInvite)} onRefresh={() => load()} colaboradorAtivo={colaboradorAtivo} colaboradores={colaboradores} />
                     </div>
                   )}
                 </div>
