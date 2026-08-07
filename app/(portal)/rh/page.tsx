@@ -72,7 +72,7 @@ type Details = {
   exames: Array<Record<string, string | null>>
   etapas: EtapaAdmissao[]
 }
-type DocumentoCadastro = { id: string; modelo_id: string; item_id: string; nome: string; storage_path: string; status: string; observacao_rh: string | null; enviado_em: string | null; modelo?: { id: string; ordem: number; nome: string } }
+type DocumentoCadastro = { id: string; modelo_id: string; item_id: string; nome: string; storage_path: string; status: string; observacao_rh: string | null; enviado_em: string | null; created_at?: string | null; revisado_em?: string | null; modelo?: { id: string; ordem: number; nome: string } }
 type Convite = { id: string; nome_destinatario: string; email_destinatario: string | null; telefone_destinatario: string | null; cpf: string | null; matricula: string | null; endereco: string | null; data_admissao: string | null; data_inicio_efetivo: string | null; inicio_efetivo: boolean; cargo: string | null; obra: string | null; etapa_atual: number; expires_at: string; status: string; token_code: string | null; justificativa_devolucao: string | null; created_at: string; revogado_em: string | null; aprovado_em: string | null; funcionario_id: string | null; documentos: DocumentoCadastro[] }
 
 const emptyDetails: Details = { historico: [], documentos: [], exames: [], etapas: [] }
@@ -682,6 +682,58 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
                   ) : (
                     <span style={{ color: C.inkSoft, fontSize: 9 }}>Aguardando envio</span>
                   )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── REGISTRO DE ATIVIDADES E LOG DE ANEXOS (RH + CANDIDATO) ── */}
+      <div style={{ marginTop: 14, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+          <strong style={{ fontSize: 11, color: C.amber, display: 'flex', alignItems: 'center', gap: 6 }}>
+            📜 Log de Registro & Histórico de Anexos (Rastreabilidade)
+          </strong>
+          <span style={{ fontSize: 9, color: C.inkSoft }}>
+            {invite.documentos.length + 1} registro(s) auditado(s)
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+          {/* Evento 1: Criação do Convite pelo RH */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, padding: '7px 9px', background: '#12141C', borderRadius: 4, border: `1px solid ${C.border}` }}>
+            <div>
+              <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginRight: 6, fontWeight: 800 }}>[Empresa / RH]</span>
+              <strong style={{ color: C.ink }}>Convite de Admissão Gerado</strong>
+              <span style={{ color: C.inkSoft, marginLeft: 6 }}>({invite.cargo || 'Cargo n/i'}{invite.obra ? ` · Obra: ${invite.obra}` : ''})</span>
+            </div>
+            <span style={{ color: C.inkSoft, fontSize: 9 }}>
+              📅 {new Date(invite.created_at).toLocaleString('pt-BR')}
+            </span>
+          </div>
+
+          {/* Eventos dos Documentos Enviados pelo Candidato ou pelo RH */}
+          {invite.documentos.slice().sort((a, b) => new Date(b.enviado_em || b.created_at || 0).getTime() - new Date(a.enviado_em || a.created_at || 0).getTime()).map(doc => {
+            const isRH = doc.item_id === '__guia_rh__' || doc.storage_path?.includes('pix') || doc.nome?.includes('Dados Bancários')
+            const autorBadge = isRH ? '[Empresa / RH]' : '[Candidato / Funcionário]'
+            const badgeColor = isRH ? '#3B82F6' : '#F59E0B'
+            const dataAnexo = doc.enviado_em || doc.created_at || invite.created_at
+
+            return (
+              <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, fontSize: 10, padding: '7px 9px', background: '#12141C', borderRadius: 4, border: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 8, background: `${badgeColor}20`, color: badgeColor === '#3B82F6' ? '#60A5FA' : C.amber, border: `1px solid ${badgeColor}44`, padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
+                    {autorBadge}
+                  </span>
+                  <strong style={{ color: C.ink }}>{doc.nome}</strong>
+                  <span style={{ fontSize: 9, color: doc.status === 'aprovado' ? '#4ADE80' : doc.status === 'devolvido' ? '#F87171' : C.amber, fontWeight: 700 }}>
+                    · {doc.status === 'aprovado' ? '✓ Aprovado' : doc.status === 'devolvido' ? '⚠️ Devolvido' : '⏳ Aguardando análise'}
+                  </span>
+                </div>
+                <div style={{ fontSize: 9, color: C.inkSoft, textAlign: 'right' }}>
+                  <div>Anexado em: <strong>{new Date(dataAnexo).toLocaleString('pt-BR')}</strong></div>
+                  {doc.revisado_em && <div style={{ color: C.amber, fontSize: 8, marginTop: 2 }}>Analisado pelo RH em: {new Date(doc.revisado_em).toLocaleString('pt-BR')}</div>}
                 </div>
               </div>
             )
