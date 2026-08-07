@@ -756,9 +756,22 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
             const badgeColor = isRH ? '#3B82F6' : '#F59E0B'
             const dataAnexo = doc.enviado_em || doc.created_at || invite.created_at
 
-            const nomeAutorAnexo = isRH 
-              ? resolveNomeCriador(invite.criado_por, colaboradores) 
-              : (invite.nome_destinatario || 'Candidato')
+            let nomeAutorAnexo = invite.nome_destinatario || 'Candidato'
+            if (isRH) {
+              const criador = resolveNomeCriador(invite.criado_por, colaboradores)
+              if (criador !== 'Gestor RH') {
+                nomeAutorAnexo = criador
+              } else if (doc.observacao_rh) {
+                const match = doc.observacao_rh.match(/Aprovado por (.*)/) || doc.observacao_rh.match(/\[(.*)\]:/) || doc.observacao_rh.match(/Devolvido por (.*)/)
+                if (match) {
+                  nomeAutorAnexo = match[1]
+                } else {
+                  nomeAutorAnexo = 'Gestor RH'
+                }
+              } else {
+                nomeAutorAnexo = 'Gestor RH'
+              }
+            }
 
             return (
               <div key={doc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, fontSize: 10, padding: '7px 9px', background: '#12141C', borderRadius: 4, border: `1px solid ${C.border}` }}>
