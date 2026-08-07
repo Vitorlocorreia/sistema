@@ -1661,7 +1661,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     let fetchedContas = (c as ContaComRelacoes[]) ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const oIds = colaboradorAtivo.obras_ids || []
-      fetchedContas = fetchedContas.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : oIds.includes('geral'))
+      fetchedContas = fetchedContas.filter(conta => (conta.obra_id && conta.obra_id !== 'geral') ? oIds.includes(conta.obra_id) : oIds.includes('geral'))
     }
     
     setContas(fetchedContas)
@@ -2369,7 +2369,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     let fetchedContasFornecedores = c ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const oIds = colaboradorAtivo.obras_ids || []
-      fetchedContasFornecedores = fetchedContasFornecedores.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : oIds.includes('geral'))
+      fetchedContasFornecedores = fetchedContasFornecedores.filter(conta => (conta.obra_id && conta.obra_id !== 'geral') ? oIds.includes(conta.obra_id) : oIds.includes('geral'))
     }
     setContasFornecedores(fetchedContasFornecedores)
     setLoading(false)
@@ -3010,8 +3010,20 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
               <div>
                 <label style={label}>Obra Vinculada</label>
                 <select style={input} value={form.obra_id} onChange={e => setForm(f => ({ ...f, obra_id: e.target.value }))}>
-                  <option value="">Geral / Administrativo</option>
-                  {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                  {(() => {
+                    const temGeral = colaboradorAtivo.cargo === 'admin_geral' || (colaboradorAtivo.obras_ids || []).includes('geral') || obras.some(o => o.id === 'geral')
+                    const dbObras = obras.filter(o => o.id !== 'geral')
+                    return (
+                      <>
+                        {temGeral ? (
+                          <option value="">Geral / Administrativo</option>
+                        ) : (
+                          <option value="">Selecione a Obra</option>
+                        )}
+                        {dbObras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                      </>
+                    )
+                  })()}
                 </select>
               </div>
               <div>
@@ -3513,7 +3525,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     let fetchedContas = (c as ContaComRelacoes[]) ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const oIds = colaboradorAtivo.obras_ids || []
-      fetchedContas = fetchedContas.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : oIds.includes('geral'))
+      fetchedContas = fetchedContas.filter(conta => (conta.obra_id && conta.obra_id !== 'geral') ? oIds.includes(conta.obra_id) : oIds.includes('geral'))
     }
     setContas(fetchedContas)
     setEmpresas(e ?? [])
@@ -4912,8 +4924,20 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 <div>
                   <label style={label}>Obra Vinculada</label>
                   <select style={input} value={formEdicao.obra_id || ''} onChange={e => setFormEdicao(f => ({ ...f, obra_id: e.target.value }))}>
-                    <option value="">Geral / Administrativo</option>
-                    {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                    {(() => {
+                      const temGeral = colaboradorAtivo.cargo === 'admin_geral' || (colaboradorAtivo.obras_ids || []).includes('geral') || obras.some(o => o.id === 'geral')
+                      const dbObras = obras.filter(o => o.id !== 'geral')
+                      return (
+                        <>
+                          {temGeral ? (
+                            <option value="">Geral / Administrativo</option>
+                          ) : (
+                            <option value="">Selecione a Obra</option>
+                          )}
+                          {dbObras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                        </>
+                      )
+                    })()}
                   </select>
                 </div>
               </div>
