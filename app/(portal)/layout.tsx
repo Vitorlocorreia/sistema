@@ -3,9 +3,10 @@ import { useState, useRef, useEffect, useCallback } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import {
   LayoutGrid, Wallet, DollarSign, Clock, Package,
-  Camera, Building2, FileText, Truck, ChevronRight, GripVertical, Settings, X, Menu, LogOut, Users
+  Camera, Building2, FileText, Truck, ChevronRight, GripVertical, Settings, X, Menu, LogOut, Users, Sun, Moon
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
+import { useTheme } from '@/components/ThemeProvider'
 import type { Colaborador } from '@/lib/types'
 import { motion, AnimatePresence } from 'motion/react'
 
@@ -93,6 +94,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const [colaborador, setColaborador] = useState<Colaborador | null>(null)
   const [appsAutorizados, setAppsAutorizados] = useState<string[]>([])
   const [authChecked, setAuthChecked] = useState(false)
+  const { theme, toggleTheme } = useTheme()
 
   // ── Auth guard OTIMISTA: mostra UI imediatamente a partir do cache local ───
   useEffect(() => {
@@ -284,12 +286,21 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             <span className="text-[9px] text-[#9CA3AF] uppercase tracking-widest block">Portal Construtora</span>
           </div>
         </div>
-        {colaborador?.cargo === 'admin_geral' && <button
-          onClick={() => setMobileOpen(true)}
-          className="p-2 -mr-2 text-[#9CA3AF] hover:text-[#F3F4F6] focus:outline-none"
-        >
-          <Menu size={22} />
-        </button>}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Modo Claro ☀️' : 'Modo Escuro 🌙'}
+            style={{ border: 0, background: 'transparent', cursor: 'pointer', padding: 6, color: C.inkSoft }}
+          >
+            {theme === 'dark' ? <Sun size={18} color={C.amber} /> : <Moon size={18} color={C.amber} />}
+          </button>
+          {colaborador?.cargo === 'admin_geral' && <button
+            onClick={() => setMobileOpen(true)}
+            className="p-2 -mr-2 text-[#9CA3AF] hover:text-[#F3F4F6] focus:outline-none"
+          >
+            <Menu size={22} />
+          </button>}
+        </div>
       </header>
 
       {/* ── BACKDROP ─────────────────────────────────────────────── */}
@@ -445,13 +456,25 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
               </div>
             </div>
             <button
+              onClick={toggleTheme}
+              title={theme === 'dark' ? 'Alternar para Modo Claro ☀️' : 'Alternar para Modo Escuro 🌙'}
+              style={{
+                all: 'unset', cursor: 'pointer',
+                width: 28, height: 28, borderRadius: 2, flexShrink: 0,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                border: `1px solid ${C.border}`, color: C.inkSoft, transition: 'all 0.15s',
+              }}
+            >
+              {theme === 'dark' ? <Sun size={13} color={C.amber} /> : <Moon size={13} color={C.amber} />}
+            </button>
+            <button
               onClick={handleLogout}
               title="Sair"
               style={{
                 all: 'unset', cursor: 'pointer',
                 width: 28, height: 28, borderRadius: 2, flexShrink: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: '1px solid #1E2230', color: '#4B5563', transition: 'all 0.15s',
+                border: `1px solid ${C.border}`, color: C.inkSoft, transition: 'all 0.15s',
               }}
               className="hover:border-red-500/40 hover:text-red-400 hover:bg-red-500/10"
             >

@@ -1,24 +1,59 @@
 @import "tailwindcss";
 
+:root, [data-theme="dark"] {
+  --theme-bg: #0B0C0E;
+  --theme-bg-panel: #12141C;
+  --theme-bg-card: #16181C;
+  --theme-bg-white: #1E2230;
+  --theme-ink: #F3F4F6;
+  --theme-ink-soft: #9CA3AF;
+  --theme-border: #222530;
+  --theme-amber: #F59E0B;
+  --theme-amber-dim: #3D2A08;
+  --theme-green: #10B981;
+  --theme-green-dim: #063D27;
+  --theme-red: #EF4444;
+  --theme-gold: #D97706;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --theme-bg: #F8FAFC;
+  --theme-bg-panel: #FFFFFF;
+  --theme-bg-card: #F1F5F9;
+  --theme-bg-white: #FFFFFF;
+  --theme-ink: #0F172A;
+  --theme-ink-soft: #64748B;
+  --theme-border: #E2E8F0;
+  --theme-amber: #D97706;
+  --theme-amber-dim: #FEF3C7;
+  --theme-green: #059669;
+  --theme-green-dim: #D1FAE5;
+  --theme-red: #DC2626;
+  --theme-gold: #B45309;
+  color-scheme: light;
+}
+
 @theme {
   --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
   --font-display: Archivo, ui-sans-serif, system-ui, sans-serif;
   
-  --color-brand-bg: #0B0C0E;
-  --color-brand-panel: #12141C;
-  --color-brand-card: #1A1D26;
-  --color-brand-ink: #F3F4F6;
-  --color-brand-ink-soft: #9CA3AF;
-  --color-brand-border: #2A2E3D;
-  --color-brand-amber: #F59E0B;
-  --color-brand-green: #10B981;
-  --color-brand-red: #EF4444;
+  --color-brand-bg: var(--theme-bg);
+  --color-brand-panel: var(--theme-bg-panel);
+  --color-brand-card: var(--theme-bg-card);
+  --color-brand-ink: var(--theme-ink);
+  --color-brand-ink-soft: var(--theme-ink-soft);
+  --color-brand-border: var(--theme-border);
+  --color-brand-amber: var(--theme-amber);
+  --color-brand-green: var(--theme-green);
+  --color-brand-red: var(--theme-red);
 }
 
 body {
-  background-color: var(--color-brand-bg);
-  color: var(--color-brand-ink);
+  background-color: var(--theme-bg);
+  color: var(--theme-ink);
   font-family: var(--font-sans);
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 /* RDO details scroll inside the opened document so the list/sidebar and the

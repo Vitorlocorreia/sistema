@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ToastContainer } from "@/components/Toast";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,9 +18,11 @@ export default function RootLayout({
       lang="pt-BR"
       className="h-full antialiased"
     >
-      <body className="min-h-full flex flex-col bg-[#0B0C0E] text-[#F3F4F6] font-sans selection:bg-[#F59E0B] selection:text-[#0B0C0E]">
-        {children}
-        <ToastContainer />
+      <body className="min-h-full flex flex-col bg-[var(--theme-bg)] text-[var(--theme-ink)] font-sans selection:bg-[#F59E0B] selection:text-[#0B0C0E]">
+        <ThemeProvider>
+          {children}
+          <ToastContainer />
+        </ThemeProvider>
       </body>
     </html>
   );
