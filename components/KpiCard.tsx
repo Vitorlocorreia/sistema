@@ -23,7 +23,7 @@ export function KpiCard({ label, valor, delta, positivo, icon: Icon, active, onC
       whileTap={isClickable ? { scale: 0.98 } : {}}
       onClick={onClick}
       style={{
-        background: active ? '#1E2230' : '#12141C',
+        background: active ? C.amberDim : C.bgPanel,
         borderRadius: 2,
         padding: '18px 20px',
         border: active ? `1px solid ${C.amber}` : `1px solid ${C.border}`,

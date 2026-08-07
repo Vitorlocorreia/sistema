@@ -22,7 +22,7 @@ export function Panel({ title, action, children }: Props) {
         style={{
           padding: '14px 20px', 
           borderBottom: `1px solid ${C.border}`,
-          background: '#161821'
+          background: C.bgCard
         }}
       >
         <span style={{ 

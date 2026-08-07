@@ -21,14 +21,14 @@
   --theme-bg: #F1F5F9;
   --theme-bg-panel: #FFFFFF;
   --theme-bg-card: #FFFFFF;
-  --theme-bg-white: #F8FAFC;
+  --theme-bg-white: #FFFBEB;
   --theme-ink: #0F172A;
-  --theme-ink-soft: #475569;
+  --theme-ink-soft: #334155;
   --theme-border: #CBD5E1;
   --theme-amber: #D97706;
   --theme-amber-dim: #FEF3C7;
   --theme-green: #059669;
-  --theme-green-dim: #D1FAE5;
+  --theme-green-dim: #DCFCE7;
   --theme-red: #DC2626;
   --theme-gold: #B45309;
   color-scheme: light;
@@ -56,12 +56,9 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* FULL LIGHT THEME OVERRIDES */
-[data-theme="light"] {
-  background-color: #F1F5F9 !important;
-  color: #0F172A !important;
-}
-
+/* HIGH-CONTRAST LIGHT THEME OVERRIDES */
+[data-theme="light"],
+[data-theme="light"] body,
 [data-theme="light"] main {
   background-color: #F1F5F9 !important;
   color: #0F172A !important;
@@ -72,47 +69,99 @@ body {
   background-color: #FFFFFF !important;
   border-color: #CBD5E1 !important;
   color: #0F172A !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Conversion of hardcoded dark container styles to crisp white cards in Light Mode */
-[data-theme="light"] div[style*="background: '#0B0C0E'"],
-[data-theme="light"] div[style*="background: '#12141C'"],
-[data-theme="light"] div[style*="background: '#16181C'"],
-[data-theme="light"] div[style*="background: '#1A1D26'"],
-[data-theme="light"] div[style*="background: '#1E2230'"],
-[data-theme="light"] div[style*="background: '#222530'"],
-[data-theme="light"] section[style*="background: '#12141C'"],
-[data-theme="light"] section[style*="background: '#0B0C0E'"] {
+/* Crisp Cards & Panels with High Contrast Borders & Soft Depth Elevation */
+[data-theme="light"] *[style*="background: '#0B0C0E'"],
+[data-theme="light"] *[style*="background: '#12141C'"],
+[data-theme="light"] *[style*="background: '#16181C'"],
+[data-theme="light"] *[style*="background: '#161821'"],
+[data-theme="light"] *[style*="background: '#16181D'"],
+[data-theme="light"] *[style*="background: '#1A1D26'"],
+[data-theme="light"] *[style*="background: '#1E2230'"],
+[data-theme="light"] *[style*="background: '#131A29'"],
+[data-theme="light"] *[style*="background: '#222530'"],
+[data-theme="light"] *[style*="background: '#2A2E3D'"],
+[data-theme="light"] *[style*="background: '#1F1918'"],
+[data-theme="light"] *[style*="background: '#1E1B13'"],
+[data-theme="light"] *[style*="background: rgb(11, 12, 14)"],
+[data-theme="light"] *[style*="background: rgb(18, 20, 28)"],
+[data-theme="light"] *[style*="background: rgb(22, 24, 28)"],
+[data-theme="light"] *[style*="background: rgb(26, 29, 38)"],
+[data-theme="light"] *[style*="background: rgb(30, 34, 48)"] {
   background-color: #FFFFFF !important;
   border-color: #CBD5E1 !important;
   color: #0F172A !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.06), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
 }
 
-/* Light mode form inputs & dropdowns */
+/* Inner containers & progress bars */
+[data-theme="light"] *[style*="background: '#0B0C0E33'"] {
+  background-color: #E2E8F0 !important;
+  border-color: #CBD5E1 !important;
+}
+
+/* Form inputs & Selects with sharp border focus */
 [data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
 [data-theme="light"] select,
 [data-theme="light"] textarea {
   background-color: #FFFFFF !important;
   color: #0F172A !important;
-  border-color: #CBD5E1 !important;
+  border-color: #94A3B8 !important;
+  font-weight: 600;
 }
 
 [data-theme="light"] input::placeholder,
 [data-theme="light"] textarea::placeholder {
-  color: #94A3B8 !important;
+  color: #64748B !important;
 }
 
-/* Light mode table headers */
+/* Table headers with distinct background contrast */
 [data-theme="light"] tr[style*="background: '#16181C'"],
-[data-theme="light"] th[style*="background: '#16181C'"] {
-  background-color: #F8FAFC !important;
-  color: #334155 !important;
+[data-theme="light"] th[style*="background: '#16181C'"],
+[data-theme="light"] tr[style*="background: '#0B0C0E'"],
+[data-theme="light"] th[style*="background: '#0B0C0E'"],
+[data-theme="light"] tr[style*="background: '#12141C'"],
+[data-theme="light"] th[style*="background: '#12141C'"] {
+  background-color: #E2E8F0 !important;
+  color: #0F172A !important;
+  font-weight: 900 !important;
   border-color: #CBD5E1 !important;
 }
 
-/* Light mode table cells */
+/* Table rows and borders */
 [data-theme="light"] td {
   border-color: #E2E8F0 !important;
+  color: #0F172A !important;
+}
+
+[data-theme="light"] tr:hover {
+  background-color: #F1F5F9 !important;
+}
+
+/* Text readability enhancements */
+[data-theme="light"] *[style*="color: '#F3F4F6'"] {
+  color: #0F172A !important;
+}
+
+[data-theme="light"] *[style*="color: '#9CA3AF'"] {
+  color: #475569 !important;
+}
+
+/* Status Badges high-contrast color scheme */
+[data-theme="light"] span[style*="background: '#3D2A08'"],
+[data-theme="light"] span[style*="background: var(--theme-amber-dim)"] {
+  background-color: #FEF3C7 !important;
+  color: #B45309 !important;
+  border-color: #FDE68A !important;
+}
+
+[data-theme="light"] span[style*="background: '#063D27'"],
+[data-theme="light"] span[style*="background: var(--theme-green-dim)"] {
+  background-color: #DCFCE7 !important;
+  color: #15803D !important;
+  border-color: #86EFAC !important;
 }
 
 /* RDO details scroll inside the opened document so the list/sidebar and the
