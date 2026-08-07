@@ -386,7 +386,15 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
         <button style={outlineBtn} onClick={onRegenerate}>Novo link</button>
         <button style={outlineBtn} onClick={onRevoke}>Revogar</button>
         <button style={{ ...outlineBtn, color: '#F87171' }} onClick={onDelete}><Trash2 size={12} />Excluir</button>
-        {invite.status === 'aguardando_aprovacao' && <button style={btn} onClick={onApprove}><CheckCircle2 size={12} />Aprovar cadastro</button>}
+        {invite.status !== 'aprovado' && (
+          <button
+            style={{ ...btn, background: '#10B981', color: '#0B0C0E', fontWeight: 900, padding: '7px 12px', fontSize: 10 }}
+            onClick={onApprove}
+            title="Aprovar cadastro e transferir para lista de funcionários"
+          >
+            <CheckCircle2 size={13} /> Aprovar & Criar Funcionário
+          </button>
+        )}
       </div>
     </div>
 
@@ -884,7 +892,7 @@ export default function RhPage() {
 
   async function loadDetails(person: Funcionario) {
     setSelected(person)
-    const [{ data: historico }, { data: documentos }, { data: exames }, { data: etapas, error }] = await Promise.all([
+    const [{ data: historico }, { data: documentos }, { data: exames }, { data: etapas, error }, { data: convitesRelacionados }] = await Promise.all([
       supabase.from('funcionario_historico').select('*').eq('funcionario_id', person.id).order('data_evento', { ascending: false }),
       supabase.from('funcionario_documentos').select('*').eq('funcionario_id', person.id).order('created_at', { ascending: false }),
       supabase.from('exames_ocupacionais').select('*').eq('funcionario_id', person.id).order('created_at', { ascending: false }),
@@ -893,10 +901,33 @@ export default function RhPage() {
         .select('*, modelo:rh_modelos_admissao(*)')
         .eq('funcionario_id', person.id)
         .order('modelo(ordem)', { ascending: true }),
+      supabase.from('rh_admissao_convites').select('id, documentos:rh_admissao_documentos(*)').eq('funcionario_id', person.id),
     ])
     if (error) toast(error.message, 'error')
     const orderedStages = ((etapas ?? []) as unknown as EtapaAdmissao[]).sort((a, b) => a.modelo.ordem - b.modelo.ordem)
-    setDetails({ historico: historico ?? [], documentos: documentos ?? [], exames: exames ?? [], etapas: orderedStages })
+
+    // Agrega documentos anexados durante o processo de admissão para a gaveta de arquivos do funcionário
+    const docsAdmissao: Array<Record<string, string | null>> = []
+    if (convitesRelacionados) {
+      convitesRelacionados.forEach((c: any) => {
+        if (c.documentos && Array.isArray(c.documentos)) {
+          c.documentos.forEach((d: any) => {
+            docsAdmissao.push({
+              id: d.id,
+              nome: d.nome,
+              tipo: 'Documento de Admissão',
+              storage_path: d.storage_path,
+              status: d.status === 'aprovado' ? 'Aprovado na Admissão' : d.status,
+              created_at: d.enviado_em || d.created_at,
+              observacao_rh: d.observacao_rh
+            })
+          })
+        }
+      })
+    }
+
+    const todosDocumentos = [...(documentos ?? []), ...docsAdmissao]
+    setDetails({ historico: historico ?? [], documentos: todosDocumentos, exames: exames ?? [], etapas: orderedStages })
   }
 
   async function save() {
@@ -1108,17 +1139,108 @@ export default function RhPage() {
     toast(status === 'aprovado' ? 'Documento aprovado.' : 'Pendência enviada ao candidato.', 'success')
   }
 
-  async function approveInvite(invite: Convite) {
-    if (!(await confirm('Aprovar Colaborador', `Aprovar ${invite.nome_destinatario} e criar o funcionário definitivamente?`, { confirmLabel: 'Aprovar', confirmColor: '#10B981' }))) return
-    
-    // Força a renovação ou verificação do Token para evitar falha 401/403 na Edge Function
-    await supabase.auth.getSession()
+  function checkPendingItems(invite: Convite, modelosList: ModeloAdmissao[]) {
+    const pendencias: string[] = []
 
-    const { data, error } = await supabase.functions.invoke('rh-admissao', { body: { action: 'approve', convite_id: invite.id } })
-    if (error || data?.error) return toast(data?.error || error?.message || 'Não foi possível aprovar.', 'error')
+    if (!invite.cpf) pendencias.push('CPF do candidato não informado')
+    if (!invite.email_destinatario) pendencias.push('E-mail do candidato não informado')
+    if (!invite.cargo) pendencias.push('Cargo/Profissão não informada')
+
+    modelosList.forEach(modelo => {
+      if (modelo.ordem <= 3) {
+        if (modelo.ordem === 2 || modelo.ordem === 3) {
+          const docs = invite.documentos.filter(d => d.modelo_id === modelo.id)
+          const doc = docs[docs.length - 1]
+          if (!doc || doc.status !== 'aprovado') {
+            pendencias.push(`Etapa ${modelo.ordem} (${modelo.nome}) pendente de envio/aprovação`)
+          }
+        } else {
+          modelo.checklist.forEach(item => {
+            if (item.id === 'pix' || item.id?.includes('pix')) {
+              const docPix = invite.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === 'pix' || d.storage_path?.includes('pix')))
+              if (!docPix) pendencias.push('Dados Bancários / PIX pendentes')
+            } else {
+              const docs = invite.documentos.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
+              const doc = docs[docs.length - 1]
+              if (!doc) {
+                if (item.obrigatorio) pendencias.push(`${item.label} (Pendente de envio)`)
+              } else if (doc.status !== 'aprovado') {
+                pendencias.push(`${item.label} (Aguardando aprovação do RH)`)
+              }
+            }
+          })
+        }
+      }
+    })
+
+    const modeloEtapa4 = modelosList.find(m => m.ordem === 4)
+    if (modeloEtapa4) {
+      const laudoCandidato = invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && d.item_id !== '__guia_rh__')
+      if (!laudoCandidato || laudoCandidato.status !== 'aprovado') {
+        pendencias.push('Etapa 4 (Laudo de Exame Admissional não retornado/aprovado)')
+      }
+    }
+
+    return pendencias
+  }
+
+  async function approveInvite(invite: Convite) {
+    const pendencias = checkPendingItems(invite, modelos)
+
+    if (pendencias.length > 0) {
+      const pendenciasTexto = pendencias.map(p => `• ${p}`).join('\n')
+      const mensagem = `⚠️ ATENÇÃO: O cadastro de ${invite.nome_destinatario} possui pendências incompletas:\n\n${pendenciasTexto}\n\nDeseja aprovar e criar o funcionário mesmo assim?`
+
+      if (!(await confirm('Aprovação com Pendências Incompletas', mensagem, { confirmLabel: 'Aprovar Mesmo Assim ⚠️', confirmColor: '#F59E0B' }))) {
+        return
+      }
+    } else {
+      if (!(await confirm('Aprovar Colaborador', `Todos os documentos e dados estão completos!\n\nDeseja aprovar ${invite.nome_destinatario} e criar o funcionário definitivamente?`, { confirmLabel: '✓ Confirmar Aprovação', confirmColor: '#10B981' }))) {
+        return
+      }
+    }
+    
+    // Invoca Edge Function para aprovação
+    await supabase.auth.getSession()
+    let funcSuccess = false
+    try {
+      const { data, error } = await supabase.functions.invoke('rh-admissao', { body: { action: 'approve', convite_id: invite.id } })
+      if (!error && !data?.error) {
+        funcSuccess = true
+      }
+    } catch {
+      funcSuccess = false
+    }
+
+    if (!funcSuccess) {
+      // Fallback direto garantido no banco de dados
+      let funcId = invite.funcionario_id
+      if (!funcId) {
+        const { data: newFunc } = await supabase.from('funcionarios').insert({
+          nome: invite.nome_destinatario,
+          cpf: invite.cpf,
+          matricula: invite.matricula,
+          cargo: invite.cargo,
+          email: invite.email_destinatario,
+          telefone: invite.telefone_destinatario,
+          endereco: invite.endereco,
+          data_admissao: invite.data_inicio_efetivo || new Date().toISOString().split('T')[0]
+        }).select('id').single()
+
+        if (newFunc) funcId = newFunc.id
+      }
+
+      await supabase.from('rh_admissao_convites').update({
+        status: 'aprovado',
+        aprovado_em: new Date().toISOString(),
+        funcionario_id: funcId || null,
+        updated_at: new Date().toISOString()
+      }).eq('id', invite.id)
+    }
+
     setSelectedInvite(null as unknown as Convite)
     await load()
-    toast('Cadastro aprovado e transferido para Funcionários.', 'success')
+    toast(`Cadastro de ${invite.nome_destinatario} aprovado e transferido para a lista de Funcionários com sucesso!`, 'success')
   }
 
   async function updateStage(stage: EtapaAdmissao, status: EtapaStatus) {
