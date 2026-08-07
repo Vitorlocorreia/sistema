@@ -1036,7 +1036,7 @@ export default function RhPage() {
       expires_at: expiresAt,
       status: 'ativo',
       etapa_atual: 1,
-      criado_por: authData.user.id
+      criado_por: colaboradorAtivo?.id || null
     }).select().single()
 
     if (error) {
