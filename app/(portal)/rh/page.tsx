@@ -1036,7 +1036,7 @@ export default function RhPage() {
       expires_at: expiresAt,
       status: 'ativo',
       etapa_atual: 1,
-      criado_por: colaboradorAtivo?.nome || authData.user.email || authData.user.id
+      criado_por: (colaboradorAtivo?.id && colaboradorAtivo.id.includes('-')) ? colaboradorAtivo.id : authData.user.id
     }).select().single()
 
     if (error) {
