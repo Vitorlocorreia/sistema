@@ -139,6 +139,26 @@ function ArchivePanel({ person, details, onBack, onDelete, onOpen }: { person: F
 const GUIA_ITEM_ID = 'identificacao'
 const LAUDO_ITEM_ID = 'responsavel'
 
+function resolveNomeCriador(criadoPor: string | null | undefined, colaboradoresList: any[]) {
+  if (!criadoPor) return 'Gestor RH'
+  if (!criadoPor.includes('-')) return criadoPor
+
+  const colab = (colaboradoresList || []).find(c =>
+    c.id === criadoPor ||
+    c.email === criadoPor ||
+    c.nome === criadoPor ||
+    (c as any).auth_user_id === criadoPor ||
+    (c as any).user_id === criadoPor ||
+    (c as any).usuario_id === criadoPor ||
+    (c as any).auth_id === criadoPor
+  )
+
+  if (colab?.nome) return colab.nome
+  if (colab?.email) return colab.email
+
+  return 'Gestor RH'
+}
+
 function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke, onRegenerate, onCopy, onDelete, onRefresh, colaboradorAtivo, colaboradores = [] }: {
   invite: Convite
   modelos: ModeloAdmissao[]
@@ -713,14 +733,7 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
         <div style={{ display: 'grid', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
           {/* Evento 1: Criação do Convite pelo RH */}
           {(() => {
-            const criadorObj = colaboradores.find(c => 
-              c.id === invite.criado_por || 
-              c.email === invite.criado_por || 
-              c.nome === invite.criado_por ||
-              (c as any).user_id === invite.criado_por ||
-              (c as any).auth_user_id === invite.criado_por
-            )
-            const nomeCriador = criadorObj?.nome || (invite.criado_por && !invite.criado_por.includes('-') ? invite.criado_por : null) || colaboradorAtivo?.nome || 'Gestor RH'
+            const nomeCriador = resolveNomeCriador(invite.criado_por, colaboradores)
             return (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, padding: '7px 9px', background: '#12141C', borderRadius: 4, border: `1px solid ${C.border}` }}>
                 <div>
@@ -743,15 +756,8 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
             const badgeColor = isRH ? '#3B82F6' : '#F59E0B'
             const dataAnexo = doc.enviado_em || doc.created_at || invite.created_at
 
-            const criadorConviteObj = colaboradores.find(c => 
-              c.id === invite.criado_por || 
-              c.email === invite.criado_por || 
-              c.nome === invite.criado_por ||
-              (c as any).user_id === invite.criado_por ||
-              (c as any).auth_user_id === invite.criado_por
-            )
             const nomeAutorAnexo = isRH 
-              ? (criadorConviteObj?.nome || (invite.criado_por && !invite.criado_por.includes('-') ? invite.criado_por : null) || colaboradorAtivo?.nome || 'Gestor RH') 
+              ? resolveNomeCriador(invite.criado_por, colaboradores) 
               : (invite.nome_destinatario || 'Candidato')
 
             return (
@@ -1865,14 +1871,7 @@ export default function RhPage() {
                   </div>
                   <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
                     {(() => {
-                      const criadorObj = colaboradores.find(c => 
-                        c.id === invite.criado_por || 
-                        c.email === invite.criado_por || 
-                        c.nome === invite.criado_por ||
-                        (c as any).user_id === invite.criado_por ||
-                        (c as any).auth_user_id === invite.criado_por
-                      )
-                      const nomeGerador = criadorObj?.nome || (invite.criado_por && !invite.criado_por.includes('-') ? invite.criado_por : null) || colaboradorAtivo?.nome || 'Gestor RH'
+                      const nomeGerador = resolveNomeCriador(invite.criado_por, colaboradores)
                       return (
                         <span style={{ color: C.amber, fontWeight: 700 }}>👤 Gerado por: {nomeGerador}</span>
                       )
