@@ -125,7 +125,7 @@ function actionFor(status: EtapaStatus) {
   return { label: 'Reabrir etapa', next: 'Em preenchimento' as EtapaStatus }
 }
 
-function ArchivePanel({ person, details, onBack, onDelete, onOpen }: { person: Funcionario; details: Details; onBack: () => void; onDelete: () => void; onOpen: (documento: Record<string, string | null>) => void }) {
+function ArchivePanel({ person, details, onBack, onDelete, onOpen, onUpload }: { person: Funcionario; details: Details; onBack: () => void; onDelete: () => void; onOpen: (documento: Record<string, string | null>) => void; onUpload?: (order: number, files: FileList) => void }) {
   const [filter, setFilter] = useState('')
   const documents = details.documentos.filter(documento => `${documento.nome || ''} ${documento.tipo || ''}`.toLowerCase().includes(filter.toLowerCase()))
   return <div>
@@ -142,7 +142,19 @@ function ArchivePanel({ person, details, onBack, onDelete, onOpen }: { person: F
         }
         return order === 1; // Fallback: documentos sem etapa ou ordem caem na pasta 1
       }); 
-      return <article key={order} style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5, padding: 11 }}><span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>PASTA {order}</span><h4 style={{ margin: '5px 0 9px', fontSize: 11 }}>{etapa?.modelo.nome || `Etapa ${order}`}</h4>{docs.length ? docs.map(documento => <button key={documento.id} onClick={() => onOpen(documento)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 0, borderTop: `1px solid ${C.border}`, padding: '8px 0', background: 'transparent', color: C.amber, fontSize: 9, cursor: 'pointer' }}>↗ {documento.nome || 'Documento'}<span style={{ display: 'block', color: C.inkSoft, marginTop: 2 }}>{documento.status || 'Arquivado'}</span></button>) : <p style={{ color: C.inkSoft, fontSize: 9 }}>Nenhum arquivo nesta pasta.</p>}</article> 
+      return <article key={order} style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5, padding: 11 }}><span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>PASTA {order}</span><h4 style={{ margin: '5px 0 9px', fontSize: 11 }}>{etapa?.modelo.nome || `Etapa ${order}`}</h4>{docs.length ? docs.map(documento => <button key={documento.id} onClick={() => onOpen(documento)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 0, borderTop: `1px solid ${C.border}`, padding: '8px 0', background: 'transparent', color: C.amber, fontSize: 9, cursor: 'pointer' }}>↗ {documento.nome || 'Documento'}<span style={{ display: 'block', color: C.inkSoft, marginTop: 2 }}>{documento.status || 'Arquivado'}</span></button>) : <p style={{ color: C.inkSoft, fontSize: 9 }}>Nenhum arquivo nesta pasta.</p>}
+        {onUpload && (
+          <label style={{ display: 'block', width: '100%', textAlign: 'center', border: `1px dashed ${C.border}`, padding: '6px 0', background: 'transparent', color: C.inkSoft, fontSize: 9, cursor: 'pointer', marginTop: 8, borderRadius: 4 }}>
+            + Anexar arquivo
+            <input type="file" multiple style={{ display: 'none' }} onChange={e => {
+              if (e.target.files?.length) {
+                onUpload(order, e.target.files)
+                e.target.value = ''
+              }
+            }} />
+          </label>
+        )}
+      </article> 
     })}</div>
   </div>
 }
@@ -1399,6 +1411,60 @@ export default function RhPage() {
     await loadDetails(selected)
   }
 
+  async function uploadToArchiveFolder(order: number, files: FileList) {
+    if (!selected || !files.length) return
+    let etapa = details.etapas.find(item => item.modelo.ordem === order)
+    
+    let etapaId = etapa?.id
+    if (!etapaId) {
+      const modelo = modelos.find(m => m.ordem === order)
+      if (modelo) {
+        const { data: newStage } = await supabase.from('funcionario_admissao_etapas')
+          .insert({ funcionario_id: selected.id, modelo_id: modelo.id, status: 'Pendente', checklist: modelo.checklist })
+          .select('id').single()
+        if (newStage) etapaId = newStage.id
+      }
+    }
+
+    setUploading(order.toString())
+    let uploaded = 0
+    for (const file of Array.from(files)) {
+      if (file.size > 15 * 1024 * 1024) {
+        toast(`${file.name} ultrapassa o limite de 15 MB.`, 'error')
+        continue
+      }
+      const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
+      const path = `${selected.id}/archive-${order}/${Date.now()}-${safeName}`
+      const { error: uploadError } = await supabase.storage.from('rh-documentos').upload(path, file, { contentType: file.type || 'application/octet-stream', upsert: false })
+      if (uploadError) {
+        toast(`Falha ao enviar ${file.name}: ${uploadError.message}`, 'error')
+        continue
+      }
+      
+      const { error: rowError } = await supabase.from('funcionario_documentos').insert({
+        funcionario_id: selected.id,
+        etapa_id: etapaId || null,
+        tipo: 'Documento Adicional',
+        nome: file.name,
+        arquivo_url: path,
+        storage_path: path,
+        tamanho_bytes: file.size,
+        mime_type: file.type || 'application/octet-stream',
+        status: 'Recebido'
+      })
+      if (rowError) {
+        toast(`Falha no banco: ${rowError.message}`, 'error')
+        continue
+      }
+      uploaded++
+    }
+    setUploading(null)
+    if (uploaded) {
+      toast(`${uploaded} arquivo(s) anexado(s) à Pasta ${order}.`, 'success')
+      await loadDetails(selected)
+    }
+  }
+
   async function addExam() {
     if (!selected) return
     let tipo = await prompt('Adicionar exame', { description: 'Tipo do exame (ex: admissional, periódico, demissional):' })
@@ -2037,7 +2103,7 @@ export default function RhPage() {
                   </button>
                   {selected?.id === person.id && (
                     <div style={{ background: '#0B0C0E', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '16px 14px' }}>
-                      <ArchivePanel person={selected} details={details} onBack={() => { setSelected(null); setDetails(emptyDetails) }} onDelete={() => void deleteEmployee(selected)} onOpen={documento => void openDocument(documento)} />
+                      <ArchivePanel person={selected} details={details} onBack={() => { setSelected(null); setDetails(emptyDetails) }} onDelete={() => void deleteEmployee(selected)} onOpen={documento => void openDocument(documento)} onUpload={uploadToArchiveFolder} />
                     </div>
                   )}
                 </div>
