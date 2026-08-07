@@ -2385,11 +2385,16 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
       telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
       endereco: '', banco: '', agencia: '', conta: ''
     })
-    setShowForm(true)
+    setShowForm(prev => !prev)
   }
 
   const iniciarEdicaoFornecedor = (f: Fornecedor) => {
+    if (editingFornecedor?.id === f.id) {
+      setEditingFornecedor(null)
+      return
+    }
     setEditingFornecedor(f)
+    setShowForm(false)
     const docTipo = (f.tipo as 'PJ'|'PF') || (f.cnpj && f.cnpj.replace(/\D/g, '').length === 11 ? 'PF' : 'PJ')
     setForm({
       razao_social: f.razao_social || '',
@@ -2407,7 +2412,6 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
       agencia: f.agencia || '',
       conta: f.conta || ''
     })
-    setShowForm(true)
   }
 
   const save = async () => {
@@ -2534,12 +2538,10 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
         <input style={{ ...input, paddingLeft: 34 }} placeholder="Buscar por razão, fantasia, CNPJ/CPF ou categoria..." value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
-      {showForm && podeCriar && (
+      {showForm && !editingFornecedor && podeCriar && (
         <div style={{ ...card, marginBottom: 20, borderColor: C.amber + '44' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.ink }}>
-              {editingFornecedor ? `Editar Fornecedor: ${editingFornecedor.razao_social}` : 'Novo Fornecedor'}
-            </h3>
+            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.ink }}>Novo Fornecedor</h3>
             <span style={{ fontSize: 11, color: C.inkSoft }}>{form.tipo === 'PJ' ? 'Pessoa Jurídica (CNPJ)' : 'Pessoa Física (CPF)'}</span>
           </div>
           
@@ -2613,8 +2615,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : editingFornecedor ? 'Salvar Alterações' : 'Cadastrar Fornecedor'}</button>
-            <button style={btnGhost} onClick={() => { setShowForm(false); setEditingFornecedor(null) }}>Cancelar</button>
+            <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar Fornecedor'}</button>
+            <button style={btnGhost} onClick={() => setShowForm(false)}>Cancelar</button>
           </div>
         </div>
       )}
@@ -2629,68 +2631,155 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
             const docLabel = f.tipo === 'PF' ? 'CPF' : 'CNPJ'
 
             return (
-              <div key={f.id} style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14, borderLeft: temContasVencidas ? `3px solid #EF4444` : `1px solid ${C.border}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 8, background: temContasVencidas ? '#EF444415' : C.amber + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    <Users size={16} color={temContasVencidas ? '#EF4444' : C.amber} />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 800, color: C.ink, fontSize: 14 }}>{f.razao_social || f.nome_fantasia}</span>
-                      <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: f.tipo === 'PF' ? '#3B82F620' : '#10B98120', color: f.tipo === 'PF' ? '#60A5FA' : '#34D399' }}>
-                        {f.tipo === 'PF' ? 'PESSOA FÍSICA' : 'PESSOA JURÍDICA'}
-                      </span>
-                      {temContasVencidas && (
-                        <span style={{ fontSize: 9, fontWeight: 900, background: '#EF444420', color: '#EF4444', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                          <AlertTriangle size={8} /> CONTAS VENCIDAS
+              <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14, borderLeft: temContasVencidas ? `3px solid #EF4444` : `1px solid ${C.border}`, borderColor: editingFornecedor?.id === f.id ? C.amber : undefined }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: 8, background: temContasVencidas ? '#EF444415' : C.amber + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <Users size={16} color={temContasVencidas ? '#EF4444' : C.amber} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 800, color: C.ink, fontSize: 14 }}>{f.razao_social || f.nome_fantasia}</span>
+                        <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: f.tipo === 'PF' ? '#3B82F620' : '#10B98120', color: f.tipo === 'PF' ? '#60A5FA' : '#34D399' }}>
+                          {f.tipo === 'PF' ? 'PESSOA FÍSICA' : 'PESSOA JURÍDICA'}
                         </span>
-                      )}
+                        {temContasVencidas && (
+                          <span style={{ fontSize: 9, fontWeight: 900, background: '#EF444420', color: '#EF4444', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <AlertTriangle size={8} /> CONTAS VENCIDAS
+                          </span>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
+                        {f.cnpj ? `${docLabel}: ${f.cnpj}` : `Sem ${docLabel}`} · {f.categoria ?? 'Sem Categoria'} {f.responsavel ? `· Resp: ${f.responsavel}` : ''}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
-                      {f.cnpj ? `${docLabel}: ${f.cnpj}` : `Sem ${docLabel}`} · {f.categoria ?? 'Sem Categoria'} {f.responsavel ? `· Resp: ${f.responsavel}` : ''}
+                    <div style={{ textAlign: 'right', marginRight: 16 }}>
+                      <div style={{ fontSize: 11, color: C.inkSoft }}>Em Aberto: <strong style={{ color: temContasVencidas ? '#EF4444' : C.ink }}>{fmt(totalEmAberto)}</strong></div>
+                      <div style={{ fontSize: 10, color: '#34D399' }}>Pagas: {totalPagasCount} ({fmt(totalPago)})</div>
                     </div>
+                    {podeCriar && (
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                        <button onClick={() => iniciarEdicaoFornecedor(f)} title="Editar Fornecedor" style={{ background: editingFornecedor?.id === f.id ? C.amber + '22' : 'none', border: `1px solid ${editingFornecedor?.id === f.id ? C.amber : 'transparent'}`, borderRadius: 4, color: editingFornecedor?.id === f.id ? C.amber : C.inkSoft, cursor: 'pointer', padding: 6 }}>
+                          <Edit3 size={14} />
+                        </button>
+                        <button onClick={() => remove(f.id)} title="Excluir Fornecedor" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div style={{ textAlign: 'right', marginRight: 16 }}>
-                    <div style={{ fontSize: 11, color: C.inkSoft }}>Em Aberto: <strong style={{ color: temContasVencidas ? '#EF4444' : C.ink }}>{fmt(totalEmAberto)}</strong></div>
-                    <div style={{ fontSize: 10, color: '#34D399' }}>Pagas: {totalPagasCount} ({fmt(totalPago)})</div>
-                  </div>
-                  {podeCriar && (
-                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                      <button onClick={() => iniciarEdicaoFornecedor(f)} title="Editar Fornecedor" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                        <Edit3 size={14} />
-                      </button>
-                      <button onClick={() => remove(f.id)} title="Excluir Fornecedor" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                        <X size={14} />
+
+                  {(f.banco || f.pix || f.endereco) && (
+                    <div style={{ background: '#0B0C0E', padding: '10px 14px', borderRadius: 6, fontSize: 11, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, border: `1px solid ${C.border}` }}>
+                      {f.endereco && <div><span style={{ color: C.inkSoft, fontWeight: 700 }}>Endereço:</span> {f.endereco}</div>}
+                      <div style={{ display: 'flex', gap: 16 }}>
+                        {f.banco && (
+                          <div>
+                            <span style={{ color: C.inkSoft, fontWeight: 700 }}>Banco:</span> {f.banco} · Ag: {f.agencia} · Cc: {f.conta}
+                          </div>
+                        )}
+                        {f.pix && (
+                          <div>
+                            <span style={{ color: C.inkSoft, fontWeight: 700 }}>PIX:</span> <span style={{ color: C.amber, fontWeight: 700 }}>{f.pix}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  {goToHistoricoByFornecedor && (
+                    <div style={{ padding: '0 14px', marginBottom: 14 }}>
+                      <button 
+                        style={{ ...btnGhost, color: C.amber, border: `1px solid ${C.amber}40`, width: '100%', justifyContent: 'center' }}
+                        onClick={() => goToHistoricoByFornecedor(f.id)}
+                      >
+                        <ArrowUpRight size={14} /> Ver Contas & Negociar (Histórico)
                       </button>
                     </div>
                   )}
                 </div>
 
-                {(f.banco || f.pix || f.endereco) && (
-                  <div style={{ background: '#0B0C0E', padding: '10px 14px', borderRadius: 6, fontSize: 11, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, border: `1px solid ${C.border}` }}>
-                    {f.endereco && <div><span style={{ color: C.inkSoft, fontWeight: 700 }}>Endereço:</span> {f.endereco}</div>}
-                    <div style={{ display: 'flex', gap: 16 }}>
-                      {f.banco && (
-                        <div>
-                          <span style={{ color: C.inkSoft, fontWeight: 700 }}>Banco:</span> {f.banco} · Ag: {f.agencia} · Cc: {f.conta}
-                        </div>
-                      )}
-                      {f.pix && (
-                        <div>
-                          <span style={{ color: C.inkSoft, fontWeight: 700 }}>PIX:</span> <span style={{ color: C.amber, fontWeight: 700 }}>{f.pix}</span>
-                        </div>
-                      )}
+                {editingFornecedor?.id === f.id && podeCriar && (
+                  <div style={{ ...card, marginTop: 4, marginBottom: 10, borderColor: C.amber + '88', background: C.bgPanel }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.ink }}>
+                        Editar Fornecedor: {editingFornecedor.razao_social}
+                      </h3>
+                      <span style={{ fontSize: 11, color: C.inkSoft }}>{form.tipo === 'PJ' ? 'Pessoa Jurídica (CNPJ)' : 'Pessoa Física (CPF)'}</span>
                     </div>
-                  </div>
-                )}
-                {goToHistoricoByFornecedor && (
-                  <div style={{ padding: '0 14px', marginBottom: 14 }}>
-                    <button 
-                      style={{ ...btnGhost, color: C.amber, border: `1px solid ${C.amber}40`, width: '100%', justifyContent: 'center' }}
-                      onClick={() => goToHistoricoByFornecedor(f.id)}
-                    >
-                      <ArrowUpRight size={14} /> Ver Contas & Negociar (Histórico)
-                    </button>
+                    
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14, marginBottom: 14 }}>
+                      <div>
+                        <label style={label}>Tipo de Pessoa</label>
+                        <select style={input} value={form.tipo} onChange={e => {
+                          const novoTipo = e.target.value as 'PJ'|'PF'
+                          setForm(f => ({ ...f, tipo: novoTipo, cnpj: formatCnpjCpf(f.cnpj, novoTipo) }))
+                        }}>
+                          <option value="PJ">Pessoa Jurídica (CNPJ)</option>
+                          <option value="PF">Pessoa Física (CPF)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label style={label}>{form.tipo === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}</label>
+                        <input style={input} value={form.razao_social} onChange={e => setForm(prev => ({ ...prev, razao_social: e.target.value }))} placeholder={form.tipo === 'PJ' ? "Ex: Cimento & Cia Ltda" : "Ex: João da Silva"} />
+                      </div>
+                      {form.tipo === 'PJ' && (
+                        <div>
+                          <label style={label}>Nome Fantasia</label>
+                          <input style={input} value={form.nome_fantasia} onChange={e => setForm(prev => ({ ...prev, nome_fantasia: e.target.value }))} placeholder="Ex: Cimento Bela Vista" />
+                        </div>
+                      )}
+                      <div>
+                        <label style={label}>{form.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
+                        <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: formatCnpjCpf(e.target.value, prev.tipo) }))} placeholder={form.tipo === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"} />
+                      </div>
+                      <div>
+                        <label style={label}>Telefone / WhatsApp</label>
+                        <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))} placeholder="(11) 99999-9999" />
+                      </div>
+                      <div>
+                        <label style={label}>E-mail</label>
+                        <input style={input} type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="vendas@fornecedor.com" />
+                      </div>
+                      <div>
+                        <label style={label}>Contato Responsável</label>
+                        <input style={input} value={form.responsavel} onChange={e => setForm(prev => ({ ...prev, responsavel: e.target.value }))} placeholder="Ex: Ricardo Silva" />
+                      </div>
+                      <div>
+                        <label style={label}>Categoria</label>
+                        <input style={input} value={form.categoria} onChange={e => setForm(prev => ({ ...prev, categoria: e.target.value }))} placeholder="Ex: Material, Serviço, Equipamentos" />
+                      </div>
+                      <div>
+                        <label style={label}>Banco</label>
+                        <input style={input} value={form.banco} onChange={e => setForm(prev => ({ ...prev, banco: e.target.value }))} placeholder="Ex: Itaú (341)" />
+                      </div>
+                      <div>
+                        <label style={label}>Agência</label>
+                        <input style={input} value={form.agencia} onChange={e => setForm(prev => ({ ...prev, agencia: e.target.value }))} placeholder="Ex: 0001" />
+                      </div>
+                      <div>
+                        <label style={label}>Conta Corrente</label>
+                        <input style={input} value={form.conta} onChange={e => setForm(prev => ({ ...prev, conta: e.target.value }))} placeholder="Ex: 12345-6" />
+                      </div>
+                      <div>
+                        <label style={label}>Chave PIX</label>
+                        <input style={input} value={form.pix} onChange={e => setForm(prev => ({ ...prev, pix: e.target.value }))} placeholder="Chave PIX" />
+                      </div>
+                      <div>
+                        <label style={label}>Empresa preferencial</label>
+                        <select style={input} value={form.empresa_id} onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}>
+                          <option value="">Compartilhado entre todas</option>
+                          {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
+                        </select>
+                      </div>
+                      <div style={{ gridColumn: 'span 2' }}>
+                        <label style={label}>Endereço Completo</label>
+                        <input style={input} value={form.endereco} onChange={e => setForm(prev => ({ ...prev, endereco: e.target.value }))} placeholder="Av. Paulista, 1000 - São Paulo/SP" />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Alterações'}</button>
+                      <button style={btnGhost} onClick={() => setEditingFornecedor(null)}>Cancelar</button>
+                    </div>
                   </div>
                 )}
               </div>
