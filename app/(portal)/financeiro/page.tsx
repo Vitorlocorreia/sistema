@@ -1661,7 +1661,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     let fetchedContas = (c as ContaComRelacoes[]) ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const oIds = colaboradorAtivo.obras_ids || []
-      fetchedContas = fetchedContas.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : true)
+      fetchedContas = fetchedContas.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : oIds.includes('geral'))
     }
     
     setContas(fetchedContas)
@@ -2369,7 +2369,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     let fetchedContasFornecedores = c ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const oIds = colaboradorAtivo.obras_ids || []
-      fetchedContasFornecedores = fetchedContasFornecedores.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : true)
+      fetchedContasFornecedores = fetchedContasFornecedores.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : oIds.includes('geral'))
     }
     setContasFornecedores(fetchedContasFornecedores)
     setLoading(false)
@@ -3513,7 +3513,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     let fetchedContas = (c as ContaComRelacoes[]) ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const oIds = colaboradorAtivo.obras_ids || []
-      fetchedContas = fetchedContas.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : true)
+      fetchedContas = fetchedContas.filter(conta => conta.obra_id ? (oIds.includes(conta.obra_id) || oIds.includes('geral')) : oIds.includes('geral'))
     }
     setContas(fetchedContas)
     setEmpresas(e ?? [])
