@@ -1558,7 +1558,6 @@ export default function RhPage() {
           '""'
         ])
       }
-      }
     })
 
     if (formato === 'xlsx') {
