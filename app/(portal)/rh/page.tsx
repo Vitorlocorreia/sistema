@@ -19,6 +19,7 @@ import {
   Clock,
   AlertTriangle,
 } from 'lucide-react'
+import * as XLSX from 'xlsx'
 import { PageTitle } from '@/components/PageTitle'
 import { supabase } from '@/lib/supabase'
 import { toast } from '@/components/Toast'
@@ -1476,7 +1477,7 @@ export default function RhPage() {
     await loadDetails(selected)
   }
 
-  const exportarFuncionariosCSV = (tipo: 'todos' | 'filtrados' | 'selecionados' = 'todos') => {
+  const exportarFuncionarios = (tipo: 'todos' | 'filtrados' | 'selecionados' = 'todos', formato: 'csv' | 'xlsx' = 'csv') => {
     let targetInvites: Convite[] = []
     let targetPessoas: Funcionario[] = []
 
@@ -1557,18 +1558,36 @@ export default function RhPage() {
           '""'
         ])
       }
+      }
     })
 
-    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `relatorio_funcionarios_rh_${tipo}_${new Date().toISOString().slice(0, 10)}.csv`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    if (formato === 'xlsx') {
+      // Remove as aspas duplas dos campos para o Excel e cria array 2D
+      const dataXLSX = [
+        headers,
+        ...rows.map(row => row.map(cell => {
+          if (cell === '""') return ''
+          if (cell.startsWith('"') && cell.endsWith('"')) return cell.slice(1, -1)
+          return cell
+        }))
+      ]
+      const ws = XLSX.utils.aoa_to_sheet(dataXLSX)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Relatório RH')
+      XLSX.writeFile(wb, `relatorio_rh_${tipo}_${new Date().toISOString().slice(0, 10)}.xlsx`)
+    } else {
+      const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `relatorio_rh_${tipo}_${new Date().toISOString().slice(0, 10)}.csv`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    }
+
     setModoExportacao(false)
     toast(`${rows.length} registro(s) exportado(s) com sucesso!`, 'success')
   }
@@ -1758,20 +1777,35 @@ export default function RhPage() {
             </button>
 
             {selectedInviteIds.length + selectedPessoaIds.length > 0 && (
-              <button
-                onClick={() => exportarFuncionariosCSV('selecionados')}
-                style={{ ...btn, background: '#34D399', color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
-              >
-                Baixar Selecionados ({selectedInviteIds.length + selectedPessoaIds.length}) 📥
-              </button>
+              <>
+                <button
+                  onClick={() => exportarFuncionarios('selecionados', 'csv')}
+                  style={{ ...btn, background: '#34D399', color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
+                >
+                  Baixar Selecionados CSV ({selectedInviteIds.length + selectedPessoaIds.length}) 📥
+                </button>
+                <button
+                  onClick={() => exportarFuncionarios('selecionados', 'xlsx')}
+                  style={{ ...btn, background: '#10B981', color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
+                >
+                  Baixar Selecionados Excel ({selectedInviteIds.length + selectedPessoaIds.length}) 📊
+                </button>
+              </>
             )}
 
             <button
-              onClick={() => exportarFuncionariosCSV('filtrados')}
+              onClick={() => exportarFuncionarios('filtrados', 'csv')}
               style={{ ...btn, background: C.amber, color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
-              title="Baixar todos os funcionários e candidatos visíveis no filtro atual"
+              title="Baixar todos visíveis em CSV"
             >
-              Baixar Todos os Filtrados ({convitesFiltrados.length + pessoasFiltradas.length}) 📥
+              Baixar Filtrados CSV ({convitesFiltrados.length + pessoasFiltradas.length}) 📥
+            </button>
+            <button
+              onClick={() => exportarFuncionarios('filtrados', 'xlsx')}
+              style={{ ...btn, background: '#F59E0B', color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
+              title="Baixar todos visíveis em Excel"
+            >
+              Baixar Filtrados Excel ({convitesFiltrados.length + pessoasFiltradas.length}) 📊
             </button>
           </div>
         </div>
