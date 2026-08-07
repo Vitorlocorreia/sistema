@@ -813,7 +813,21 @@ export default function RhPage() {
   }
 
   async function save() {
+    if (saving) return
     if (!form.nome.trim()) return toast('Informe o nome do funcionário.', 'error')
+
+    // Prevenção de duplicidade por Nome ou CPF
+    const nomeNorm = form.nome.trim().toLowerCase()
+    const cpfNorm = form.cpf.trim().replace(/\D/g, '')
+    const existente = pessoas.find(p => {
+      const pNome = p.nome.trim().toLowerCase()
+      const pCpf = (p.cpf || '').replace(/\D/g, '')
+      return pNome === nomeNorm || (cpfNorm && pCpf && pCpf === cpfNorm)
+    })
+    if (existente) {
+      return toast(`Já existe um funcionário cadastrado com este nome/CPF (${existente.nome}).`, 'error')
+    }
+
     setSaving(true)
     const { data: person, error } = await supabase
       .from('funcionarios')
@@ -844,7 +858,22 @@ export default function RhPage() {
   }
 
   async function createInvite() {
+    if (inviteSaving) return
     if (!inviteForm.nome.trim()) return toast('Informe o nome do candidato.', 'error')
+
+    // Prevenção de duplicidade de convite por Nome ou CPF em andamento
+    const nomeNorm = inviteForm.nome.trim().toLowerCase()
+    const cpfNorm = inviteForm.cpf.trim().replace(/\D/g, '')
+    const conviteExistente = convites.find(c => {
+      if (['aprovado', 'revogado', 'expirado'].includes(c.status)) return false
+      const cNome = c.nome_destinatario.trim().toLowerCase()
+      const cCpf = (c.cpf || '').replace(/\D/g, '')
+      return cNome === nomeNorm || (cpfNorm && cCpf && cCpf === cpfNorm)
+    })
+    if (conviteExistente) {
+      return toast(`Já existe um cadastro em andamento para "${conviteExistente.nome_destinatario}".`, 'error')
+    }
+
     const { data: authData } = await supabase.auth.getUser()
     if (!authData.user) return toast('Sua sessão segura do Supabase não está ativa. Por favor, faça login novamente.', 'error')
     const hours = Math.min(168, Math.max(1, Number(inviteForm.validade) || 72))
