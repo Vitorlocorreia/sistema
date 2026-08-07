@@ -1485,8 +1485,8 @@ export default function RhPage() {
       targetInvites = convites.filter(c => selectedInviteIds.includes(c.id))
       targetPessoas = pessoas.filter(p => selectedPessoaIds.includes(p.id))
     } else if (tipo === 'filtrados') {
-      targetInvites = convitesFiltrados
-      targetPessoas = pessoasFiltradas
+      targetInvites = activeTab === 'admissao' ? convitesFiltrados : []
+      targetPessoas = activeTab === 'ativos' ? pessoasFiltradas : []
     } else {
       targetInvites = convites
       targetPessoas = pessoas
@@ -1798,14 +1798,14 @@ export default function RhPage() {
               style={{ ...btn, background: C.amber, color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
               title="Baixar todos visíveis em CSV"
             >
-              Baixar Filtrados CSV ({convitesFiltrados.length + pessoasFiltradas.length}) 📥
+              Baixar Filtrados CSV ({activeTab === 'ativos' ? pessoasFiltradas.length : convitesFiltrados.length}) 📥
             </button>
             <button
               onClick={() => exportarFuncionarios('filtrados', 'xlsx')}
               style={{ ...btn, background: '#F59E0B', color: '#0B0C0E', padding: '7px 16px', fontSize: 11 }}
               title="Baixar todos visíveis em Excel"
             >
-              Baixar Filtrados Excel ({convitesFiltrados.length + pessoasFiltradas.length}) 📊
+              Baixar Filtrados Excel ({activeTab === 'ativos' ? pessoasFiltradas.length : convitesFiltrados.length}) 📊
             </button>
           </div>
         </div>
