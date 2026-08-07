@@ -713,14 +713,20 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
         <div style={{ display: 'grid', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
           {/* Evento 1: Criação do Convite pelo RH */}
           {(() => {
-            const criadorObj = colaboradores.find(c => c.id === invite.criado_por || c.email === invite.criado_por)
-            const nomeCriador = criadorObj?.nome || (invite.criado_por && !invite.criado_por.includes('-') ? invite.criado_por : null) || 'RH / Empresa'
+            const criadorObj = colaboradores.find(c => 
+              c.id === invite.criado_por || 
+              c.email === invite.criado_por || 
+              c.nome === invite.criado_por ||
+              (c as any).user_id === invite.criado_por ||
+              (c as any).auth_user_id === invite.criado_por
+            )
+            const nomeCriador = criadorObj?.nome || (invite.criado_por && !invite.criado_por.includes('-') ? invite.criado_por : null) || colaboradorAtivo?.nome || 'Gestor RH'
             return (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 10, padding: '7px 9px', background: '#12141C', borderRadius: 4, border: `1px solid ${C.border}` }}>
                 <div>
                   <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginRight: 6, fontWeight: 800 }}>[Empresa / RH]</span>
                   <strong style={{ color: C.ink }}>Convite de Admissão Gerado</strong>
-                  <span style={{ color: C.amber, fontWeight: 700, marginLeft: 6 }}>· Usuário: {nomeCriador}</span>
+                  <span style={{ color: C.amber, fontWeight: 700, marginLeft: 6 }}>· Gerado por: {nomeCriador}</span>
                   <span style={{ color: C.inkSoft, marginLeft: 6 }}>({invite.cargo || 'Cargo n/i'}{invite.obra ? ` · Obra: ${invite.obra}` : ''})</span>
                 </div>
                 <span style={{ color: C.inkSoft, fontSize: 9 }}>
@@ -737,9 +743,15 @@ function CadastroTable({ invite, modelos, onOpen, onReview, onApprove, onRevoke,
             const badgeColor = isRH ? '#3B82F6' : '#F59E0B'
             const dataAnexo = doc.enviado_em || doc.created_at || invite.created_at
 
-            const criadorConviteObj = colaboradores.find(c => c.id === invite.criado_por || c.email === invite.criado_por)
+            const criadorConviteObj = colaboradores.find(c => 
+              c.id === invite.criado_por || 
+              c.email === invite.criado_por || 
+              c.nome === invite.criado_por ||
+              (c as any).user_id === invite.criado_por ||
+              (c as any).auth_user_id === invite.criado_por
+            )
             const nomeAutorAnexo = isRH 
-              ? (criadorConviteObj?.nome || 'RH / Empresa') 
+              ? (criadorConviteObj?.nome || (invite.criado_por && !invite.criado_por.includes('-') ? invite.criado_por : null) || colaboradorAtivo?.nome || 'Gestor RH') 
               : (invite.nome_destinatario || 'Candidato')
 
             return (
@@ -871,7 +883,7 @@ export default function RhPage() {
       supabase.from('funcionarios').select('*').order('nome').limit(5000),
       supabase.from('rh_modelos_admissao').select('*').eq('ativo', true).order('ordem'),
       supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*, modelo:rh_modelos_admissao(id,ordem,nome))').neq('status', 'aprovado').order('created_at', { ascending: false }).limit(5000),
-      supabase.from('colaboradores').select('id, nome, email'),
+      supabase.from('colaboradores').select('*'),
     ])
 
     if (peopleData) setPessoas(peopleData as Funcionario[])
@@ -1018,7 +1030,7 @@ export default function RhPage() {
       expires_at: expiresAt,
       status: 'ativo',
       etapa_atual: 1,
-      criado_por: colaboradorAtivo?.id || authData.user.id
+      criado_por: colaboradorAtivo?.nome || authData.user.email || authData.user.id
     }).select().single()
 
     if (error) {
@@ -1852,6 +1864,20 @@ export default function RhPage() {
                     )}
                   </div>
                   <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5, display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {(() => {
+                      const criadorObj = colaboradores.find(c => 
+                        c.id === invite.criado_por || 
+                        c.email === invite.criado_por || 
+                        c.nome === invite.criado_por ||
+                        (c as any).user_id === invite.criado_por ||
+                        (c as any).auth_user_id === invite.criado_por
+                      )
+                      const nomeGerador = criadorObj?.nome || (invite.criado_por && !invite.criado_por.includes('-') ? invite.criado_por : null) || colaboradorAtivo?.nome || 'Gestor RH'
+                      return (
+                        <span style={{ color: C.amber, fontWeight: 700 }}>👤 Gerado por: {nomeGerador}</span>
+                      )
+                    })()}
+                    <span>·</span>
                     <span style={{ color: C.amber, fontWeight: 700 }}>✉️ {invite.email_destinatario || 'E-mail não informado'}</span>
                     <span>·</span>
                     <span style={{ color: C.ink, fontWeight: 700 }}>Profissão: {invite.cargo || 'Não informada'}</span>
