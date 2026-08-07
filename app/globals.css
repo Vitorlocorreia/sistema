@@ -18,13 +18,13 @@
 }
 
 [data-theme="light"] {
-  --theme-bg: #F8FAFC;
+  --theme-bg: #F1F5F9;
   --theme-bg-panel: #FFFFFF;
-  --theme-bg-card: #F1F5F9;
-  --theme-bg-white: #FFFFFF;
+  --theme-bg-card: #FFFFFF;
+  --theme-bg-white: #F8FAFC;
   --theme-ink: #0F172A;
-  --theme-ink-soft: #64748B;
-  --theme-border: #E2E8F0;
+  --theme-ink-soft: #475569;
+  --theme-border: #CBD5E1;
   --theme-amber: #D97706;
   --theme-amber-dim: #FEF3C7;
   --theme-green: #059669;
@@ -54,6 +54,65 @@ body {
   color: var(--theme-ink);
   font-family: var(--font-sans);
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* FULL LIGHT THEME OVERRIDES */
+[data-theme="light"] {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+[data-theme="light"] main {
+  background-color: #F1F5F9 !important;
+  color: #0F172A !important;
+}
+
+[data-theme="light"] aside,
+[data-theme="light"] header {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+/* Conversion of hardcoded dark container styles to crisp white cards in Light Mode */
+[data-theme="light"] div[style*="background: '#0B0C0E'"],
+[data-theme="light"] div[style*="background: '#12141C'"],
+[data-theme="light"] div[style*="background: '#16181C'"],
+[data-theme="light"] div[style*="background: '#1A1D26'"],
+[data-theme="light"] div[style*="background: '#1E2230'"],
+[data-theme="light"] div[style*="background: '#222530'"],
+[data-theme="light"] section[style*="background: '#12141C'"],
+[data-theme="light"] section[style*="background: '#0B0C0E'"] {
+  background-color: #FFFFFF !important;
+  border-color: #CBD5E1 !important;
+  color: #0F172A !important;
+}
+
+/* Light mode form inputs & dropdowns */
+[data-theme="light"] input:not([type="checkbox"]):not([type="radio"]),
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+  border-color: #CBD5E1 !important;
+}
+
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: #94A3B8 !important;
+}
+
+/* Light mode table headers */
+[data-theme="light"] tr[style*="background: '#16181C'"],
+[data-theme="light"] th[style*="background: '#16181C'"] {
+  background-color: #F8FAFC !important;
+  color: #334155 !important;
+  border-color: #CBD5E1 !important;
+}
+
+/* Light mode table cells */
+[data-theme="light"] td {
+  border-color: #E2E8F0 !important;
 }
 
 /* RDO details scroll inside the opened document so the list/sidebar and the

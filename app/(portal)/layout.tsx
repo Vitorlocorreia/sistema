@@ -319,125 +319,128 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
       {/* ── SIDEBAR ─────────────────────────────────────────────── */}
       <aside
+        style={{ background: C.bgPanel, borderColor: C.border }}
         className={`
-          fixed inset-y-0 left-0 z-50 md:static md:flex flex-col flex-shrink-0
-          w-[280px] bg-[#12141C] border-r border-[#222530] p-6
+          fixed inset-y-0 left-0 z-50 md:sticky md:top-0 md:h-screen flex flex-col flex-shrink-0
+          w-[280px] border-r p-5 transition-colors duration-200
           transform transition-transform duration-250 ease-out md:translate-x-0
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
         `}
       >
         {/* Mobile close button */}
-        <div className="md:hidden flex justify-end mb-4">
+        <div className="md:hidden flex justify-end mb-2">
           <button
             onClick={() => setMobileOpen(false)}
-            className="p-1.5 text-[#9CA3AF] hover:text-[#F3F4F6] border border-[#222530] rounded"
+            style={{ color: C.inkSoft, borderColor: C.border }}
+            className="p-1.5 border rounded"
           >
             <X size={16} />
           </button>
         </div>
 
-        {/* Logo */}
-        <div className="flex items-center gap-3 px-2 mb-7">
-          <div className="w-[34px] h-[34px] rounded bg-[#F59E0B] flex items-center justify-center">
-            <Wallet size={18} color="#0B0C0E" strokeWidth={2.5} />
+        {/* Scrollable Apps Container */}
+        <div className="flex-1 min-h-0 overflow-y-auto pr-1">
+          {/* Logo */}
+          <div className="flex items-center gap-3 px-2 mb-5">
+            <div className="w-[34px] h-[34px] rounded bg-[#F59E0B] flex items-center justify-center flex-shrink-0">
+              <Wallet size={18} color="#0B0C0E" strokeWidth={2.5} />
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 900, color: C.ink, letterSpacing: -0.2, textTransform: 'uppercase' }}>Carteira de Apps</div>
+              <div style={{ fontSize: 9.5, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Construtora · Portal</div>
+            </div>
           </div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 900, color: C.ink, letterSpacing: -0.2, textTransform: 'uppercase' }}>Carteira de Apps</div>
-            <div style={{ fontSize: 9.5, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>Construtora · Portal</div>
+
+          {/* Section header + edit toggle */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '14px 8px 10px' }}>
+            <div style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 1.2 }}>
+              Meus Aplicativos
+            </div>
+            <button
+              onClick={() => setEditMode(prev => !prev)}
+              title={editMode ? 'Sair do modo edição' : 'Personalizar ordem'}
+              style={{
+                all: 'unset', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 4,
+                padding: '3px 8px', borderRadius: 2,
+                border: `1px solid ${editMode ? C.amber : C.border}`,
+                background: editMode ? `${C.amber}18` : 'transparent',
+                fontSize: 9, fontWeight: 800, color: editMode ? C.amber : C.inkSoft,
+                textTransform: 'uppercase', letterSpacing: 0.5, transition: 'all 0.15s',
+              }}
+            >
+              {editMode ? <X size={10} /> : <Settings size={10} />}
+              {editMode ? 'Pronto' : 'Ordem'}
+            </button>
           </div>
-        </div>
 
-
-
-        {/* Section header + edit toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '18px 8px 10px' }}>
-          <div style={{ fontSize: 9, fontWeight: 800, color: '#4B5563', textTransform: 'uppercase', letterSpacing: 1.2 }}>
-            Meus Aplicativos
-          </div>
-          <button
-            onClick={() => setEditMode(prev => !prev)}
-            title={editMode ? 'Sair do modo edição' : 'Personalizar ordem'}
-            style={{
-              all: 'unset', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 4,
-              padding: '3px 8px', borderRadius: 2,
-              border: `1px solid ${editMode ? C.amber : C.border}`,
-              background: editMode ? `${C.amber}18` : 'transparent',
-              fontSize: 9, fontWeight: 800, color: editMode ? C.amber : C.inkSoft,
-              textTransform: 'uppercase', letterSpacing: 0.5, transition: 'all 0.15s',
-            }}
-          >
-            {editMode ? <X size={10} /> : <Settings size={10} />}
-            {editMode ? 'Pronto' : 'Ordem'}
-          </button>
-        </div>
-
-        {/* App cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {sortedApps.map((app, index) => {
-            const Icon = iconMap[app.icone]
-            const active = pathname.startsWith(`/${app.id}`)
-            return (
-              <div
-                key={app.id}
-                draggable={editMode}
-                onDragStart={() => handleDragStart(index)}
-                onDragEnter={() => handleDragEnter(index)}
-                onDragEnd={handleDragEnd}
-                onDragOver={e => e.preventDefault()}
-                style={{
-                  display: 'flex', flexDirection: 'column', gap: 10,
-                  padding: '12px 14px', borderRadius: 2,
-                  background: active ? '#1E2230' : 'transparent',
-                  border: `1px solid ${active ? C.amber : editMode ? C.border : 'transparent'}`,
-                  transition: 'all 0.12s ease',
-                  cursor: editMode ? 'grab' : 'pointer',
-                  userSelect: 'none',
-                }}
-                onClick={() => {
-                  if (!editMode) { router.push(`/${app.id}`); setMobileOpen(false) }
-                }}
-                className={editMode ? '' : 'hover:bg-brand-card/50 hover:border-brand-border'}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    {editMode && <GripVertical size={14} color={C.inkSoft} style={{ flexShrink: 0, marginLeft: -4 }} />}
-                    <div style={{
-                      width: 32, height: 32, borderRadius: 2,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: active ? `${C.amber}22` : C.border,
-                      transition: 'background 0.12s',
-                    }}>
-                      <Icon size={16} color={active ? C.amber : C.inkSoft} strokeWidth={2} />
+          {/* App cards */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {sortedApps.map((app, index) => {
+              const Icon = iconMap[app.icone]
+              const active = pathname.startsWith(`/${app.id}`)
+              return (
+                <div
+                  key={app.id}
+                  draggable={editMode}
+                  onDragStart={() => handleDragStart(index)}
+                  onDragEnter={() => handleDragEnter(index)}
+                  onDragEnd={handleDragEnd}
+                  onDragOver={e => e.preventDefault()}
+                  style={{
+                    display: 'flex', flexDirection: 'column', gap: 10,
+                    padding: '12px 14px', borderRadius: 4,
+                    background: active ? C.bgWhite : 'transparent',
+                    border: `1px solid ${active ? C.amber : editMode ? C.border : 'transparent'}`,
+                    transition: 'all 0.12s ease',
+                    cursor: editMode ? 'grab' : 'pointer',
+                    userSelect: 'none',
+                  }}
+                  onClick={() => {
+                    if (!editMode) { router.push(`/${app.id}`); setMobileOpen(false) }
+                  }}
+                  className={editMode ? '' : 'hover:opacity-90'}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      {editMode && <GripVertical size={14} color={C.inkSoft} style={{ flexShrink: 0, marginLeft: -4 }} />}
+                      <div style={{
+                        width: 32, height: 32, borderRadius: 4,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: active ? `${C.amber}22` : C.border,
+                        transition: 'background 0.12s',
+                      }}>
+                        <Icon size={16} color={active ? C.amber : C.inkSoft} strokeWidth={2} />
+                      </div>
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{app.nome}</div>
+                        <div style={{ fontSize: 10.5, color: C.inkSoft, marginTop: 1 }}>substitui {app.sub}</div>
+                      </div>
                     </div>
-                    <div style={{ textAlign: 'left' }}>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{app.nome}</div>
-                      <div style={{ fontSize: 10.5, color: C.inkSoft, marginTop: 1 }}>substitui {app.sub}</div>
-                    </div>
+                    {!editMode && <ChevronRight size={14} color={active ? C.amber : C.inkSoft} />}
                   </div>
-                  {!editMode && <ChevronRight size={14} color={active ? C.amber : '#4B5563'} />}
+                  <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                    <StatusBadge status={app.status as any} />
+                  </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-                  <StatusBadge status={app.status as any} />
-                </div>
-              </div>
-            )
-          })}
+              )
+            })}
+          </div>
+
+          {/* Edit mode hint */}
+          {editMode && (
+            <div style={{
+              marginTop: 10, padding: '8px 12px', borderRadius: 4,
+              background: `${C.amber}10`, border: `1px solid ${C.amber}25`,
+              fontSize: 10, color: C.amber, fontWeight: 700, textAlign: 'center'
+            }}>
+              Arraste os itens para reordenar
+            </div>
+          )}
         </div>
 
-        {/* Edit mode hint */}
-        {editMode && (
-          <div style={{
-            marginTop: 10, padding: '8px 12px', borderRadius: 2,
-            background: `${C.amber}10`, border: `1px solid ${C.amber}25`,
-            fontSize: 10, color: C.amber, fontWeight: 700, textAlign: 'center'
-          }}>
-            Arraste os itens para reordenar
-          </div>
-        )}
-
-        {/* User Block */}
-        <div style={{ marginTop: 'auto', paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+        {/* Pinned User Block */}
+        <div style={{ paddingTop: 14, marginTop: 10, borderTop: `1px solid ${C.border}`, flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px' }}>
             <div style={{
               width: 34, height: 34, borderRadius: 2, flexShrink: 0,
