@@ -131,7 +131,19 @@ function ArchivePanel({ person, details, onBack, onDelete, onOpen }: { person: F
   return <div>
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start', flexWrap: 'wrap', marginBottom: 14 }}><div><strong style={{ fontSize: 14 }}>{person.nome}</strong><p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>{person.cargo || 'Cargo não informado'} · {person.cpf || 'CPF não informado'} · <span style={{ color: C.amber }}>✉️ {person.email || 'E-mail não informado'}</span> {(person as any).telefone ? `· 📞 ${(person as any).telefone}` : ''}</p></div><div style={{ display: 'flex', gap: 7, flexWrap: 'wrap' }}><button style={outlineBtn} onClick={onBack}>← Voltar</button><button style={{ ...outlineBtn, color: '#F87171' }} onClick={onDelete}><Trash2 size={12} />Excluir</button></div></div>
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}><div><strong style={{ fontSize: 12 }}>Baú documental</strong><p style={{ color: C.inkSoft, fontSize: 10, margin: '4px 0 0' }}>Arquivo permanente, organizado nas quatro pastas de admissão.</p></div><input style={{ ...input, width: 210 }} placeholder="Buscar documento" value={filter} onChange={event => setFilter(event.target.value)} /></div>
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 9 }}>{[1, 2, 3, 4].map(order => { const etapa = details.etapas.find(item => item.modelo.ordem === order); const docs = documents.filter(documento => documento.etapa_id === etapa?.id); return <article key={order} style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5, padding: 11 }}><span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>PASTA {order}</span><h4 style={{ margin: '5px 0 9px', fontSize: 11 }}>{etapa?.modelo.nome || `Etapa ${order}`}</h4>{docs.length ? docs.map(documento => <button key={documento.id} onClick={() => onOpen(documento)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 0, borderTop: `1px solid ${C.border}`, padding: '8px 0', background: 'transparent', color: C.amber, fontSize: 9, cursor: 'pointer' }}>↗ {documento.nome || 'Documento'}<span style={{ display: 'block', color: C.inkSoft, marginTop: 2 }}>{documento.status || 'Arquivado'}</span></button>) : <p style={{ color: C.inkSoft, fontSize: 9 }}>Nenhum arquivo nesta pasta.</p>}</article> })}</div>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 9 }}>{[1, 2, 3, 4].map(order => { 
+      const etapa = details.etapas.find(item => item.modelo.ordem === order); 
+      const docs = documents.filter(documento => {
+        if (documento.etapa_id) {
+          return etapa?.id ? documento.etapa_id === etapa.id : false;
+        }
+        if (documento.ordem_pasta) {
+          return String(documento.ordem_pasta) === String(order);
+        }
+        return order === 1; // Fallback: documentos sem etapa ou ordem caem na pasta 1
+      }); 
+      return <article key={order} style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 5, padding: 11 }}><span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>PASTA {order}</span><h4 style={{ margin: '5px 0 9px', fontSize: 11 }}>{etapa?.modelo.nome || `Etapa ${order}`}</h4>{docs.length ? docs.map(documento => <button key={documento.id} onClick={() => onOpen(documento)} style={{ display: 'block', width: '100%', textAlign: 'left', border: 0, borderTop: `1px solid ${C.border}`, padding: '8px 0', background: 'transparent', color: C.amber, fontSize: 9, cursor: 'pointer' }}>↗ {documento.nome || 'Documento'}<span style={{ display: 'block', color: C.inkSoft, marginTop: 2 }}>{documento.status || 'Arquivado'}</span></button>) : <p style={{ color: C.inkSoft, fontSize: 9 }}>Nenhum arquivo nesta pasta.</p>}</article> 
+    })}</div>
   </div>
 }
 
@@ -943,6 +955,14 @@ export default function RhPage() {
       convitesRelacionados.forEach((c: any) => {
         if (c.documentos && Array.isArray(c.documentos)) {
           c.documentos.forEach((d: any) => {
+            let ordemDoc = null
+            if (d.modelo_id) {
+               const mod = modelos.find(m => m.id === d.modelo_id)
+               if (mod) ordemDoc = mod.ordem
+            } else if (d.item_id === '__guia_rh__' || (d.nome || '').toLowerCase().includes('guia') || (d.nome || '').toLowerCase().includes('pix')) {
+               ordemDoc = 1
+            }
+
             docsAdmissao.push({
               id: d.id,
               nome: d.nome,
@@ -950,7 +970,8 @@ export default function RhPage() {
               storage_path: d.storage_path,
               status: d.status === 'aprovado' ? 'Aprovado na Admissão' : d.status,
               created_at: d.enviado_em || d.created_at,
-              observacao_rh: d.observacao_rh
+              observacao_rh: d.observacao_rh,
+              ordem_pasta: ordemDoc?.toString() || null
             })
           })
         }
