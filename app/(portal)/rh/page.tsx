@@ -1289,6 +1289,7 @@ export default function RhPage() {
           email: invite.email_destinatario,
           telefone: invite.telefone_destinatario,
           endereco: invite.endereco,
+          obra: invite.obra,
           data_admissao: invite.data_inicio_efetivo || new Date().toISOString().split('T')[0]
         }).select('id').single()
 
@@ -1301,6 +1302,15 @@ export default function RhPage() {
         funcionario_id: funcId || null,
         updated_at: new Date().toISOString()
       }).eq('id', invite.id)
+    }
+
+    // Força a atualização da obra para garantir que não se perca, mesmo que a Edge Function tenha falhado ao copiar
+    if (invite.obra) {
+      const { data: updatedInvite } = await supabase.from('rh_admissao_convites').select('funcionario_id').eq('id', invite.id).single()
+      const finalFuncId = updatedInvite?.funcionario_id || funcId
+      if (finalFuncId) {
+        await supabase.from('funcionarios').update({ obra: invite.obra }).eq('id', finalFuncId)
+      }
     }
 
     setSelectedInvite(null as unknown as Convite)
