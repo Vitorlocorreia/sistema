@@ -2133,6 +2133,9 @@ export default function RhPage() {
                     <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 3 }}>
                       {person.cargo || 'Sem cargo'} · <span style={{ color: C.amber }}>✉️ {person.email || 'Sem e-mail'}</span> · {person.cpf || 'Sem CPF'} · {person.status}
                     </div>
+                    <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
+                      Início Efetivo: <strong style={{ color: C.ink }}>{person.data_admissao ? new Date(person.data_admissao).toLocaleDateString('pt-BR') : 'Não informada'}</strong> · Obra: <strong style={{ color: C.ink }}>{(person as any).obra || 'Nenhuma vinculada'}</strong>
+                    </div>
                   </button>
                   {selected?.id === person.id && (
                     <div style={{ background: '#0B0C0E', borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, padding: '16px 14px' }}>
