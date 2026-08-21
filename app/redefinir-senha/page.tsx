@@ -94,6 +94,23 @@ export default function RedefinirSenhaPage() {
     async function checarSessao() {
       setVerificandoSessao(true)
 
+      // 0. Se vier via PKCE (?code=...)
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search)
+        const code = params.get('code')
+        if (code) {
+          try {
+            const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+            if (!error && data?.session?.user) {
+              setSessaoValida(true)
+              setEmailUsuario(data.session.user.email || null)
+              setVerificandoSessao(false)
+              return
+            }
+          } catch { }
+        }
+      }
+
       // 1. Escuta o evento PASSWORD_RECOVERY ou sessão ativa
       const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (event === 'PASSWORD_RECOVERY' || (session && session.user)) {
@@ -108,6 +125,7 @@ export default function RedefinirSenhaPage() {
       if (session && session.user) {
         setSessaoValida(true)
         setEmailUsuario(session.user.email || null)
+        setVerificandoSessao(false)
       } else {
         // Se a URL tiver hash com tokens de recuperação, o Supabase processa automaticamente em instantes
         setTimeout(async () => {
@@ -119,7 +137,7 @@ export default function RedefinirSenhaPage() {
             setSessaoValida(false)
           }
           setVerificandoSessao(false)
-        }, 1200)
+        }, 1500)
       }
 
       return () => {

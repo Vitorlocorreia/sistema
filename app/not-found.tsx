@@ -9,11 +9,20 @@ export default function NotFound() {
   const router = useRouter()
 
   useEffect(() => {
-    // Se o usuário caiu em uma página inexistente (como /**) mas o link contém token de recuperação do Supabase
     if (typeof window !== 'undefined') {
-      const hash = window.location.hash
-      if (hash.includes('type=recovery') || (hash.includes('access_token') && hash.includes('refresh_token'))) {
-        router.replace('/redefinir-senha' + hash)
+      const hash = window.location.hash || ''
+      const search = window.location.search || ''
+      const pathname = window.location.pathname || ''
+
+      // Se o link contiver tokens de recuperação ou foi gerado com /** pelo Supabase
+      if (
+        pathname.includes('**') ||
+        hash.includes('access_token') ||
+        hash.includes('type=recovery') ||
+        search.includes('code=') ||
+        search.includes('type=recovery')
+      ) {
+        router.replace('/redefinir-senha' + search + hash)
       }
     }
   }, [router])
