@@ -243,7 +243,7 @@ export default function RDO() {
   const filteredRdos = useMemo(() => {
     return rdos.filter(r => {
       const matchesSearch =
-        r.responsavel.toLowerCase().includes(search.toLowerCase()) ||
+        (r.responsavel ?? '').toLowerCase().includes(search.toLowerCase()) ||
         (r.resumo ?? '').toLowerCase().includes(search.toLowerCase())
       const matchesObra = filterObra === 'Todas' || r.obra?.nome === filterObra
       const matchesStatus = filterStatus === 'Todos' || r.status === filterStatus
@@ -329,8 +329,8 @@ export default function RDO() {
     toast(`${selectedRdoIds.length} diário(s) excluído(s).`, 'success')
   }
 
-  const getWeatherIcon = (weather: string) => {
-    switch (weather.toLowerCase()) {
+  const getWeatherIcon = (weather?: string) => {
+    switch ((weather || '').toLowerCase()) {
       case 'sol':
       case 'ensolarado':
         return <Sun size={16} color={C.amber} />

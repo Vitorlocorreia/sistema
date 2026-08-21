@@ -4623,7 +4623,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Aguardando aprovação' ? '1px solid #3B82F644' : 'none',
                           boxShadow: c.status === 'Bloqueado' ? '0 0 8px #F9731633' : 'none'
                         }}>
-                          {c.status === 'Bloqueado' ? '🔒 BLOQUEADO' : c.status === 'Aguardando aprovação' ? '⏳ AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : c.status.toUpperCase()}
+                          {c.status === 'Bloqueado' ? '🔒 BLOQUEADO' : c.status === 'Aguardando aprovação' ? '⏳ AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : (c.status || 'LANÇADO').toUpperCase()}
                         </span>
                         {c.criado_por && (
                           <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>

@@ -1277,9 +1277,10 @@ export default function RhPage() {
       funcSuccess = false
     }
 
+    let funcId: string | null = invite.funcionario_id || null
+
     if (!funcSuccess) {
       // Fallback direto garantido no banco de dados
-      let funcId = invite.funcionario_id
       if (!funcId) {
         const { data: newFunc } = await supabase.from('funcionarios').insert({
           nome: invite.nome_destinatario,
