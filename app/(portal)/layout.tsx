@@ -98,6 +98,11 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   // ── Auth guard OTIMISTA: mostra UI imediatamente a partir do cache local ───
   useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
+      router.replace('/redefinir-senha' + window.location.hash)
+      return
+    }
+
     const raw = localStorage.getItem(SESSION_KEY)
     if (!raw) {
       router.replace('/login')

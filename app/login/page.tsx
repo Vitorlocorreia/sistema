@@ -43,6 +43,22 @@ export default function LoginPage() {
   const [emailRecuperar, setEmailRecuperar] = useState('')
   const [sucessoRecuperar, setSucessoRecuperar] = useState(false)
 
+  // Detecção de link de recuperação caso o Supabase redirecione para /login
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
+      router.replace('/redefinir-senha' + window.location.hash)
+      return
+    }
+    const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        router.replace('/redefinir-senha')
+      }
+    })
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [router])
+
   // Canvas de partículas animadas em background
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   useEffect(() => {
