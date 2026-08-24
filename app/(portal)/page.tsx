@@ -28,45 +28,50 @@ export default function Dashboard() {
 
   const loadData = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
-    const [
-      { data: ob },
-      { data: rd },
-      { data: sp },
-      { data: ft }
-    ] = await Promise.all([
-      supabase.from('obras').select('id, nome, status, progresso').order('nome'),
-      supabase.from('rdos').select('id, resumo, status, obra:obras(nome)').order('data', { ascending: false }),
-      supabase.from('suprimentos').select('id, titulo, quantidade, unidade, status, obra:obras(nome)').order('created_at', { ascending: false }),
-      supabase.from('fotos').select('id, legenda, imagem_url, data_iso, created_at, obra:obras(nome)').order('created_at', { ascending: false })
-    ])
+    try {
+      const [
+        { data: ob },
+        { data: rd },
+        { data: sp },
+        { data: ft }
+      ] = await Promise.all([
+        supabase.from('obras').select('id, nome, status, progresso').order('nome'),
+        supabase.from('rdos').select('id, resumo, status, obra:obras(nome)').order('data', { ascending: false }),
+        supabase.from('suprimentos').select('id, titulo, quantidade, unidade, status, obra:obras(nome)').order('created_at', { ascending: false }),
+        supabase.from('fotos').select('id, legenda, imagem_url, data_iso, created_at, obra:obras(nome)').order('created_at', { ascending: false })
+      ])
 
-    let obList = ob ?? []
-    let rdList = rd ?? []
-    let spList = sp ?? []
-    let ftList = ft ?? []
+      let obList = ob ?? []
+      let rdList = rd ?? []
+      let spList = sp ?? []
+      let ftList = ft ?? []
 
-    // Filtrar por acesso à obra
-    if (typeof window !== 'undefined') {
-      const sessao = localStorage.getItem('colaborador_sessao')
-      if (sessao) {
-        try {
-          const colab = JSON.parse(sessao)
-          if (colab.cargo !== 'admin_geral') {
-            const oIds = colab.obras_ids || []
-            obList = obList.filter((o: any) => oIds.includes(o.id))
-            rdList = rdList.filter((r: any) => oIds.includes(r.obra_id) || oIds.includes('geral') || !r.obra_id)
-            spList = spList.filter((s: any) => oIds.includes(s.obra_id) || oIds.includes('geral') || !s.obra_id)
-            ftList = ftList.filter((f: any) => oIds.includes(f.obra_id) || oIds.includes('geral') || !f.obra_id)
-          }
-        } catch {}
+      // Filtrar por acesso à obra
+      if (typeof window !== 'undefined') {
+        const sessao = localStorage.getItem('colaborador_sessao')
+        if (sessao) {
+          try {
+            const colab = JSON.parse(sessao)
+            if (colab.cargo !== 'admin_geral') {
+              const oIds = colab.obras_ids || []
+              obList = obList.filter((o: any) => oIds.includes(o.id))
+              rdList = rdList.filter((r: any) => oIds.includes(r.obra_id) || oIds.includes('geral') || !r.obra_id)
+              spList = spList.filter((s: any) => oIds.includes(s.obra_id) || oIds.includes('geral') || !s.obra_id)
+              ftList = ftList.filter((f: any) => oIds.includes(f.obra_id) || oIds.includes('geral') || !f.obra_id)
+            }
+          } catch {}
+        }
       }
-    }
 
-    setObrasList(obList)
-    setRdosList(rdList)
-    setSuprimentosList(spList)
-    setFotosList(ftList)
-    setLoading(false)
+      setObrasList(obList)
+      setRdosList(rdList)
+      setSuprimentosList(spList)
+      setFotosList(ftList)
+    } catch (err) {
+      console.warn('Error loading dashboard data:', err)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => {

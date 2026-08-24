@@ -1,0 +1,18 @@
+name: Keep Supabase & Vercel Alive
+
+on:
+  schedule:
+    # Roda todos os dias às 06:00 e às 18:00 UTC (03:00 e 15:00 de Brasília)
+    - cron: '0 6,18 * * *'
+  workflow_dispatch: # Permite rodar manualmente pelo painel do GitHub
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase & Vercel API
+        run: |
+          echo "Realizando ping no endpoint de keep-alive..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" https://sistema-wheat.vercel.app/api/keep-alive)
+          echo "Resposta do servidor:"
+          echo "$RESPONSE"

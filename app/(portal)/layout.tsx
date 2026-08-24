@@ -96,6 +96,14 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   const [authChecked, setAuthChecked] = useState(false)
   const { theme, toggleTheme } = useTheme()
 
+  // Safety timeout para nunca travar no spinner em caso de lentidão de rede
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAuthChecked(true)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [])
+
   // ── Auth guard OTIMISTA: mostra UI imediatamente a partir do cache local ───
   useEffect(() => {
     if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
@@ -113,34 +121,49 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
     try {
       sessao = JSON.parse(raw)
     } catch {
+      localStorage.removeItem(SESSION_KEY)
       router.replace('/login')
       return
     }
 
-    if (!sessao) { router.replace('/login'); return }
+    if (!sessao || !sessao.id) {
+      localStorage.removeItem(SESSION_KEY)
+      router.replace('/login')
+      return
+    }
 
     // 1. Carrega sessão do cache LOCAL instantaneamente (sem esperar banco)
     setColaborador(sessao)
 
-    // 2. Carrega apps do cache (sem roundtrip)
+    // 2. Carrega apps do cache local ou defaults do cargo imediatamente
     const cachedApps = readAppsCache()
-    if (cachedApps) {
+    if (cachedApps && cachedApps.length > 0) {
       setAppsAutorizados(cachedApps)
-      setAuthChecked(true)
+    } else {
+      const initialApps = sessao.cargo === 'admin_geral'
+        ? defaultApps.map(a => a.id)
+        : (sessao.apps ? sessao.apps.split(',').map((a: string) => a.trim()).filter(Boolean) : ['financeiro', 'rh', 'suprimentos', 'rdo'])
+      setAppsAutorizados(initialApps)
+      writeAppsCache(initialApps)
     }
+    setAuthChecked(true)
 
-    // 3. Valida e atualiza em background (não bloqueia a UI)
+    // 3. Valida e sincroniza em background (sem bloquear a UI)
     const validarEmBackground = async () => {
       try {
         const { data: c, error } = await supabase
           .from('colaboradores')
           .select('*')
           .eq('id', sessao!.id)
-          .single()
+          .maybeSingle()
 
-        if (error || !c) {
-          console.error('Session validation failed:', error, c)
-          // Sessão inválida no banco → expulsa
+        if (error) {
+          console.warn('Background auth sync warning:', error.message)
+          return
+        }
+
+        if (!c) {
+          // Se o usuário foi removido do banco, expulsa
           localStorage.removeItem(SESSION_KEY)
           invalidateAppsCache()
           router.replace('/login')
@@ -152,7 +175,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         localStorage.setItem(SESSION_KEY, JSON.stringify(c))
         localStorage.setItem('perfil_ativo', c.cargo)
 
-        // Resolve lista de apps
+        // Resolve lista de apps atualizada
         let listaApps: string[]
         if (c.override_permissoes) {
           listaApps = c.apps
@@ -163,18 +186,18 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             .from('config_permissoes')
             .select('apps')
             .eq('cargo', c.cargo)
-            .single()
+            .maybeSingle()
           listaApps = perm?.apps
             ? perm.apps.split(',').map((a: string) => a.trim()).filter(Boolean)
-            : ['financeiro']
+            : (c.cargo === 'admin_geral' ? defaultApps.map(a => a.id) : ['financeiro'])
         }
 
         setAppsAutorizados(listaApps)
         writeAppsCache(listaApps)
+      } catch (err) {
+        console.warn('Background sync error:', err)
+      } finally {
         setAuthChecked(true)
-      } catch {
-        // Falha de rede — mantém UI com cache, tenta de novo depois
-        if (!authChecked) setAuthChecked(true)
       }
     }
 
