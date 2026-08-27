@@ -1644,8 +1644,8 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
-    let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao')
-    let qE = supabase.from('empresas').select('*').order('razao_social')
+    let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao').limit(50000)
+    let qE = supabase.from('empresas').select('*').order('razao_social').limit(1000)
     
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -2348,9 +2348,9 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
 
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
-    let qF = supabase.from('fornecedores').select('*').order('razao_social')
-    let qE = supabase.from('empresas').select('*').order('razao_social')
-    let qC = supabase.from('contas').select('*')
+    let qF = supabase.from('fornecedores').select('*').order('razao_social').limit(10000)
+    let qE = supabase.from('empresas').select('*').order('razao_social').limit(1000)
+    let qC = supabase.from('contas').select('*').limit(50000)
 
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -3594,10 +3594,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
-    let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false })
-    let qE = supabase.from('empresas').select('*').order('razao_social')
-    let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social')
-    let qO = supabase.from('obras').select('*').order('nome')
+    let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false }).limit(50000)
+    let qE = supabase.from('empresas').select('*').order('razao_social').limit(1000)
+    let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social').limit(10000)
+    let qO = supabase.from('obras').select('*').order('nome').limit(1000)
 
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])

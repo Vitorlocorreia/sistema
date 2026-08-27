@@ -202,7 +202,7 @@ export default function ObrasPage() {
       supabase.from('obras').select('*').order('nome'),
       supabase.from('galeria_pastas').select('*, obra:obras(nome)').order('ordem'),
       supabase.from('medicoes').select('*').order('periodo_fim', { ascending: false }),
-      supabase.from('contas').select('id,obra_id,tipo,valor,status,data_previsao'),
+      supabase.from('contas').select('id,obra_id,tipo,valor,status,data_previsao').limit(50000),
       supabase.from('faturamentos').select('*').order('data_previsao', { ascending: false })
     ])
 
