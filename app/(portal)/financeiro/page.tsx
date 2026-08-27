@@ -10,7 +10,7 @@ import {
   ChevronDown, ChevronUp
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
-import { supabase } from '@/lib/supabase'
+import { supabase, fetchAllChunks } from '@/lib/supabase'
 import { toast } from '@/components/Toast'
 import type { Empresa, Fornecedor, Conta, ContaComRelacoes, Obra, Colaborador, ConfigPermissao, CargoSistema, ItemNegociacao, ItemMedicao } from '@/lib/types'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
@@ -1644,19 +1644,30 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
-    let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao').limit(50000)
+    const buildContasQuery = (sb: typeof supabase) => {
+      let q = sb.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia), obra:obras(nome)').order('data_previsao', { ascending: false })
+      if (colaboradorAtivo.cargo !== 'admin_geral') {
+        const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+        if (ids.length > 0) {
+          q = q.in('empresa_id', ids)
+        }
+        q = q.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
+      }
+      return q
+    }
+
     let qE = supabase.from('empresas').select('*').order('razao_social').limit(1000)
-    
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
       if (ids.length > 0) {
-        qC = qC.in('empresa_id', ids)
         qE = qE.in('id', ids)
       }
-      qC = qC.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
     }
     
-    const [{ data: c }, { data: e }] = await Promise.all([qC, qE])
+    const [{ data: c }, { data: e }] = await Promise.all([
+      fetchAllChunks<ContaComRelacoes>(buildContasQuery),
+      qE
+    ])
     
     let fetchedContas = (c as ContaComRelacoes[]) ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
@@ -2348,21 +2359,34 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
 
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
-    let qF = supabase.from('fornecedores').select('*').order('razao_social').limit(10000)
-    let qE = supabase.from('empresas').select('*').order('razao_social').limit(1000)
-    let qC = supabase.from('contas').select('*').limit(50000)
+    const buildContasQuery = (sb: typeof supabase) => {
+      let q = sb.from('contas').select('*')
+      if (colaboradorAtivo.cargo !== 'admin_geral') {
+        const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+        if (ids.length > 0) {
+          q = q.in('empresa_id', ids)
+        }
+        q = q.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
+      }
+      return q
+    }
+
+    let qF = supabase.from('fornecedores').select('*').order('razao_social')
+    let qE = supabase.from('empresas').select('*').order('razao_social')
 
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
       if (ids.length > 0) {
         qF = qF.or(`empresa_id.in.(${ids.join(',')}),empresa_id.is.null`)
         qE = qE.in('id', ids)
-        qC = qC.in('empresa_id', ids)
       }
-      qC = qC.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
     }
 
-    const [{ data: f }, { data: e }, { data: c }] = await Promise.all([qF, qE, qC])
+    const [{ data: f }, { data: e }, { data: c }] = await Promise.all([
+      fetchAllChunks<Fornecedor>(() => qF),
+      qE.limit(1000),
+      fetchAllChunks<Conta>(buildContasQuery)
+    ])
     setFornecedores(f ?? [])
     setEmpresas(e ?? [])
     
@@ -3594,22 +3618,36 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
-    let qC = supabase.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false }).limit(50000)
-    let qE = supabase.from('empresas').select('*').order('razao_social').limit(1000)
-    let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social').limit(10000)
-    let qO = supabase.from('obras').select('*').order('nome').limit(1000)
+    const buildContasQuery = (sb: typeof supabase) => {
+      let q = sb.from('contas').select('*, empresa:empresas(nome_fantasia,razao_social,cor), fornecedor:fornecedores(razao_social,nome_fantasia,banco,agencia,conta,pix,cnpj), obra:obras(nome)').order('data_previsao', { ascending: false })
+      if (colaboradorAtivo.cargo !== 'admin_geral') {
+        const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+        if (ids.length > 0) {
+          q = q.in('empresa_id', ids)
+        }
+        q = q.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
+      }
+      return q
+    }
+
+    let qE = supabase.from('empresas').select('*').order('razao_social')
+    let qF = supabase.from('fornecedores').select('id, razao_social, nome_fantasia').order('razao_social')
+    let qO = supabase.from('obras').select('*').order('nome')
 
     if (colaboradorAtivo.cargo !== 'admin_geral') {
       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
       if (ids.length > 0) {
-        qC = qC.in('empresa_id', ids)
         qE = qE.in('id', ids)
         qF = qF.or(`empresa_id.in.(${ids.join(',')}),empresa_id.is.null`)
       }
-      qC = qC.or(`is_privada.eq.false,is_privada.is.null,usuarios_permitidos.cs.{${colaboradorAtivo.id}}`)
     }
 
-    const [{ data: c }, { data: e }, { data: f }, { data: o }] = await Promise.all([qC, qE, qF, qO])
+    const [{ data: c }, { data: e }, { data: f }, { data: o }] = await Promise.all([
+      fetchAllChunks<ContaComRelacoes>(buildContasQuery),
+      qE.limit(1000),
+      fetchAllChunks<Fornecedor>(() => qF),
+      qO.limit(1000)
+    ])
     
     let fetchedContas = (c as ContaComRelacoes[]) ?? []
     if (colaboradorAtivo.cargo !== 'admin_geral') {
@@ -4028,6 +4066,20 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     const matchInicio = !filtDataInicio || (data !== '' && data >= filtDataInicio)
     const matchFim = !filtDataFim || (data !== '' && data <= filtDataFim)
     const codFormatted = fmtCodigo(c)
+    const rawSearch = search.trim().toLowerCase()
+
+    // Se o usuário digitou exatamente um código de conta (ex: PAG-01770 ou 1770)
+    const isExactCodeSearch = rawSearch && (
+      codFormatted.toLowerCase() === rawSearch ||
+      String(c.codigo_sequencial || '') === rawSearch ||
+      (rawSearch.startsWith('pag-') && codFormatted.toLowerCase().includes(rawSearch)) ||
+      (rawSearch.startsWith('rec-') && codFormatted.toLowerCase().includes(rawSearch))
+    )
+
+    if (isExactCodeSearch) {
+      return matchEmpresa
+    }
+
     const matchSearch  = !search ||
       c.descricao.toLowerCase().includes(search.toLowerCase()) ||
       (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase()) ||
