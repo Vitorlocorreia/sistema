@@ -3348,6 +3348,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [filtTipoData, setFiltTipoData] = useState<'previsao_vencimento' | 'vencimento' | 'previsao' | 'pago_em' | 'created_at'>('previsao_vencimento')
+  const [filtValorMin, setFiltValorMin] = useState('')
+  const [filtValorMax, setFiltValorMax] = useState('')
   const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'venc_prox' | 'venc_dist' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
   const [search, setSearch]           = useState('')
   const [showFiltros, setShowFiltros] = useState(false)
@@ -4080,6 +4082,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       return matchEmpresa
     }
 
+    const numValorMin = filtValorMin !== '' ? parseFloat(filtValorMin) : null
+    const numValorMax = filtValorMax !== '' ? parseFloat(filtValorMax) : null
+    const matchValorMin = numValorMin === null || isNaN(numValorMin) || Number(c.valor || 0) >= numValorMin
+    const matchValorMax = numValorMax === null || isNaN(numValorMax) || Number(c.valor || 0) <= numValorMax
+
     const matchSearch  = !search ||
       c.descricao.toLowerCase().includes(search.toLowerCase()) ||
       (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase()) ||
@@ -4087,7 +4094,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
       codFormatted.toLowerCase().includes(search.toLowerCase()) ||
       String(c.codigo_sequencial || '').includes(search.trim())
-    return matchEmpresa && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim
+    return matchEmpresa && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim && matchValorMin && matchValorMax
   }).sort((a, b) => {
     const da = new Date(a.created_at || a.data_previsao || '').getTime()
     const db = new Date(b.created_at || b.data_previsao || '').getTime()
@@ -4119,6 +4126,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
     const matchInicio = !filtDataInicio || (data !== '' && data >= filtDataInicio)
     const matchFim = !filtDataFim || (data !== '' && data <= filtDataFim)
+    const numValorMin = filtValorMin !== '' ? parseFloat(filtValorMin) : null
+    const numValorMax = filtValorMax !== '' ? parseFloat(filtValorMax) : null
+    const matchValorMin = numValorMin === null || isNaN(numValorMin) || Number(c.valor || 0) >= numValorMin
+    const matchValorMax = numValorMax === null || isNaN(numValorMax) || Number(c.valor || 0) <= numValorMax
     const codFormatted = fmtCodigo(c)
     const matchSearch  = !search ||
       c.descricao.toLowerCase().includes(search.toLowerCase()) ||
@@ -4127,7 +4138,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
       codFormatted.toLowerCase().includes(search.toLowerCase()) ||
       String(c.codigo_sequencial || '').includes(search.trim())
-    return matchEmpresa && matchFornecedor && matchTipo && matchSearch && matchInicio && matchFim
+    return matchEmpresa && matchFornecedor && matchTipo && matchSearch && matchInicio && matchFim && matchValorMin && matchValorMax
   })
 
   const getStatsByStatus = (st: string) => {
@@ -4162,7 +4173,18 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const podeDeletar = (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
   const podeEditar = (permissaoAtiva?.pode_lancar === true) || (permissaoAtiva?.pode_alterar_status === true) || (permissaoAtiva?.pode_pagar === true) || (permissaoAtiva?.pode_aprovar === true) || (permissaoAtiva?.pode_excluir_lancamento === true) || isAdminGeral || colaboradorAtivo.cargo === 'admin_empresa'
 
-  const activeFiltrosCount = [filtEmpresa, filtFornecedor, filtTipo !== 'todos' ? filtTipo : '', filtStatus !== 'todos' ? filtStatus : '', filtTipoData !== 'previsao_vencimento' ? filtTipoData : '', filtDataInicio, filtDataFim, filtOrdem !== 'novo' ? filtOrdem : ''].filter(Boolean).length
+  const activeFiltrosCount = [
+    filtEmpresa,
+    filtFornecedor,
+    filtTipo !== 'todos' ? filtTipo : '',
+    filtStatus !== 'todos' ? filtStatus : '',
+    filtTipoData !== 'previsao_vencimento' ? filtTipoData : '',
+    filtDataInicio,
+    filtDataFim,
+    filtValorMin !== '' ? `min:${filtValorMin}` : '',
+    filtValorMax !== '' ? `max:${filtValorMax}` : '',
+    filtOrdem !== 'novo' ? filtOrdem : ''
+  ].filter(Boolean).length
 
   const clearFiltros = () => {
     const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
@@ -4173,6 +4195,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     setFiltTipoData('previsao_vencimento')
     setFiltDataInicio('')
     setFiltDataFim('')
+    setFiltValorMin('')
+    setFiltValorMax('')
     setFiltOrdem('novo')
   }
 
@@ -4203,7 +4227,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               <span style={{ fontSize: 9, opacity: 0.7 }}>{showFiltros ? '▲' : '▼'}</span>
             </button>
             {showFiltros && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50, width: 340, background: '#13151A', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, boxShadow: '0 8px 32px rgba(0,0,0,.6)', display: 'grid', gap: 14 }}>
+              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50, width: 350, background: '#13151A', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, boxShadow: '0 8px 32px rgba(0,0,0,.6)', display: 'grid', gap: 14 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>Filtros avançados</span>
                   {activeFiltrosCount > 0 && <button onClick={clearFiltros} style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>Limpar tudo</button>}
@@ -4272,6 +4296,89 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         )
                       })}
                     </select>
+                  </div>
+                </div>
+
+                {/* ── Filtro de Faixa de Valor ── */}
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Faixa de Valor (R$)</label>
+                    {(filtValorMin !== '' || filtValorMax !== '') && (
+                      <button
+                        type="button"
+                        onClick={() => { setFiltValorMin(''); setFiltValorMax('') }}
+                        style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 9, cursor: 'pointer', fontWeight: 700 }}
+                      >
+                        Limpar valor
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.inkSoft }}>R$</span>
+                      <input
+                        placeholder="Mínimo"
+                        style={{ ...input, paddingLeft: 26 }}
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={filtValorMin}
+                        onChange={e => setFiltValorMin(e.target.value)}
+                      />
+                    </div>
+                    <span style={{ color: C.inkSoft, fontSize: 11 }}>até</span>
+                    <div style={{ position: 'relative', flex: 1 }}>
+                      <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.inkSoft }}>R$</span>
+                      <input
+                        placeholder="Máximo"
+                        style={{ ...input, paddingLeft: 26 }}
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={filtValorMax}
+                        onChange={e => setFiltValorMax(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {/* Chips rápidos de valor */}
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                    {[
+                      { label: 'Até R$ 1k', min: '', max: '1000' },
+                      { label: 'R$ 1k - 5k', min: '1000', max: '5000' },
+                      { label: 'R$ 5k - 20k', min: '5000', max: '20000' },
+                      { label: 'R$ 20k - 50k', min: '20000', max: '50000' },
+                      { label: '+ R$ 50k', min: '50000', max: '' },
+                    ].map((preset, idx) => {
+                      const isActive = filtValorMin === preset.min && filtValorMax === preset.max
+                      return (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            if (isActive) {
+                              setFiltValorMin('')
+                              setFiltValorMax('')
+                            } else {
+                              setFiltValorMin(preset.min)
+                              setFiltValorMax(preset.max)
+                            }
+                          }}
+                          style={{
+                            border: `1px solid ${isActive ? C.amber : C.border}`,
+                            borderRadius: 4,
+                            background: isActive ? '#F59E0B20' : '#181A22',
+                            color: isActive ? C.amber : C.inkSoft,
+                            padding: '2px 7px',
+                            fontSize: 9,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {preset.label}
+                        </button>
+                      )
+                    })}
                   </div>
                 </div>
 
