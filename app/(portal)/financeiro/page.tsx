@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useCallback, useMemo, Fragment } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useDeferredValue, Fragment } from 'react'
 import * as XLSX from 'xlsx'
 import {
   DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus,
@@ -7,9 +7,11 @@ import {
   Search, RefreshCw, ArrowUpRight, ArrowDownRight, Calendar,
   Shield, Check, AlertTriangle, Paperclip, Eye, UserPlus, ToggleLeft, ToggleRight,
   Edit3, Sliders, Camera, Trash2, FileSpreadsheet, Upload, Download, CheckCircle2,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Ruler, BarChart3, Activity, MapPin, Receipt, ShieldCheck, User, Image as ImageIcon, Layers,
+  Briefcase, ArrowLeft, Phone, Mail, Landmark, Filter, RotateCcw
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
+import { PageTitle } from '@/components/PageTitle'
 import { supabase, fetchAllChunks } from '@/lib/supabase'
 import { toast } from '@/components/Toast'
 import type { Empresa, Fornecedor, Conta, ContaComRelacoes, Obra, Colaborador, ConfigPermissao, CargoSistema, ItemNegociacao, ItemMedicao } from '@/lib/types'
@@ -139,12 +141,12 @@ function ObservacaoExpandivel({ text, maxLength = 60, showTitleLabel = true }: {
 
 // ─── NAV TABS ────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'obras',      label: 'Obras & Metricas', icon: Building2 },
-  { id: 'empresas',  label: 'Empresas',  icon: Building2  },
-  { id: 'fornecedores', label: 'Fornecedores', icon: Users },
-  { id: 'contas',    label: 'Lançar Conta', icon: Plus     },
-  { id: 'historico', label: 'Histórico & Fluxo', icon: FileText },
-  { id: 'permissoes', label: 'Usuários & Acessos', icon: Shield },
+  { id: 'obras',        label: 'Obras & Métricas',     icon: Building2 },
+  { id: 'empresas',     label: 'Empresas',            icon: Building2 },
+  { id: 'fornecedores', label: 'Fornecedores',        icon: Users     },
+  { id: 'contas',       label: 'Lançar Conta',        icon: Plus      },
+  { id: 'historico',    label: 'Histórico & Fluxo',    icon: FileText  },
+  { id: 'permissoes',   label: 'Usuários & Acessos',  icon: Shield    },
 ] as const
 type Tab = typeof TABS[number]['id']
 
@@ -166,12 +168,12 @@ const card: React.CSSProperties = {
 }
 
 const input: React.CSSProperties = {
-  background: '#0B0C0E',
+  background: C.bgWhite,
   border: `1px solid ${C.border}`,
   borderRadius: 6,
   color: C.ink,
-  padding: '9px 13px',
-  fontSize: 13,
+  padding: '8px 12px',
+  fontSize: 12,
   width: '100%',
   outline: 'none',
 }
@@ -219,11 +221,21 @@ const btnGhost: React.CSSProperties = {
 import { useConfirm } from '@/hooks/useConfirm'
 import { usePrompt } from '@/hooks/usePrompt'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
+import { useSearchParams } from 'next/navigation'
 
-export default function FinanceiroPage() {
+function FinanceiroContent() {
+  const searchParams = useSearchParams()
+  const tabParam = (searchParams.get('tab') as Tab | null)
   const { confirm, ConfirmDialog } = useConfirm()
   const { prompt, PromptDialog } = usePrompt()
-  const [tab, setTab] = useState<Tab>('historico')
+  const [tab, setTab] = useState<Tab>(tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'historico')
+
+  useEffect(() => {
+    if (tabParam && TABS.some(t => t.id === tabParam)) {
+      setTab(tabParam)
+    }
+  }, [tabParam])
+
   const [activeFornecedorId, setActiveFornecedorId] = useState<string>('')
   
   // Colaborador atualmente conectado neste navegador/dispositivo
@@ -369,22 +381,33 @@ export default function FinanceiroPage() {
 
   return (
     <div style={{ minHeight: '100%' }}>
-      {/* Top Header com Usuário Conectado no Navegador */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16, marginBottom: 28 }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 800, color: C.amber, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>
-            Gestão Financeira
+      {/* ── TOP HEADER COM ASSINATURA EXECUTIVA JWA ──────────────── */}
+      <PageTitle
+        modulo="Financeiro"
+        titulo="Gestão Financeira & Medições"
+        subtitle="Fluxo de caixa, conciliação de contas a pagar/receber, medições de obras e governança orçamentária."
+        action={
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setTab('contas')}
+              style={{
+                ...btn(C.amber),
+                fontSize: 11.5,
+                fontWeight: 900,
+                padding: '7px 14px',
+                boxShadow: '0 4px 12px rgba(245, 158, 11, 0.25)'
+              }}
+            >
+              <Plus size={14} strokeWidth={2.5} /> Lançar Nova Conta
+            </motion.button>
           </div>
-          <h1 style={{ fontSize: 26, fontWeight: 900, color: C.ink, margin: 0 }}>
-            Portal Financeiro
-          </h1>
-        </div>
+        }
+      />
 
-
-      </div>
-
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 28, borderBottom: `1px solid ${C.border}`, paddingBottom: 0 }}>
+      {/* ── BARRA DE ABAS SEGMENTADA E DEFINIDA ──────────────────── */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 22, background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: 4, overflowX: 'auto' }}>
         {TABS.filter(t => abasVisiveis.includes(t.id)).map(t => {
           const active = tab === t.id
           const Icon = t.icon
@@ -393,18 +416,24 @@ export default function FinanceiroPage() {
               key={t.id}
               onClick={() => setTab(t.id)}
               style={{
-                background: 'none', border: 'none',
-                borderBottom: active ? `2px solid ${C.amber}` : '2px solid transparent',
-                color: active ? C.amber : C.inkSoft,
-                padding: '10px 18px',
-                fontSize: 12, fontWeight: 800, cursor: 'pointer',
-                display: 'flex', alignItems: 'center', gap: 7,
-                marginBottom: -1,
-                letterSpacing: .4,
-                textTransform: 'uppercase',
+                background: active ? C.bgPanel : 'transparent',
+                border: `1px solid ${active ? C.border : 'transparent'}`,
+                boxShadow: active ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                color: active ? C.ink : C.inkSoft,
+                padding: '8px 16px',
+                fontSize: 11.5,
+                fontWeight: active ? 800 : 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 7,
+                borderRadius: 6,
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap'
               }}
+              className="hover:text-amber-500"
             >
-              <Icon size={13} />
+              <Icon size={13} color={active ? C.amber : undefined} />
               {t.label}
             </button>
           )
@@ -613,7 +642,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
   
   async function criarObra(e: React.FormEvent) {
     e.preventDefault(); if (!form.nome.trim()) return toast('Informe o nome da obra.', 'error')
-    const { data, error } = await supabase.from('obras').insert({ nome: form.nome.trim(), cliente: form.cliente || null, endereco: form.endereco || null, valor_contrato: Number(form.valor) || 0, progresso: 0, status: 'Em dia' }).select().single()
+    const { data, error } = await supabase.from('obras').insert({ nome: form.nome.trim(), cliente: form.cliente || null, endereco: form.endereco || null, valor_contrato: parseCurrency(form.valor) || 0, progresso: 0, status: 'Em dia' }).select().single()
     if (error) return toast(error.message, 'error'); setForm({ nome: '', cliente: '', endereco: '', valor: '' }); setShowForm(false); setObraId(data.id); await load(); toast('Obra criada.', 'success')
   }
 
@@ -802,9 +831,110 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
       
       {/* Visão Geral */}
       {obraId === 'todas' && (
-        <div style={{ ...card, padding: 24 }}>
+        <div style={{ ...card, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-          
+          {/* ─── CABEÇALHO DO MÓDULO DE OBRAS ────────────────────────── */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Building2 size={16} color={C.amber} />
+                </div>
+                <h2 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Portfólio de Obras & Medições
+                </h2>
+              </div>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: C.inkSoft }}>
+                Governança executiva de contratos, boletins de medição (BMs), avanço físico e previsões financeiras.
+              </p>
+            </div>
+
+            {podeGerenciar && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => setShowForm(!showForm)}
+                style={{
+                  ...btn(C.amber),
+                  fontSize: 11.5,
+                  fontWeight: 900,
+                  padding: '8px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <Plus size={14} strokeWidth={2.5} />
+                {showForm ? 'Fechar Formulário' : 'Nova Obra'}
+              </motion.button>
+            )}
+          </div>
+
+          {/* ─── FORMULÁRIO DE NOVA OBRA ─────────────────────────────── */}
+          {showForm && podeGerenciar && (
+            <motion.form
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              onSubmit={criarObra}
+              style={{
+                background: C.bgCard,
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                padding: '18px 20px',
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: 12,
+                alignItems: 'end'
+              }}
+            >
+              <div>
+                <label style={label}>Nome da Obra *</label>
+                <input
+                  style={input}
+                  placeholder="Ex: Reforma Hospital Regional"
+                  value={form.nome}
+                  onChange={e => setForm({ ...form, nome: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label style={label}>Cliente / Órgão</label>
+                <input
+                  style={input}
+                  placeholder="Ex: Governo do Estado / CEHAB"
+                  value={form.cliente}
+                  onChange={e => setForm({ ...form, cliente: e.target.value })}
+                />
+              </div>
+              <div>
+                <label style={label}>Endereço / Local</label>
+                <input
+                  style={input}
+                  placeholder="Ex: Av. Principal, 100 - Recife/PE"
+                  value={form.endereco}
+                  onChange={e => setForm({ ...form, endereco: e.target.value })}
+                />
+              </div>
+              <div>
+                <label style={label}>Valor do Contrato (R$)</label>
+                <input
+                  style={input}
+                  placeholder="0,00"
+                  value={form.valor}
+                  onChange={e => setForm({ ...form, valor: e.target.value })}
+                />
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="submit" style={{ ...btn(C.amber), flex: 1, padding: '9px 16px', fontSize: 11.5 }}>
+                  Cadastrar Obra
+                </button>
+                <button type="button" onClick={() => setShowForm(false)} style={{ ...btnGhost, padding: '9px 14px', fontSize: 11.5 }}>
+                  Cancelar
+                </button>
+              </div>
+            </motion.form>
+          )}
+
           {/* ─── DASHBOARD GLOBAL DE PORTFÓLIO ──────────────────────────── */}
           {obras.length > 0 && (() => {
             const obrasAtivasList = obras.filter(o => !isObraConcluida(o.status))
@@ -818,37 +948,62 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
             const obrasConcluidasCount = obras.length - obrasAtivasCount
 
             const kpis = [
-              { label: 'Total de Obras',       value: String(obras.length),         sub: `${obrasAtivasCount} ativas · ${obrasConcluidasCount} concluídas`, color: C.amber,   icon: '🏗️' },
-              { label: 'Portfólio Contratos',  value: fmt(totalContrato),           sub: 'soma das ativas',                                                        color: '#60A5FA', icon: '📋' },
-              { label: 'Medido Acumulado',     value: fmt(totalMedido),             sub: `${totalContrato > 0 ? ((totalMedido / totalContrato) * 100).toFixed(1) : 0}% das ativas`, color: '#A78BFA', icon: '📐' },
-              { label: 'Medido Previsto (BMs)', value: fmt(totalMedidoPrevisto),     sub: `+${fmt(totalPrevistoBM)} nos BMs previstos`,                            color: '#3B82F6', icon: '🔮' },
-              { label: 'Saldo a Medir',        value: fmt(saldoMedir),              sub: 'obras ativas restantes',                                                 color: C.green,   icon: '💰' },
-              { label: 'Progresso Médio',      value: `${progressoMedio.toFixed(1)}%`, sub: 'média física das ativas',                                             color: C.amber,   icon: '⚡' },
+              { label: 'Total de Obras',       value: String(obras.length),         sub: `${obrasAtivasCount} ativas · ${obrasConcluidasCount} concluídas`, color: C.amber,   icon: Building2 },
+              { label: 'Portfólio Contratos',  value: fmt(totalContrato),           sub: 'soma das obras ativas',                                                  color: C.amber, icon: FileText },
+              { label: 'Medido Acumulado',     value: fmt(totalMedido),             sub: `${totalContrato > 0 ? ((totalMedido / totalContrato) * 100).toFixed(1) : 0}% das ativas`, color: '#8B5CF6', icon: Ruler },
+              { label: 'Medido Previsto (BMs)', value: fmt(totalMedidoPrevisto),     sub: `+${fmt(totalPrevistoBM)} nos BMs previstos`,                            color: C.amber, icon: TrendingUp },
+              { label: 'Saldo a Medir',        value: fmt(saldoMedir),              sub: 'obras ativas restantes',                                                 color: C.green, icon: DollarSign },
+              { label: 'Progresso Médio',      value: `${progressoMedio.toFixed(1)}%`, sub: 'avanço físico médio',                                                color: C.amber, icon: Activity },
             ]
 
             return (
-              <div style={{ marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {/* KPI cards */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: 10 }}>
-                  {kpis.map(k => (
-                    <div key={k.label} style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0, overflow: 'hidden' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0 }}>
-                        <span style={{ fontSize: 16, flexShrink: 0 }}>{k.icon}</span>
-                        <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.label}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                {/* KPI cards com alto contraste e acabamento executivo */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 12 }}>
+                  {kpis.map(k => {
+                    const IconComponent = k.icon
+                    return (
+                      <div
+                        key={k.label}
+                        style={{
+                          background: C.bgPanel,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 8,
+                          padding: '16px 18px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 6,
+                          minWidth: 0,
+                          overflow: 'hidden',
+                          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <IconComponent size={14} color={k.color} />
+                          </div>
+                          <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.label}</span>
+                        </div>
+                        <span style={{ fontSize: 16, fontWeight: 900, color: C.ink, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', wordBreak: 'break-all' }} title={k.value}>{k.value}</span>
+                        <span style={{ fontSize: 9.5, color: C.inkSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.sub}</span>
                       </div>
-                      <span style={{ fontSize: 15, fontWeight: 900, color: k.color, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', wordBreak: 'break-all' }} title={k.value}>{k.value}</span>
-                      <span style={{ fontSize: 9, color: C.inkSoft, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{k.sub}</span>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
 
-                {/* Barras de progresso por obra */}
-                <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 20px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>📊 Progresso Individual por Obra</span>
-                    <span style={{ fontSize: 10, color: C.inkSoft }}>{obras.length} obras · média {progressoMedio.toFixed(1)}%</span>
+                {/* Painel de Avanço e Medições por Obra */}
+                <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '20px 22px', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 5, background: 'rgba(245, 158, 11, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <BarChart3 size={14} color={C.amber} />
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>Portfólio de Obras — Avanço & Medições</span>
+                    </div>
+                    <span style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 600 }}>{obras.length} obras cadastradas · média física {progressoMedio.toFixed(1)}%</span>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {[...obras].sort((a, b) => Number(b.medido_acumulado || 0) - Number(a.medido_acumulado || 0)).map(o => {
                       const valContrato = Number(o.valor_contrato || 0)
                       const valMedido   = Number(o.medido_acumulado || 0)
@@ -856,65 +1011,111 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                       const pctFisico   = Math.min(100, Number(o.progresso || 0))
                       const statusColor = o.status === 'Atrasado' ? '#EF4444' : o.status === 'Concluído' ? C.green : C.amber
                       return (
-                        <div key={o.id}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <button onClick={() => setObraId(o.id)} style={{ all: 'unset', cursor: 'pointer', fontSize: 11, fontWeight: 700, color: C.ink }}>{o.nome}</button>
-                              <span style={{ fontSize: 8, fontWeight: 900, background: `${statusColor}22`, color: statusColor, border: `1px solid ${statusColor}55`, padding: '1px 5px', borderRadius: 3 }}>{o.status || 'Em dia'}</span>
+                        <div
+                          key={o.id}
+                          style={{
+                            background: C.bgCard,
+                            border: `1px solid ${C.border}`,
+                            borderRadius: 8,
+                            padding: '14px 16px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 8,
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <button
+                                onClick={() => setObraId(o.id)}
+                                style={{
+                                  all: 'unset',
+                                  cursor: 'pointer',
+                                  fontSize: 12.5,
+                                  fontWeight: 900,
+                                  color: C.ink,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: 0.3,
+                                  transition: 'color 0.15s'
+                                }}
+                                className="hover:text-amber-500"
+                              >
+                                {o.nome}
+                              </button>
+                              <span style={{ fontSize: 8.5, fontWeight: 900, background: `${statusColor}18`, color: statusColor, border: `1px solid ${statusColor}44`, padding: '2px 7px', borderRadius: 4, textTransform: 'uppercase' }}>
+                                {o.status || 'Em dia'}
+                              </span>
                             </div>
-                            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                              <span style={{ fontSize: 10, color: '#A78BFA' }}>{fmt(valMedido)}</span>
-                              {o.proximo_urb_valor ? <span style={{ fontSize: 10, color: '#3B82F6', fontWeight: 800 }}>+{fmt(Number(o.proximo_urb_valor))} (previsto)</span> : null}
-                              <span style={{ fontSize: 10, color: C.inkSoft }}>/ {fmt(valContrato)}</span>
-                              <span style={{ fontSize: 11, fontWeight: 900, color: pctMedido >= 70 ? C.green : pctMedido >= 30 ? C.amber : C.inkSoft, minWidth: 40, textAlign: 'right' }}>{pctMedido.toFixed(1)}%</span>
+                            <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 11, color: '#8B5CF6', fontWeight: 800 }}>{fmt(valMedido)} medido</span>
+                              {o.proximo_urb_valor ? (
+                                <span style={{ fontSize: 10.5, color: C.amber, fontWeight: 800 }}>+{fmt(Number(o.proximo_urb_valor))} (previsto)</span>
+                              ) : null}
+                              <span style={{ fontSize: 10.5, color: C.inkSoft }}>/ {fmt(valContrato)}</span>
+                              <span style={{ fontSize: 11.5, fontWeight: 900, color: pctMedido >= 70 ? C.green : pctMedido >= 30 ? C.amber : C.inkSoft, minWidth: 46, textAlign: 'right' }}>
+                                {pctMedido.toFixed(1)}%
+                              </span>
                             </div>
                           </div>
-                          <div style={{ height: 8, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', position: 'relative', marginBottom: o.proximo_urb_data ? 6 : 0 }}>
-                            <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${pctMedido}%`, background: '#7C3AED44', borderRadius: 4 }} />
+
+                          {/* Barra de Progresso Duplo */}
+                          <div style={{ height: 8, background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', position: 'relative' }}>
+                            <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${pctMedido}%`, background: 'rgba(139, 92, 246, 0.45)', borderRadius: 4 }} />
                             <div style={{ position: 'absolute', top: '25%', left: 0, height: '50%', width: `${pctFisico}%`, background: pctFisico >= 70 ? C.green : C.amber, borderRadius: 4 }} />
                           </div>
+
+                          {/* Notificação de Próximo BM */}
                           {o.proximo_urb_data && (
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(59, 130, 246, 0.08)', padding: '4px 8px', borderRadius: 4, borderLeft: '2px solid #3B82F6' }}>
-                              <span style={{ fontSize: 9, color: '#3B82F6', fontWeight: 800 }}>📅 Próximo URB: {new Date(o.proximo_urb_data + 'T12:00:00').toLocaleDateString('pt-BR')} {o.proximo_urb_desc ? `— ${o.proximo_urb_desc}` : ''}</span>
-                              {o.proximo_urb_valor ? <span style={{ fontSize: 9, fontWeight: 900, color: C.ink }}>{fmt(Number(o.proximo_urb_valor))}</span> : null}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(245, 158, 11, 0.08)', padding: '6px 12px', borderRadius: 5, borderLeft: `3px solid ${C.amber}`, marginTop: 2 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Calendar size={12} color={C.amber} />
+                                <span style={{ fontSize: 10, color: C.amber, fontWeight: 800, textTransform: 'uppercase' }}>
+                                  Próximo BM: {new Date(o.proximo_urb_data + 'T12:00:00').toLocaleDateString('pt-BR')} {o.proximo_urb_desc ? `· ${o.proximo_urb_desc}` : ''}
+                                </span>
+                              </div>
+                              {o.proximo_urb_valor ? <span style={{ fontSize: 10.5, fontWeight: 900, color: C.ink }}>{fmt(Number(o.proximo_urb_valor))}</span> : null}
                             </div>
                           )}
                         </div>
                       )
                     })}
                   </div>
-                  <div style={{ display: 'flex', gap: 16, marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: C.inkSoft }}>
-                      <div style={{ width: 12, height: 4, background: '#7C3AED44', border: '1px solid #7C3AED', borderRadius: 2 }} />
+
+                  <div style={{ display: 'flex', gap: 20, marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: C.inkSoft }}>
+                      <div style={{ width: 12, height: 4, background: 'rgba(139, 92, 246, 0.6)', border: `1px solid #8B5CF6`, borderRadius: 2 }} />
                       Medição financeira acumulada
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 9, color: C.inkSoft }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, color: C.inkSoft }}>
                       <div style={{ width: 12, height: 4, background: C.amber, borderRadius: 2 }} />
-                      Avanço físico
+                      Avanço físico informado
                     </div>
                   </div>
                 </div>
               </div>
             )
           })()}
-          {/* ──────────────────────────────────────────────────────────────── */}
 
           {/* Grid de Obras */}
           {obras.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft }}>Nenhuma obra cadastrada ainda.</div>
-
+            <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft, fontSize: 12 }}>Nenhuma obra cadastrada no sistema.</div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
               {obras.map(o => (
-                <div key={o.id} style={{ background: '#12141C', borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div key={o.id} style={{ background: C.bgPanel, borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
                   {/* Card Header */}
-                  <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.02)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800, color: C.ink }}>{o.nome}</h3>
-                        <p style={{ margin: 0, fontSize: 11, color: C.inkSoft }}>{o.cliente || 'Sem cliente vinculado'}</p>
+                  <div style={{ padding: '16px 20px', borderBottom: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.015)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                          <Building2 size={15} color={C.amber} />
+                        </div>
+                        <div>
+                          <h3 style={{ margin: '0 0 3px', fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.3 }}>{o.nome}</h3>
+                          <p style={{ margin: 0, fontSize: 10.5, color: C.inkSoft }}>{o.cliente || 'Sem cliente vinculado'}</p>
+                        </div>
                       </div>
-                      <span style={{ fontSize: 10, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: o.status === 'Em dia' ? `${C.green}15` : `${C.amber}15`, color: o.status === 'Em dia' ? C.green : C.amber, border: `1px solid ${o.status === 'Em dia' ? C.green : C.amber}33` }}>
+                      <span style={{ fontSize: 9, fontWeight: 900, padding: '2px 7px', borderRadius: 4, background: o.status === 'Em dia' ? `${C.green}18` : `${C.amber}18`, color: o.status === 'Em dia' ? C.green : C.amber, border: `1px solid ${o.status === 'Em dia' ? C.green : C.amber}44`, textTransform: 'uppercase' }}>
                         {o.status || 'Em dia'}
                       </span>
                     </div>
@@ -922,7 +1123,12 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                   
                   {/* Card Body */}
                   <div style={{ padding: '16px 20px', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {o.endereco && <div style={{ fontSize: 11, color: C.inkSoft }}><b style={{ color: C.ink }}>📍 Local:</b> {o.endereco}</div>}
+                    {o.endereco && (
+                      <div style={{ fontSize: 10.5, color: C.inkSoft, display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <MapPin size={12} color={C.amber} />
+                        <span>{o.endereco}</span>
+                      </div>
+                    )}
                     {(() => {
                       const valContrato = Number(o.valor_contrato || 0)
                       const valMedido = Number(o.medido_acumulado || 0)
@@ -930,39 +1136,45 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                       const pctFormatado = pctRaw === 0 ? '0%' : pctRaw < 0.01 ? '<0,01%' : (pctRaw % 1 === 0 ? pctRaw.toFixed(0) + '%' : pctRaw.toFixed(2).replace('.', ',') + '%')
                       return (
                         <>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
-                            <span style={{ color: C.inkSoft }}>Progresso Físico</span>
-                            <strong style={{ color: C.amber }}>{pctFormatado}</strong>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5 }}>
+                            <span style={{ color: C.inkSoft, fontWeight: 700 }}>Progresso Físico</span>
+                            <strong style={{ color: C.amber, fontWeight: 900 }}>{pctFormatado}</strong>
                           </div>
-                          <div style={{ width: '100%', height: 6, background: '#0B0C0E', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ width: '100%', height: 6, background: C.bgCard, borderRadius: 3, overflow: 'hidden', border: `1px solid ${C.border}` }}>
                             <div style={{ width: `${Math.min(100, Math.max(0, pctRaw))}%`, height: '100%', background: C.amber, borderRadius: 3 }} />
                           </div>
                         </>
                       )
                     })()}
                     
-                    <div style={{ display: 'flex', gap: 16, marginTop: 'auto', paddingTop: 12, borderTop: `1px dashed ${C.border}` }}>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: 10, color: C.inkSoft }}>Contrato</span>
-                        <strong style={{ fontSize: 12, color: C.ink }}>{fmt(Number(o.valor_contrato || 0))}</strong>
+                    <div style={{ display: 'flex', gap: 16, marginTop: 'auto', paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Contrato</span>
+                        <strong style={{ fontSize: 13, color: C.ink, fontWeight: 800 }}>{fmt(Number(o.valor_contrato || 0))}</strong>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Medido</span>
+                        <strong style={{ fontSize: 13, color: '#A78BFA', fontWeight: 800 }}>{fmt(Number(o.medido_acumulado || 0))}</strong>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: 10, color: C.inkSoft }}>Fotos Anexas</span>
-                        <strong style={{ fontSize: 12, color: C.ink }}>{new Set(fotos.filter(f => f.obra_id === o.id).map(f => f.imagem_url).filter(Boolean)).size}</strong>
+                        <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Fotos</span>
+                        <strong style={{ fontSize: 13, color: C.ink, fontWeight: 800 }}>{new Set(fotos.filter(f => f.obra_id === o.id).map(f => f.imagem_url).filter(Boolean)).size}</strong>
                       </div>
                     </div>
                   </div>
                   
                   {/* Card Footer */}
                   <div style={{ padding: '12px 20px', background: 'rgba(0,0,0,0.2)', borderTop: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <button onClick={() => setObraId(o.id)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}>Ver Detalhes <ArrowUpRight size={14} /></button>
+                    <button onClick={() => setObraId(o.id)} style={{ ...btnGhost, color: C.amber, borderColor: `${C.amber}44`, padding: '6px 12px', fontSize: 10.5, fontWeight: 800 }}>
+                      Ver Detalhes <ArrowUpRight size={13} />
+                    </button>
                     {podeGerenciar && (
                       <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        <button onClick={() => abrirEdicaoObra(o)} style={{ all: 'unset', cursor: 'pointer', padding: 6, color: C.amber, opacity: 0.8 }} title="Editar obra">
-                          <Edit3 size={15} color={C.amber} />
+                        <button onClick={() => abrirEdicaoObra(o)} style={{ all: 'unset', cursor: 'pointer', padding: 6, color: C.inkSoft }} title="Editar dados da obra">
+                          <Edit3 size={14} />
                         </button>
-                        <button onClick={() => excluirObra(o.id, o.nome)} style={{ all: 'unset', cursor: 'pointer', padding: 6, color: C.inkSoft, opacity: 0.6 }} title="Excluir obra">
-                          <Trash2 size={15} color="#EF4444" />
+                        <button onClick={() => excluirObra(o.id, o.nome)} style={{ all: 'unset', cursor: 'pointer', padding: 6, color: '#EF4444' }} title="Excluir obra">
+                          <Trash2 size={14} />
                         </button>
                       </div>
                     )}
@@ -976,182 +1188,300 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
 
       {/* Detalhes da Obra Selecionada */}
       {obraId !== 'todas' && obraSelecionada && (
-        <div style={{ ...card, padding: 24 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 24, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
-            <button onClick={() => { setObraId('todas'); setMetricasForm({ bm_atual: '', medido_acumulado: '', observacao: '' }) }} style={{ ...btnGhost, color: C.inkSoft, padding: '6px 10px' }}>← Voltar às Obras</button>
-            <div style={{ width: 1, height: 24, background: C.border }} />
-            <h2 style={{ margin: 0, fontSize: 18, color: C.ink }}>{obraSelecionada.nome}</h2>
-            {podeGerenciar && (
-              <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-                {obraSelecionada.id !== 'geral' && (
-                  <>
-                    <button
-                      onClick={() => alternarStatusObra(obraSelecionada)}
-                      style={{
-                        ...btnGhost,
-                        color: isObraConcluida(obraSelecionada.status) ? C.amber : C.green,
-                        borderColor: isObraConcluida(obraSelecionada.status) ? `${C.amber}44` : `${C.green}44`,
-                        background: isObraConcluida(obraSelecionada.status) ? `${C.amber}11` : `${C.green}11`,
-                        padding: '6px 12px',
-                        fontWeight: 800
-                      }}
-                    >
-                      <CheckCircle2 size={14} />
-                      {isObraConcluida(obraSelecionada.status) ? 'Reabrir Obra' : 'Concluir Obra'}
-                    </button>
-                    <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Edit3 size={14}/> Editar Obra</button>
-                    <button onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)} style={{ ...btnGhost, color: '#EF4444', padding: '6px 12px' }}><Trash2 size={14}/> Excluir Obra</button>
-                  </>
-                )}
-                <button onClick={() => setAcessosObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, padding: '6px 12px' }}><Shield size={14}/> Acessos</button>
+        <div style={{ ...card, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {/* ─── BARRA DE NAVEGAÇÃO & IDENTIDADE DA OBRA ────────────── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <button
+                onClick={() => { setObraId('todas'); setMetricasForm({ bm_atual: '', medido_acumulado: '', observacao: '' }) }}
+                style={{
+                  ...btnGhost,
+                  color: C.inkSoft,
+                  padding: '6px 14px',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                className="hover:text-amber-500"
+              >
+                <ArrowLeft size={13} /> Voltar ao Portfólio
+              </button>
+
+              {podeGerenciar && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  {obraSelecionada.id !== 'geral' && (
+                    <>
+                      <button
+                        onClick={() => alternarStatusObra(obraSelecionada)}
+                        style={{
+                          ...btnGhost,
+                          color: isObraConcluida(obraSelecionada.status) ? C.amber : C.green,
+                          borderColor: isObraConcluida(obraSelecionada.status) ? `${C.amber}44` : `${C.green}44`,
+                          background: isObraConcluida(obraSelecionada.status) ? `${C.amber}11` : `${C.green}11`,
+                          padding: '6px 14px',
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        <CheckCircle2 size={13} />
+                        {isObraConcluida(obraSelecionada.status) ? 'Reabrir Obra' : 'Concluir Obra'}
+                      </button>
+                      <button
+                        onClick={() => abrirEdicaoObra(obraSelecionada)}
+                        style={{ ...btnGhost, color: C.ink, padding: '6px 14px', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Edit3 size={13} color={C.amber} /> Editar Obra
+                      </button>
+                      <button
+                        onClick={() => excluirObra(obraSelecionada.id, obraSelecionada.nome)}
+                        style={{ ...btnGhost, color: '#EF4444', borderColor: '#EF444433', padding: '6px 14px', fontSize: 10.5, fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}
+                      >
+                        <Trash2 size={13} /> Excluir
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setAcessosObra(obraSelecionada)}
+                    style={{ ...btn(C.amber), padding: '6px 14px', fontSize: 10.5, fontWeight: 900, display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Shield size={13} /> Permissões & Equipe
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Identidade da Obra */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 8, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Building2 size={20} color={C.amber} />
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <h1 style={{ margin: 0, fontSize: 17, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                      {obraSelecionada.nome}
+                    </h1>
+                    <span style={{ fontSize: 9, fontWeight: 900, padding: '2px 8px', borderRadius: 4, background: isObraConcluida(obraSelecionada.status) ? `${C.green}18` : obraSelecionada.status === 'Atrasado' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)', color: isObraConcluida(obraSelecionada.status) ? C.green : obraSelecionada.status === 'Atrasado' ? '#EF4444' : C.amber, border: `1px solid ${isObraConcluida(obraSelecionada.status) ? `${C.green}44` : obraSelecionada.status === 'Atrasado' ? '#EF444444' : `${C.amber}44`}`, textTransform: 'uppercase' }}>
+                      {obraSelecionada.status || 'Em dia'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 14, marginTop: 4, flexWrap: 'wrap', alignItems: 'center', fontSize: 11, color: C.inkSoft }}>
+                    {obraSelecionada.cliente && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Briefcase size={12} color={C.amber} /> {obraSelecionada.cliente}
+                      </span>
+                    )}
+                    {obraSelecionada.endereco && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <MapPin size={12} color={C.amber} /> {obraSelecionada.endereco}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
-            )}
+            </div>
           </div>
           
-          <div style={{ display: 'grid', gap: 20 }}>
-            {/* Metricas Rapidas */}
-            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', background: '#12141C', padding: 16, borderRadius: 8, border: `1px solid ${C.border}` }}>
-              <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Cliente</span><strong style={{ fontSize: 14, color: C.ink }}>{obraSelecionada.cliente || '—'}</strong></div>
-              <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Contrato</span><strong style={{ fontSize: 14, color: C.ink }}>{fmt(Number(obraSelecionada.valor_contrato || 0))}</strong></div>
-              <div>
-                <span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Progresso</span>
-                <strong style={{ fontSize: 14, color: C.amber }}>
-                  {(() => {
-                    const c = Number(obraSelecionada.valor_contrato || 0)
-                    const m = Number(obraSelecionada.medido_acumulado || 0)
-                    const pctRaw = c > 0 ? (m / c) * 100 : (obraSelecionada.progresso || 0)
-                    return pctRaw === 0 ? '0%' : pctRaw < 0.01 ? '<0,01%' : (pctRaw % 1 === 0 ? pctRaw.toFixed(0) + '%' : pctRaw.toFixed(2).replace('.', ',') + '%')
-                  })()}
-                </strong>
-              </div>
-              <div><span style={{ fontSize: 11, color: C.inkSoft, display: 'block' }}>Fotos do Financeiro</span><strong style={{ fontSize: 14, color: C.ink }}>{fotosObra.length}</strong></div>
-            </div>
-            
-            {/* Medições e BM - Sistemático com histórico */}
-            <div style={{ background: '#12141C', padding: 20, borderRadius: 8, border: `1px solid ${C.border}` }}>
-              <h3 style={{ margin: '0 0 16px', fontSize: 14, color: C.ink }}>📏 Métricas de Medição</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {/* ─── 4 CARDS DE KPIS EXECUTIVOS COM ALTO CONTRASTE ────── */}
+            {(() => {
+              const valContrato = Number(obraSelecionada.valor_contrato || 0)
+              const valMedido   = Number(obraSelecionada.medido_acumulado || 0)
+              const saldoMedir  = Math.max(0, valContrato - valMedido)
+              const pctMedido   = valContrato > 0 ? (valMedido / valContrato) * 100 : (obraSelecionada.progresso || 0)
+              const pctFormatado = pctMedido === 0 ? '0%' : pctMedido < 0.01 ? '<0,01%' : (pctMedido % 1 === 0 ? pctMedido.toFixed(0) + '%' : pctMedido.toFixed(2).replace('.', ',') + '%')
+              const pctFisico = Math.min(100, Number(obraSelecionada.progresso || 0))
 
-              {/* Resumo atual */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 20 }}>
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>BM Atual</div>
-                  <div style={{ fontSize: 16, color: C.amber, fontWeight: 800, marginTop: 4 }}>{obraSelecionada.bm_atual || '—'}</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Medido Acumulado (Total)</div>
-                  <div style={{ fontSize: 16, color: C.ink, fontWeight: 800, marginTop: 4 }}>{fmt(Number(obraSelecionada.medido_acumulado || 0))}</div>
-                </div>
-                <div style={{ background: 'rgba(59,130,246,0.06)', padding: 12, borderRadius: 6, border: `1px solid rgba(59,130,246,0.2)` }}>
-                  <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Medido Previsto (BMs)</div>
-                  <div style={{ fontSize: 16, color: '#3B82F6', fontWeight: 800, marginTop: 4 }}>
-                    {fmt(Number(obraSelecionada.medido_acumulado || 0) + Number(obraSelecionada.proximo_urb_valor || 0))}
-                  </div>
-                  {obraSelecionada.proximo_urb_valor ? (
-                    <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 2 }}>
-                      +{fmt(Number(obraSelecionada.proximo_urb_valor))} próx. BM
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+                    <div style={{ background: C.bgPanel, padding: '16px 18px', borderRadius: 8, border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <FileText size={13} color={C.amber} />
+                        </div>
+                        <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, letterSpacing: 0.5 }}>Valor Contratual Total</span>
+                      </div>
+                      <strong style={{ fontSize: 16, color: C.ink, fontWeight: 900, marginTop: 4 }}>{fmt(valContrato)}</strong>
+                      <span style={{ fontSize: 9.5, color: C.inkSoft }}>Orçamento global aprovado</span>
                     </div>
-                  ) : null}
+
+                    <div style={{ background: C.bgPanel, padding: '16px 18px', borderRadius: 8, border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Ruler size={13} color="#8B5CF6" />
+                        </div>
+                        <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, letterSpacing: 0.5 }}>Medição Acumulada</span>
+                      </div>
+                      <strong style={{ fontSize: 16, color: '#8B5CF6', fontWeight: 900, marginTop: 4 }}>{fmt(valMedido)}</strong>
+                      <span style={{ fontSize: 9.5, color: C.inkSoft }}>{pctFormatado} do contrato faturado</span>
+                    </div>
+
+                    <div style={{ background: C.bgPanel, padding: '16px 18px', borderRadius: 8, border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <DollarSign size={13} color="#10B981" />
+                        </div>
+                        <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, letterSpacing: 0.5 }}>Saldo Restante a Medir</span>
+                      </div>
+                      <strong style={{ fontSize: 16, color: '#10B981', fontWeight: 900, marginTop: 4 }}>{fmt(saldoMedir)}</strong>
+                      <span style={{ fontSize: 9.5, color: C.inkSoft }}>Disponível para faturamento</span>
+                    </div>
+
+                    <div style={{ background: C.bgPanel, padding: '16px 18px', borderRadius: 8, border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <Activity size={13} color={C.amber} />
+                        </div>
+                        <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, letterSpacing: 0.5 }}>Avanço Físico Global</span>
+                      </div>
+                      <strong style={{ fontSize: 16, color: C.amber, fontWeight: 900, marginTop: 4 }}>{pctFisico.toFixed(1)}%</strong>
+                      <span style={{ fontSize: 9.5, color: C.inkSoft }}>Execução física informada</span>
+                    </div>
+                  </div>
+
+                  {/* Régua de Progresso Visual */}
+                  <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 800, color: C.ink, marginBottom: 8 }}>
+                      <span>Acompanhamento Geral de Execução</span>
+                      <span>{pctFormatado} medido · {pctFisico.toFixed(1)}% físico</span>
+                    </div>
+                    <div style={{ height: 10, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 5, overflow: 'hidden', position: 'relative' }}>
+                      <div style={{ position: 'absolute', top: 0, left: 0, height: '100%', width: `${Math.min(100, pctMedido)}%`, background: 'rgba(139, 92, 246, 0.5)', borderRadius: 5 }} />
+                      <div style={{ position: 'absolute', top: '20%', left: 0, height: '60%', width: `${pctFisico}%`, background: pctFisico >= 70 ? C.green : C.amber, borderRadius: 3 }} />
+                    </div>
+                    <div style={{ display: 'flex', gap: 20, marginTop: 10, fontSize: 10, color: C.inkSoft }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 12, height: 4, background: 'rgba(139, 92, 246, 0.6)', border: `1px solid #8B5CF6`, borderRadius: 2 }} />
+                        Medição financeira acumulada ({pctFormatado})
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 12, height: 4, background: C.amber, borderRadius: 2 }} />
+                        Avanço físico executado ({pctFisico.toFixed(1)}%)
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div style={{ background: 'rgba(52,211,153,0.06)', padding: 12, borderRadius: 6, border: `1px solid rgba(52,211,153,0.2)` }}>
-                  <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Saldo a Medir</div>
-                  <div style={{ fontSize: 16, color: '#34D399', fontWeight: 800, marginTop: 4 }}>{fmt(Math.max(0, Number(obraSelecionada.valor_contrato || 0) - Number(obraSelecionada.medido_acumulado || 0)))}</div>
+              )
+            })()}
+            
+            {/* ─── PREVISÃO DO PRÓXIMO BM & LANÇAMENTOS ───────────────── */}
+            <div style={{ background: C.bgPanel, padding: 20, borderRadius: 8, border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Ruler size={14} color={C.amber} />
                 </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 6, border: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Nº de BMs</div>
-                  <div style={{ fontSize: 16, color: C.ink, fontWeight: 800, marginTop: 4 }}>{(obraSelecionada.historico_medicoes || []).length}</div>
-                </div>
+                <h3 style={{ margin: 0, fontSize: 13, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Governança de Medição & Boletins (BMs)
+                </h3>
               </div>
 
-              {/* Previsão do Próximo BM */}
-              <div style={{ marginBottom: 20, padding: 14, background: 'rgba(59, 130, 246, 0.08)', borderRadius: 8, border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, color: '#3B82F6', fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                    📅 Previsão do Próximo BM
+              {/* Previsão do Próximo BM Card */}
+              <div style={{ marginBottom: 18, padding: '16px 18px', background: 'rgba(245, 158, 11, 0.06)', borderRadius: 8, border: '1px solid rgba(245, 158, 11, 0.22)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <Calendar size={14} color={C.amber} />
+                    <span style={{ fontSize: 11, color: C.amber, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Previsão Orçamentária do Próximo BM
+                    </span>
                   </div>
                   {podeGerenciar && (
-                    <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: '#3B82F6', padding: '4px 8px', fontSize: 10 }}>
-                      <Edit3 size={12} /> Editar Previsão
+                    <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ ...btnGhost, color: C.amber, borderColor: `${C.amber}44`, padding: '4px 10px', fontSize: 10, fontWeight: 800 }}>
+                      <Edit3 size={11} /> Editar Previsão
                     </button>
                   )}
                 </div>
                 {obraSelecionada.proximo_urb_valor || obraSelecionada.proximo_urb_data ? (
-                  <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center' }}>
                     {obraSelecionada.proximo_urb_valor && (
                       <div>
-                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 700 }}>VALOR PREVISTO</span>
-                        <strong style={{ fontSize: 15, color: '#3B82F6' }}>{fmt(Number(obraSelecionada.proximo_urb_valor))}</strong>
+                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>VALOR PREVISTO</span>
+                        <strong style={{ fontSize: 15, color: C.amber, fontWeight: 900 }}>{fmt(Number(obraSelecionada.proximo_urb_valor))}</strong>
                       </div>
                     )}
                     {obraSelecionada.proximo_urb_data && (
                       <div>
-                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 700 }}>DATA PREVISTA</span>
-                        <strong style={{ fontSize: 13, color: C.ink }}>{new Date(obraSelecionada.proximo_urb_data + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>
+                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>DATA PREVISTA</span>
+                        <strong style={{ fontSize: 13, color: C.ink, fontWeight: 800 }}>{new Date(obraSelecionada.proximo_urb_data + 'T12:00:00').toLocaleDateString('pt-BR')}</strong>
                       </div>
                     )}
                     {obraSelecionada.proximo_urb_desc && (
                       <div>
-                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 700 }}>LOTE / OBSERVAÇÃO</span>
-                        <span style={{ fontSize: 11, color: C.inkSoft }}>{obraSelecionada.proximo_urb_desc}</span>
+                        <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', fontWeight: 800, textTransform: 'uppercase' }}>LOTE / OBSERVAÇÃO</span>
+                        <span style={{ fontSize: 11, color: C.ink, fontWeight: 600 }}>{obraSelecionada.proximo_urb_desc}</span>
                       </div>
                     )}
                   </div>
                 ) : (
                   <div style={{ fontSize: 11, color: C.inkSoft }}>
-                    Nenhuma previsão de BM cadastrada para esta obra. {podeGerenciar && <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ all: 'unset', cursor: 'pointer', color: '#3B82F6', textDecoration: 'underline' }}>Cadastrar agora</button>}
+                    Nenhuma previsão de BM cadastrada para esta obra. {podeGerenciar && <button onClick={() => abrirEdicaoObra(obraSelecionada)} style={{ all: 'unset', cursor: 'pointer', color: C.amber, textDecoration: 'underline', fontWeight: 700 }}>Cadastrar agora</button>}
                   </div>
                 )}
               </div>
 
-              {/* Formulário nova medição */}
+              {/* Formulário Nova Medição */}
               {podeGerenciar && (
-                <div style={{ background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 8, border: `1px dashed ${C.border}`, marginBottom: 20 }}>
-                  <div style={{ fontSize: 11, color: C.amber, fontWeight: 800, textTransform: 'uppercase', marginBottom: 12 }}>+ Registrar Nova Medição</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 12 }}>
+                <div style={{ background: C.bgCard, padding: 18, borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: C.ink, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 14 }}>
+                    <Plus size={14} color={C.amber} /> Lançar Novo Boletim de Medição (BM)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginBottom: 14 }}>
                     <div>
-                      <label style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 700, textTransform: 'uppercase' }}>BM (Referência) *</label>
-                      <input style={input} placeholder="Ex: BM-004" value={metricasForm.bm_atual} onChange={e => setMetricasForm({ ...metricasForm, bm_atual: e.target.value })} />
+                      <label style={{ fontSize: 9.5, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 800, textTransform: 'uppercase' }}>BM de Referência *</label>
+                      <input style={input} placeholder="Ex: BM-005" value={metricasForm.bm_atual} onChange={e => setMetricasForm({ ...metricasForm, bm_atual: e.target.value })} />
                     </div>
                     <div>
-                      <label style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 700, textTransform: 'uppercase' }}>Medido Neste BM (R$) *</label>
+                      <label style={{ fontSize: 9.5, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 800, textTransform: 'uppercase' }}>Medido Neste BM (R$) *</label>
                       <input style={input} placeholder="0,00" value={metricasForm.medido_acumulado} onChange={e => setMetricasForm({ ...metricasForm, medido_acumulado: e.target.value })} />
                       {metricasForm.medido_acumulado && (
-                        <div style={{ fontSize: 9, color: C.amber, marginTop: 4, fontWeight: 700 }}>
+                        <div style={{ fontSize: 9.5, color: '#8B5CF6', marginTop: 4, fontWeight: 800 }}>
                           Novo Total Acumulado: {fmt(Number(obraSelecionada.medido_acumulado || 0) + parseCurrency(metricasForm.medido_acumulado))}
                         </div>
                       )}
                     </div>
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <label style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 700, textTransform: 'uppercase' }}>Observação</label>
-                      <input style={input} placeholder="Descrição opcional desta medição..." value={metricasForm.observacao} onChange={e => setMetricasForm({ ...metricasForm, observacao: e.target.value })} />
+                      <label style={{ fontSize: 9.5, color: C.inkSoft, display: 'block', marginBottom: 4, fontWeight: 800, textTransform: 'uppercase' }}>Observação Técnica / Escopo Medido</label>
+                      <input style={input} placeholder="Ex: Medição referente à fase de alvenaria e instalações elétricas..." value={metricasForm.observacao} onChange={e => setMetricasForm({ ...metricasForm, observacao: e.target.value })} />
                     </div>
                   </div>
-                  <button onClick={() => salvarMetricasObra(obraSelecionada.id)} style={{ ...btn(C.amber), padding: '8px 20px' }}>
-                    Registrar Medição
+                  <button onClick={() => salvarMetricasObra(obraSelecionada.id)} style={{ ...btn(C.amber), padding: '8px 20px', fontSize: 11.5, fontWeight: 900 }}>
+                    Registrar Medição Oficial
                   </button>
                 </div>
               )}
 
-              {/* Histórico de medições */}
+              {/* Histórico e Timeline dos Boletins */}
               <div>
-                <div style={{ fontSize: 11, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 12 }}>Histórico de Medições</div>
+                <div style={{ fontSize: 11, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 14 }}>
+                  Histórico Oficial de Boletins ({(obraSelecionada.historico_medicoes || []).length} registros)
+                </div>
                 {(obraSelecionada.historico_medicoes || []).length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '20px 0', color: C.inkSoft, fontSize: 12, border: `1px dashed ${C.border}`, borderRadius: 6 }}>Nenhuma medição registrada ainda.</div>
+                  <div style={{ textAlign: 'center', padding: '28px 0', color: C.inkSoft, fontSize: 11.5, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
+                    Nenhuma medição registrada ainda nesta obra.
+                  </div>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {[...(obraSelecionada.historico_medicoes || [])].reverse().map((item, idx) => (
-                      <div key={item.id} style={{ display: 'flex', gap: 12, position: 'relative' }}>
-                        {/* linha da timeline */}
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 28, flexShrink: 0 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: idx === 0 ? C.amber : C.border, marginTop: 10, zIndex: 1, border: `2px solid ${idx === 0 ? C.amber : C.inkSoft}` }} />
+                      <div key={item.id} style={{ display: 'flex', gap: 14, position: 'relative' }}>
+                        {/* Linha vertical da Timeline */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 24, flexShrink: 0 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: '50%', background: idx === 0 ? C.amber : 'rgba(245, 158, 11, 0.4)', marginTop: 12, zIndex: 1, border: `2px solid ${idx === 0 ? C.amber : C.border}` }} />
                           {idx < (obraSelecionada.historico_medicoes || []).length - 1 && (
                             <div style={{ width: 1, flex: 1, background: C.border, marginTop: 2 }} />
                           )}
                         </div>
                         <div style={{ flex: 1, paddingBottom: 16 }}>
                           {editandoMedicaoId === item.id ? (
-                            // ─── Modo edição inline ───
-                            <div style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${C.amber}44`, borderRadius: 6, padding: 12 }}>
-                              <div style={{ fontSize: 10, color: C.amber, fontWeight: 800, textTransform: 'uppercase', marginBottom: 10 }}>✏️ Editando Medição</div>
+                            // ─── Modo Edição Inline ───
+                            <div style={{ background: C.bgCard, border: `1px solid ${C.amber}`, borderRadius: 8, padding: 14 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, color: C.amber, fontWeight: 900, textTransform: 'uppercase', marginBottom: 10 }}>
+                                <Edit3 size={12} /> Editando Registro de Medição
+                              </div>
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10, marginBottom: 10 }}>
                                 <div>
                                   <label style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginBottom: 3, fontWeight: 700, textTransform: 'uppercase' }}>BM *</label>
@@ -1159,7 +1489,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                                 </div>
                                 <div>
                                   <label style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginBottom: 3, fontWeight: 700, textTransform: 'uppercase' }}>Medido Acumulado (R$) *</label>
-                                  <input style={input} type="number" step="0.01" value={editMedicaoForm.medido_acumulado} onChange={e => setEditMedicaoForm(f => ({ ...f, medido_acumulado: e.target.value }))} />
+                                  <input style={input} value={editMedicaoForm.medido_acumulado} onChange={e => setEditMedicaoForm(f => ({ ...f, medido_acumulado: e.target.value }))} />
                                 </div>
                                 <div style={{ gridColumn: '1 / -1' }}>
                                   <label style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginBottom: 3, fontWeight: 700, textTransform: 'uppercase' }}>Observação</label>
@@ -1167,61 +1497,66 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                                 </div>
                               </div>
                               <div style={{ display: 'flex', gap: 8 }}>
-                                <button onClick={() => salvarEdicaoMedicao(obraSelecionada.id, item.id)} style={{ ...btn(C.amber), padding: '5px 14px', fontSize: 11 }}>Salvar</button>
-                                <button onClick={() => setEditandoMedicaoId(null)} style={{ ...btnGhost, padding: '5px 14px', fontSize: 11 }}>Cancelar</button>
+                                <button onClick={() => salvarEdicaoMedicao(obraSelecionada.id, item.id)} style={{ ...btn(C.amber), padding: '6px 14px', fontSize: 10.5 }}>Salvar</button>
+                                <button onClick={() => setEditandoMedicaoId(null)} style={{ ...btnGhost, padding: '6px 14px', fontSize: 10.5 }}>Cancelar</button>
                               </div>
                             </div>
                           ) : (
-                            // ─── Modo exibição ───
-                            <>
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
-                                <span style={{ fontSize: 11, fontWeight: 800, color: idx === 0 ? C.amber : C.ink, background: idx === 0 ? C.amber + '18' : 'rgba(255,255,255,0.04)', padding: '2px 8px', borderRadius: 4 }}>{item.bm}</span>
-                                <span style={{ fontSize: 10, color: C.inkSoft }}>{new Date(item.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                                <span style={{ fontSize: 10, color: C.inkSoft }}>👤 {item.autor}</span>
+                            // ─── Modo Exibição Executivo ───
+                            <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', boxShadow: '0 1px 2px rgba(0,0,0,0.03)' }}>
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 10 }}>
+                                <span style={{ fontSize: 11, fontWeight: 900, color: idx === 0 ? C.amber : C.ink, background: idx === 0 ? 'rgba(245, 158, 11, 0.12)' : 'rgba(255,255,255,0.04)', border: `1px solid ${idx === 0 ? 'rgba(245, 158, 11, 0.35)' : C.border}`, padding: '3px 9px', borderRadius: 4 }}>
+                                  {item.bm}
+                                </span>
+                                <span style={{ fontSize: 10.5, color: C.inkSoft, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <Clock size={11} /> {new Date(item.data).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                                <span style={{ fontSize: 10.5, color: C.inkSoft, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                  <User size={11} /> {item.autor}
+                                </span>
                                 {podeGerenciar && (
-                                  <div style={{ display: 'flex', gap: 4, marginLeft: 'auto' }}>
+                                  <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
                                     <button
                                       onClick={() => { setEditandoMedicaoId(item.id); setEditMedicaoForm({ bm: item.bm, medido_acumulado: String(item.medido_acumulado), observacao: item.observacao || '' }) }}
-                                      style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 10 }}
-                                      title="Editar"
-                                    ><Edit3 size={11} /></button>
+                                      style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: '3px 6px', borderRadius: 3 }}
+                                      title="Editar medição"
+                                    ><Edit3 size={13} /></button>
                                     <button
                                       onClick={() => excluirMedicao(obraSelecionada.id, item.id)}
-                                      style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '2px 6px', borderRadius: 3, fontSize: 10 }}
-                                      title="Excluir"
-                                    ><Trash2 size={11} /></button>
+                                      style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '3px 6px', borderRadius: 3 }}
+                                      title="Excluir medição"
+                                    ><Trash2 size={13} /></button>
                                   </div>
                                 )}
                               </div>
                               {(() => {
                                 const historicoArray = obraSelecionada.historico_medicoes || []
-                                // Como a lista está invertida (.reverse()), o item anterior na ordem cronológica é o índice + 1
                                 const itemAnterior = historicoArray[historicoArray.length - 1 - idx - 1]
                                 const medidoDesteBM = itemAnterior ? Math.max(0, item.medido_acumulado - itemAnterior.medido_acumulado) : item.medido_acumulado
                                 return (
-                                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
                                     <div>
                                       <span style={{ fontSize: 9, color: C.amber, textTransform: 'uppercase', fontWeight: 800 }}>Medido Neste BM</span>
-                                      <div style={{ fontSize: 13, fontWeight: 800, color: C.amber }}>{fmt(medidoDesteBM)}</div>
+                                      <div style={{ fontSize: 13.5, fontWeight: 900, color: C.amber }}>{fmt(medidoDesteBM)}</div>
                                     </div>
                                     <div>
-                                      <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Medido Acum. (Total)</span>
-                                      <div style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{fmt(item.medido_acumulado)}</div>
+                                      <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Total Acumulado</span>
+                                      <div style={{ fontSize: 13.5, fontWeight: 800, color: C.ink }}>{fmt(item.medido_acumulado)}</div>
                                     </div>
                                     <div>
-                                      <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Saldo a Medir</span>
-                                      <div style={{ fontSize: 13, fontWeight: 700, color: '#34D399' }}>{fmt(item.saldo_a_medir)}</div>
+                                      <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Saldo Remanescente</span>
+                                      <div style={{ fontSize: 13.5, fontWeight: 800, color: '#10B981' }}>{fmt(item.saldo_a_medir)}</div>
                                     </div>
                                     {item.observacao && (
-                                      <div style={{ flex: '1 1 200px' }}>
-                                        <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase' }}>Obs.</span>
-                                        <div style={{ fontSize: 12, color: C.inkSoft, fontStyle: 'italic' }}>{item.observacao}</div>
+                                      <div style={{ gridColumn: '1 / -1', background: 'rgba(255,255,255,0.02)', padding: '6px 10px', borderRadius: 4, border: `1px solid ${C.border}` }}>
+                                        <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Observação Técnica: </span>
+                                        <span style={{ fontSize: 11, color: C.ink }}>{item.observacao}</span>
                                       </div>
                                     )}
                                   </div>
                                 )
                               })()}
-                            </>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -1231,15 +1566,25 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
               </div>
             </div>
             
-            {/* Anexos */}
-            <div>
+            {/* ─── GALERIA DE FOTOS & COMPROVANTES DA OBRA ───────────── */}
+            <div style={{ background: C.bgPanel, padding: 20, borderRadius: 8, border: `1px solid ${C.border}`, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 10 }}>
-                <h3 style={{ margin: 0, fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}><Camera size={16}/> Galeria de Fotos e Comprovantes</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Camera size={14} color={C.amber} />
+                  </div>
+                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Galeria de Evidências & Vistorias da Obra
+                  </h3>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: C.amber, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '2px 8px', borderRadius: 4 }}>
+                    {fotosObra.length} registros
+                  </span>
+                </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   {fotosObra.length > 0 && (
                     <button
                       onClick={() => selecionarTodasFotos(fotosObra)}
-                      style={{ ...btnGhost, padding: '6px 10px', fontSize: 11, color: C.ink }}
+                      style={{ ...btnGhost, padding: '6px 12px', fontSize: 10.5, color: C.ink, fontWeight: 700 }}
                     >
                       {selecionadasFotos.length === fotosObra.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
                     </button>
@@ -1249,18 +1594,18 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                     <>
                       <button
                         onClick={() => void baixarFotosEmLote(fotosObra)}
-                        style={{ ...btn('#3B82F6'), padding: '6px 12px', fontSize: 11 }}
+                        style={{ ...btn(C.amber), padding: '6px 12px', fontSize: 10.5 }}
                       >
-                        <ArrowDownRight size={13} /> Baixar ({selecionadasFotos.length})
+                        <Download size={12} /> Baixar ({selecionadasFotos.length})
                       </button>
 
                       {podeGerenciar && (
                         <button
                           onClick={() => void excluirFotosEmLote()}
                           disabled={processandoLote}
-                          style={{ ...btn('#EF4444'), padding: '6px 12px', fontSize: 11 }}
+                          style={{ ...btn('#EF4444'), padding: '6px 12px', fontSize: 10.5 }}
                         >
-                          <Trash2 size={13} /> {processandoLote ? 'Excluindo...' : `Excluir (${selecionadasFotos.length})`}
+                          <Trash2 size={12} /> {processandoLote ? 'Excluindo...' : `Excluir (${selecionadasFotos.length})`}
                         </button>
                       )}
                     </>
@@ -1268,9 +1613,9 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
 
                   {podeGerenciar && (
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <input style={{ ...input, width: 180 }} placeholder="Legenda da nova foto..." value={legenda} onChange={e => setLegenda(e.target.value)} />
-                      <label style={{ ...btn(C.amber), cursor: 'pointer', padding: '0 12px' }}>
-                        <Plus size={14} /> Anexar
+                      <input style={{ ...input, width: 190, fontSize: 11 }} placeholder="Legenda da foto..." value={legenda} onChange={e => setLegenda(e.target.value)} />
+                      <label style={{ ...btn(C.amber), cursor: 'pointer', padding: '0 14px', fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Upload size={13} /> Anexar
                         <input hidden type="file" accept="image/*" onChange={e => { const f = e.target.files?.[0]; if (f) void anexarFoto(f); e.currentTarget.value = '' }} />
                       </label>
                     </div>
@@ -1278,7 +1623,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                 </div>
               </div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
                 {fotosObra.map(f => {
                   const isRdo = Boolean(f.rdo_id) || (f.imagem_url && !f.imagem_url.includes('comprovantes'))
                   const fotoUrl = !f.imagem_url ? '' : f.imagem_url.startsWith('http')
@@ -1288,15 +1633,15 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                   const isChecked = selecionadasFotos.includes(f.id)
 
                   return (
-                    <div key={f.id} style={{ border: `1px solid ${isChecked ? C.amber : C.border}`, borderRadius: 6, overflow: 'hidden', background: isChecked ? '#1E1B13' : '#12141C', position: 'relative', transition: 'all 0.2s' }}>
+                    <div key={f.id} style={{ border: `1px solid ${isChecked ? C.amber : C.border}`, borderRadius: 8, overflow: 'hidden', background: isChecked ? 'rgba(245, 158, 11, 0.12)' : C.bgCard, position: 'relative', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
                       <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setFotoExpandida({ ...f, resolvedUrl: fotoUrl })}>
-                        <img src={fotoUrl} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 130, objectFit: 'cover' }} />
+                        <img src={fotoUrl} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 140, objectFit: 'cover' }} />
                         
                         {/* Checkbox de Seleção */}
                         <div
                           onClick={e => { e.stopPropagation(); toggleFotoSelecionada(f.id) }}
                           style={{
-                            position: 'absolute', top: 6, left: 6, width: 22, height: 22, borderRadius: 4,
+                            position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: 4,
                             background: isChecked ? C.amber : 'rgba(11,12,14,0.85)',
                             border: `1.5px solid ${isChecked ? C.amber : '#fff'}`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1307,11 +1652,11 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                           {isChecked && <Check size={14} color="#0B0C0E" strokeWidth={3} />}
                         </div>
 
-                        <div style={{ position: 'absolute', bottom: 6, left: 6, background: isRdo ? '#3B82F6DD' : '#10B981DD', padding: '1px 6px', borderRadius: 3, fontSize: 9, fontWeight: 800, color: '#fff', backdropFilter: 'blur(3px)' }}>
-                          {isRdo ? '📋 Foto RDO' : '💰 Financeiro'}
+                        <div style={{ position: 'absolute', bottom: 8, left: 8, background: isRdo ? 'rgba(245, 158, 11, 0.92)' : 'rgba(16, 185, 129, 0.92)', padding: '2px 7px', borderRadius: 4, fontSize: 8.5, fontWeight: 900, color: '#0B0C0E', backdropFilter: 'blur(3px)', textTransform: 'uppercase' }}>
+                          {isRdo ? 'Diário RDO' : 'Financeiro'}
                         </div>
                         {podeGerenciar && (
-                          <div style={{ position: 'absolute', top: 6, right: 6, display: 'flex', gap: 4, background: 'rgba(11,12,14,0.85)', padding: '2px 4px', borderRadius: 4, backdropFilter: 'blur(4px)' }} onClick={e => e.stopPropagation()}>
+                          <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4, background: 'rgba(11,12,14,0.85)', padding: '2px 4px', borderRadius: 4, backdropFilter: 'blur(4px)' }} onClick={e => e.stopPropagation()}>
                             <button
                               onClick={() => { setEditandoFotoId(f.id); setEditFotoLegenda(f.legenda || '') }}
                               style={{ background: 'none', border: 'none', color: C.ink, cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
@@ -1329,7 +1674,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                           </div>
                         )}
                       </div>
-                      <div style={{ padding: '8px 10px' }}>
+                      <div style={{ padding: '10px 12px' }}>
                         {editandoFotoId === f.id ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             <input
@@ -1340,13 +1685,13 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                               autoFocus
                             />
                             <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                              <button onClick={() => salvarEdicaoFoto(f.id)} style={{ ...btn(C.amber), padding: '2px 8px', fontSize: 10 }}>Salvar</button>
-                              <button onClick={() => setEditandoFotoId(null)} style={{ ...btnGhost, padding: '2px 8px', fontSize: 10 }}>Cancelar</button>
+                              <button onClick={() => salvarEdicaoFoto(f.id)} style={{ ...btn(C.amber), padding: '3px 10px', fontSize: 10 }}>Salvar</button>
+                              <button onClick={() => setEditandoFotoId(null)} style={{ ...btnGhost, padding: '3px 10px', fontSize: 10 }}>Cancelar</button>
                             </div>
                           </div>
                         ) : (
                           <>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda'}</div>
+                            <div style={{ fontSize: 11.5, fontWeight: 800, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda informada'}</div>
                             <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>{new Date(f.data_iso).toLocaleDateString('pt-BR')}</div>
                           </>
                         )}
@@ -1355,8 +1700,8 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                   )
                 })}
                 {fotosObra.length === 0 && (
-                  <div style={{ gridColumn: '1 / -1', padding: '30px 0', textAlign: 'center', color: C.inkSoft, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
-                    Nenhuma foto anexada a esta obra.
+                  <div style={{ gridColumn: '1 / -1', padding: '36px 0', textAlign: 'center', color: C.inkSoft, border: `1px dashed ${C.border}`, borderRadius: 8, fontSize: 11.5 }}>
+                    Nenhuma evidência ou foto anexada a esta obra até o momento.
                   </div>
                 )}
               </div>
@@ -1370,10 +1715,13 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
         {editandoObra && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, width: '100%', maxWidth: 460, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}
+              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, width: '100%', maxWidth: 480, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 900, color: C.ink, margin: 0 }}>✏️ Editar Obra</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Edit3 size={16} color={C.amber} />
+                  <h3 style={{ fontSize: 14, fontWeight: 900, color: C.ink, margin: 0, textTransform: 'uppercase', letterSpacing: 0.4 }}>Editar Dados da Obra</h3>
+                </div>
                 <button onClick={() => setEditandoObra(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
               </div>
 
@@ -1383,12 +1731,12 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                   <input style={input} value={editObraForm.nome} onChange={e => setEditObraForm({ ...editObraForm, nome: e.target.value })} placeholder="Ex: LOTE 07" />
                 </div>
                 <div>
-                  <label style={label}>Cliente</label>
-                  <input style={input} value={editObraForm.cliente} onChange={e => setEditObraForm({ ...editObraForm, cliente: e.target.value })} placeholder="Ex: Governo do Estado" />
+                  <label style={label}>Cliente / Contratante</label>
+                  <input style={input} value={editObraForm.cliente} onChange={e => setEditObraForm({ ...editObraForm, cliente: e.target.value })} placeholder="Ex: Incorporadora Alfa" />
                 </div>
                 <div>
                   <label style={label}>Endereço / Localização</label>
-                  <input style={input} value={editObraForm.endereco} onChange={e => setEditObraForm({ ...editObraForm, endereco: e.target.value })} placeholder="Ex: Recife - PE" />
+                  <input style={input} value={editObraForm.endereco} onChange={e => setEditObraForm({ ...editObraForm, endereco: e.target.value })} placeholder="Ex: Av. Principal, 500" />
                 </div>
                 <div>
                   <label style={label}>Valor do Contrato (R$)</label>
@@ -1404,27 +1752,30 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                   </select>
                 </div>
 
-                <div style={{ padding: 12, background: 'rgba(59, 130, 246, 0.06)', borderRadius: 6, border: '1px solid rgba(59, 130, 246, 0.2)' }}>
-                  <label style={{ ...label, color: '#3B82F6' }}>📅 Previsão do Próximo BM</label>
+                <div style={{ padding: 14, background: 'rgba(245, 158, 11, 0.08)', borderRadius: 6, border: '1px solid rgba(245, 158, 11, 0.25)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                    <Calendar size={13} color={C.amber} />
+                    <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, textTransform: 'uppercase', letterSpacing: 0.5 }}>Previsão do Próximo BM</span>
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 8 }}>
                     <div>
-                      <label style={{ fontSize: 9, color: C.inkSoft }}>Data Prevista</label>
+                      <label style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Data Prevista</label>
                       <input type="date" style={input} value={editObraForm.proximo_urb_data} onChange={e => setEditObraForm({ ...editObraForm, proximo_urb_data: e.target.value })} />
                     </div>
                     <div>
-                      <label style={{ fontSize: 9, color: C.inkSoft }}>Valor Estimado (R$)</label>
+                      <label style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Valor Estimado (R$)</label>
                       <input style={input} value={editObraForm.proximo_urb_valor} onChange={e => setEditObraForm({ ...editObraForm, proximo_urb_valor: e.target.value })} placeholder="0,00" />
                     </div>
                   </div>
                   <div style={{ marginTop: 8 }}>
-                    <label style={{ fontSize: 9, color: C.inkSoft }}>Descrição / Lote</label>
+                    <label style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Descrição / Lote</label>
                     <input style={input} value={editObraForm.proximo_urb_desc} onChange={e => setEditObraForm({ ...editObraForm, proximo_urb_desc: e.target.value })} placeholder="Ex: Liberar Medição Lote 3" />
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
-                  <button type="button" onClick={() => setEditandoObra(null)} style={{ ...btnGhost, padding: '8px 16px' }}>Cancelar</button>
-                  <button type="submit" style={{ ...btn(C.amber), padding: '8px 20px' }}>Salvar Alterações</button>
+                  <button type="button" onClick={() => setEditandoObra(null)} style={{ ...btnGhost, padding: '8px 16px', fontSize: 11 }}>Cancelar</button>
+                  <button type="submit" style={{ ...btn(C.amber), padding: '8px 20px', fontSize: 11, fontWeight: 900 }}>Salvar Alterações</button>
                 </div>
               </form>
             </motion.div>
@@ -1445,7 +1796,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
-                style={{ ...btnGhost, color: C.amber, border: `1px solid ${C.amber}40`, textDecoration: 'none', padding: '6px 14px', fontSize: 12 }}
+                style={{ ...btnGhost, color: C.amber, border: `1px solid ${C.amber}40`, textDecoration: 'none', padding: '6px 14px', fontSize: 11, fontWeight: 700 }}
               >
                 Abrir em nova aba ↗
               </a>
@@ -1467,13 +1818,13 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
               <img
                 src={fotoExpandida.resolvedUrl || fotoExpandida.imagem_url}
                 alt={fotoExpandida.legenda || 'Foto da Obra'}
-                style={{ maxWidth: '100%', maxHeight: '75vh', borderRadius: 8, objectFit: 'contain', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', border: `1px solid ${C.border}` }}
+                style={{ maxWidth: '100%', maxHeight: '75vh', borderRadius: 6, objectFit: 'contain', boxShadow: '0 10px 40px rgba(0,0,0,0.8)', border: `1px solid ${C.border}` }}
               />
-              <div style={{ textAlign: 'center', background: 'rgba(18,20,28,0.9)', padding: '10px 20px', borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: C.ink }}>{fotoExpandida.legenda || 'Sem legenda'}</span>
-                <div style={{ display: 'flex', gap: 12, fontSize: 11, color: C.inkSoft }}>
-                  <span>📅 {new Date(fotoExpandida.data_iso).toLocaleDateString('pt-BR')}</span>
-                  <span>{fotoExpandida.rdo_id ? '📋 Foto enviada via RDO' : '💰 Anexada pelo Financeiro'}</span>
+              <div style={{ textAlign: 'center', background: C.bgPanel, padding: '12px 24px', borderRadius: 6, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{fotoExpandida.legenda || 'Sem legenda'}</span>
+                <div style={{ display: 'flex', gap: 16, fontSize: 10.5, color: C.inkSoft }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar size={12} color={C.amber} /> {new Date(fotoExpandida.data_iso).toLocaleDateString('pt-BR')}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><FileText size={12} color={C.inkSoft} /> {fotoExpandida.rdo_id ? 'Foto enviada via RDO' : 'Anexada pelo Financeiro'}</span>
                 </div>
               </div>
             </motion.div>
@@ -1483,19 +1834,24 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
 
       {/* ── MODAL DE GERENCIAMENTO DE ACESSOS (OBRAS) ── */}
       {acessosObra && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#12141C', border: `1px solid ${C.amber}`, borderRadius: 8, padding: 20, maxWidth: 540, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  🔒 Acessos à Obra: <span style={{ color: C.amber }}>{acessosObra.nome}</span>
-                </h3>
-                <p style={{ fontSize: 11, color: C.inkSoft, margin: '3px 0 0' }}>
-                  Marque ou desmarque os usuários autorizados a visualizar esta obra.
-                </p>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 22, maxWidth: 580, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 32, height: 32, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Shield size={16} color={C.amber} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    Permissões da Obra: <span style={{ color: C.amber }}>{acessosObra.nome}</span>
+                  </h3>
+                  <p style={{ fontSize: 10.5, color: C.inkSoft, margin: '2px 0 0' }}>
+                    Defina os colaboradores autorizados a acessar esta obra no sistema.
+                  </p>
+                </div>
               </div>
               <button style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer' }} onClick={() => setAcessosObra(null)}>
-                <X size={16} />
+                <X size={18} />
               </button>
             </div>
 
@@ -1504,8 +1860,8 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                 type="button"
                 onClick={() => setFiltroAcesso('todos')}
                 style={{
-                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
-                  background: filtroAcesso === 'todos' ? C.amber : '#1A1D28',
+                  padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                  background: filtroAcesso === 'todos' ? C.amber : C.bgCard,
                   color: filtroAcesso === 'todos' ? '#0B0C0E' : C.inkSoft
                 }}
               >
@@ -1515,9 +1871,10 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                 type="button"
                 onClick={() => setFiltroAcesso('com_acesso')}
                 style={{
-                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
-                  background: filtroAcesso === 'com_acesso' ? '#22C55E' : '#1A1D28',
-                  color: filtroAcesso === 'com_acesso' ? '#0B0C0E' : '#4ADE80'
+                  padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                  background: filtroAcesso === 'com_acesso' ? 'rgba(34, 197, 94, 0.2)' : C.bgCard,
+                  color: filtroAcesso === 'com_acesso' ? '#4ADE80' : C.inkSoft,
+                  borderColor: filtroAcesso === 'com_acesso' ? '#22C55E55' : C.border
                 }}
               >
                 ✓ Com Acesso ({colaboradores.filter(c => c.cargo === 'admin_geral' || (c.obras_ids || []).includes(acessosObra.id)).length})
@@ -1526,18 +1883,20 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                 type="button"
                 onClick={() => setFiltroAcesso('sem_acesso')}
                 style={{
-                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
-                  background: filtroAcesso === 'sem_acesso' ? '#EF4444' : '#1A1D28',
-                  color: filtroAcesso === 'sem_acesso' ? '#FFFFFF' : '#F87171'
+                  padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                  background: filtroAcesso === 'sem_acesso' ? 'rgba(239, 68, 68, 0.2)' : C.bgCard,
+                  color: filtroAcesso === 'sem_acesso' ? '#F87171' : C.inkSoft,
+                  borderColor: filtroAcesso === 'sem_acesso' ? '#EF444455' : C.border
                 }}
               >
                 ✕ Sem Acesso ({colaboradores.filter(c => c.cargo !== 'admin_geral' && !(c.obras_ids || []).includes(acessosObra.id)).length})
               </button>
             </div>
 
-            <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 12, position: 'relative' }}>
+              <Search size={14} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
               <input
-                style={{ ...input, fontSize: 11, padding: '7px 10px' }}
+                style={{ ...input, fontSize: 11, padding: '7px 10px 7px 32px' }}
                 placeholder="Buscar colaborador por nome, cargo ou e-mail..."
                 value={searchColab}
                 onChange={e => setSearchColab(e.target.value)}
@@ -1582,31 +1941,38 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                   const isUpdating = updatingColabId === colab.id
 
                   return (
-                    <div key={colab.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#0B0C0E', border: `1px solid ${hasAccess ? C.amber + '44' : C.border}`, borderRadius: 6 }}>
+                    <div key={colab.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: C.bgCard, border: `1px solid ${hasAccess ? `${C.amber}44` : C.border}`, borderRadius: 6 }}>
                       <div>
-                        <strong style={{ fontSize: 12, color: C.ink, display: 'block' }}>{colab.nome}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <strong style={{ fontSize: 12, color: C.ink }}>{colab.nome}</strong>
+                          {isAdmin && (
+                            <span style={{ fontSize: 8.5, fontWeight: 900, background: `${C.amber}18`, color: C.amber, border: `1px solid ${C.amber}44`, padding: '1px 5px', borderRadius: 3 }}>
+                              ADMIN GERAL
+                            </span>
+                          )}
+                        </div>
                         <span style={{ fontSize: 10, color: C.inkSoft }}>
                           {colab.cargo || 'Sem cargo'} · {colab.email || 'Sem e-mail'}
                         </span>
                       </div>
                       <div>
                         {isAdmin ? (
-                          <span style={{ fontSize: 9, fontWeight: 900, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '3px 8px', borderRadius: 4 }}>
-                            👑 Admin Geral
+                          <span style={{ fontSize: 9.5, fontWeight: 800, color: C.amber }}>
+                            Acesso Total
                           </span>
                         ) : (
                           <button
                             disabled={isUpdating}
                             onClick={() => void toggleAcessoColaboradorObra(colab, acessosObra.id)}
                             style={{
-                              borderRadius: 4, padding: '5px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer',
-                              background: hasAccess ? '#22C55E20' : '#EF444420',
-                              color: hasAccess ? '#4ADE80' : '#F87171',
-                              border: `1px solid ${hasAccess ? '#22C55E44' : '#EF444444'}`,
+                              borderRadius: 4, padding: '5px 12px', fontSize: 10, fontWeight: 800, cursor: isUpdating ? 'not-allowed' : 'pointer',
+                              background: hasAccess ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                              color: hasAccess ? '#4ADE80' : C.inkSoft,
+                              border: `1px solid ${hasAccess ? '#22C55E55' : C.border}`,
                               opacity: isUpdating ? 0.5 : 1
                             }}
                           >
-                            {isUpdating ? 'Salvando...' : hasAccess ? '✓ Com Acesso' : '✕ Sem Acesso'}
+                            {isUpdating ? 'Salvando...' : hasAccess ? '✓ Com Acesso' : '+ Liberar Acesso'}
                           </button>
                         )}
                       </div>
@@ -1616,7 +1982,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
             </div>
 
             <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
-              <button style={{ ...btn(), fontSize: 11, padding: '7px 14px' }} onClick={() => setAcessosObra(null)}>
+              <button style={{ ...btn(C.amber), fontSize: 11, padding: '7px 18px', fontWeight: 900 }} onClick={() => setAcessosObra(null)}>
                 Concluir
               </button>
             </div>
@@ -1780,7 +2146,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     { label: 'Saldo Recebido',   value: fmt(resultado),    icon: DollarSign,    color: resultado >= 0 ? '#34D399' : '#F87171' },
     { label: 'Contas Vencidas',  value: fmt(totalVencido),  icon: AlertCircle,   color: totalVencido > 0 ? '#EF4444' : C.inkSoft },
     { label: 'Vence em 7 dias',  value: fmt(total7d),      icon: Calendar,      color: C.amber },
-    { label: 'Vence em 30 dias', value: fmt(total30d),     icon: Clock,         color: '#3B82F6' },
+    { label: 'Vence em 30 dias', value: fmt(total30d),     icon: Clock,         color: C.amber },
   ]
 
   return (
@@ -1898,12 +2264,13 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   const [colaboradores, setColaboradores] = useState<Colaborador[]>([])
   const [loading, setLoading]   = useState(true)
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#C8A96E' })
+  const [form, setForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#F59E0B' })
   const [saving, setSaving] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
 
   // Edição de empresa
   const [editingEmpresa, setEditingEmpresa] = useState<Empresa | null>(null)
-  const [editForm, setEditForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#C8A96E' })
+  const [editForm, setEditForm] = useState({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#F59E0B' })
   const [savingEdit, setSavingEdit] = useState(false)
 
   // Gerenciamento de acessos
@@ -1911,6 +2278,8 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   const [searchColab, setSearchColab] = useState('')
   const [filtroAcesso, setFiltroAcesso] = useState<'todos' | 'com_acesso' | 'sem_acesso'>('todos')
   const [updatingColabId, setUpdatingColabId] = useState<string | null>(null)
+
+  const PRESET_COLORS = ['#F59E0B', '#3B82F6', '#10B981', '#8B5CF6', '#EC4899', '#06B6D4', '#64748B', '#D97706']
 
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
@@ -1926,20 +2295,21 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
   useRealtimeSync(load, 'financeiro-empresas')
   useEffect(() => { void load() }, [load])
 
-  const save = async () => {
-    if (!form.razao_social.trim()) return toast('Informe a Razão Social', 'error')
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!form.razao_social.trim()) return toast('Informe a Razão Social da empresa.', 'error')
     setSaving(true)
     const { error } = await supabase.from('empresas').insert({
       razao_social: form.razao_social.trim(),
       nome_fantasia: form.nome_fantasia.trim() || null,
       cnpj: form.cnpj.trim() || null,
-      cor: form.cor || '#C8A96E'
+      cor: form.cor || '#F59E0B'
     })
     if (error) {
       setSaving(false)
       return toast(`Não foi possível salvar a empresa: ${error.message}`, 'error')
     }
-    setForm({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#C8A96E' })
+    setForm({ razao_social: '', nome_fantasia: '', cnpj: '', cor: '#F59E0B' })
     setShowForm(false)
     setSaving(false)
     await load()
@@ -1952,13 +2322,14 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
       razao_social: emp.razao_social || '',
       nome_fantasia: emp.nome_fantasia || '',
       cnpj: emp.cnpj || '',
-      cor: emp.cor || '#C8A96E'
+      cor: emp.cor || '#F59E0B'
     })
   }
 
-  const saveEdit = async () => {
+  const saveEdit = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!editingEmpresa) return
-    if (!editForm.razao_social.trim()) return toast('Informe a Razão Social', 'error')
+    if (!editForm.razao_social.trim()) return toast('Informe a Razão Social.', 'error')
     setSavingEdit(true)
     try {
       const { error } = await supabase
@@ -1967,13 +2338,13 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
           razao_social: editForm.razao_social.trim(),
           nome_fantasia: editForm.nome_fantasia.trim() || null,
           cnpj: editForm.cnpj.trim() || null,
-          cor: editForm.cor || '#C8A96E'
+          cor: editForm.cor || '#F59E0B'
         })
         .eq('id', editingEmpresa.id)
 
       if (error) throw error
 
-      toast('Empresa atualizada com sucesso!', 'success')
+      toast('Dados da empresa atualizados com sucesso!', 'success')
       setEditingEmpresa(null)
       await load()
     } catch (err: unknown) {
@@ -1986,7 +2357,7 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
 
   const toggleAcessoColaborador = async (colab: Colaborador, empresaId: string) => {
     if (colab.cargo === 'admin_geral') {
-      return toast('Administradores gerais possuem acesso automático a todas as empresas.', 'info')
+      return toast('Administradores gerais possuem acesso irrestrito a todas as empresas.', 'info')
     }
 
     setUpdatingColabId(colab.id)
@@ -2018,300 +2389,593 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
     }
   }
 
-  const remove = async (id: string) => {
-    if (!(await confirm('Remover empresa', 'Deseja realmente remover esta empresa?', { confirmLabel: 'Remover', confirmColor: C.red }))) return
-    await supabase.from('empresas').delete().eq('id', id)
-    load()
+  const remove = async (id: string, nome: string) => {
+    if (!(await confirm('Excluir Empresa', `Deseja realmente remover a empresa "${nome}"? Esta ação removerá os vínculos do sistema.`, { confirmLabel: 'Excluir Empresa', confirmColor: C.red }))) return
+    const { error } = await supabase.from('empresas').delete().eq('id', id)
+    if (error) return toast(error.message, 'error')
+    await load()
+    toast('Empresa removida com sucesso.', 'success')
   }
 
-  // Verifica permissão dinamicamente do banco
-  const podeGerenciar = permissaoAtiva?.pode_empresas && colaboradorAtivo.cargo !== 'admin_empresa'
+  const podeGerenciar = Boolean(permissaoAtiva?.pode_empresas && colaboradorAtivo.cargo !== 'admin_empresa')
+
+  const empresasFiltradas = useMemo(() => {
+    let list = empresas.filter(e => {
+      if (colaboradorAtivo.cargo !== 'admin_empresa') return true
+      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+      return ids.includes(e.id)
+    })
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      list = list.filter(e =>
+        (e.razao_social || '').toLowerCase().includes(q) ||
+        (e.nome_fantasia || '').toLowerCase().includes(q) ||
+        (e.cnpj || '').toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [empresas, colaboradorAtivo, searchQuery])
+
+  // KPIs de Empresas
+  const totalEmpresas = empresas.length
+  const empresasComCnpj = empresas.filter(e => Boolean(e.cnpj)).length
+  const totalUsuariosVinculados = colaboradores.length
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.ink }}>Empresas e Filiais</h2>
-          <p style={{ margin: '4px 0 0', fontSize: 11, color: C.inkSoft }}>Gerencie os dados cadastrais e defina quais colaboradores possuem acesso a cada empresa.</p>
-        </div>
-        {podeGerenciar && (
-          <button style={btn()} onClick={() => setShowForm(v => !v)}>
-            <Plus size={14} /> Nova Empresa
-          </button>
-        )}
-      </div>
-
-      {showForm && podeGerenciar && (
-        <div style={{ ...card, marginBottom: 20, borderColor: C.amber + '44' }}>
-          <div style={{ fontWeight: 800, fontSize: 12, color: C.amber, marginBottom: 12 }}>+ Cadastrar Nova Empresa</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-            <div>
-              <label style={label}>Razão Social *</label>
-              <input style={input} value={form.razao_social} onChange={e => setForm(f => ({ ...f, razao_social: e.target.value }))} placeholder="Nome legal da empresa" />
-            </div>
-            <div>
-              <label style={label}>Nome Fantasia</label>
-              <input style={input} value={form.nome_fantasia} onChange={e => setForm(f => ({ ...f, nome_fantasia: e.target.value }))} placeholder="Como é conhecida" />
-            </div>
-            <div>
-              <label style={label}>CNPJ</label>
-              <input style={input} value={form.cnpj} onChange={e => setForm(f => ({ ...f, cnpj: e.target.value }))} placeholder="00.000.000/0000-00" />
-            </div>
-            <div>
-              <label style={label}>Cor de Identificação</label>
-              <input type="color" value={form.cor} onChange={e => setForm(f => ({ ...f, cor: e.target.value }))} style={{ height: 38, width: '100%', borderRadius: 6, border: `1px solid ${C.border}`, background: 'none', cursor: 'pointer', padding: 2 }} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Empresa'}</button>
-            <button style={btnGhost} onClick={() => setShowForm(false)}>Cancelar</button>
-          </div>
-        </div>
-      )}
-
-      {loading ? (
-        <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando empresas...</p>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(300px,1fr))', gap: 14 }}>
-          {empresas.filter(e => {
-            if (colaboradorAtivo.cargo !== 'admin_empresa') return true
-            const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-            return ids.includes(e.id)
-          }).map(e => {
-            const colabsComAcesso = colaboradores.filter(c => {
-              if (c.cargo === 'admin_geral') return true
-              const ids: string[] = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
-              return ids.includes(e.id)
-            })
-
-            return (
-              <div key={e.id} style={{ ...card, borderLeft: `4px solid ${e.cor}`, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <div style={{ width: 38, height: 38, borderRadius: 8, background: e.cor + '22', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Building2 size={18} color={e.cor} />
-                    </div>
-                    {podeGerenciar && (
-                      <button onClick={() => remove(e.id)} title="Excluir empresa" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div style={{ fontWeight: 900, color: C.ink, fontSize: 13, marginBottom: 2 }}>{e.nome_fantasia ?? e.razao_social}</div>
-                  {e.nome_fantasia && <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>{e.razao_social}</div>}
-                  {e.cnpj && <div style={{ fontSize: 10, color: C.inkSoft }}>CNPJ: <strong>{e.cnpj}</strong></div>}
-
-                  <div style={{ marginTop: 12, padding: '6px 10px', background: '#0B0C0E', borderRadius: 5, border: `1px solid ${C.border}`, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: C.inkSoft }}>
-                    <Users size={12} color={C.amber} />
-                    <span><strong>{colabsComAcesso.length}</strong> usuário(s) com acesso</span>
-                  </div>
-                </div>
-
-                {podeGerenciar && (
-                  <div style={{ display: 'flex', gap: 8, marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                    <button
-                      style={{ ...btnGhost, flex: 1, fontSize: 10, padding: '6px 10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-                      onClick={() => openEdit(e)}
-                    >
-                      <Edit3 size={12} /> Editar
-                    </button>
-                    <button
-                      style={{ ...btnGhost, flex: 1, fontSize: 10, padding: '6px 10px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
-                      onClick={() => setAcessosEmpresa(e)}
-                    >
-                      <Shield size={12} /> Acessos
-                    </button>
-                  </div>
-                )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* ─── CABEÇALHO DA SEÇÃO DE EMPRESAS ──────────────────────────── */}
+      <div style={{ ...card, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Building2 size={16} color={C.amber} />
               </div>
-            )
-          })}
-          {empresas.length === 0 && <p style={{ color: C.inkSoft, fontSize: 13 }}>Nenhuma empresa cadastrada no sistema.</p>}
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Gestão de Empresas & Filiais
+              </h2>
+            </div>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: C.inkSoft }}>
+              Administração de entidades jurídicas, cadastro de CNPJ, identidade visual e controle de acesso por usuário.
+            </p>
+          </div>
+
+          {podeGerenciar && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowForm(!showForm)}
+              style={{
+                ...btn(C.amber),
+                fontSize: 11.5,
+                fontWeight: 900,
+                padding: '8px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              {showForm ? 'Fechar Formulário' : 'Nova Empresa'}
+            </motion.button>
+          )}
         </div>
-      )}
 
-      {/* ── MODAL DE EDIÇÃO DE EMPRESA ── */}
-      {editingEmpresa && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#12141C', border: `1px solid ${C.amber}`, borderRadius: 8, padding: 20, maxWidth: 480, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
-              ✏️ Editar Empresa / Filial
-            </h3>
+        {/* ─── FORMULÁRIO DE NOVA EMPRESA ────────────────────────────── */}
+        {showForm && podeGerenciar && (
+          <motion.form
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            onSubmit={save}
+            style={{
+              background: C.bgCard,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              padding: '18px 20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Building2 size={14} color={C.amber} /> Cadastrar Nova Entidade
+            </div>
 
-            <div style={{ display: 'grid', gap: 12, marginBottom: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
               <div>
                 <label style={label}>Razão Social *</label>
-                <input style={input} value={editForm.razao_social} onChange={e => setEditForm({ ...editForm, razao_social: e.target.value })} placeholder="Nome legal da empresa" />
+                <input
+                  style={input}
+                  placeholder="Nome empresarial oficial"
+                  value={form.razao_social}
+                  onChange={e => setForm({ ...form, razao_social: e.target.value })}
+                  required
+                />
               </div>
               <div>
                 <label style={label}>Nome Fantasia</label>
-                <input style={input} value={editForm.nome_fantasia} onChange={e => setEditForm({ ...editForm, nome_fantasia: e.target.value })} placeholder="Como é conhecida" />
+                <input
+                  style={input}
+                  placeholder="Nome comercial / Como é conhecida"
+                  value={form.nome_fantasia}
+                  onChange={e => setForm({ ...form, nome_fantasia: e.target.value })}
+                />
               </div>
               <div>
                 <label style={label}>CNPJ</label>
-                <input style={input} value={editForm.cnpj} onChange={e => setEditForm({ ...editForm, cnpj: e.target.value })} placeholder="00.000.000/0000-00" />
+                <input
+                  style={input}
+                  placeholder="00.000.000/0000-00"
+                  value={form.cnpj}
+                  onChange={e => setForm({ ...form, cnpj: e.target.value })}
+                />
               </div>
               <div>
                 <label style={label}>Cor de Identificação</label>
-                <input type="color" value={editForm.cor} onChange={e => setEditForm({ ...editForm, cor: e.target.value })} style={{ height: 38, width: '100%', borderRadius: 6, border: `1px solid ${C.border}`, background: 'none', cursor: 'pointer', padding: 2 }} />
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap' }}>
+                    {PRESET_COLORS.map(c => (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => setForm({ ...form, cor: c })}
+                        style={{
+                          width: 24,
+                          height: 24,
+                          borderRadius: 4,
+                          background: c,
+                          border: form.cor === c ? '2px solid #FFFFFF' : '1px solid rgba(0,0,0,0.2)',
+                          cursor: 'pointer',
+                          boxShadow: form.cor === c ? '0 0 0 2px #F59E0B' : 'none'
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <input
+                    type="color"
+                    value={form.cor}
+                    onChange={e => setForm({ ...form, cor: e.target.value })}
+                    style={{ width: 34, height: 32, borderRadius: 4, border: `1px solid ${C.border}`, background: 'none', cursor: 'pointer', padding: 1 }}
+                  />
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button style={btnGhost} onClick={() => setEditingEmpresa(null)} disabled={savingEdit}>Cancelar</button>
-              <button style={btn()} onClick={() => void saveEdit()} disabled={savingEdit}>{savingEdit ? 'Salvando...' : 'Salvar Alterações'}</button>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 4 }}>
+              <button type="button" onClick={() => setShowForm(false)} style={{ ...btnGhost, padding: '8px 16px', fontSize: 11.5 }}>
+                Cancelar
+              </button>
+              <button type="submit" disabled={saving} style={{ ...btn(C.amber), padding: '8px 18px', fontSize: 11.5, fontWeight: 900 }}>
+                {saving ? 'Cadastrando...' : 'Salvar Empresa'}
+              </button>
             </div>
+          </motion.form>
+        )}
+
+        {/* ─── 4 CARDS DE KPIS EXECUTIVOS ────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Building2 size={14} color={C.amber} />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>Total de Empresas</span>
+            </div>
+            <strong style={{ fontSize: 16, fontWeight: 900, color: C.ink, marginTop: 2 }}>{totalEmpresas}</strong>
+            <span style={{ fontSize: 9.5, color: C.inkSoft }}>Entidades jurídicas cadastradas</span>
+          </div>
+
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <ShieldCheck size={14} color="#10B981" />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>CNPJs Ativos</span>
+            </div>
+            <strong style={{ fontSize: 16, fontWeight: 900, color: '#10B981', marginTop: 2 }}>{empresasComCnpj} de {totalEmpresas}</strong>
+            <span style={{ fontSize: 9.5, color: C.inkSoft }}>Cadastros com CNPJ informado</span>
+          </div>
+
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={14} color="#8B5CF6" />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>Equipe no Sistema</span>
+            </div>
+            <strong style={{ fontSize: 16, fontWeight: 900, color: '#8B5CF6', marginTop: 2 }}>{totalUsuariosVinculados}</strong>
+            <span style={{ fontSize: 9.5, color: C.inkSoft }}>Colaboradores e gestores</span>
+          </div>
+
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Shield size={14} color={C.amber} />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>Segregação de Acesso</span>
+            </div>
+            <strong style={{ fontSize: 16, fontWeight: 900, color: C.ink, marginTop: 2 }}>Multi-Empresa</strong>
+            <span style={{ fontSize: 9.5, color: C.inkSoft }}>Permissões isoladas por filial</span>
           </div>
         </div>
-      )}
 
-      {/* ── MODAL DE GERENCIAMENTO DE ACESSOS ── */}
-      {acessosEmpresa && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: '#12141C', border: `1px solid ${C.amber}`, borderRadius: 8, padding: 20, maxWidth: 540, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 10px 30px rgba(0,0,0,0.6)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 14, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  🔒 Acessos à Empresa: <span style={{ color: C.amber }}>{acessosEmpresa.nome_fantasia || acessosEmpresa.razao_social}</span>
-                </h3>
-                <p style={{ fontSize: 11, color: C.inkSoft, margin: '3px 0 0' }}>
-                  Marque ou desmarque os usuários autorizados a visualizar e gerenciar esta empresa.
-                </p>
-              </div>
-              <button style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer' }} onClick={() => setAcessosEmpresa(null)}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
-              <button
-                type="button"
-                onClick={() => setFiltroAcesso('todos')}
-                style={{
-                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
-                  background: filtroAcesso === 'todos' ? C.amber : '#1A1D28',
-                  color: filtroAcesso === 'todos' ? '#0B0C0E' : C.inkSoft
-                }}
-              >
-                Todos ({colaboradores.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFiltroAcesso('com_acesso')}
-                style={{
-                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
-                  background: filtroAcesso === 'com_acesso' ? '#22C55E' : '#1A1D28',
-                  color: filtroAcesso === 'com_acesso' ? '#0B0C0E' : '#4ADE80'
-                }}
-              >
-                ✓ Com Acesso ({colaboradores.filter(c => c.cargo === 'admin_geral' || (c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])).includes(acessosEmpresa.id)).length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setFiltroAcesso('sem_acesso')}
-                style={{
-                  padding: '5px 10px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: 0,
-                  background: filtroAcesso === 'sem_acesso' ? '#EF4444' : '#1A1D28',
-                  color: filtroAcesso === 'sem_acesso' ? '#FFFFFF' : '#F87171'
-                }}
-              >
-                ✕ Sem Acesso ({colaboradores.filter(c => c.cargo !== 'admin_geral' && !(c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])).includes(acessosEmpresa.id)).length})
-              </button>
-            </div>
-
-            <div style={{ marginBottom: 12 }}>
+        {/* ─── BARRA DE PESQUISA & FILTROS ────────────────────────────── */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 260 }}>
+            <div style={{ position: 'relative', width: '100%' }}>
+              <Search size={14} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
               <input
-                style={{ ...input, fontSize: 11, padding: '7px 10px' }}
-                placeholder="Buscar colaborador por nome, cargo ou e-mail..."
-                value={searchColab}
-                onChange={e => setSearchColab(e.target.value)}
+                style={{ ...input, paddingLeft: 32, fontSize: 11 }}
+                placeholder="Buscar empresa por Razão Social, Nome Fantasia ou CNPJ..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
               />
             </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', display: 'grid', gap: 8, paddingRight: 4 }}>
-              {colaboradores
-                .filter(colab => {
-                  const isAdmin = colab.cargo === 'admin_geral'
-                  const ids: string[] = colab.empresas_ids || (colab.empresa_id ? [colab.empresa_id] : [])
-                  const hasAccess = isAdmin || ids.includes(acessosEmpresa.id)
-
-                  if (filtroAcesso === 'com_acesso' && !hasAccess) return false
-                  if (filtroAcesso === 'sem_acesso' && hasAccess) return false
-
-                  if (!searchColab.trim()) return true
-                  const q = searchColab.toLowerCase()
-                  return colab.nome.toLowerCase().includes(q) || (colab.cargo || '').toLowerCase().includes(q) || (colab.email || '').toLowerCase().includes(q)
-                })
-                .sort((a, b) => {
-                  const aAdmin = a.cargo === 'admin_geral'
-                  const bAdmin = b.cargo === 'admin_geral'
-
-                  const aIds: string[] = a.empresas_ids || (a.empresa_id ? [a.empresa_id] : [])
-                  const bIds: string[] = b.empresas_ids || (b.empresa_id ? [b.empresa_id] : [])
-
-                  const aAccess = aAdmin || aIds.includes(acessosEmpresa.id)
-                  const bAccess = bAdmin || bIds.includes(acessosEmpresa.id)
-
-                  // 1. Admin Geral em primeiro
-                  if (aAdmin && !bAdmin) return -1
-                  if (!aAdmin && bAdmin) return 1
-
-                  // 2. Com Acesso em primeiro
-                  if (aAccess && !bAccess) return -1
-                  if (!aAccess && bAccess) return 1
-
-                  // 3. Ordem alfabética
-                  return a.nome.localeCompare(b.nome, 'pt-BR')
-                })
-                .map(colab => {
-                  const isAdmin = colab.cargo === 'admin_geral'
-                  const ids: string[] = colab.empresas_ids || (colab.empresa_id ? [colab.empresa_id] : [])
-                  const hasAccess = isAdmin || ids.includes(acessosEmpresa.id)
-                  const isUpdating = updatingColabId === colab.id
-
-                  return (
-                    <div key={colab.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: '#0B0C0E', border: `1px solid ${hasAccess ? C.amber + '44' : C.border}`, borderRadius: 6 }}>
-                      <div>
-                        <strong style={{ fontSize: 12, color: C.ink, display: 'block' }}>{colab.nome}</strong>
-                        <span style={{ fontSize: 10, color: C.inkSoft }}>
-                          {colab.cargo || 'Sem cargo'} · {colab.email || 'Sem e-mail'}
-                        </span>
-                      </div>
-                      <div>
-                        {isAdmin ? (
-                          <span style={{ fontSize: 9, fontWeight: 900, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '3px 8px', borderRadius: 4 }}>
-                            👑 Admin Geral
-                          </span>
-                        ) : (
-                          <button
-                            disabled={isUpdating}
-                            onClick={() => void toggleAcessoColaborador(colab, acessosEmpresa.id)}
-                            style={{
-                              borderRadius: 4, padding: '5px 10px', fontSize: 10, fontWeight: 800, cursor: 'pointer',
-                              background: hasAccess ? '#22C55E20' : '#EF444420',
-                              color: hasAccess ? '#4ADE80' : '#F87171',
-                              border: `1px solid ${hasAccess ? '#22C55E44' : '#EF444444'}`,
-                              opacity: isUpdating ? 0.5 : 1
-                            }}
-                          >
-                            {isUpdating ? 'Salvando...' : hasAccess ? '✓ Com Acesso' : '✕ Sem Acesso'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-            </div>
-
-            <div style={{ marginTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
-              <button style={{ ...btn(), fontSize: 11, padding: '7px 14px' }} onClick={() => setAcessosEmpresa(null)}>
-                Concluir
-              </button>
-            </div>
           </div>
+          <span style={{ fontSize: 11, color: C.inkSoft, fontWeight: 600 }}>
+            {empresasFiltradas.length} {empresasFiltradas.length === 1 ? 'empresa listada' : 'empresas listadas'}
+          </span>
         </div>
-      )}
+
+        {/* ─── GRID DE CARDS EXECUTIVOS DE EMPRESAS ──────────────────── */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft, fontSize: 12 }}>Carregando dados das empresas...</div>
+        ) : empresasFiltradas.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft, fontSize: 12, border: `1px dashed ${C.border}`, borderRadius: 8 }}>
+            Nenhuma empresa encontrada com os filtros selecionados.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+            {empresasFiltradas.map(e => {
+              const colabsComAcesso = colaboradores.filter(c => {
+                if (c.cargo === 'admin_geral') return true
+                const ids: string[] = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
+                return ids.includes(e.id)
+              })
+
+              const corDestaque = e.cor || '#F59E0B'
+
+              return (
+                <div
+                  key={e.id}
+                  style={{
+                    background: C.bgPanel,
+                    borderRadius: 8,
+                    border: `1px solid ${C.border}`,
+                    borderLeft: `4px solid ${corDestaque}`,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {/* Card Header */}
+                  <div style={{ padding: '16px 18px', borderBottom: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.015)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 6, background: `${corDestaque}18`, border: `1px solid ${corDestaque}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                          <Building2 size={17} color={corDestaque} />
+                        </div>
+                        <div>
+                          <h3 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                            {e.nome_fantasia || e.razao_social}
+                          </h3>
+                          {e.nome_fantasia && (
+                            <p style={{ margin: 0, fontSize: 10.5, color: C.inkSoft }}>{e.razao_social}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {podeGerenciar && (
+                        <button
+                          onClick={() => remove(e.id, e.nome_fantasia || e.razao_social)}
+                          title="Excluir empresa"
+                          style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4, transition: 'color 0.15s' }}
+                          className="hover:text-red-500"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Card Body */}
+                  <div style={{ padding: '16px 18px', flex: 1, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.inkSoft }}>
+                        <FileText size={12} color={C.amber} />
+                        <span>CNPJ: <strong style={{ color: C.ink }}>{e.cnpj || 'Não informado'}</strong></span>
+                      </div>
+
+                      <div style={{ width: 14, height: 14, borderRadius: '50%', background: corDestaque, border: '1px solid rgba(255,255,255,0.3)' }} title={`Cor: ${corDestaque}`} />
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '8px 12px', background: C.bgCard, borderRadius: 6, border: `1px solid ${C.border}`, marginTop: 'auto' }}>
+                      <Users size={13} color={C.amber} />
+                      <span style={{ fontSize: 10.5, color: C.ink }}>
+                        <strong style={{ color: C.amber, fontWeight: 900 }}>{colabsComAcesso.length}</strong> usuário(s) com acesso autorizado
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Card Footer */}
+                  {podeGerenciar && (
+                    <div style={{ padding: '10px 18px', background: 'rgba(0,0,0,0.15)', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 8 }}>
+                      <button
+                        style={{ ...btnGhost, flex: 1, fontSize: 10.5, fontWeight: 800, padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                        onClick={() => openEdit(e)}
+                      >
+                        <Edit3 size={12} color={C.amber} /> Editar Dados
+                      </button>
+                      <button
+                        style={{ ...btn(C.amber), flex: 1, fontSize: 10.5, fontWeight: 900, padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+                        onClick={() => setAcessosEmpresa(e)}
+                      >
+                        <Shield size={12} /> Acessos & Equipe
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── MODAL DE EDIÇÃO DE EMPRESA ──────────────────────────────── */}
+      <AnimatePresence>
+        {editingEmpresa && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24, maxWidth: 500, width: '100%', boxShadow: '0 12px 36px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Edit3 size={16} color={C.amber} />
+                  <h3 style={{ fontSize: 14, fontWeight: 900, color: C.ink, margin: 0, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    Editar Entidade Empresarial
+                  </h3>
+                </div>
+                <button onClick={() => setEditingEmpresa(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
+              </div>
+
+              <form onSubmit={saveEdit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <label style={label}>Razão Social *</label>
+                  <input style={input} value={editForm.razao_social} onChange={e => setEditForm({ ...editForm, razao_social: e.target.value })} placeholder="Nome empresarial oficial" required />
+                </div>
+                <div>
+                  <label style={label}>Nome Fantasia</label>
+                  <input style={input} value={editForm.nome_fantasia} onChange={e => setEditForm({ ...editForm, nome_fantasia: e.target.value })} placeholder="Como é conhecida" />
+                </div>
+                <div>
+                  <label style={label}>CNPJ</label>
+                  <input style={input} value={editForm.cnpj} onChange={e => setEditForm({ ...editForm, cnpj: e.target.value })} placeholder="00.000.000/0000-00" />
+                </div>
+                <div>
+                  <label style={label}>Cor de Identificação</label>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <div style={{ display: 'flex', gap: 4, flex: 1, flexWrap: 'wrap' }}>
+                      {PRESET_COLORS.map(c => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => setEditForm({ ...editForm, cor: c })}
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 4,
+                            background: c,
+                            border: editForm.cor === c ? '2px solid #FFFFFF' : '1px solid rgba(0,0,0,0.2)',
+                            cursor: 'pointer',
+                            boxShadow: editForm.cor === c ? '0 0 0 2px #F59E0B' : 'none'
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <input
+                      type="color"
+                      value={editForm.cor}
+                      onChange={e => setEditForm({ ...editForm, cor: e.target.value })}
+                      style={{ width: 34, height: 32, borderRadius: 4, border: `1px solid ${C.border}`, background: 'none', cursor: 'pointer', padding: 1 }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                  <button type="button" style={btnGhost} onClick={() => setEditingEmpresa(null)} disabled={savingEdit}>Cancelar</button>
+                  <button type="submit" style={{ ...btn(C.amber), fontWeight: 900 }} disabled={savingEdit}>{savingEdit ? 'Salvando...' : 'Salvar Alterações'}</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── MODAL DE GERENCIAMENTO DE ACESSOS ───────────────────────── */}
+      <AnimatePresence>
+        {acessosEmpresa && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24, maxWidth: 560, width: '100%', maxHeight: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 12px 36px rgba(0,0,0,0.5)', gap: 14 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${C.border}`, paddingBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Shield size={16} color={C.amber} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                      Acessos & Equipe: <span style={{ color: C.amber }}>{acessosEmpresa.nome_fantasia || acessosEmpresa.razao_social}</span>
+                    </h3>
+                    <p style={{ fontSize: 10.5, color: C.inkSoft, margin: '2px 0 0' }}>
+                      Defina os colaboradores autorizados a visualizar e lançar contas desta empresa.
+                    </p>
+                  </div>
+                </div>
+                <button style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer' }} onClick={() => setAcessosEmpresa(null)}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Filtros de Acesso */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setFiltroAcesso('todos')}
+                  style={{
+                    padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                    background: filtroAcesso === 'todos' ? C.amber : C.bgCard,
+                    color: filtroAcesso === 'todos' ? '#0B0C0E' : C.inkSoft
+                  }}
+                >
+                  Todos ({colaboradores.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroAcesso('com_acesso')}
+                  style={{
+                    padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                    background: filtroAcesso === 'com_acesso' ? 'rgba(34, 197, 94, 0.2)' : C.bgCard,
+                    color: filtroAcesso === 'com_acesso' ? '#4ADE80' : C.inkSoft,
+                    borderColor: filtroAcesso === 'com_acesso' ? '#22C55E55' : C.border
+                  }}
+                >
+                  ✓ Com Acesso ({colaboradores.filter(c => c.cargo === 'admin_geral' || (c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])).includes(acessosEmpresa.id)).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFiltroAcesso('sem_acesso')}
+                  style={{
+                    padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                    background: filtroAcesso === 'sem_acesso' ? 'rgba(239, 68, 68, 0.2)' : C.bgCard,
+                    color: filtroAcesso === 'sem_acesso' ? '#F87171' : C.inkSoft,
+                    borderColor: filtroAcesso === 'sem_acesso' ? '#EF444455' : C.border
+                  }}
+                >
+                  ✕ Sem Acesso ({colaboradores.filter(c => c.cargo !== 'admin_geral' && !(c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])).includes(acessosEmpresa.id)).length})
+                </button>
+              </div>
+
+              {/* Busca de Colaborador */}
+              <div style={{ position: 'relative' }}>
+                <Search size={13} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  style={{ ...input, paddingLeft: 30, fontSize: 11 }}
+                  placeholder="Buscar colaborador por nome, cargo ou e-mail..."
+                  value={searchColab}
+                  onChange={e => setSearchColab(e.target.value)}
+                />
+              </div>
+
+              {/* Lista com Scroll */}
+              <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+                {colaboradores
+                  .filter(colab => {
+                    const isAdmin = colab.cargo === 'admin_geral'
+                    const ids: string[] = colab.empresas_ids || (colab.empresa_id ? [colab.empresa_id] : [])
+                    const hasAccess = isAdmin || ids.includes(acessosEmpresa.id)
+
+                    if (filtroAcesso === 'com_acesso' && !hasAccess) return false
+                    if (filtroAcesso === 'sem_acesso' && hasAccess) return false
+
+                    if (!searchColab.trim()) return true
+                    const q = searchColab.toLowerCase()
+                    return (colab.nome || '').toLowerCase().includes(q) || (colab.cargo || '').toLowerCase().includes(q) || (colab.email || '').toLowerCase().includes(q)
+                  })
+                  .sort((a, b) => {
+                    const aAdmin = a.cargo === 'admin_geral'
+                    const bAdmin = b.cargo === 'admin_geral'
+
+                    const aIds: string[] = a.empresas_ids || (a.empresa_id ? [a.empresa_id] : [])
+                    const bIds: string[] = b.empresas_ids || (b.empresa_id ? [b.empresa_id] : [])
+
+                    const aAccess = aAdmin || aIds.includes(acessosEmpresa.id)
+                    const bAccess = bAdmin || bIds.includes(acessosEmpresa.id)
+
+                    if (aAdmin && !bAdmin) return -1
+                    if (!aAdmin && bAdmin) return 1
+                    if (aAccess && !bAccess) return -1
+                    if (!aAccess && bAccess) return 1
+                    return (a.nome || '').localeCompare(b.nome || '', 'pt-BR')
+                  })
+                  .map(colab => {
+                    const isAdmin = colab.cargo === 'admin_geral'
+                    const ids: string[] = colab.empresas_ids || (colab.empresa_id ? [colab.empresa_id] : [])
+                    const hasAccess = isAdmin || ids.includes(acessosEmpresa.id)
+                    const isUpdating = updatingColabId === colab.id
+
+                    return (
+                      <div
+                        key={colab.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '10px 14px',
+                          background: C.bgCard,
+                          border: `1px solid ${hasAccess ? 'rgba(245, 158, 11, 0.35)' : C.border}`,
+                          borderRadius: 6
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <User size={13} color={C.amber} />
+                          </div>
+                          <div>
+                            <strong style={{ fontSize: 12, color: C.ink, display: 'block' }}>{colab.nome}</strong>
+                            <span style={{ fontSize: 10, color: C.inkSoft }}>
+                              {colab.cargo ? NOMES_CARGOS[colab.cargo] || colab.cargo : 'Sem cargo'} · {colab.email || 'Sem e-mail'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div>
+                          {isAdmin ? (
+                            <span style={{ fontSize: 9, fontWeight: 900, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, border: '1px solid rgba(245, 158, 11, 0.35)', padding: '3px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <Shield size={10} /> Admin Geral
+                            </span>
+                          ) : (
+                            <button
+                              disabled={isUpdating}
+                              onClick={() => void toggleAcessoColaborador(colab, acessosEmpresa.id)}
+                              style={{
+                                borderRadius: 4,
+                                padding: '5px 12px',
+                                fontSize: 10,
+                                fontWeight: 800,
+                                cursor: isUpdating ? 'not-allowed' : 'pointer',
+                                background: hasAccess ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
+                                color: hasAccess ? '#4ADE80' : C.inkSoft,
+                                border: `1px solid ${hasAccess ? '#22C55E55' : C.border}`,
+                                opacity: isUpdating ? 0.5 : 1
+                              }}
+                            >
+                              {isUpdating ? 'Salvando...' : hasAccess ? '✓ Com Acesso' : '+ Liberar Acesso'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+
+              <div style={{ marginTop: 6, display: 'flex', justifyContent: 'flex-end', borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                <button style={{ ...btn(C.amber), fontSize: 11, padding: '7px 18px', fontWeight: 900 }} onClick={() => setAcessosEmpresa(null)}>
+                  Concluir
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -2350,6 +3014,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
   const [showForm, setShowForm]         = useState(false)
   const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null)
   const [search, setSearch]             = useState('')
+  const [filtroTipo, setFiltroTipo]     = useState<'todos' | 'PJ' | 'PF' | 'aberto' | 'vencidas'>('todos')
   const [form, setForm] = useState({
     razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ' as 'PJ'|'PF',
     telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
@@ -2413,10 +3078,6 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
   }
 
   const iniciarEdicaoFornecedor = (f: Fornecedor) => {
-    if (editingFornecedor?.id === f.id) {
-      setEditingFornecedor(null)
-      return
-    }
     setEditingFornecedor(f)
     setShowForm(false)
     const docTipo = (f.tipo as 'PJ'|'PF') || (f.cnpj && f.cnpj.replace(/\D/g, '').length === 11 ? 'PF' : 'PJ')
@@ -2438,7 +3099,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     })
   }
 
-  const save = async () => {
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault()
     if (!form.razao_social.trim()) {
       return toast(form.tipo === 'PJ' ? 'Informe a Razão Social (*)' : 'Informe o Nome Completo (*)', 'error')
     }
@@ -2497,32 +3159,17 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     await load()
   }
 
-  const remove = async (id: string) => {
-    if (!(await confirm('Remover fornecedor', 'Deseja realmente remover este fornecedor?', { confirmLabel: 'Remover', confirmColor: C.red }))) return
-    await supabase.from('fornecedores').delete().eq('id', id)
-    load()
+  const remove = async (id: string, nome: string) => {
+    if (!(await confirm('Excluir Fornecedor', `Deseja realmente remover o fornecedor "${nome}"? Esta ação removerá o vínculo com contas não lançadas.`, { confirmLabel: 'Excluir Fornecedor', confirmColor: C.red }))) return
+    const { error } = await supabase.from('fornecedores').delete().eq('id', id)
+    if (error) return toast(error.message, 'error')
+    await load()
+    toast('Fornecedor removido com sucesso.', 'success')
   }
 
   const empresasIds = colaboradorAtivo.empresas_ids?.length ? colaboradorAtivo.empresas_ids : (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
 
-  const filtered = useMemo(() =>
-    fornecedores.filter(f => {
-      // Regra de Permissões: se for diferente de admin_geral, exibe fornecedores compartilhados (empresa_id null) e das empresas autorizadas
-      if (colaboradorAtivo.cargo !== 'admin_geral') {
-        if (f.empresa_id && !empresasIds.includes(f.empresa_id)) {
-          return false
-        }
-      }
-      return (
-        f.razao_social.toLowerCase().includes(search.toLowerCase()) ||
-        (f.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (f.categoria ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (f.cnpj ?? '').includes(search)
-      )
-    })
-  , [fornecedores, search, colaboradorAtivo, empresasIds])
-
-  // Indexador O(1): pré-computa totais de contas por fornecedor uma única vez
+  // Indexador O(1): pré-computa totais de contas por fornecedor
   const contasResumoMap = useMemo(() => {
     const map: Record<string, { totalEmAberto: number; totalPago: number; totalPagasCount: number; temVencidas: boolean }> = {}
     contasFornecedores.forEach(c => {
@@ -2544,274 +3191,586 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     return map
   }, [contasFornecedores])
 
-  // Verifica permissão dinamicamente (seja pela flag ou pela aba ativa)
+  // KPIs
+  const totalFornecedores = fornecedores.length
+  const totalPJ = fornecedores.filter(f => f.tipo !== 'PF').length
+  const totalPF = fornecedores.filter(f => f.tipo === 'PF').length
+  const totalGeralEmAberto = useMemo(() => Object.values(contasResumoMap).reduce((acc, curr) => acc + curr.totalEmAberto, 0), [contasResumoMap])
+  const totalGeralPago = useMemo(() => Object.values(contasResumoMap).reduce((acc, curr) => acc + curr.totalPago, 0), [contasResumoMap])
+
+  const filtered = useMemo(() =>
+    fornecedores.filter(f => {
+      if (colaboradorAtivo.cargo !== 'admin_geral') {
+        if (f.empresa_id && !empresasIds.includes(f.empresa_id)) {
+          return false
+        }
+      }
+
+      const resumo = contasResumoMap[f.id] || { totalEmAberto: 0, totalPago: 0, totalPagasCount: 0, temVencidas: false }
+
+      if (filtroTipo === 'PJ' && f.tipo === 'PF') return false
+      if (filtroTipo === 'PF' && f.tipo !== 'PF') return false
+      if (filtroTipo === 'aberto' && resumo.totalEmAberto <= 0) return false
+      if (filtroTipo === 'vencidas' && !resumo.temVencidas) return false
+
+      if (!search.trim()) return true
+      const q = search.toLowerCase()
+      return (
+        f.razao_social.toLowerCase().includes(q) ||
+        (f.nome_fantasia ?? '').toLowerCase().includes(q) ||
+        (f.categoria ?? '').toLowerCase().includes(q) ||
+        (f.responsavel ?? '').toLowerCase().includes(q) ||
+        (f.cnpj ?? '').includes(search)
+      )
+    })
+  , [fornecedores, search, filtroTipo, colaboradorAtivo, empresasIds, contasResumoMap])
+
   const temAbaFornecedores = permissaoAtiva?.abas_financeiro ? permissaoAtiva.abas_financeiro.split(',').map(a => a.trim()).includes('fornecedores') : false
   const podeCriar = Boolean(permissaoAtiva?.pode_fornecedores || temAbaFornecedores || colaboradorAtivo.cargo === 'admin_geral')
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.ink }}>Fornecedores centralizados</h2>
-        {podeCriar && (
-          <button style={btn()} onClick={abrirNovoForm}><Plus size={14} /> Novo Fornecedor</button>
-        )}
-      </div>
-
-      <div style={{ position: 'relative', marginBottom: 20, maxWidth: 360 }}>
-        <Search size={13} color={C.inkSoft} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-        <input style={{ ...input, paddingLeft: 34 }} placeholder="Buscar por razão, fantasia, CNPJ/CPF ou categoria..." value={search} onChange={e => setSearch(e.target.value)} />
-      </div>
-
-      {showForm && !editingFornecedor && podeCriar && (
-        <div style={{ ...card, marginBottom: 20, borderColor: C.amber + '44' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-            <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.ink }}>Novo Fornecedor</h3>
-            <span style={{ fontSize: 11, color: C.inkSoft }}>{form.tipo === 'PJ' ? 'Pessoa Jurídica (CNPJ)' : 'Pessoa Física (CPF)'}</span>
-          </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14, marginBottom: 14 }}>
-            <div>
-              <label style={label}>Tipo de Pessoa</label>
-              <select style={input} value={form.tipo} onChange={e => {
-                const novoTipo = e.target.value as 'PJ'|'PF'
-                setForm(f => ({ ...f, tipo: novoTipo, cnpj: formatCnpjCpf(f.cnpj, novoTipo) }))
-              }}>
-                <option value="PJ">Pessoa Jurídica (CNPJ)</option>
-                <option value="PF">Pessoa Física (CPF)</option>
-              </select>
-            </div>
-            <div>
-              <label style={label}>{form.tipo === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}</label>
-              <input style={input} value={form.razao_social} onChange={e => setForm(prev => ({ ...prev, razao_social: e.target.value }))} placeholder={form.tipo === 'PJ' ? "Ex: Cimento & Cia Ltda" : "Ex: João da Silva"} />
-            </div>
-            {form.tipo === 'PJ' && (
-              <div>
-                <label style={label}>Nome Fantasia</label>
-                <input style={input} value={form.nome_fantasia} onChange={e => setForm(prev => ({ ...prev, nome_fantasia: e.target.value }))} placeholder="Ex: Cimento Bela Vista" />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* ─── CABEÇALHO DA SEÇÃO DE FORNECEDORES ──────────────────────── */}
+      <div style={{ ...card, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 14, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={16} color={C.amber} />
               </div>
-            )}
-            <div>
-              <label style={label}>{form.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
-              <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: formatCnpjCpf(e.target.value, prev.tipo) }))} placeholder={form.tipo === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"} />
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Gestão de Fornecedores & Prestadores
+              </h2>
             </div>
-            <div>
-              <label style={label}>Telefone / WhatsApp</label>
-              <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))} placeholder="(11) 99999-9999" />
-            </div>
-            <div>
-              <label style={label}>E-mail</label>
-              <input style={input} type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="vendas@fornecedor.com" />
-            </div>
-            <div>
-              <label style={label}>Contato Responsável</label>
-              <input style={input} value={form.responsavel} onChange={e => setForm(prev => ({ ...prev, responsavel: e.target.value }))} placeholder="Ex: Ricardo Silva" />
-            </div>
-            <div>
-              <label style={label}>Categoria</label>
-              <input style={input} value={form.categoria} onChange={e => setForm(prev => ({ ...prev, categoria: e.target.value }))} placeholder="Ex: Material, Serviço, Equipamentos" />
-            </div>
-            <div>
-              <label style={label}>Banco</label>
-              <input style={input} value={form.banco} onChange={e => setForm(prev => ({ ...prev, banco: e.target.value }))} placeholder="Ex: Itaú (341)" />
-            </div>
-            <div>
-              <label style={label}>Agência</label>
-              <input style={input} value={form.agencia} onChange={e => setForm(prev => ({ ...prev, agencia: e.target.value }))} placeholder="Ex: 0001" />
-            </div>
-            <div>
-              <label style={label}>Conta Corrente</label>
-              <input style={input} value={form.conta} onChange={e => setForm(prev => ({ ...prev, conta: e.target.value }))} placeholder="Ex: 12345-6" />
-            </div>
-            <div>
-              <label style={label}>Chave PIX</label>
-              <input style={input} value={form.pix} onChange={e => setForm(prev => ({ ...prev, pix: e.target.value }))} placeholder="Chave PIX" />
-            </div>
-            <div>
-              <label style={label}>Empresa preferencial</label>
-              <select style={input} value={form.empresa_id} onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}>
-                <option value="">Compartilhado entre todas</option>
-                {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
-              </select>
-            </div>
-            <div style={{ gridColumn: 'span 2' }}>
-              <label style={label}>Endereço Completo</label>
-              <input style={input} value={form.endereco} onChange={e => setForm(prev => ({ ...prev, endereco: e.target.value }))} placeholder="Av. Paulista, 1000 - São Paulo/SP" />
-            </div>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: C.inkSoft }}>
+              Cadastro unificado de fornecedores (PJ/PF), chaves PIX, domicílio bancário e monitoramento de contas correntes.
+            </p>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Cadastrar Fornecedor'}</button>
-            <button style={btnGhost} onClick={() => setShowForm(false)}>Cancelar</button>
+
+          {podeCriar && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={abrirNovoForm}
+              style={{
+                ...btn(C.amber),
+                fontSize: 11.5,
+                fontWeight: 900,
+                padding: '8px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              <Plus size={14} strokeWidth={2.5} />
+              {showForm ? 'Fechar Formulário' : 'Novo Fornecedor'}
+            </motion.button>
+          )}
+        </div>
+
+        {/* ─── FORMULÁRIO DE CADASTRO / EDIÇÃO RÁPIDA ────────────────── */}
+        {showForm && !editingFornecedor && podeCriar && (
+          <motion.form
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            onSubmit={save}
+            style={{
+              background: C.bgCard,
+              border: `1px solid ${C.border}`,
+              borderRadius: 8,
+              padding: '18px 20px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 16
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+              <div style={{ fontSize: 12, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Plus size={14} color={C.amber} /> Cadastrar Fornecedor
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>
+                {form.tipo === 'PJ' ? 'Pessoa Jurídica (CNPJ)' : 'Pessoa Física (CPF)'}
+              </span>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+              <div>
+                <label style={label}>Tipo de Registro</label>
+                <select style={input} value={form.tipo} onChange={e => {
+                  const novoTipo = e.target.value as 'PJ'|'PF'
+                  setForm(f => ({ ...f, tipo: novoTipo, cnpj: formatCnpjCpf(f.cnpj, novoTipo) }))
+                }}>
+                  <option value="PJ">Pessoa Jurídica (CNPJ)</option>
+                  <option value="PF">Pessoa Física (CPF)</option>
+                </select>
+              </div>
+              <div>
+                <label style={label}>{form.tipo === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}</label>
+                <input style={input} value={form.razao_social} onChange={e => setForm(prev => ({ ...prev, razao_social: e.target.value }))} placeholder={form.tipo === 'PJ' ? "Ex: Construtora & Materiais Ltda" : "Ex: Carlos Eduardo"} required />
+              </div>
+              {form.tipo === 'PJ' && (
+                <div>
+                  <label style={label}>Nome Fantasia</label>
+                  <input style={input} value={form.nome_fantasia} onChange={e => setForm(prev => ({ ...prev, nome_fantasia: e.target.value }))} placeholder="Ex: Cimento Forte" />
+                </div>
+              )}
+              <div>
+                <label style={label}>{form.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
+                <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: formatCnpjCpf(e.target.value, prev.tipo) }))} placeholder={form.tipo === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"} />
+              </div>
+              <div>
+                <label style={label}>Telefone / WhatsApp</label>
+                <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))} placeholder="(11) 99999-9999" />
+              </div>
+              <div>
+                <label style={label}>E-mail Comercial</label>
+                <input style={input} type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="financeiro@fornecedor.com.br" />
+              </div>
+              <div>
+                <label style={label}>Contato Responsável</label>
+                <input style={input} value={form.responsavel} onChange={e => setForm(prev => ({ ...prev, responsavel: e.target.value }))} placeholder="Ex: Ricardo Silva" />
+              </div>
+              <div>
+                <label style={label}>Categoria de Fornecimento</label>
+                <input style={input} value={form.categoria} onChange={e => setForm(prev => ({ ...prev, categoria: e.target.value }))} placeholder="Ex: Concreto, Aço, Locação" />
+              </div>
+              <div>
+                <label style={label}>Chave PIX</label>
+                <input style={input} value={form.pix} onChange={e => setForm(prev => ({ ...prev, pix: e.target.value }))} placeholder="CNPJ, CPF, E-mail, Celular ou Aleatória" />
+              </div>
+              <div>
+                <label style={label}>Banco</label>
+                <input style={input} value={form.banco} onChange={e => setForm(prev => ({ ...prev, banco: e.target.value }))} placeholder="Ex: Itaú (341)" />
+              </div>
+              <div>
+                <label style={label}>Agência</label>
+                <input style={input} value={form.agencia} onChange={e => setForm(prev => ({ ...prev, agencia: e.target.value }))} placeholder="0001" />
+              </div>
+              <div>
+                <label style={label}>Conta Corrente</label>
+                <input style={input} value={form.conta} onChange={e => setForm(prev => ({ ...prev, conta: e.target.value }))} placeholder="12345-6" />
+              </div>
+              <div>
+                <label style={label}>Empresa Vinculada</label>
+                <select style={input} value={form.empresa_id} onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}>
+                  <option value="">Compartilhado entre todas</option>
+                  {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
+                </select>
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={label}>Endereço Completo</label>
+                <input style={input} value={form.endereco} onChange={e => setForm(prev => ({ ...prev, endereco: e.target.value }))} placeholder="Rua, Número, Bairro, Cidade/UF - CEP" />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 6, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+              <button type="button" style={btnGhost} onClick={() => setShowForm(false)}>Cancelar</button>
+              <button type="submit" disabled={saving} style={{ ...btn(C.amber), fontWeight: 900 }}>
+                {saving ? 'Cadastrando...' : 'Salvar Fornecedor'}
+              </button>
+            </div>
+          </motion.form>
+        )}
+
+        {/* ─── 4 CARDS DE KPIS EXECUTIVOS ────────────────────────────── */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Users size={14} color={C.amber} />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>Total de Fornecedores</span>
+            </div>
+            <strong style={{ fontSize: 16, fontWeight: 900, color: C.ink, marginTop: 2 }}>{totalFornecedores}</strong>
+            <span style={{ fontSize: 9.5, color: C.inkSoft }}>Parceiros cadastrados</span>
+          </div>
+
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Building2 size={14} color="#3B82F6" />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>Entidades PJ / PF</span>
+            </div>
+            <strong style={{ fontSize: 16, fontWeight: 900, color: '#3B82F6', marginTop: 2 }}>{totalPJ} PJ · {totalPF} PF</strong>
+            <span style={{ fontSize: 9.5, color: C.inkSoft }}>Empresas vs Autônomos</span>
+          </div>
+
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <AlertCircle size={14} color="#EF4444" />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>Total em Aberto</span>
+            </div>
+            <strong style={{ fontSize: 16, fontWeight: 900, color: totalGeralEmAberto > 0 ? '#EF4444' : C.ink, marginTop: 2 }}>{fmt(totalGeralEmAberto)}</strong>
+            <span style={{ fontSize: 9.5, color: C.inkSoft }}>Contas pendentes de liquidação</span>
+          </div>
+
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <DollarSign size={14} color="#10B981" />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.6 }}>Total Liquidado</span>
+            </div>
+            <strong style={{ fontSize: 16, fontWeight: 900, color: '#10B981', marginTop: 2 }}>{fmt(totalGeralPago)}</strong>
+            <span style={{ fontSize: 9.5, color: C.inkSoft }}>Volume faturado e pago</span>
           </div>
         </div>
-      )}
 
-      {loading ? (
-        <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando fornecedores...</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {filtered.map(f => {
-            const resumo = contasResumoMap[f.id] || { totalEmAberto: 0, totalPago: 0, totalPagasCount: 0, temVencidas: false }
-            const { totalEmAberto, totalPago, totalPagasCount, temVencidas: temContasVencidas } = resumo
-            const docLabel = f.tipo === 'PF' ? 'CPF' : 'CNPJ'
+        {/* ─── BARRA DE PESQUISA & FILTROS INTELIGENTES ───────────────── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div style={{ position: 'relative', flex: 1, minWidth: 260 }}>
+              <Search size={14} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+              <input
+                style={{ ...input, paddingLeft: 32, fontSize: 11 }}
+                placeholder="Buscar fornecedor por Razão Social, Nome Fantasia, CNPJ/CPF, Categoria ou Responsável..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <span style={{ fontSize: 11, color: C.inkSoft, fontWeight: 600 }}>
+              {filtered.length} {filtered.length === 1 ? 'fornecedor listado' : 'fornecedores listados'}
+            </span>
+          </div>
 
-            return (
-              <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 14, borderLeft: temContasVencidas ? `3px solid #EF4444` : `1px solid ${C.border}`, borderColor: editingFornecedor?.id === f.id ? C.amber : undefined }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: 8, background: temContasVencidas ? '#EF444415' : C.amber + '15', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <Users size={16} color={temContasVencidas ? '#EF4444' : C.amber} />
+          {/* Filtros Chips */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setFiltroTipo('todos')}
+              style={{
+                padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                background: filtroTipo === 'todos' ? C.amber : C.bgCard,
+                color: filtroTipo === 'todos' ? '#0B0C0E' : C.inkSoft
+              }}
+            >
+              Todos ({totalFornecedores})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroTipo('PJ')}
+              style={{
+                padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                background: filtroTipo === 'PJ' ? 'rgba(59, 130, 246, 0.2)' : C.bgCard,
+                color: filtroTipo === 'PJ' ? '#60A5FA' : C.inkSoft,
+                borderColor: filtroTipo === 'PJ' ? '#3B82F655' : C.border
+              }}
+            >
+              Empresas (PJ) ({totalPJ})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroTipo('PF')}
+              style={{
+                padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                background: filtroTipo === 'PF' ? 'rgba(245, 158, 11, 0.2)' : C.bgCard,
+                color: filtroTipo === 'PF' ? C.amber : C.inkSoft,
+                borderColor: filtroTipo === 'PF' ? `${C.amber}55` : C.border
+              }}
+            >
+              Pessoa Física (PF) ({totalPF})
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroTipo('aberto')}
+              style={{
+                padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                background: filtroTipo === 'aberto' ? 'rgba(245, 158, 11, 0.2)' : C.bgCard,
+                color: filtroTipo === 'aberto' ? C.amber : C.inkSoft,
+                borderColor: filtroTipo === 'aberto' ? `${C.amber}55` : C.border
+              }}
+            >
+              Com Saldo em Aberto
+            </button>
+            <button
+              type="button"
+              onClick={() => setFiltroTipo('vencidas')}
+              style={{
+                padding: '5px 12px', borderRadius: 20, fontSize: 10, fontWeight: 800, cursor: 'pointer', border: `1px solid ${C.border}`,
+                background: filtroTipo === 'vencidas' ? 'rgba(239, 68, 68, 0.2)' : C.bgCard,
+                color: filtroTipo === 'vencidas' ? '#F87171' : C.inkSoft,
+                borderColor: filtroTipo === 'vencidas' ? '#EF444455' : C.border
+              }}
+            >
+              Com Contas Vencidas
+            </button>
+          </div>
+        </div>
+
+        {/* ─── LISTAGEM EXECUTIVA DE FORNECEDORES ────────────────────── */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft, fontSize: 12 }}>Carregando dados de fornecedores...</div>
+        ) : filtered.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft, fontSize: 12, border: `1px dashed ${C.border}`, borderRadius: 8 }}>
+            Nenhum fornecedor encontrado com os critérios pesquisados.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
+            {filtered.map(f => {
+              const resumo = contasResumoMap[f.id] || { totalEmAberto: 0, totalPago: 0, totalPagasCount: 0, temVencidas: false }
+              const { totalEmAberto, totalPago, totalPagasCount, temVencidas: temContasVencidas } = resumo
+              const docLabel = f.tipo === 'PF' ? 'CPF' : 'CNPJ'
+              const isPJ = f.tipo !== 'PF'
+
+              return (
+                <div
+                  key={f.id}
+                  style={{
+                    background: C.bgPanel,
+                    borderRadius: 8,
+                    border: `1px solid ${C.border}`,
+                    borderLeft: `4px solid ${temContasVencidas ? '#EF4444' : totalEmAberto > 0 ? C.amber : '#10B981'}`,
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    overflow: 'hidden',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  {/* Card Top */}
+                  <div style={{ padding: '16px 18px', borderBottom: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.015)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ width: 34, height: 34, borderRadius: 6, background: isPJ ? 'rgba(59, 130, 246, 0.1)' : 'rgba(245, 158, 11, 0.1)', border: `1px solid ${isPJ ? 'rgba(59, 130, 246, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                          {isPJ ? <Building2 size={17} color="#3B82F6" /> : <User size={17} color={C.amber} />}
+                        </div>
+                        <div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                              {f.razao_social || f.nome_fantasia}
+                            </h3>
+                          </div>
+                          {f.nome_fantasia && (
+                            <p style={{ margin: '2px 0 0', fontSize: 10.5, color: C.inkSoft }}>{f.nome_fantasia}</p>
+                          )}
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                            <span style={{ fontSize: 9, fontWeight: 900, padding: '2px 6px', borderRadius: 4, background: isPJ ? 'rgba(59, 130, 246, 0.12)' : 'rgba(245, 158, 11, 0.12)', color: isPJ ? '#60A5FA' : C.amber, border: `1px solid ${isPJ ? 'rgba(59, 130, 246, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`, textTransform: 'uppercase' }}>
+                              {isPJ ? 'Pessoa Jurídica' : 'Pessoa Física'}
+                            </span>
+                            {f.categoria && (
+                              <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: C.bgCard, color: C.inkSoft, border: `1px solid ${C.border}` }}>
+                                {f.categoria}
+                              </span>
+                            )}
+                            {temContasVencidas && (
+                              <span style={{ fontSize: 9, fontWeight: 900, background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.35)', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                <AlertTriangle size={10} /> Contas Vencidas
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      {podeCriar && (
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                          <button
+                            onClick={() => iniciarEdicaoFornecedor(f)}
+                            title="Editar Fornecedor"
+                            style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4 }}
+                            className="hover:text-amber-500"
+                          >
+                            <Edit3 size={13} />
+                          </button>
+                          <button
+                            onClick={() => remove(f.id, f.razao_social || f.nome_fantasia || 'Fornecedor')}
+                            title="Excluir Fornecedor"
+                            style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4 }}
+                            className="hover:text-red-500"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontWeight: 800, color: C.ink, fontSize: 14 }}>{f.razao_social || f.nome_fantasia}</span>
-                        <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: f.tipo === 'PF' ? '#3B82F620' : '#10B98120', color: f.tipo === 'PF' ? '#60A5FA' : '#34D399' }}>
-                          {f.tipo === 'PF' ? 'PESSOA FÍSICA' : 'PESSOA JURÍDICA'}
-                        </span>
-                        {temContasVencidas && (
-                          <span style={{ fontSize: 9, fontWeight: 900, background: '#EF444420', color: '#EF4444', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            <AlertTriangle size={8} /> CONTAS VENCIDAS
-                          </span>
+                  </div>
+
+                  {/* Card Financial Bar */}
+                  <div style={{ padding: '10px 18px', background: C.bgCard, borderBottom: `1px solid ${C.border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                    <div>
+                      <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Em Aberto</span>
+                      <strong style={{ fontSize: 13, color: temContasVencidas ? '#EF4444' : totalEmAberto > 0 ? C.amber : C.ink, fontWeight: 900 }}>
+                        {fmt(totalEmAberto)}
+                      </strong>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>Total Liquidado ({totalPagasCount})</span>
+                      <strong style={{ fontSize: 13, color: '#10B981', fontWeight: 900 }}>
+                        {fmt(totalPago)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  {/* Card Metadata Details */}
+                  <div style={{ padding: '14px 18px', flex: 1, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 11 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: C.inkSoft }}>
+                      <FileText size={12} color={C.amber} />
+                      <span>{docLabel}: <strong style={{ color: C.ink }}>{f.cnpj || 'Não informado'}</strong></span>
+                    </div>
+
+                    {(f.telefone || f.email || f.responsavel) && (
+                      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', color: C.inkSoft }}>
+                        {f.telefone && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Phone size={12} color={C.amber} /> {f.telefone}
+                          </div>
+                        )}
+                        {f.email && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <Mail size={12} color={C.amber} /> {f.email}
+                          </div>
+                        )}
+                        {f.responsavel && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <User size={12} color={C.amber} /> {f.responsavel}
+                          </div>
                         )}
                       </div>
-                      <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
-                        {f.cnpj ? `${docLabel}: ${f.cnpj}` : `Sem ${docLabel}`} · {f.categoria ?? 'Sem Categoria'} {f.responsavel ? `· Resp: ${f.responsavel}` : ''}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right', marginRight: 16 }}>
-                      <div style={{ fontSize: 11, color: C.inkSoft }}>Em Aberto: <strong style={{ color: temContasVencidas ? '#EF4444' : C.ink }}>{fmt(totalEmAberto)}</strong></div>
-                      <div style={{ fontSize: 10, color: '#34D399' }}>Pagas: {totalPagasCount} ({fmt(totalPago)})</div>
-                    </div>
-                    {podeCriar && (
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                        <button onClick={() => iniciarEdicaoFornecedor(f)} title="Editar Fornecedor" style={{ background: editingFornecedor?.id === f.id ? C.amber + '22' : 'none', border: `1px solid ${editingFornecedor?.id === f.id ? C.amber : 'transparent'}`, borderRadius: 4, color: editingFornecedor?.id === f.id ? C.amber : C.inkSoft, cursor: 'pointer', padding: 6 }}>
-                          <Edit3 size={14} />
-                        </button>
-                        <button onClick={() => remove(f.id)} title="Excluir Fornecedor" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                          <X size={14} />
-                        </button>
+                    )}
+
+                    {(f.banco || f.pix || f.endereco) && (
+                      <div style={{ background: C.bgCard, padding: '8px 12px', borderRadius: 6, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                        {f.endereco && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.inkSoft }}>
+                            <MapPin size={11} color={C.amber} /> <span>{f.endereco}</span>
+                          </div>
+                        )}
+                        {f.banco && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.inkSoft }}>
+                            <Landmark size={11} color={C.amber} />
+                            <span>{f.banco} {f.agencia ? `· Ag: ${f.agencia}` : ''} {f.conta ? `· Cc: ${f.conta}` : ''}</span>
+                          </div>
+                        )}
+                        {f.pix && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: C.inkSoft }}>
+                            <DollarSign size={11} color={C.amber} />
+                            <span>PIX: <strong style={{ color: C.amber }}>{f.pix}</strong></span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {(f.banco || f.pix || f.endereco) && (
-                    <div style={{ background: '#0B0C0E', padding: '10px 14px', borderRadius: 6, fontSize: 11, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, border: `1px solid ${C.border}` }}>
-                      {f.endereco && <div><span style={{ color: C.inkSoft, fontWeight: 700 }}>Endereço:</span> {f.endereco}</div>}
-                      <div style={{ display: 'flex', gap: 16 }}>
-                        {f.banco && (
-                          <div>
-                            <span style={{ color: C.inkSoft, fontWeight: 700 }}>Banco:</span> {f.banco} · Ag: {f.agencia} · Cc: {f.conta}
-                          </div>
-                        )}
-                        {f.pix && (
-                          <div>
-                            <span style={{ color: C.inkSoft, fontWeight: 700 }}>PIX:</span> <span style={{ color: C.amber, fontWeight: 700 }}>{f.pix}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                  {/* Card Action Footer */}
                   {goToHistoricoByFornecedor && (
-                    <div style={{ padding: '0 14px', marginBottom: 14 }}>
-                      <button 
-                        style={{ ...btnGhost, color: C.amber, border: `1px solid ${C.amber}40`, width: '100%', justifyContent: 'center' }}
+                    <div style={{ padding: '10px 18px', background: 'rgba(0,0,0,0.15)', borderTop: `1px solid ${C.border}`, display: 'flex', gap: 8 }}>
+                      <button
+                        style={{ ...btnGhost, flex: 1, fontSize: 10.5, fontWeight: 800, padding: '6px 12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, color: C.amber, borderColor: 'rgba(245, 158, 11, 0.35)' }}
                         onClick={() => goToHistoricoByFornecedor(f.id)}
                       >
-                        <ArrowUpRight size={14} /> Ver Contas & Negociar (Histórico)
+                        <ArrowUpRight size={13} /> Ver Contas & Histórico
                       </button>
                     </div>
                   )}
                 </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
-                {editingFornecedor?.id === f.id && podeCriar && (
-                  <div style={{ ...card, marginTop: 4, marginBottom: 10, borderColor: C.amber + '88', background: C.bgPanel }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-                      <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.ink }}>
-                        Editar Fornecedor: {editingFornecedor.razao_social}
-                      </h3>
-                      <span style={{ fontSize: 11, color: C.inkSoft }}>{form.tipo === 'PJ' ? 'Pessoa Jurídica (CNPJ)' : 'Pessoa Física (CPF)'}</span>
-                    </div>
-                    
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 14, marginBottom: 14 }}>
-                      <div>
-                        <label style={label}>Tipo de Pessoa</label>
-                        <select style={input} value={form.tipo} onChange={e => {
-                          const novoTipo = e.target.value as 'PJ'|'PF'
-                          setForm(f => ({ ...f, tipo: novoTipo, cnpj: formatCnpjCpf(f.cnpj, novoTipo) }))
-                        }}>
-                          <option value="PJ">Pessoa Jurídica (CNPJ)</option>
-                          <option value="PF">Pessoa Física (CPF)</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={label}>{form.tipo === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}</label>
-                        <input style={input} value={form.razao_social} onChange={e => setForm(prev => ({ ...prev, razao_social: e.target.value }))} placeholder={form.tipo === 'PJ' ? "Ex: Cimento & Cia Ltda" : "Ex: João da Silva"} />
-                      </div>
-                      {form.tipo === 'PJ' && (
-                        <div>
-                          <label style={label}>Nome Fantasia</label>
-                          <input style={input} value={form.nome_fantasia} onChange={e => setForm(prev => ({ ...prev, nome_fantasia: e.target.value }))} placeholder="Ex: Cimento Bela Vista" />
-                        </div>
-                      )}
-                      <div>
-                        <label style={label}>{form.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
-                        <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: formatCnpjCpf(e.target.value, prev.tipo) }))} placeholder={form.tipo === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"} />
-                      </div>
-                      <div>
-                        <label style={label}>Telefone / WhatsApp</label>
-                        <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))} placeholder="(11) 99999-9999" />
-                      </div>
-                      <div>
-                        <label style={label}>E-mail</label>
-                        <input style={input} type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="vendas@fornecedor.com" />
-                      </div>
-                      <div>
-                        <label style={label}>Contato Responsável</label>
-                        <input style={input} value={form.responsavel} onChange={e => setForm(prev => ({ ...prev, responsavel: e.target.value }))} placeholder="Ex: Ricardo Silva" />
-                      </div>
-                      <div>
-                        <label style={label}>Categoria</label>
-                        <input style={input} value={form.categoria} onChange={e => setForm(prev => ({ ...prev, categoria: e.target.value }))} placeholder="Ex: Material, Serviço, Equipamentos" />
-                      </div>
-                      <div>
-                        <label style={label}>Banco</label>
-                        <input style={input} value={form.banco} onChange={e => setForm(prev => ({ ...prev, banco: e.target.value }))} placeholder="Ex: Itaú (341)" />
-                      </div>
-                      <div>
-                        <label style={label}>Agência</label>
-                        <input style={input} value={form.agencia} onChange={e => setForm(prev => ({ ...prev, agencia: e.target.value }))} placeholder="Ex: 0001" />
-                      </div>
-                      <div>
-                        <label style={label}>Conta Corrente</label>
-                        <input style={input} value={form.conta} onChange={e => setForm(prev => ({ ...prev, conta: e.target.value }))} placeholder="Ex: 12345-6" />
-                      </div>
-                      <div>
-                        <label style={label}>Chave PIX</label>
-                        <input style={input} value={form.pix} onChange={e => setForm(prev => ({ ...prev, pix: e.target.value }))} placeholder="Chave PIX" />
-                      </div>
-                      <div>
-                        <label style={label}>Empresa preferencial</label>
-                        <select style={input} value={form.empresa_id} onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}>
-                          <option value="">Compartilhado entre todas</option>
-                          {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
-                        </select>
-                      </div>
-                      <div style={{ gridColumn: 'span 2' }}>
-                        <label style={label}>Endereço Completo</label>
-                        <input style={input} value={form.endereco} onChange={e => setForm(prev => ({ ...prev, endereco: e.target.value }))} placeholder="Av. Paulista, 1000 - São Paulo/SP" />
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button style={btn()} onClick={save} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Alterações'}</button>
-                      <button style={btnGhost} onClick={() => setEditingFornecedor(null)}>Cancelar</button>
-                    </div>
-                  </div>
-                )}
+      {/* ─── MODAL DE EDIÇÃO DE FORNECEDOR ───────────────────────────── */}
+      <AnimatePresence>
+        {editingFornecedor && podeCriar && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 24, maxWidth: 640, width: '100%', maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 12px 36px rgba(0,0,0,0.5)', display: 'flex', flexDirection: 'column', gap: 16 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Edit3 size={16} color={C.amber} />
+                  <h3 style={{ fontSize: 14, fontWeight: 900, color: C.ink, margin: 0, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    Editar Fornecedor: {editingFornecedor.razao_social}
+                  </h3>
+                </div>
+                <button onClick={() => setEditingFornecedor(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
               </div>
-            )
-          })}
-          {filtered.length === 0 && <p style={{ color: C.inkSoft, fontSize: 13 }}>Nenhum fornecedor cadastrado.</p>}
-        </div>
-      )}
+
+              <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+                  <div>
+                    <label style={label}>Tipo de Registro</label>
+                    <select style={input} value={form.tipo} onChange={e => {
+                      const novoTipo = e.target.value as 'PJ'|'PF'
+                      setForm(f => ({ ...f, tipo: novoTipo, cnpj: formatCnpjCpf(f.cnpj, novoTipo) }))
+                    }}>
+                      <option value="PJ">Pessoa Jurídica (CNPJ)</option>
+                      <option value="PF">Pessoa Física (CPF)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={label}>{form.tipo === 'PJ' ? 'Razão Social *' : 'Nome Completo *'}</label>
+                    <input style={input} value={form.razao_social} onChange={e => setForm(prev => ({ ...prev, razao_social: e.target.value }))} required />
+                  </div>
+                  {form.tipo === 'PJ' && (
+                    <div>
+                      <label style={label}>Nome Fantasia</label>
+                      <input style={input} value={form.nome_fantasia} onChange={e => setForm(prev => ({ ...prev, nome_fantasia: e.target.value }))} />
+                    </div>
+                  )}
+                  <div>
+                    <label style={label}>{form.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
+                    <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: formatCnpjCpf(e.target.value, prev.tipo) }))} />
+                  </div>
+                  <div>
+                    <label style={label}>Telefone / WhatsApp</label>
+                    <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))} />
+                  </div>
+                  <div>
+                    <label style={label}>E-mail Comercial</label>
+                    <input style={input} type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={label}>Contato Responsável</label>
+                    <input style={input} value={form.responsavel} onChange={e => setForm(prev => ({ ...prev, responsavel: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={label}>Categoria</label>
+                    <input style={input} value={form.categoria} onChange={e => setForm(prev => ({ ...prev, categoria: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={label}>Chave PIX</label>
+                    <input style={input} value={form.pix} onChange={e => setForm(prev => ({ ...prev, pix: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={label}>Banco</label>
+                    <input style={input} value={form.banco} onChange={e => setForm(prev => ({ ...prev, banco: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={label}>Agência</label>
+                    <input style={input} value={form.agencia} onChange={e => setForm(prev => ({ ...prev, agencia: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={label}>Conta Corrente</label>
+                    <input style={input} value={form.conta} onChange={e => setForm(prev => ({ ...prev, conta: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={label}>Empresa Vinculada</label>
+                    <select style={input} value={form.empresa_id} onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}>
+                      <option value="">Compartilhado entre todas</option>
+                      {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label style={label}>Endereço Completo</label>
+                    <input style={input} value={form.endereco} onChange={e => setForm(prev => ({ ...prev, endereco: e.target.value }))} />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                  <button type="button" style={btnGhost} onClick={() => setEditingFornecedor(null)} disabled={saving}>Cancelar</button>
+                  <button type="submit" style={{ ...btn(C.amber), fontWeight: 900 }} disabled={saving}>{saving ? 'Salvando...' : 'Salvar Alterações'}</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -2906,10 +3865,11 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
     }
   }, [colaboradorAtivo])
 
-  const save = async () => {
+  const save = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     const dataBase = form.tipo === 'pagar' ? form.data_vencimento : form.data_previsao
     if (!form.empresa_id || !form.descricao || !form.valor || !dataBase) {
-      toast('Preencha os campos obrigatórios (*)', 'error')
+      toast('Preencha todos os campos obrigatórios (*)', 'error')
       return
     }
     setSaving(true)
@@ -3036,245 +3996,429 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
   const podeRegistrar = permissaoAtiva?.pode_lancar
 
   return (
-    <div style={{ maxWidth: 640 }}>
-      <h2 style={{ margin: '0 0 24px', fontSize: 18, fontWeight: 900, color: C.ink }}>Lançar Conta</h2>
-
-      {!podeRegistrar ? (
-        <div style={{ ...card, color: C.inkSoft }}>
-          <Shield size={24} color={C.amber} style={{ marginBottom: 12 }} />
-          <div>Seu cargo atual não possui permissões para registrar novas contas ou despesas no financeiro.</div>
+    <div style={{ maxWidth: 840, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* ─── CABEÇALHO DO LANÇAMENTO ──────────────────────────────────── */}
+      <div style={{ ...card, padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, borderBottom: `1px solid ${C.border}`, paddingBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 6, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Receipt size={18} color={C.amber} />
+            </div>
+            <div>
+              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Novo Lançamento Financeiro
+              </h2>
+              <p style={{ margin: '3px 0 0', fontSize: 11, color: C.inkSoft }}>
+                Registro de títulos a pagar, contas a receber, notas fiscais e anexação de comprovantes.
+              </p>
+            </div>
+          </div>
         </div>
-      ) : (
-        <>
-          {ok && (
-            <div style={{ background: '#34D39920', border: '1px solid #34D39944', borderRadius: 8, padding: '12px 16px', marginBottom: 20, color: '#34D399', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <CheckCircle size={15} /> Lançamento financeiro registrado com sucesso!
-            </div>
-          )}
 
-          <div style={{ ...card, display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {(['pagar','receber'] as const).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => setForm(f => ({ ...f, tipo: t }))}
-                  style={{
-                    flex: 1, padding: '10px 0', borderRadius: 8, cursor: 'pointer', fontWeight: 800, fontSize: 12,
-                    border: `1px solid ${form.tipo === t ? (t === 'pagar' ? '#F87171' : '#34D399') : C.border}`,
-                    background: form.tipo === t ? (t === 'pagar' ? '#F8717118' : '#34D39918') : 'none',
-                    color: form.tipo === t ? (t === 'pagar' ? '#F87171' : '#34D399') : C.inkSoft,
-                    textTransform: 'uppercase', letterSpacing: .5,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  }}
-                >
-                  {t === 'pagar' ? <ArrowDownRight size={14} /> : <ArrowUpRight size={14} />}
-                  Conta a {t === 'pagar' ? 'Pagar' : 'Receber'}
-                </button>
-              ))}
+        {!podeRegistrar ? (
+          <div style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', borderRadius: 8, padding: 20, color: C.inkSoft, display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+            <Shield size={20} color="#EF4444" style={{ flexShrink: 0, marginTop: 2 }} />
+            <div>
+              <strong style={{ color: '#EF4444', display: 'block', fontSize: 13, marginBottom: 4 }}>Acesso Restrito</strong>
+              Seu perfil de acesso atual não possui permissões administrativas para registrar novos lançamentos financeiros ou despesas.
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+            {/* Mensagem de Sucesso */}
+            {ok && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                style={{ background: 'rgba(16, 185, 129, 0.12)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 8, padding: '14px 18px', color: '#10B981', fontWeight: 800, fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <CheckCircle2 size={16} /> Lançamento financeiro registrado e indexado com sucesso no sistema!
+              </motion.div>
+            )}
+
+            {/* ── SELETOR DUAL: A PAGAR vs A RECEBER ── */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, tipo: 'pagar' }))}
+                style={{
+                  padding: '14px 18px',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontWeight: 900,
+                  fontSize: 12,
+                  border: `1.5px solid ${form.tipo === 'pagar' ? '#EF4444' : C.border}`,
+                  background: form.tipo === 'pagar' ? 'rgba(239, 68, 68, 0.1)' : C.bgCard,
+                  color: form.tipo === 'pagar' ? '#F87171' : C.inkSoft,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <ArrowDownRight size={16} strokeWidth={2.5} />
+                Conta a Pagar (Despesa / Saída)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, tipo: 'receber' }))}
+                style={{
+                  padding: '14px 18px',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontWeight: 900,
+                  fontSize: 12,
+                  border: `1.5px solid ${form.tipo === 'receber' ? '#10B981' : C.border}`,
+                  background: form.tipo === 'receber' ? 'rgba(16, 185, 129, 0.1)' : C.bgCard,
+                  color: form.tipo === 'receber' ? '#34D399' : C.inkSoft,
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.6,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <ArrowUpRight size={16} strokeWidth={2.5} />
+                Conta a Receber (Receita / Entrada)
+              </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div>
-                <label style={label}>Empresa *</label>
-                <select
-                  style={input}
-                  disabled={(() => {
-                    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-                    return ids.length === 1
-                  })()}
-                  value={form.empresa_id}
-                  onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}
-                >
-                  <option value="">Selecione a empresa</option>
-                  {empresas.filter(e => {
-                    if (colaboradorAtivo.cargo === 'admin_geral') return true
-                    const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-                    return ids.length === 0 || ids.includes(e.id)
-                  }).map((e: any) => (
-                    <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
-                  ))}
-                </select>
+            {/* ── SEÇÃO 1: ENTIDADES & VÍNCULOS CORPORATIVOS ── */}
+            <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, color: C.amber, textTransform: 'uppercase', letterSpacing: 0.6, display: 'flex', alignItems: 'center', gap: 6, borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+                <Building2 size={13} color={C.amber} /> 1. Entidades & Vínculos Corporativos
               </div>
-              <div>
-                <label style={label}>Possui fornecedor?</label>
-                <select style={input} value={form.possui_fornecedor ? 'sim' : 'nao'} onChange={e => setForm(f => ({ ...f, possui_fornecedor: e.target.value === 'sim', fornecedor_id: e.target.value === 'sim' ? f.fornecedor_id : '' }))}>
-                  <option value="nao">Não possui</option><option value="sim">Possui</option>
-                </select>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                <div>
+                  <label style={label}>Empresa Pagadora / Receptora *</label>
+                  <select
+                    style={input}
+                    disabled={(() => {
+                      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                      return ids.length === 1
+                    })()}
+                    value={form.empresa_id}
+                    onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}
+                    required
+                  >
+                    <option value="">Selecione a empresa</option>
+                    {empresas.filter(e => {
+                      if (colaboradorAtivo.cargo === 'admin_geral') return true
+                      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                      return ids.length === 0 || ids.includes(e.id)
+                    }).map((e: any) => (
+                      <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={label}>Obra / Centro de Custo Vinculado</label>
+                  <select style={input} value={form.obra_id} onChange={e => setForm(f => ({ ...f, obra_id: e.target.value }))}>
+                    {(() => {
+                      const temGeral = colaboradorAtivo.cargo === 'admin_geral' || (colaboradorAtivo.obras_ids || []).includes('geral') || obras.some(o => o.id === 'geral')
+                      const dbObras = obras.filter(o => o.id !== 'geral')
+                      return (
+                        <>
+                          {temGeral ? (
+                            <option value="">Geral / Administrativo</option>
+                          ) : (
+                            <option value="">Selecione a Obra</option>
+                          )}
+                          {dbObras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                        </>
+                      )
+                    })()}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={label}>Categoria Financeira</label>
+                  <select style={input} value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
+                    <option value="">Selecione a categoria</option>
+                    {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
               </div>
-              {form.possui_fornecedor && <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <label style={{ ...label, marginBottom: 0 }}>Fornecedor</label>
-                  {permissaoAtiva?.pode_fornecedores && (
+
+              {/* Vínculo de Fornecedor / Favorecido */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4, background: C.bgPanel, padding: '12px 14px', borderRadius: 6, border: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={form.possui_fornecedor}
+                      onChange={e => setForm(f => ({ ...f, possui_fornecedor: e.target.checked, fornecedor_id: e.target.checked ? f.fornecedor_id : '' }))}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    <span style={{ fontSize: 11, fontWeight: 800, color: form.possui_fornecedor ? C.ink : C.inkSoft }}>
+                      Vincular Fornecedor / Prestador de Serviço
+                    </span>
+                  </label>
+
+                  {form.possui_fornecedor && permissaoAtiva?.pode_fornecedores && (
                     <button
                       type="button"
                       onClick={() => setShowNovoFornModal(true)}
-                      style={{ background: 'none', border: 'none', color: C.amber, fontSize: 10, fontWeight: 800, cursor: 'pointer', padding: 0 }}
-                      title="Cadastrar fornecedor rapidamente sem sair da tela"
+                      style={{ background: 'none', border: 'none', color: C.amber, fontSize: 10.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, padding: 0 }}
                     >
-                      + Novo Fornecedor
+                      <Plus size={12} /> Cadastrar Novo Fornecedor Rápido
                     </button>
                   )}
                 </div>
-                <select style={input} value={form.fornecedor_id} onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}>
-                  <option value="">Selecione o fornecedor</option>{fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social ?? f.nome_fantasia}</option>)}
-                </select>
-              </div>}
-              <div>
-                <label style={label}>Obra Vinculada</label>
-                <select style={input} value={form.obra_id} onChange={e => setForm(f => ({ ...f, obra_id: e.target.value }))}>
-                  {(() => {
-                    const temGeral = colaboradorAtivo.cargo === 'admin_geral' || (colaboradorAtivo.obras_ids || []).includes('geral') || obras.some(o => o.id === 'geral')
-                    const dbObras = obras.filter(o => o.id !== 'geral')
-                    return (
-                      <>
-                        {temGeral ? (
-                          <option value="">Geral / Administrativo</option>
-                        ) : (
-                          <option value="">Selecione a Obra</option>
-                        )}
-                        {dbObras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
-                      </>
-                    )
-                  })()}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Categoria</label>
-                <select style={input} value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
-                  <option value="">Selecione a categoria</option>
-                  {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
+
+                {form.possui_fornecedor && (
+                  <select
+                    style={{ ...input, background: C.bgCard }}
+                    value={form.fornecedor_id}
+                    onChange={e => setForm(f => ({ ...f, fornecedor_id: e.target.value }))}
+                  >
+                    <option value="">Selecione o fornecedor / prestador</option>
+                    {fornecedores.map(f => (
+                      <option key={f.id} value={f.id}>{f.razao_social || f.nome_fantasia} {f.cnpj ? `(${f.cnpj})` : ''}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 14 }}>
-              <div>
-                <label style={label}>Descrição do Lançamento *</label>
-                <input style={input} value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Ex: NF Cimento CP-II" />
+            {/* ── SEÇÃO 2: DADOS DO TÍTULO & CONDIÇÕES FINANCEIRAS ── */}
+            <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, color: C.amber, textTransform: 'uppercase', letterSpacing: 0.6, display: 'flex', alignItems: 'center', gap: 6, borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+                <DollarSign size={13} color={C.amber} /> 2. Dados do Título & Valores
               </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={label}>Descrição do Lançamento ou Referência NF *</label>
+                  <input
+                    style={input}
+                    value={form.descricao}
+                    onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                    placeholder="Ex: Fornecimento de Aço CA-50 10mm - NF 004829"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={label}>Valor do Título (R$) *</label>
+                  <input
+                    style={{ ...input, fontWeight: 800, fontSize: 13, color: form.tipo === 'pagar' ? '#F87171' : '#34D399' }}
+                    type="text"
+                    inputMode="decimal"
+                    value={form.valor}
+                    onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
+                    placeholder="0,00"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={label}>{form.tipo === 'pagar' ? 'Data de Vencimento *' : 'Data de Previsão *'}</label>
+                  <input
+                    style={input}
+                    type="date"
+                    value={form.tipo === 'pagar' ? form.data_vencimento : form.data_previsao}
+                    onChange={e => form.tipo === 'pagar' ? setForm(f => ({ ...f, data_vencimento: e.target.value })) : setForm(f => ({ ...f, data_previsao: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label style={label}>Recorrência / Parcelamento</label>
+                  <select style={input} value={form.recorrencia} onChange={e => setForm(f => ({ ...f, recorrencia: e.target.value as any }))}>
+                    <option value="unico">Parcela Única</option>
+                    <option value="mensal">Mensal Recorrente (12 parcelas)</option>
+                    <option value="semanal">Semanal Recorrente (4 parcelas)</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
-                <label style={label}>Recorrência automática</label>
-                <select style={input} value={form.recorrencia} onChange={e => setForm(f => ({ ...f, recorrencia: e.target.value as any }))}>
-                  <option value="unico">Parcela Única</option>
-                  <option value="mensal">Mensal (12 meses)</option>
-                  <option value="semanal">Semanal (4 semanas)</option>
-                </select>
+                <label style={label}>Observações Internas / Justificativa</label>
+                <textarea
+                  style={{ ...input, resize: 'vertical' }}
+                  rows={2}
+                  value={form.observacoes}
+                  onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))}
+                  placeholder="Informações adicionais para conferência, dados de medição ou instruções bancárias..."
+                />
               </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-              <div>
-                <label style={label}>Valor do Título *</label>
-                <input style={input} type="text" inputMode="decimal" value={form.valor} onChange={e => setForm(f => ({ ...f, valor: e.target.value }))} placeholder="0,00" />
+            {/* ── SEÇÃO 3: DOCUMENTAÇÃO & CONFIDENCIALIDADE ── */}
+            <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 900, color: C.amber, textTransform: 'uppercase', letterSpacing: 0.6, display: 'flex', alignItems: 'center', gap: 6, borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+                <Paperclip size={13} color={C.amber} /> 3. Documentação, Anexos & Segurança
               </div>
-              <div>
-                <label style={label}>{form.tipo === 'pagar' ? 'Data de vencimento *' : 'Data de previsão *'}</label>
-                <input style={input} type="date" value={form.tipo === 'pagar' ? form.data_vencimento : form.data_previsao} onChange={e => form.tipo === 'pagar' ? setForm(f => ({ ...f, data_vencimento: e.target.value })) : setForm(f => ({ ...f, data_previsao: e.target.value }))} />
-              </div>
-            </div>
 
-            <div>
-              <label style={label}>Observações do lançamento</label>
-              <textarea style={input} rows={3} value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="Informações para aprovação, pagamento ou conferência" />
-            </div>
+              {/* Upload Dropzone */}
+              <div style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: 16, background: C.bgPanel, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: C.ink, display: 'block' }}>Anexar Boletos, Notas Fiscais e Comprovantes</span>
+                    <span style={{ fontSize: 10, color: C.inkSoft }}>Formatos aceitos: PDF, Imagens (PNG/JPG), XML, Excel e Documentos.</span>
+                  </div>
 
-            <div style={{ border: `1px dashed ${C.border}`, borderRadius: 8, padding: '14px 18px', background: '#0B0C0E33' }}>
-              <label style={{ ...label, marginBottom: 4 }}>Anexar Boletos / Notas Fiscais / Documentos</label>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <label style={{ ...btnGhost, cursor: 'pointer', background: '#111', alignSelf: 'flex-start' }}>
-                  <Paperclip size={13} />
-                  Selecionar arquivo(s)
-                  <input type="file" multiple onChange={handleFileChange} style={{ display: 'none' }} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" />
-                </label>
+                  <label style={{ ...btn(C.amber), cursor: 'pointer', padding: '6px 14px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Upload size={13} />
+                    Selecionar Arquivos
+                    <input type="file" multiple onChange={handleFileChange} style={{ display: 'none' }} accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" />
+                  </label>
+                </div>
+
                 {anexoFiles.length > 0 && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 }}>
                     {anexoFiles.map((file, idx) => (
-                      <div key={idx} style={{ fontSize: 11, color: '#34D399', fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#0F1115', border: `1px solid ${C.border}`, padding: '4px 10px', borderRadius: 4 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                          <Check size={12} /> {file.name}
+                      <div
+                        key={idx}
+                        style={{
+                          fontSize: 11,
+                          color: '#34D399',
+                          fontWeight: 700,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: 'rgba(16, 185, 129, 0.08)',
+                          border: '1px solid rgba(16, 185, 129, 0.25)',
+                          padding: '6px 12px',
+                          borderRadius: 6
+                        }}
+                      >
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <CheckCircle2 size={13} color="#10B981" /> {file.name} ({(file.size / 1024).toFixed(1)} KB)
                         </span>
                         <button
                           type="button"
                           onClick={() => removeAnexoFile(idx)}
-                          style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '2px 4px' }}
+                          style={{ all: 'unset', color: '#EF4444', cursor: 'pointer', padding: 2 }}
                           title="Remover este arquivo"
                         >
-                          <X size={12} />
+                          <X size={14} />
                         </button>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
+
+              {/* Lançamento Confidencial */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '12px 16px',
+                  background: form.is_privada ? 'rgba(245, 158, 11, 0.08)' : C.bgPanel,
+                  border: `1px solid ${form.is_privada ? 'rgba(245, 158, 11, 0.35)' : C.border}`,
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+                onClick={() => setForm(f => ({ ...f, is_privada: !f.is_privada }))}
+              >
+                <div style={{ width: 18, height: 18, border: `1.5px solid ${form.is_privada ? C.amber : C.border}`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: form.is_privada ? C.amber : 'transparent', flexShrink: 0 }}>
+                  {form.is_privada && <Check size={13} color="#0B0C0E" strokeWidth={3} />}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 11.5, fontWeight: 900, color: form.is_privada ? C.amber : C.ink, display: 'flex', alignItems: 'center', gap: 6, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+                    <Shield size={14} /> Lançamento Confidencial / Sigiloso
+                  </span>
+                  <span style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginTop: 2 }}>
+                    Apenas o Administrador Geral e os colaboradores selecionados terão visibilidade deste lançamento.
+                  </span>
+                </div>
+              </div>
+
+              {form.is_privada && (
+                <div style={{ background: C.bgPanel, padding: 14, borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 220, overflowY: 'auto' }}>
+                  <span style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase' }}>Colaboradores com acesso autorizado:</span>
+                  {colaboradores.map(colab => {
+                    const isPermitido = (form.usuarios_permitidos || []).includes(colab.id);
+                    const isAdmin = colab.cargo === 'admin_geral';
+                    return (
+                      <label key={colab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 6, background: isPermitido || isAdmin ? 'rgba(52, 211, 153, 0.08)' : 'transparent', border: `1px solid ${isPermitido || isAdmin ? 'rgba(52, 211, 153, 0.25)' : 'transparent'}`, cursor: isAdmin ? 'not-allowed' : 'pointer' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={isPermitido || isAdmin} 
+                          disabled={isAdmin}
+                          onChange={() => {
+                            if (isAdmin) return
+                            setForm(f => {
+                              const atuais = f.usuarios_permitidos || []
+                              return { ...f, usuarios_permitidos: atuais.includes(colab.id) ? atuais.filter(x => x !== colab.id) : [...atuais, colab.id] }
+                            })
+                          }} 
+                        />
+                        <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: isPermitido || isAdmin ? '#34D399' : C.ink }}>{colab.nome}</span>
+                          <span style={{ fontSize: 10, color: C.inkSoft }}>({colab.cargo.replace('_', ' ')})</span>
+                          {isAdmin && <span style={{ fontSize: 9.5, fontWeight: 800, color: C.amber }}>(Acesso permanente)</span>}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Aviso de Alçada de Aprovação */}
+              {form.tipo === 'pagar' && form.valor && parseCurrency(form.valor) > 30000 && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', color: C.amber, borderRadius: 6, padding: '10px 14px', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ShieldCheck size={16} /> Lançamento com valor superior a R$ 30.000,00 será registrado com status inicial "Bloqueado", exigindo liberação de Diretoria.
+                </div>
+              )}
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: form.is_privada ? '#F59E0B11' : '#111', border: `1px solid ${form.is_privada ? '#F59E0B44' : C.border}`, borderRadius: 8, cursor: 'pointer' }} onClick={() => setForm(f => ({ ...f, is_privada: !f.is_privada }))}>
-              <div style={{ width: 16, height: 16, border: `1px solid ${form.is_privada ? C.amber : C.border}`, borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', background: form.is_privada ? C.amber : 'transparent' }}>
-                {form.is_privada && <Check size={12} color="#000" />}
-              </div>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: form.is_privada ? C.amber : C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Shield size={14} /> Lançamento Confidencial / Privado
-                </span>
-                <span style={{ fontSize: 10, color: C.inkSoft, display: 'block', marginTop: 2 }}>Apenas o Admin Geral e as pessoas que você marcar poderão ver este lançamento.</span>
-              </div>
+            {/* ── BOTÃO DE SUBMISSÃO ── */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                type="submit"
+                disabled={saving}
+                style={{
+                  ...btn(C.amber),
+                  padding: '10px 24px',
+                  fontSize: 12,
+                  fontWeight: 900,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                {saving ? (
+                  <>Registrando Lançamento...</>
+                ) : (
+                  <>
+                    <Plus size={15} strokeWidth={2.5} />
+                    Confirmar Lançamento Financeiro
+                  </>
+                )}
+              </motion.button>
             </div>
+          </form>
+        )}
+      </div>
 
-            {form.is_privada && (
-              <div style={{ background: '#12141C', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 250, overflowY: 'auto', marginTop: -6, marginBottom: 14 }}>
-                <div style={{ fontSize: 11, color: C.inkSoft, marginBottom: 4 }}>Marque quem poderá visualizar este lançamento:</div>
-                {colaboradores.map(colab => {
-                  const isPermitido = (form.usuarios_permitidos || []).includes(colab.id);
-                  const isAdmin = colab.cargo === 'admin_geral';
-                  return (
-                    <label key={colab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 6, background: isPermitido ? '#34D39910' : 'transparent', border: `1px solid ${isPermitido ? '#34D39930' : 'transparent'}`, cursor: isAdmin ? 'not-allowed' : 'pointer' }}>
-                      <input 
-                        type="checkbox" 
-                        checked={isPermitido || isAdmin} 
-                        disabled={isAdmin}
-                        onChange={() => {
-                          if (isAdmin) return
-                          setForm(f => {
-                            const atuais = f.usuarios_permitidos || []
-                            return { ...f, usuarios_permitidos: atuais.includes(colab.id) ? atuais.filter(x => x !== colab.id) : [...atuais, colab.id] }
-                          })
-                        }} 
-                      />
-                      <div style={{ flex: 1 }}>
-                        <span style={{ fontSize: 13, color: isPermitido || isAdmin ? '#34D399' : C.ink }}>{colab.nome}</span>
-                        <span style={{ fontSize: 11, color: C.inkSoft, marginLeft: 8 }}>({colab.cargo.replace('_', ' ')})</span>
-                        {isAdmin && <span style={{ fontSize: 10, marginLeft: 8, color: C.amber }}>(Acesso obrigatório)</span>}
-                      </div>
-                    </label>
-                  )
-                })}
-              </div>
-            )}
-
-            {/* Exibe aviso de aprovação necessário caso ultrapasse limite */}
-            {form.tipo === 'pagar' && form.valor && (permissaoAtiva?.limite_valor ?? 5000) !== 0 && parseFloat(form.valor) > (permissaoAtiva?.limite_valor ?? 5000) && !permissaoAtiva?.pode_aprovar && (
-              <div style={{ background: '#3B82F618', border: '1px solid #3B82F633', color: '#3B82F6', borderRadius: 6, padding: '10px 14px', fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Shield size={14} /> Lançamento de valor elevado exigirá aprovação de um Administrador para ser compensado.
-              </div>
-            )}
-
-            <button style={{ ...btn(), alignSelf: 'flex-start' }} onClick={save} disabled={saving}>
-              {saving ? 'Registrando...' : <><Plus size={14} /> Lançar Conta</>}
-            </button>
-          </div>
-        </>
-      )}
-
-      {/* MODAL CADASTRAR NOVO FORNECEDOR RÁPIDO */}
+      {/* ── MODAL CADASTRAR NOVO FORNECEDOR RÁPIDO ───────────────────── */}
       <AnimatePresence>
         {showNovoFornModal && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, width: '100%', maxWidth: 460, padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}
+              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, width: '100%', maxWidth: 480, padding: 24, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 12px 36px rgba(0,0,0,0.5)' }}
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-                <h3 style={{ fontSize: 16, fontWeight: 900, color: C.ink, margin: 0 }}>👥 Cadastrar Novo Fornecedor</h3>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Users size={16} color={C.amber} />
+                  <h3 style={{ fontSize: 14, fontWeight: 900, color: C.ink, margin: 0, textTransform: 'uppercase', letterSpacing: 0.4 }}>Cadastrar Novo Fornecedor</h3>
+                </div>
                 <button onClick={() => setShowNovoFornModal(false)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
               </div>
 
@@ -3283,12 +4427,12 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
                   <button
                     type="button"
                     onClick={() => setFornForm(f => ({ ...f, tipo: 'PJ' }))}
-                    style={{ flex: 1, padding: '6px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11, border: `1px solid ${fornForm.tipo === 'PJ' ? C.amber : C.border}`, background: fornForm.tipo === 'PJ' ? C.amber + '18' : 'none', color: fornForm.tipo === 'PJ' ? C.amber : C.inkSoft }}
+                    style={{ flex: 1, padding: '7px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11, border: `1px solid ${fornForm.tipo === 'PJ' ? C.amber : C.border}`, background: fornForm.tipo === 'PJ' ? 'rgba(245, 158, 11, 0.12)' : 'none', color: fornForm.tipo === 'PJ' ? C.amber : C.inkSoft }}
                   >Pessoa Jurídica (PJ)</button>
                   <button
                     type="button"
                     onClick={() => setFornForm(f => ({ ...f, tipo: 'PF' }))}
-                    style={{ flex: 1, padding: '6px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11, border: `1px solid ${fornForm.tipo === 'PF' ? '#3B82F6' : C.border}`, background: fornForm.tipo === 'PF' ? '#3B82F618' : 'none', color: fornForm.tipo === 'PF' ? '#60A5FA' : C.inkSoft }}
+                    style={{ flex: 1, padding: '7px 0', borderRadius: 6, cursor: 'pointer', fontWeight: 800, fontSize: 11, border: `1px solid ${fornForm.tipo === 'PF' ? C.amber : C.border}`, background: fornForm.tipo === 'PF' ? 'rgba(245, 158, 11, 0.12)' : 'none', color: fornForm.tipo === 'PF' ? C.amber : C.inkSoft }}
                   >Pessoa Física (PF)</button>
                 </div>
 
@@ -3306,13 +4450,13 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
 
                 <div>
                   <label style={label}>{fornForm.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
-                  <input style={input} value={fornForm.cnpj} onChange={e => setFornForm({ ...fornForm, cnpj: e.target.value })} placeholder={fornForm.tipo === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00'} />
+                  <input style={input} value={fornForm.cnpj} onChange={e => setFornForm({ ...fornForm, cnpj: formatCnpjCpf(e.target.value, fornForm.tipo) })} placeholder={fornForm.tipo === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00'} />
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
                     <label style={label}>Chave PIX</label>
-                    <input style={input} value={fornForm.pix} onChange={e => setFornForm({ ...fornForm, pix: e.target.value })} placeholder="CNPJ, E-mail ou Celular" />
+                    <input style={input} value={fornForm.pix} onChange={e => setFornForm({ ...fornForm, pix: e.target.value })} placeholder="Chave PIX" />
                   </div>
                   <div>
                     <label style={label}>Categoria</label>
@@ -3320,9 +4464,9 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 10 }}>
-                  <button type="button" onClick={() => setShowNovoFornModal(false)} style={{ ...btnGhost, padding: '8px 16px' }}>Cancelar</button>
-                  <button type="submit" disabled={salvandoForn} style={{ ...btn(C.amber), padding: '8px 20px' }}>{salvandoForn ? 'Salvando...' : 'Cadastrar Fornecedor'}</button>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                  <button type="button" onClick={() => setShowNovoFornModal(false)} style={btnGhost}>Cancelar</button>
+                  <button type="submit" disabled={salvandoForn} style={{ ...btn(C.amber), fontWeight: 900 }}>{salvandoForn ? 'Cadastrando...' : 'Cadastrar Fornecedor'}</button>
                 </div>
               </form>
             </motion.div>
@@ -4054,103 +5198,142 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     return ids.length > 0 ? contas.filter(c => ids.includes(c.empresa_id)) : contas
   }, [contas, colaboradorAtivo])
 
-  const filtered = contasDaEmpresa.filter(c => {
-    const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
-    const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
-    const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
-    const matchStatus  = filtStatus === 'todos' || c.status === filtStatus
-    let data = c.data_previsao || c.data_vencimento || ''
-    if (filtTipoData === 'vencimento') data = c.data_vencimento || ''
-    else if (filtTipoData === 'previsao') data = c.data_previsao || ''
-    else if (filtTipoData === 'pago_em') data = c.pago_em ? c.pago_em.slice(0, 10) : ''
-    else if (filtTipoData === 'created_at') data = c.created_at ? c.created_at.slice(0, 10) : ''
+  const deferredSearch = useDeferredValue(search)
 
-    const matchInicio = !filtDataInicio || (data !== '' && data >= filtDataInicio)
-    const matchFim = !filtDataFim || (data !== '' && data <= filtDataFim)
-    const codFormatted = fmtCodigo(c)
-    const rawSearch = search.trim().toLowerCase()
+  const filtered = useMemo(() => {
+    return contasDaEmpresa.filter(c => {
+      const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
+      const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
+      const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
+      const matchStatus  = filtStatus === 'todos' || c.status === filtStatus
+      let data = c.data_previsao || c.data_vencimento || ''
+      if (filtTipoData === 'vencimento') data = c.data_vencimento || ''
+      else if (filtTipoData === 'previsao') data = c.data_previsao || ''
+      else if (filtTipoData === 'pago_em') data = c.pago_em ? c.pago_em.slice(0, 10) : ''
+      else if (filtTipoData === 'created_at') data = c.created_at ? c.created_at.slice(0, 10) : ''
 
-    // Se o usuário digitou exatamente um código de conta (ex: PAG-01770 ou 1770)
-    const isExactCodeSearch = rawSearch && (
-      codFormatted.toLowerCase() === rawSearch ||
-      String(c.codigo_sequencial || '') === rawSearch ||
-      (rawSearch.startsWith('pag-') && codFormatted.toLowerCase().includes(rawSearch)) ||
-      (rawSearch.startsWith('rec-') && codFormatted.toLowerCase().includes(rawSearch))
-    )
+      const matchInicio = !filtDataInicio || (data !== '' && data >= filtDataInicio)
+      const matchFim = !filtDataFim || (data !== '' && data <= filtDataFim)
+      const codFormatted = fmtCodigo(c)
+      const rawSearch = deferredSearch.trim().toLowerCase()
 
-    if (isExactCodeSearch) {
-      return matchEmpresa
+      const isExactCodeSearch = rawSearch && (
+        codFormatted.toLowerCase() === rawSearch ||
+        String(c.codigo_sequencial || '') === rawSearch ||
+        (rawSearch.startsWith('pag-') && codFormatted.toLowerCase().includes(rawSearch)) ||
+        (rawSearch.startsWith('rec-') && codFormatted.toLowerCase().includes(rawSearch))
+      )
+
+      if (isExactCodeSearch) {
+        return matchEmpresa
+      }
+
+      const numValorMin = filtValorMin !== '' ? parseFloat(filtValorMin) : null
+      const numValorMax = filtValorMax !== '' ? parseFloat(filtValorMax) : null
+      const matchValorMin = numValorMin === null || isNaN(numValorMin) || Number(c.valor || 0) >= numValorMin
+      const matchValorMax = numValorMax === null || isNaN(numValorMax) || Number(c.valor || 0) <= numValorMax
+
+      const matchSearch  = !deferredSearch ||
+        c.descricao.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.obra?.nome ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.fornecedor?.razao_social ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        codFormatted.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        String(c.codigo_sequencial || '').includes(deferredSearch.trim())
+      return matchEmpresa && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim && matchValorMin && matchValorMax
+    }).sort((a, b) => {
+      const da = new Date(a.created_at || a.data_previsao || '').getTime()
+      const db = new Date(b.created_at || b.data_previsao || '').getTime()
+      if (filtOrdem === 'maior_valor') return b.valor - a.valor
+      if (filtOrdem === 'menor_valor') return a.valor - b.valor
+      if (filtOrdem === 'az') return a.descricao.localeCompare(b.descricao, 'pt-BR')
+      if (filtOrdem === 'za') return b.descricao.localeCompare(a.descricao, 'pt-BR')
+      if (filtOrdem === 'venc_prox' || filtOrdem === 'venc_dist') {
+        const vA = new Date(a.data_vencimento || a.data_previsao || a.created_at || '').getTime()
+        const vB = new Date(b.data_vencimento || b.data_previsao || b.created_at || '').getTime()
+        return filtOrdem === 'venc_prox' ? vA - vB : vB - vA
+      }
+      return filtOrdem === 'novo' ? db - da : da - db
+    })
+  }, [contasDaEmpresa, filtEmpresa, filtFornecedor, filtTipo, filtStatus, filtTipoData, filtDataInicio, filtDataFim, filtValorMin, filtValorMax, deferredSearch, filtOrdem])
+
+  // Controles de Paginação de Alta Performance
+  const [paginaAtual, setPaginaAtual] = useState(1)
+  const [itensPorPagina, setItensPorPagina] = useState<number | 'todos'>(50)
+
+  useEffect(() => {
+    setPaginaAtual(1)
+  }, [search, filtStatus, filtTipo, filtEmpresa, filtFornecedor, filtDataInicio, filtDataFim, filtValorMin, filtValorMax, filtOrdem])
+
+  const totalPaginas = itensPorPagina === 'todos' ? 1 : Math.max(1, Math.ceil(filtered.length / Number(itensPorPagina)))
+
+  const contasExibidas = useMemo(() => {
+    if (itensPorPagina === 'todos') return filtered
+    const perPage = Number(itensPorPagina)
+    const inicio = (paginaAtual - 1) * perPage
+    return filtered.slice(inicio, inicio + perPage)
+  }, [filtered, paginaAtual, itensPorPagina])
+
+  const [viewMode, setViewMode] = useState<'tabela' | 'projecao'>('tabela')
+
+  // Filtro base com useMemo para contagem de status ultra rápida O(N)
+  const contasBaseFiltro = useMemo(() => {
+    return contas.filter(c => {
+      const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
+      const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
+      const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
+      let data = c.data_previsao || c.data_vencimento || ''
+      if (filtTipoData === 'vencimento') data = c.data_vencimento || ''
+      else if (filtTipoData === 'previsao') data = c.data_previsao || ''
+      else if (filtTipoData === 'pago_em') data = c.pago_em ? c.pago_em.slice(0, 10) : ''
+      else if (filtTipoData === 'created_at') data = c.created_at ? c.created_at.slice(0, 10) : ''
+
+      const matchInicio = !filtDataInicio || (data !== '' && data >= filtDataInicio)
+      const matchFim = !filtDataFim || (data !== '' && data <= filtDataFim)
+      const numValorMin = filtValorMin !== '' ? parseFloat(filtValorMin) : null
+      const numValorMax = filtValorMax !== '' ? parseFloat(filtValorMax) : null
+      const matchValorMin = numValorMin === null || isNaN(numValorMin) || Number(c.valor || 0) >= numValorMin
+      const matchValorMax = numValorMax === null || isNaN(numValorMax) || Number(c.valor || 0) <= numValorMax
+      const codFormatted = fmtCodigo(c)
+      const matchSearch  = !deferredSearch ||
+        c.descricao.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.obra?.nome ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.fornecedor?.razao_social ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        codFormatted.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        String(c.codigo_sequencial || '').includes(deferredSearch.trim())
+      return matchEmpresa && matchFornecedor && matchTipo && matchSearch && matchInicio && matchFim && matchValorMin && matchValorMax
+    })
+  }, [contas, filtEmpresa, filtFornecedor, filtTipo, filtTipoData, filtDataInicio, filtDataFim, filtValorMin, filtValorMax, deferredSearch])
+
+  // Dicionário de estatísticas pré-computado em 1 único loop O(N)
+  const statusStatsMap = useMemo(() => {
+    const map: Record<string, { count: number; total: number }> = {}
+    let countGeral = 0
+    let totalGeral = 0
+    for (const c of contasBaseFiltro) {
+      if (!map[c.status]) {
+        map[c.status] = { count: 0, total: 0 }
+      }
+      map[c.status].count++
+      map[c.status].total += (c.valor || 0)
+      countGeral++
+      totalGeral += (c.valor || 0)
     }
-
-    const numValorMin = filtValorMin !== '' ? parseFloat(filtValorMin) : null
-    const numValorMax = filtValorMax !== '' ? parseFloat(filtValorMax) : null
-    const matchValorMin = numValorMin === null || isNaN(numValorMin) || Number(c.valor || 0) >= numValorMin
-    const matchValorMax = numValorMax === null || isNaN(numValorMax) || Number(c.valor || 0) <= numValorMax
-
-    const matchSearch  = !search ||
-      c.descricao.toLowerCase().includes(search.toLowerCase()) ||
-      (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.fornecedor?.razao_social ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      codFormatted.toLowerCase().includes(search.toLowerCase()) ||
-      String(c.codigo_sequencial || '').includes(search.trim())
-    return matchEmpresa && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim && matchValorMin && matchValorMax
-  }).sort((a, b) => {
-    const da = new Date(a.created_at || a.data_previsao || '').getTime()
-    const db = new Date(b.created_at || b.data_previsao || '').getTime()
-    if (filtOrdem === 'maior_valor') return b.valor - a.valor
-    if (filtOrdem === 'menor_valor') return a.valor - b.valor
-    if (filtOrdem === 'az') return a.descricao.localeCompare(b.descricao, 'pt-BR')
-    if (filtOrdem === 'za') return b.descricao.localeCompare(a.descricao, 'pt-BR')
-    if (filtOrdem === 'venc_prox' || filtOrdem === 'venc_dist') {
-      const vA = new Date(a.data_vencimento || a.data_previsao || a.created_at || '').getTime()
-      const vB = new Date(b.data_vencimento || b.data_previsao || b.created_at || '').getTime()
-      return filtOrdem === 'venc_prox' ? vA - vB : vB - vA
-    }
-    return filtOrdem === 'novo' ? db - da : da - db
-  })
-
-  const totalPago     = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'pagar').reduce((s, c) => s + c.valor, 0)
-  const totalRecebido = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'receber').reduce((s, c) => s + c.valor, 0)
-
-  // Filtro base para cálculo dinâmico de estatísticas dos botões/select de status
-  const contasBaseFiltro = contas.filter(c => {
-    const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
-    const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
-    const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
-    let data = c.data_previsao || c.data_vencimento || ''
-    if (filtTipoData === 'vencimento') data = c.data_vencimento || ''
-    else if (filtTipoData === 'previsao') data = c.data_previsao || ''
-    else if (filtTipoData === 'pago_em') data = c.pago_em ? c.pago_em.slice(0, 10) : ''
-    else if (filtTipoData === 'created_at') data = c.created_at ? c.created_at.slice(0, 10) : ''
-
-    const matchInicio = !filtDataInicio || (data !== '' && data >= filtDataInicio)
-    const matchFim = !filtDataFim || (data !== '' && data <= filtDataFim)
-    const numValorMin = filtValorMin !== '' ? parseFloat(filtValorMin) : null
-    const numValorMax = filtValorMax !== '' ? parseFloat(filtValorMax) : null
-    const matchValorMin = numValorMin === null || isNaN(numValorMin) || Number(c.valor || 0) >= numValorMin
-    const matchValorMax = numValorMax === null || isNaN(numValorMax) || Number(c.valor || 0) <= numValorMax
-    const codFormatted = fmtCodigo(c)
-    const matchSearch  = !search ||
-      c.descricao.toLowerCase().includes(search.toLowerCase()) ||
-      (c.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.fornecedor?.razao_social ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      codFormatted.toLowerCase().includes(search.toLowerCase()) ||
-      String(c.codigo_sequencial || '').includes(search.trim())
-    return matchEmpresa && matchFornecedor && matchTipo && matchSearch && matchInicio && matchFim && matchValorMin && matchValorMax
-  })
+    map['todos'] = { count: countGeral, total: totalGeral }
+    return map
+  }, [contasBaseFiltro])
 
   const getStatsByStatus = (st: string) => {
-    const list = st === 'todos' ? contasBaseFiltro : contasBaseFiltro.filter(c => c.status === st)
-    const count = list.length
-    const total = list.reduce((s, c) => s + (c.valor || 0), 0)
-    return { count, total }
+    return statusStatsMap[st] || { count: 0, total: 0 }
   }
 
   const totalValorFiltrado = filtered.reduce((s, c) => s + (c.valor || 0), 0)
   const totalAPagarFiltrado = filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
+  const totalReceberFiltrado = filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0)
   const totalPagoFiltrado   = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
+  const totalRecebidoFiltrado = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0)
+  const saldoLiquidoFiltrado = (totalReceberFiltrado + totalRecebidoFiltrado) - (totalAPagarFiltrado + totalPagoFiltrado)
 
   const listaStatusOpcoes = [
     { value: 'todos', label: 'Todos os Status' },
@@ -4164,6 +5347,33 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     { value: 'Pago sem Nota Fiscal', label: 'Paga S/NF' },
     { value: 'Negado', label: 'Negado' },
   ]
+
+  // Projeção Mensal de Fluxo de Caixa agrupada por mês
+  const projecaoMensal = useMemo(() => {
+    const map = new Map<string, { mes: string; aPagar: number; aReceber: number; pago: number; recebido: number; saldo: number }>()
+    contasDaEmpresa.forEach(c => {
+      const d = c.data_vencimento || c.data_previsao || c.created_at || ''
+      if (!d) return
+      const mesChave = d.slice(0, 7) // YYYY-MM
+      if (!mesChave || mesChave.length < 7) return
+      
+      const mesFormatado = new Date(d).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+      if (!map.has(mesChave)) {
+        map.set(mesChave, { mes: mesFormatado.toUpperCase(), aPagar: 0, aReceber: 0, pago: 0, recebido: 0, saldo: 0 })
+      }
+      const item = map.get(mesChave)!
+      const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal'
+      if (c.tipo === 'pagar') {
+        if (isLiquidado) item.pago += (c.valor || 0)
+        else if (c.status !== 'Negado') item.aPagar += (c.valor || 0)
+      } else {
+        if (isLiquidado) item.recebido += (c.valor || 0)
+        else if (c.status !== 'Negado') item.aReceber += (c.valor || 0)
+      }
+      item.saldo = (item.recebido + item.aReceber) - (item.pago + item.aPagar)
+    })
+    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([_, val]) => val).slice(-6)
+  }, [contasDaEmpresa])
 
   // Permissões dinâmicas
   const isAdminGeral = colaboradorAtivo.cargo === 'admin_geral'
@@ -4190,8 +5400,6 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
     setFiltEmpresa(ids.length === 1 ? ids[0] : '')
     setFiltFornecedor('')
-    setFiltTipo('todos')
-    setFiltStatus('todos')
     setFiltTipoData('previsao_vencimento')
     setFiltDataInicio('')
     setFiltDataFim('')
@@ -4200,212 +5408,99 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     setFiltOrdem('novo')
   }
 
+  const clearAllFiltersAndSearch = () => {
+    clearFiltros()
+    setSearch('')
+    setFiltTipo('todos')
+    setFiltStatus('todos')
+  }
+
+  const aplicarPresetData = (preset: 'hoje' | 'esta_semana' | 'este_mes' | 'prox_30' | 'ultimos_30' | 'este_ano') => {
+    const hoje = new Date()
+    const fmtISO = (d: Date) => d.toISOString().split('T')[0]
+    
+    if (preset === 'hoje') {
+      const dStr = fmtISO(hoje)
+      setFiltDataInicio(dStr)
+      setFiltDataFim(dStr)
+    } else if (preset === 'esta_semana') {
+      const primeiro = new Date(hoje)
+      primeiro.setDate(hoje.getDate() - hoje.getDay())
+      const ultimo = new Date(primeiro)
+      ultimo.setDate(primeiro.getDate() + 6)
+      setFiltDataInicio(fmtISO(primeiro))
+      setFiltDataFim(fmtISO(ultimo))
+    } else if (preset === 'este_mes') {
+      const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+      const ultimo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+      setFiltDataInicio(fmtISO(primeiro))
+      setFiltDataFim(fmtISO(ultimo))
+    } else if (preset === 'prox_30') {
+      const fim = new Date(hoje)
+      fim.setDate(hoje.getDate() + 30)
+      setFiltDataInicio(fmtISO(hoje))
+      setFiltDataFim(fmtISO(fim))
+    } else if (preset === 'ultimos_30') {
+      const inicio = new Date(hoje)
+      inicio.setDate(hoje.getDate() - 30)
+      setFiltDataInicio(fmtISO(inicio))
+      setFiltDataFim(fmtISO(hoje))
+    } else if (preset === 'este_ano') {
+      const primeiro = new Date(hoje.getFullYear(), 0, 1)
+      const ultimo = new Date(hoje.getFullYear(), 11, 31)
+      setFiltDataInicio(fmtISO(primeiro))
+      setFiltDataFim(fmtISO(ultimo))
+    }
+  }
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-        <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.ink }}>Histórico Financeiro</h2>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: '#34D399', fontWeight: 800 }}>Total Recebido: {fmt(totalRecebido)}</span>
-          <span style={{ fontSize: 12, color: '#F87171', fontWeight: 800 }}>Total Pago: {fmt(totalPago)}</span>
+    <div style={{ display: 'grid', gap: 18 }}>
+      {/* ── 2. SELETOR DE MODO DE VISÃO & CONTROLES DE BARRA ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
+        {/* Toggle de Visualização: Tabela vs Projeção */}
+        <div style={{ display: 'flex', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 3 }}>
+          <button
+            onClick={() => setViewMode('tabela')}
+            style={{
+              background: viewMode === 'tabela' ? C.bgPanel : 'transparent',
+              border: `1px solid ${viewMode === 'tabela' ? C.border : 'transparent'}`,
+              color: viewMode === 'tabela' ? C.ink : C.inkSoft,
+              fontWeight: viewMode === 'tabela' ? 800 : 600,
+              fontSize: 11.5,
+              padding: '6px 14px',
+              borderRadius: 4,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <FileText size={13} color={viewMode === 'tabela' ? C.amber : C.inkSoft} />
+            Lançamentos & Conciliação ({filtered.length})
+          </button>
+          <button
+            onClick={() => setViewMode('projecao')}
+            style={{
+              background: viewMode === 'projecao' ? C.bgPanel : 'transparent',
+              border: `1px solid ${viewMode === 'projecao' ? C.border : 'transparent'}`,
+              color: viewMode === 'projecao' ? C.ink : C.inkSoft,
+              fontWeight: viewMode === 'projecao' ? 800 : 600,
+              fontSize: 11.5,
+              padding: '6px 14px',
+              borderRadius: 4,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Calendar size={13} color={viewMode === 'projecao' ? C.amber : C.inkSoft} />
+            Projeção de Fluxo Mensal
+          </button>
         </div>
-      </div>
 
-      {/* ── Barra de busca + botão Filtros + Botão de Modo Exportação ── */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
-          <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
-          <input style={{ ...input, paddingLeft: 30 }} placeholder="Buscar por descrição ou obra..." value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setShowFiltros(f => !f)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 7, border: `1px solid ${activeFiltrosCount > 0 ? C.amber : C.border}`, borderRadius: 5, background: activeFiltrosCount > 0 ? '#F59E0B14' : '#0B0C0E', color: activeFiltrosCount > 0 ? C.amber : C.inkSoft, padding: '8px 13px', fontSize: 11, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M3 6h18M7 12h10M11 18h2"/></svg>
-              Filtros{activeFiltrosCount > 0 ? ` (${activeFiltrosCount})` : ''}
-              <span style={{ fontSize: 9, opacity: 0.7 }}>{showFiltros ? '▲' : '▼'}</span>
-            </button>
-            {showFiltros && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 50, width: 350, background: '#13151A', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, boxShadow: '0 8px 32px rgba(0,0,0,.6)', display: 'grid', gap: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>Filtros avançados</span>
-                  {activeFiltrosCount > 0 && <button onClick={clearFiltros} style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>Limpar tudo</button>}
-                </div>
-
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Ordenação</label>
-                  <select style={{ ...input }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as any)}>
-                    <option value="novo">↓ Lançamento mais recente</option>
-                    <option value="antigo">↑ Lançamento mais antigo</option>
-                    <option value="venc_prox">↓ Vencimento mais próximo</option>
-                    <option value="venc_dist">↑ Vencimento mais distante</option>
-                    <option value="maior_valor">↓ Maior valor primeiro</option>
-                    <option value="menor_valor">↑ Menor valor primeiro</option>
-                    <option value="az">A → Z (descrição)</option>
-                    <option value="za">Z → A (descrição)</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Empresa</label>
-                  <select 
-                    style={{ ...input }} 
-                    disabled={(() => {
-                      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-                      return colaboradorAtivo.cargo !== 'admin_geral' && ids.length === 1
-                    })()} 
-                    value={filtEmpresa} 
-                    onChange={e => setFiltEmpresa(e.target.value)}
-                  >
-                    <option value="">Todas as empresas autorizadas</option>
-                    {empresas.filter(e => {
-                      if (colaboradorAtivo.cargo === 'admin_geral') return true
-                      const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-                      return ids.length === 0 || ids.includes(e.id)
-                    }).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Fornecedor</label>
-                  <select style={{ ...input }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
-                    <option value="">Todos os fornecedores</option>
-                    {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social ?? f.nome_fantasia}</option>)}
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Tipo</label>
-                    <select style={{ ...input }} value={filtTipo} onChange={e => setFiltTipo(e.target.value as any)}>
-                      <option value="todos">Todos</option>
-                      <option value="pagar">A Pagar</option>
-                      <option value="receber">A Receber</option>
-                    </select>
-                  </div>
-                  <div style={{ display: 'grid', gap: 6 }}>
-                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Status</label>
-                    <select style={{ ...input }} value={filtStatus} onChange={e => setFiltStatus(e.target.value as any)}>
-                      {listaStatusOpcoes.map(st => {
-                        const stats = getStatsByStatus(st.value)
-                        return (
-                          <option key={st.value} value={st.value}>
-                            {st.label} ({stats.count})
-                          </option>
-                        )
-                      })}
-                    </select>
-                  </div>
-                </div>
-
-                {/* ── Filtro de Faixa de Valor ── */}
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Faixa de Valor (R$)</label>
-                    {(filtValorMin !== '' || filtValorMax !== '') && (
-                      <button
-                        type="button"
-                        onClick={() => { setFiltValorMin(''); setFiltValorMax('') }}
-                        style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 9, cursor: 'pointer', fontWeight: 700 }}
-                      >
-                        Limpar valor
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.inkSoft }}>R$</span>
-                      <input
-                        placeholder="Mínimo"
-                        style={{ ...input, paddingLeft: 26 }}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={filtValorMin}
-                        onChange={e => setFiltValorMin(e.target.value)}
-                      />
-                    </div>
-                    <span style={{ color: C.inkSoft, fontSize: 11 }}>até</span>
-                    <div style={{ position: 'relative', flex: 1 }}>
-                      <span style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: C.inkSoft }}>R$</span>
-                      <input
-                        placeholder="Máximo"
-                        style={{ ...input, paddingLeft: 26 }}
-                        type="number"
-                        min="0"
-                        step="any"
-                        value={filtValorMax}
-                        onChange={e => setFiltValorMax(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  {/* Chips rápidos de valor */}
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
-                    {[
-                      { label: 'Até R$ 1k', min: '', max: '1000' },
-                      { label: 'R$ 1k - 5k', min: '1000', max: '5000' },
-                      { label: 'R$ 5k - 20k', min: '5000', max: '20000' },
-                      { label: 'R$ 20k - 50k', min: '20000', max: '50000' },
-                      { label: '+ R$ 50k', min: '50000', max: '' },
-                    ].map((preset, idx) => {
-                      const isActive = filtValorMin === preset.min && filtValorMax === preset.max
-                      return (
-                        <button
-                          key={idx}
-                          type="button"
-                          onClick={() => {
-                            if (isActive) {
-                              setFiltValorMin('')
-                              setFiltValorMax('')
-                            } else {
-                              setFiltValorMin(preset.min)
-                              setFiltValorMax(preset.max)
-                            }
-                          }}
-                          style={{
-                            border: `1px solid ${isActive ? C.amber : C.border}`,
-                            borderRadius: 4,
-                            background: isActive ? '#F59E0B20' : '#181A22',
-                            color: isActive ? C.amber : C.inkSoft,
-                            padding: '2px 7px',
-                            fontSize: 9,
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease'
-                          }}
-                        >
-                          {preset.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Filtrar por qual data?</label>
-                  <select style={{ ...input }} value={filtTipoData} onChange={e => setFiltTipoData(e.target.value as any)}>
-                    <option value="previsao_vencimento">📅 Previsão / Vencimento (Padrão)</option>
-                    <option value="vencimento">📆 Data de Vencimento</option>
-                    <option value="previsao">🗓️ Data Prevista de Pagamento</option>
-                    <option value="pago_em">✅ Data em que foi Pago (Pagamento Efetivo)</option>
-                    <option value="created_at">📝 Data de Lançamento / Criação</option>
-                  </select>
-                </div>
-
-                <div style={{ display: 'grid', gap: 6 }}>
-                  <label style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5 }}>Intervalo de datas</label>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <input title="De" aria-label="Vencimento de" style={{ ...input, flex: 1 }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
-                    <span style={{ color: C.inkSoft, fontSize: 11 }}>até</span>
-                    <input title="Até" aria-label="Vencimento até" style={{ ...input, flex: 1 }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Botão de Ativar Modo Seleção em Lote */}
+        {/* Botões de Ação Rápida */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {podeAlterarStatus && (
             <button
               onClick={() => {
@@ -4420,16 +5515,24 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 }
               }}
               style={{
-                ...btn(modoSelecao ? '#EF4444' : C.amber),
-                padding: '8px 14px',
-                fontSize: 11
+                background: modoSelecao ? 'rgba(245, 158, 11, 0.15)' : C.bgWhite,
+                border: `1px solid ${modoSelecao ? C.amber : C.border}`,
+                color: modoSelecao ? C.amber : C.ink,
+                borderRadius: 6,
+                padding: '7px 13px',
+                fontSize: 11.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6
               }}
             >
-              <CheckCircle2 size={13} /> {modoSelecao ? 'Cancelar Seleção' : 'Seleção em Lote'}
+              <CheckCircle2 size={13} color={modoSelecao ? C.amber : C.inkSoft} />
+              {modoSelecao ? 'Cancelar Seleção' : 'Seleção em Lote'}
             </button>
           )}
 
-          {/* Botão de Ativar Modo Exportar */}
           <button
             onClick={() => {
               if (modoExportacao) {
@@ -4442,115 +5545,426 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               }
             }}
             style={{
-              ...btn(modoExportacao ? '#EF4444' : '#34D399'),
-              padding: '8px 14px',
-              fontSize: 11
+              background: modoExportacao ? 'rgba(16, 185, 129, 0.15)' : C.bgWhite,
+              border: `1px solid ${modoExportacao ? '#10B981' : C.border}`,
+              color: modoExportacao ? '#10B981' : C.ink,
+              borderRadius: 6,
+              padding: '7px 13px',
+              fontSize: 11.5,
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6
             }}
           >
-            <FileText size={13} /> {modoExportacao ? 'Cancelar Exportação' : 'Exportar Pagamentos'}
+            <Download size={13} color={modoExportacao ? '#10B981' : C.inkSoft} />
+            {modoExportacao ? 'Cancelar Exportação' : 'Exportar Relatório'}
           </button>
         </div>
       </div>
 
-
-
-      {/* ── Resumo Geral dos Resultados Filtrados ── */}
-      <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 18px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>📊 Resumo do Filtro:</span>
-          <span style={{ fontSize: 12, color: C.amber, fontWeight: 900, background: 'rgba(245, 158, 11, 0.1)', padding: '2px 8px', borderRadius: 4, border: `1px solid ${C.amber}33` }}>
-            {filtered.length} conta(s)
-          </span>
-        </div>
-        <div style={{ display: 'flex', gap: 18, alignItems: 'center', fontSize: 12 }}>
-          <div><span style={{ color: C.inkSoft }}>Pendente / A Pagar: </span><strong style={{ color: '#F87171', fontWeight: 900 }}>{fmt(totalAPagarFiltrado)}</strong></div>
-          <div><span style={{ color: C.inkSoft }}>Pago: </span><strong style={{ color: '#34D399', fontWeight: 900 }}>{fmt(totalPagoFiltrado)}</strong></div>
-        </div>
-      </div>
-
-      {/* ── BARRA FLUTUANTE DE AÇÕES DE EXPORTAÇÃO (Quando modoExportacao estiver Ativo) ── */}
-      {modoExportacao && (
-        <div style={{
-          background: '#1A1D26',
-          border: `1px solid ${C.amber}`,
-          borderRadius: 8,
-          padding: '10px 16px',
-          marginBottom: 14,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 10,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.amber, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <FileText size={15} /> Modo Exportação Ativo
-            </span>
-            <span style={{ fontSize: 11, color: C.inkSoft }}>
-              ({selecionadasContas.length} de {filtered.length} selecionados)
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            {/* Botão Selecionar Todos */}
-            <button
-              onClick={() => selecionarTodasContas(filtered)}
-              style={{ ...btnGhost, padding: '6px 12px', fontSize: 11, color: C.ink }}
-            >
-              {selecionadasContas.length === filtered.length ? 'Desmarcar Todos' : `Selecionar Todos (${filtered.length})`}
-            </button>
-
-            {/* Botão Baixar Selecionadas */}
-            {selecionadasContas.length > 0 && (
+      {/* ── 3. PAINEL DE BUSCA & FILTROS INTELIGENTES ── */}
+      <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Linha 1: Input de Busca + Seletor de Natureza + Botões de Filtros */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Input de Busca */}
+          <div style={{ position: 'relative', flex: 1, minWidth: 260 }}>
+            <Search size={14} color={C.inkSoft} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+            <input
+              style={{ ...input, paddingLeft: 36, paddingRight: search ? 32 : 12, fontSize: 12.5 }}
+              placeholder="Buscar por descrição, código (ex: PAG-0123), obra ou fornecedor..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+            />
+            {search && (
               <button
-                onClick={() => exportarContasCSV(filtered.filter(c => selecionadasContas.includes(c.id)))}
-                style={{ ...btn('#34D399'), padding: '6px 14px', fontSize: 11 }}
+                onClick={() => setSearch('')}
+                title="Limpar texto de busca"
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 2 }}
               >
-                Baixar Selecionados ({selecionadasContas.length}) 📥
+                <X size={13} />
               </button>
             )}
+          </div>
 
-            {/* Botão Baixar Todas (Respeitando os Filtros atuais) */}
+          {/* Filtro Rápido de Natureza (Dual) */}
+          <div style={{ display: 'flex', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 2 }}>
+            {(['todos', 'pagar', 'receber'] as const).map(t => (
+              <button
+                key={t}
+                onClick={() => setFiltTipo(t)}
+                style={{
+                  background: filtTipo === t ? (t === 'pagar' ? '#EF444418' : t === 'receber' ? '#05966918' : C.bgPanel) : 'transparent',
+                  border: `1px solid ${filtTipo === t ? (t === 'pagar' ? '#EF4444' : t === 'receber' ? '#059669' : C.border) : 'transparent'}`,
+                  color: filtTipo === t ? (t === 'pagar' ? '#EF4444' : t === 'receber' ? '#059669' : C.ink) : C.inkSoft,
+                  fontSize: 11,
+                  fontWeight: filtTipo === t ? 800 : 600,
+                  padding: '5px 12px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {t === 'todos' ? 'Todas' : t === 'pagar' ? 'Contas a Pagar' : 'Contas a Receber'}
+              </button>
+            ))}
+          </div>
+
+          {/* Botão de Filtros Avançados */}
+          <div style={{ position: 'relative' }}>
             <button
-              onClick={() => exportarContasCSV(filtered)}
-              style={{ ...btn(C.amber), padding: '6px 14px', fontSize: 11 }}
-              title="Baixar todas as contas atualmente filtradas por busca, status ou obra"
+              onClick={() => setShowFiltros(f => !f)}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                border: `1px solid ${activeFiltrosCount > 0 ? C.amber : C.border}`,
+                borderRadius: 6,
+                background: activeFiltrosCount > 0 ? '#F59E0B18' : C.bgWhite,
+                color: activeFiltrosCount > 0 ? C.amber : C.ink,
+                padding: '7px 13px',
+                fontSize: 11.5,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
             >
-              Baixar Todas as Filtradas ({filtered.length}) 📥
+              <Filter size={13} color={activeFiltrosCount > 0 ? C.amber : C.inkSoft} />
+              <span>Filtros Avançados</span>
+              {activeFiltrosCount > 0 && (
+                <span style={{ background: C.amber, color: '#000', fontSize: 10, fontWeight: 900, padding: '1px 5px', borderRadius: 10 }}>
+                  {activeFiltrosCount}
+                </span>
+              )}
+              <ChevronDown size={12} style={{ transform: showFiltros ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </button>
+
+            {/* Popover de Filtros Avançados */}
+            {showFiltros && (
+              <div style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                zIndex: 100,
+                width: 400,
+                background: C.bgWhite,
+                border: `1px solid ${C.border}`,
+                borderRadius: 10,
+                padding: 18,
+                boxShadow: '0 16px 36px -4px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.06)',
+                display: 'grid',
+                gap: 14
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <Sliders size={15} color={C.amber} />
+                    <span style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>Filtros Avançados</span>
+                    {activeFiltrosCount > 0 && (
+                      <span style={{ background: '#F59E0B20', color: C.amber, fontSize: 10, fontWeight: 800, padding: '1px 6px', borderRadius: 4 }}>
+                        {activeFiltrosCount} ativo(s)
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button onClick={() => setShowFiltros(false)} style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 2 }}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Ordenação */}
+                <div style={{ display: 'grid', gap: 5 }}>
+                  <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Ordenação</label>
+                  <select style={{ ...input, background: C.bgPanel }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as any)}>
+                    <option value="novo">↓ Lançamento mais recente</option>
+                    <option value="antigo">↑ Lançamento mais antigo</option>
+                    <option value="venc_prox">↓ Vencimento mais próximo</option>
+                    <option value="venc_dist">↑ Vencimento mais distante</option>
+                    <option value="maior_valor">↓ Maior valor primeiro</option>
+                    <option value="menor_valor">↑ Menor valor primeiro</option>
+                    <option value="az">A → Z (descrição)</option>
+                    <option value="za">Z → A (descrição)</option>
+                  </select>
+                </div>
+
+                {/* Empresa & Fornecedor */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ display: 'grid', gap: 5 }}>
+                    <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Empresa</label>
+                    <select 
+                      style={{ ...input, background: C.bgPanel }} 
+                      disabled={(() => {
+                        const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                        return colaboradorAtivo.cargo !== 'admin_geral' && ids.length === 1
+                      })()} 
+                      value={filtEmpresa} 
+                      onChange={e => setFiltEmpresa(e.target.value)}
+                    >
+                      <option value="">Todas empresas</option>
+                      {empresas.filter(e => {
+                        if (colaboradorAtivo.cargo === 'admin_geral') return true
+                        const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+                        return ids.length === 0 || ids.includes(e.id)
+                      }).map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'grid', gap: 5 }}>
+                    <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fornecedor</label>
+                    <select style={{ ...input, background: C.bgPanel }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
+                      <option value="">Todos fornecedores</option>
+                      {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social ?? f.nome_fantasia}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Filtrar por data + Presets Rápidos */}
+                <div style={{ display: 'grid', gap: 6, background: C.bgPanel, padding: 10, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Período & Datas</label>
+                    <select style={{ ...input, width: 'auto', padding: '3px 8px', fontSize: 10.5, background: C.bgWhite }} value={filtTipoData} onChange={e => setFiltTipoData(e.target.value as any)}>
+                      <option value="previsao_vencimento">Vencimento/Previsão</option>
+                      <option value="vencimento">Data de Vencimento</option>
+                      <option value="previsao">Data Prevista</option>
+                      <option value="pago_em">Data Pagamento</option>
+                      <option value="created_at">Data Cadastro</option>
+                    </select>
+                  </div>
+
+                  {/* Chips de Presets de Data */}
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                    {[
+                      { id: 'hoje', label: 'Hoje' },
+                      { id: 'esta_semana', label: 'Esta Semana' },
+                      { id: 'este_mes', label: 'Este Mês' },
+                      { id: 'prox_30', label: 'Próx. 30d' },
+                      { id: 'ultimos_30', label: 'Últimos 30d' },
+                      { id: 'este_ano', label: 'Ano' },
+                    ].map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => aplicarPresetData(p.id as any)}
+                        style={{
+                          fontSize: 10,
+                          padding: '3px 7px',
+                          borderRadius: 4,
+                          background: C.bgWhite,
+                          border: `1px solid ${C.border}`,
+                          color: C.ink,
+                          cursor: 'pointer',
+                          fontWeight: 600
+                        }}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                    <div>
+                      <span style={{ fontSize: 9.5, color: C.inkSoft, fontWeight: 700 }}>De</span>
+                      <input style={{ ...input, background: C.bgWhite, padding: '5px 8px' }} type="date" value={filtDataInicio} onChange={e => setFiltDataInicio(e.target.value)} />
+                    </div>
+                    <div>
+                      <span style={{ fontSize: 9.5, color: C.inkSoft, fontWeight: 700 }}>Até</span>
+                      <input style={{ ...input, background: C.bgWhite, padding: '5px 8px' }} type="date" value={filtDataFim} onChange={e => setFiltDataFim(e.target.value)} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Faixa de Valor */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Valor Mín (R$)</label>
+                    <input placeholder="0,00" style={{ ...input, background: C.bgPanel }} type="number" value={filtValorMin} onChange={e => setFiltValorMin(e.target.value)} />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Valor Máx (R$)</label>
+                    <input placeholder="0,00" style={{ ...input, background: C.bgPanel }} type="number" value={filtValorMax} onChange={e => setFiltValorMax(e.target.value)} />
+                  </div>
+                </div>
+
+                {/* Rodapé: Limpar Filtros + Aplicar Filtros */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                  <button 
+                    type="button" 
+                    onClick={clearFiltros} 
+                    style={{ ...btnGhost, fontSize: 11, padding: '7px 14px', color: activeFiltrosCount > 0 ? C.amber : C.inkSoft, borderColor: activeFiltrosCount > 0 ? C.amber : C.border, display: 'inline-flex', alignItems: 'center', gap: 5 }}
+                  >
+                    <RotateCcw size={12} /> Limpar Filtros
+                  </button>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowFiltros(false)} 
+                    style={{ ...btn(C.amber), flex: 1, justifyContent: 'center', padding: '7px 16px' }}
+                  >
+                    Aplicar Filtros
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Botão de Limpar Tudo na Barra Principal (Visível quando houver qualquer filtro ou busca ativo) */}
+          {(search || filtTipo !== 'todos' || filtStatus !== 'todos' || activeFiltrosCount > 0) && (
+            <button
+              onClick={clearAllFiltersAndSearch}
+              title="Resetar todos os filtros e busca"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                background: C.bgWhite,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                color: C.inkSoft,
+                padding: '7px 12px',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <RotateCcw size={12} color={C.amber} />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
+        </div>
+
+        {/* Linha 2: Pílulas de Status Rápidas com Contadores */}
+        <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+          {listaStatusOpcoes.map(st => {
+            const stats = getStatsByStatus(st.value)
+            const isSel = filtStatus === st.value
+            return (
+              <button
+                key={st.value}
+                onClick={() => setFiltStatus(st.value as any)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  padding: '5px 11px',
+                  borderRadius: 20,
+                  fontSize: 11,
+                  fontWeight: isSel ? 800 : 600,
+                  whiteSpace: 'nowrap',
+                  cursor: 'pointer',
+                  border: `1px solid ${isSel ? C.amber : C.border}`,
+                  background: isSel ? '#F59E0B18' : C.bgWhite,
+                  color: isSel ? C.amber : C.inkSoft,
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                <span>{st.label}</span>
+                <span style={{
+                  fontSize: 9.5,
+                  background: isSel ? C.amber : 'rgba(255,255,255,0.06)',
+                  color: isSel ? '#0B0C0E' : C.inkSoft,
+                  padding: '1px 6px',
+                  borderRadius: 10,
+                  fontWeight: 900
+                }}>
+                  {stats.count}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Linha 3: Tags de Filtros Ativos (Feedback visual imediato com remoção em 1 clique) */}
+        {(search || filtTipo !== 'todos' || filtStatus !== 'todos' || activeFiltrosCount > 0) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+            <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Filtros Ativos:</span>
+            
+            {search && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.ink, fontWeight: 600 }}>
+                Busca: "{search}"
+                <button onClick={() => setSearch('')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+              </span>
+            )}
+
+            {filtTipo !== 'todos' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: filtTipo === 'pagar' ? '#EF4444' : '#059669', fontWeight: 700 }}>
+                {filtTipo === 'pagar' ? 'Contas a Pagar' : 'Contas a Receber'}
+                <button onClick={() => setFiltTipo('todos')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+              </span>
+            )}
+
+            {filtStatus !== 'todos' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.amber, fontWeight: 700 }}>
+                Status: {filtStatus}
+                <button onClick={() => setFiltStatus('todos')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+              </span>
+            )}
+
+            {filtEmpresa && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.ink, fontWeight: 600 }}>
+                Empresa: {empresas.find(e => e.id === filtEmpresa)?.nome_fantasia || 'Selecionada'}
+                <button onClick={() => setFiltEmpresa('')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+              </span>
+            )}
+
+            {filtFornecedor && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.ink, fontWeight: 600 }}>
+                Fornecedor: {fornecedores.find(f => f.id === filtFornecedor)?.nome_fantasia || fornecedores.find(f => f.id === filtFornecedor)?.razao_social || 'Selecionado'}
+                <button onClick={() => setFiltFornecedor('')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+              </span>
+            )}
+
+            {(filtDataInicio || filtDataFim) && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.ink, fontWeight: 600 }}>
+                Período: {filtDataInicio ? fmtDate(filtDataInicio) : 'Início'} até {filtDataFim ? fmtDate(filtDataFim) : 'Fim'}
+                <button onClick={() => { setFiltDataInicio(''); setFiltDataFim('') }} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+              </span>
+            )}
+
+            {(filtValorMin || filtValorMax) && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.ink, fontWeight: 600 }}>
+                Valor: {filtValorMin ? `R$ ${filtValorMin}` : 'R$ 0'} a {filtValorMax ? `R$ ${filtValorMax}` : '∞'}
+                <button onClick={() => { setFiltValorMin(''); setFiltValorMax('') }} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+              </span>
+            )}
+
+            <button
+              onClick={clearAllFiltersAndSearch}
+              style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 10.5, fontWeight: 800, cursor: 'pointer', marginLeft: 4, textDecoration: 'underline' }}
+            >
+              Limpar Todos
             </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
-      {/* ── BARRA FLUTUANTE DE ALTERAÇÃO DE STATUS EM LOTE ── */}
+      {/* ── BARRA FLUTUANTE DE SELEÇÃO EM LOTE ── */}
       {modoSelecao && (
         <div style={{
-          background: '#1A1D26',
-          border: `1px solid ${C.amber}`,
+          background: C.bgPanel,
+          border: `1.5px solid ${C.amber}`,
           borderRadius: 8,
-          padding: '10px 16px',
-          marginBottom: 14,
+          padding: '12px 18px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: 10,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.4)'
+          gap: 12,
+          boxShadow: '0 4px 14px rgba(0,0,0,0.1)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: C.amber, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <CheckCircle2 size={15} /> Seleção em Lote Ativa
+            <span style={{ fontSize: 12, fontWeight: 800, color: C.amber, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <CheckCircle2 size={15} /> Seleção em Lote
             </span>
-            <span style={{ fontSize: 11, color: C.inkSoft }}>
-              ({selecionadasContas.length} de {filtered.length} selecionados)
+            <span style={{ fontSize: 11, color: C.inkSoft, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+              {selecionadasContas.length} de {filtered.length} selecionados
             </span>
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               onClick={() => selecionarTodasContas(filtered)}
-              style={{ ...btnGhost, padding: '6px 12px', fontSize: 11, color: C.ink }}
+              style={{ background: C.bgWhite, border: `1px solid ${C.border}`, color: C.ink, borderRadius: 6, padding: '7px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
             >
               {selecionadasContas.length === filtered.length ? 'Desmarcar Todos' : `Selecionar Todos (${filtered.length})`}
             </button>
@@ -4560,11 +5974,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 aria-label="Novo status para selecionados"
                 value={statusEmLote}
                 onChange={e => setStatusEmLote(e.target.value as any)}
-                style={{ ...input, width: 170, padding: '6px 10px', fontSize: 11 }}
+                style={{ ...input, width: 190, padding: '6px 10px', fontSize: 11, fontWeight: 600, background: C.bgWhite, color: C.ink, borderColor: C.border }}
               >
-                <option value="">Selecione o Novo Status...</option>
+                <option value="" style={{ color: '#0A0A0A', background: '#FFFFFF' }}>Selecione o Novo Status...</option>
                 {listaStatusOpcoes.filter(o => o.value !== 'todos').map(st => (
-                  <option key={st.value} value={st.value}>{st.label}</option>
+                  <option key={st.value} value={st.value} style={{ color: '#0A0A0A', background: '#FFFFFF' }}>{st.label}</option>
                 ))}
               </select>
 
@@ -4573,554 +5987,756 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 onClick={alterarStatusEmLote}
                 style={{
                   ...btn(C.amber),
-                  padding: '6px 14px',
+                  padding: '7px 16px',
                   fontSize: 11,
+                  fontWeight: 800,
+                  color: '#0A0A0A',
                   opacity: (!statusEmLote || selecionadasContas.length === 0 || aplicandoLote) ? 0.5 : 1,
                   cursor: (!statusEmLote || selecionadasContas.length === 0 || aplicandoLote) ? 'not-allowed' : 'pointer'
                 }}
               >
-                {aplicandoLote ? 'Aplicando...' : `Aplicar a ${selecionadasContas.length} selecionado(s)`}
+                {aplicandoLote ? 'Aplicando...' : `Aplicar a ${selecionadasContas.length} item(ns)`}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {loading ? (
-        <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando lançamentos...</p>
-      ) : (
-        <div style={{ ...card, padding: 0, overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: '#0B0C0E' }}>
-                {(modoExportacao || modoSelecao) && (
-                  <th style={{ padding: '12px 10px', textAlign: 'center', width: 40 }}>
-                    <input
-                      type="checkbox"
-                      checked={filtered.length > 0 && selecionadasContas.length === filtered.length}
-                      onChange={() => selecionarTodasContas(filtered)}
-                      title={selecionadasContas.length === filtered.length ? 'Desmarcar todos' : 'Marcar todos os filtrados'}
-                      style={{ cursor: 'pointer', width: 15, height: 15, accentColor: C.amber }}
-                    />
-                  </th>
-                )}
-                {['Código', 'Tipo','Descrição','Empresa','Fornecedor','Vencimento','Valor','Status','Ações'].map(h => {
-                  const isAcoes = h === 'Ações'
-                  return (
-                    <th
-                      key={h}
-                      style={{
-                        padding: '12px 14px',
-                        textAlign: 'left',
-                        fontSize: 10,
-                        fontWeight: 800,
-                        color: C.inkSoft,
-                        textTransform: 'uppercase',
-                        letterSpacing: .6,
-                        whiteSpace: 'nowrap',
-                        ...(isAcoes ? {
-                          position: 'sticky',
-                          right: 0,
-                          background: '#0B0C0E',
-                          zIndex: 10,
-                          boxShadow: '-4px 0 8px rgba(0,0,0,0.5)'
-                        } : {})
-                      }}
-                    >
-                      {h}
-                    </th>
-                  )
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(c => {
-                const dataReferencia = c.tipo === 'pagar' ? (c.data_vencimento || c.data_previsao) : (c.data_previsao || c.data_vencimento)
-                const dataPrevisao = dataReferencia || ''
-                const venc = isVencido(dataReferencia || '', c.status)
-                const pago = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal'
-                const pagoParcial = c.status === 'Pago Parcial'
-                const aguardandoAprovacao = c.status === 'Bloqueado' || c.status === 'Aguardando aprovação'
-                
-                const isExpanded = expandedContaId === c.id
+      {/* ── BARRA FLUTUANTE DE EXPORTAÇÃO ── */}
+      {modoExportacao && (
+        <div style={{
+          background: C.bgPanel,
+          border: `1.5px solid #10B981`,
+          borderRadius: 8,
+          padding: '12px 18px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 12,
+          boxShadow: '0 4px 14px rgba(0,0,0,0.1)'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, color: '#10B981', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Download size={15} /> Exportação de Relatório CSV / Excel
+            </span>
+            <span style={{ fontSize: 11, color: C.inkSoft, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+              {selecionadasContas.length} de {filtered.length} selecionados
+            </span>
+          </div>
 
-                const historico = c.historico_negociacao || []
-                
-                // Ignora histórico antes da última restauração
-                const indexUltimaRestauracao = [...historico].reverse().findIndex(h => h.tipo === 'restauracao' || h.descricao?.includes('🔄 Acordo cancelado'))
-                const historicoAtivo = indexUltimaRestauracao !== -1 
-                  ? historico.slice(historico.length - indexUltimaRestauracao) 
-                  : historico;
-                
-                // Soma todos os pagamentos parciais registrados no histórico
-                const totalPagoHistorico = historicoAtivo
-                  .reduce((acc, h) => {
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => selecionarTodasContas(filtered)}
+              style={{ background: C.bgWhite, border: `1px solid ${C.border}`, color: C.ink, borderRadius: 6, padding: '7px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+            >
+              {selecionadasContas.length === filtered.length ? 'Desmarcar Todos' : `Selecionar Todos (${filtered.length})`}
+            </button>
+
+            {selecionadasContas.length > 0 && (
+              <button
+                onClick={() => exportarContasCSV(filtered.filter(c => selecionadasContas.includes(c.id)))}
+                style={{ ...btn('#10B981'), padding: '7px 14px', fontSize: 11, color: '#FFFFFF', fontWeight: 800 }}
+              >
+                Baixar Selecionados ({selecionadasContas.length})
+              </button>
+            )}
+
+            <button
+              onClick={() => exportarContasCSV(filtered)}
+              style={{ ...btn(C.amber), padding: '7px 14px', fontSize: 11, color: '#0A0A0A', fontWeight: 800 }}
+            >
+              Baixar Todas as Filtradas ({filtered.length})
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. CONTEÚDO PRINCIPAL: PROJEÇÃO DE FLUXO OU TABELA DE LANÇAMENTOS ── */}
+      {viewMode === 'projecao' ? (
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 14, fontWeight: 800, color: C.ink }}>Projeção Mensal de Fluxo de Caixa</h3>
+              <p style={{ margin: '4px 0 0', fontSize: 11.5, color: C.inkSoft }}>Comparativo mensal entre despesas projetadas vs receitas e balanço líquido.</p>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            {projecaoMensal.map((item, idx) => (
+              <div key={idx} style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 900, color: C.amber }}>{item.mes}</span>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: item.saldo >= 0 ? '#10B981' : '#EF4444' }}>
+                    Saldo: {fmt(item.saldo)}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: C.inkSoft }}>Entradas:</span>
+                  <span style={{ color: '#34D399', fontWeight: 700 }}>{fmt(item.recebido + item.aReceber)}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: C.inkSoft }}>Saídas:</span>
+                  <span style={{ color: '#EF4444', fontWeight: 700 }}>{fmt(item.pago + item.aPagar)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        /* VISÃO TABELA ANALÍTICA DE LANÇAMENTOS */
+        loading ? (
+          <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando lançamentos...</p>
+        ) : (
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+            <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: C.bgWhite, borderBottom: `2px solid ${C.border}` }}>
+                  {(modoExportacao || modoSelecao) && (
+                    <th style={{ padding: '11px 10px', textAlign: 'center', width: 40, borderBottom: `2px solid ${C.border}` }}>
+                      <input
+                        type="checkbox"
+                        checked={filtered.length > 0 && selecionadasContas.length === filtered.length}
+                        onChange={() => selecionarTodasContas(filtered)}
+                        title={selecionadasContas.length === filtered.length ? 'Desmarcar todos' : 'Marcar todos os filtrados'}
+                        style={{ cursor: 'pointer', width: 15, height: 15, accentColor: C.amber }}
+                      />
+                    </th>
+                  )}
+                  {['Código', 'Tipo', 'Descrição & Vínculo', 'Empresa / Obra', 'Fornecedor & Domicílio', 'Vencimento', 'Valor', 'Status', 'Ações'].map(h => {
+                    const isAcoes = h === 'Ações'
+                    return (
+                      <th
+                        key={h}
+                        style={{
+                          padding: '11px 14px',
+                          textAlign: 'left',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          color: C.inkSoft,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.6,
+                          whiteSpace: 'nowrap',
+                          borderBottom: `2px solid ${C.border}`,
+                          ...(isAcoes ? {
+                            position: 'sticky',
+                            right: 0,
+                            background: C.bgWhite,
+                            borderLeft: `1px solid ${C.border}`,
+                            zIndex: 10
+                          } : {})
+                        }}
+                      >
+                        {h}
+                      </th>
+                    )
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {contasExibidas.map(c => {
+                  const dataReferencia = c.tipo === 'pagar' ? (c.data_vencimento || c.data_previsao) : (c.data_previsao || c.data_vencimento)
+                  const dataPrevisao = dataReferencia || ''
+                  const venc = isVencido(dataReferencia || '', c.status)
+                  const pago = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal'
+                  const pagoParcial = c.status === 'Pago Parcial'
+                  const aguardandoAprovacao = c.status === 'Bloqueado' || c.status === 'Aguardando aprovação'
+                  
+                  const isExpanded = expandedContaId === c.id
+                  const historico = c.historico_negociacao || []
+                  
+                  // Ignora histórico antes da última restauração
+                  const indexUltimaRestauracao = [...historico].reverse().findIndex(h => h.tipo === 'restauracao' || h.descricao?.includes('🔄 Acordo cancelado'))
+                  const historicoAtivo = indexUltimaRestauracao !== -1 
+                    ? historico.slice(historico.length - indexUltimaRestauracao) 
+                    : historico
+
+                  const totalPagoHistorico = historicoAtivo.reduce((acc, h) => {
                     const val = Number(h.valor_pago || (h.tipo === 'pagamento_parcial' ? h.valor_novo : 0) || 0)
                     return acc + (val > 0 ? val : 0)
                   }, 0)
 
-                // Verifica se há desconto aplicado
-                const ultimoDesconto = [...historicoAtivo].reverse().find(h => h.tipo === 'desconto' && h.valor_novo)
-                const valorBase = ultimoDesconto?.valor_novo !== undefined ? Number(ultimoDesconto.valor_novo) : Number(c.valor || 0)
-                
-                // Valor restante a pagar/receber (saldo devedor)
-                const totalAbatido = Math.min(valorBase, totalPagoHistorico)
-                const valorCheioAbatido = Math.max(0, valorBase - totalAbatido)
+                  const ultimoDesconto = [...historicoAtivo].reverse().find(h => h.tipo === 'desconto' && h.valor_novo)
+                  const valorBase = ultimoDesconto?.valor_novo !== undefined ? Number(ultimoDesconto.valor_novo) : Number(c.valor || 0)
+                  const totalAbatido = Math.min(valorBase, totalPagoHistorico)
+                  const valorCheioAbatido = Math.max(0, valorBase - totalAbatido)
 
-                // Última negociação / pagamento efetuado
-                const ultimaNegociacao = [...historico].reverse().find(h => Number(h.valor_pago || 0) > 0 || Number(h.valor_novo || 0) > 0)
-                const valorNegociadoHoje = ultimaNegociacao ? (Number(ultimaNegociacao.valor_pago || 0) || Number(ultimaNegociacao.valor_novo || 0)) : undefined
+                  const ultimaNegociacao = [...historico].reverse().find(h => Number(h.valor_pago || 0) > 0 || Number(h.valor_novo || 0) > 0)
+                  const valorNegociadoHoje = ultimaNegociacao ? (Number(ultimaNegociacao.valor_pago || 0) || Number(ultimaNegociacao.valor_novo || 0)) : undefined
 
-                return (
-                  <Fragment key={c.id}>
-                    <tr 
-                      onClick={() => setExpandedContaId(isExpanded ? null : c.id)}
-                      style={{ 
-                        borderBottom: isExpanded ? 'none' : `1px solid ${C.border}`, 
-                        background: c.status === 'Bloqueado' ? '#F9731610' : c.status === 'Aguardando aprovação' ? '#3B82F608' : (isExpanded ? '#12141C' : 'none'),
-                        borderLeft: c.status === 'Bloqueado' ? '3px solid #F97316' : c.status === 'Aguardando aprovação' ? '3px solid #3B82F6' : 'none',
-                        cursor: 'pointer',
-                        transition: 'background 0.2s'
-                      }}
-                    >
-                      {(modoExportacao || modoSelecao) && (
-                        <td style={{ padding: '12px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-                          <input
-                            type="checkbox"
-                            checked={selecionadasContas.includes(c.id)}
-                            onChange={() => toggleContaSelecionada(c.id)}
-                            style={{ cursor: 'pointer', width: 15, height: 15, accentColor: C.amber }}
-                          />
-                        </td>
-                      )}
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{ fontSize: 10, fontWeight: 900, background: '#12141C', color: c.tipo === 'receber' ? '#34D399' : C.amber, border: `1px solid ${C.border}`, padding: '3px 7px', borderRadius: 4, letterSpacing: 0.5, fontFamily: 'monospace' }}>
-                          {fmtCodigo(c) || `#${c.id.slice(0, 5)}`}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ width: 28, height: 28, borderRadius: 6, background: c.tipo === 'receber' ? '#34D39918' : '#F8717118', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {c.tipo === 'receber' ? <ArrowUpRight size={13} color="#34D399" /> : <ArrowDownRight size={13} color="#F87171" />}
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 14px', color: C.ink, fontWeight: 600, maxWidth: 260 }}>
-                        <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
-                          <span>{c.descricao}</span>
-                          {(() => {
-                            const anexos = parseAnexos(c.comprovante_url)
-                            if (anexos.length === 0) return null
-                            return (
-                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
-                                {anexos.map((url, idx) => (
-                                  <a
-                                    key={idx}
-                                    href={url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    title={`Abrir Anexo ${idx + 1}`}
-                                    onClick={e => e.stopPropagation()}
-                                    style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'none', background: 'rgba(245, 158, 11, 0.12)', padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 700 }}
-                                  >
-                                    <Eye size={11} />
-                                    <span>{anexos.length > 1 ? `${idx + 1}` : ''}</span>
-                                  </a>
-                                ))}
-                              </div>
-                            )
-                          })()}
-                        </div>
-                        {c.categoria && (
-                          <div style={{ marginTop: 4 }}>
-                            <span style={{ fontSize: 10, color: C.inkSoft, background: '#ffffff0a', padding: '1px 6px', borderRadius: 3 }}>
-                              {c.categoria}
-                            </span>
-                          </div>
-                        )}
-                        {c.observacoes && (
-                          <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
-                            <ObservacaoExpandivel text={c.observacoes} maxLength={55} />
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px 14px', color: C.inkSoft }}>
-                        <span style={{ borderLeft: `2px solid ${c.empresa?.cor ?? '#fff'}`, paddingLeft: 6 }}>
-                          {c.empresa?.nome_fantasia ?? c.empresa?.razao_social ?? '—'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px', color: C.inkSoft, maxWidth: 220, wordBreak: 'break-word' }}>
-                        <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.razao_social ?? c.fornecedor?.nome_fantasia ?? 'Geral'}</div>
-                        {c.obra && <div style={{ fontSize: 10, color: C.amber }}>Obra: {c.obra.nome}</div>}
-                        {c.fornecedor?.pix && <div style={{ fontSize: 10, color: '#34D399', marginTop: 2 }}>PIX: {c.fornecedor.pix}</div>}
-                        {(c.fornecedor?.banco) && <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
-                          Bc: {c.fornecedor.banco} {c.fornecedor.agencia ? `Ag: ${c.fornecedor.agencia}` : ''} {c.fornecedor.conta ? `Cc: ${c.fornecedor.conta}` : ''}
-                        </div>}
-                      </td>
-                      <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>{fmtDate(dataPrevisao)}{venc && <div style={{ fontSize: 8, fontWeight: 900 }}>VENCIMENTO ATRASADO</div>}</td>
-                      <td style={{ padding: '12px 14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
-                        <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span>{fmt((pagoParcial || totalPagoHistorico > 0) ? valorCheioAbatido : valorBase)}</span>
-                          {ultimoDesconto?.valor_novo !== undefined && (
-                            <span style={{ fontSize: 9, color: '#34D399', background: '#34D39918', border: '1px solid #34D39933', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
-                              🏷️ C/ Desconto
-                            </span>
-                          )}
-                        </div>
-                        {valorNegociadoHoje !== undefined && valorNegociadoHoje > 0 && (
-                          <div style={{ marginTop: 4 }}>
-                            <div style={{ fontSize: 10, color: C.amber, fontWeight: 800 }}>
-                              {c.tipo === 'receber' ? 'A receber (hoje): ' : 'A pagar (hoje): '}{fmt(valorNegociadoHoje)}
-                            </div>
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{
-                          fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-                          letterSpacing: 0.4,
-                          background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Aguardando aprovação' ? '#3B82F620' : c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#A78BFA20' : venc ? '#F8717120' : C.amber + '20',
-                          color: c.status === 'Bloqueado' ? '#FB923C' : c.status === 'Aguardando aprovação' ? '#60A5FA' : c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#A78BFA' : venc ? '#F87171' : C.amber,
-                          border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Aguardando aprovação' ? '1px solid #3B82F644' : 'none',
-                          boxShadow: c.status === 'Bloqueado' ? '0 0 8px #F9731633' : 'none'
-                        }}>
-                          {c.status === 'Bloqueado' ? '🔒 BLOQUEADO' : c.status === 'Aguardando aprovação' ? '⏳ AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : (c.status || 'LANÇADO').toUpperCase()}
-                        </span>
-                        {c.criado_por && (
-                          <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
-                            👤 Lançado por: {c.criado_por}
-                          </div>
-                        )}
-                        {c.created_at && (
-                          <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 2, display: 'flex', alignItems: 'center', gap: 3 }}>
-                            🕒 {new Date(c.created_at).toLocaleDateString('pt-BR')} às {new Date(c.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        )}
-                        {c.aprovado_por && (
-                          <div style={{ fontSize: 9, color: '#34D399', marginTop: 2 }}>
-                            ✓ Aprovado por: {c.aprovado_por}
-                          </div>
-                        )}
-                        {c.status === 'Negado' && c.justificativa_negacao && (
-                          <div style={{ fontSize: 9, color: '#F87171', marginTop: 4, maxWidth: 160, whiteSpace: 'normal' }}>
-                            <b style={{ fontWeight: 800 }}>Motivo:</b> {c.justificativa_negacao}
-                          </div>
-                        )}
-                      </td>
-                      <td
-                        style={{
-                          padding: '12px 14px',
-                          whiteSpace: 'nowrap',
-                          position: 'sticky',
-                          right: 0,
-                          background: c.status === 'Bloqueado' ? '#1F1918' : c.status === 'Aguardando aprovação' ? '#131A29' : (isExpanded ? '#12141C' : '#12141C'),
-                          zIndex: 5,
-                          boxShadow: '-4px 0 8px rgba(0,0,0,0.5)'
+                  const isSelected = selecionadasContas.includes(c.id)
+
+                  return (
+                    <Fragment key={c.id}>
+                      <tr 
+                        onClick={() => setExpandedContaId(isExpanded ? null : c.id)}
+                        style={{ 
+                          borderBottom: isExpanded ? 'none' : `1px solid ${C.border}`, 
+                          background: isSelected ? 'rgba(245, 158, 11, 0.08)' : c.status === 'Bloqueado' ? '#F9731610' : c.status === 'Aguardando aprovação' ? '#F59E0B08' : (isExpanded ? C.bgWhite : 'transparent'),
+                          borderLeft: isSelected ? `3px solid ${C.amber}` : c.status === 'Bloqueado' ? '3px solid #F97316' : c.status === 'Aguardando aprovação' ? '3px solid #F59E0B' : 'none',
+                          cursor: 'pointer',
+                          transition: 'background 0.15s ease'
                         }}
-                        onClick={e => e.stopPropagation()}
                       >
-                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                          {podeAlterarStatus && <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 125, padding: '4px 6px', fontSize: 10 }}>
-                            <option value="Lançado">Lançado</option>
-                            <option value="Bloqueado">Bloqueado</option>
-                            <option value="Aguardando aprovação">Aguardando aprovação</option>
-                            <option value="Liberado/OK">Liberado/OK</option>
-                            <option value="A pagar">A pagar</option>
-                            <option value="Pago Parcial">Pago Parcial</option>
-                            <option value="Pago">Pago</option>
-                            <option value="Pago sem Nota Fiscal">Paga S/NF</option>
-                            <option value="Negado">Negado</option>
-                          </select>}
-
-
-                          {c.is_privada && (
-                            <button onClick={() => setAcessosContaPrivada(c)} title="Gerenciar Acessos" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
-                              <Shield size={13} />
-                            </button>
+                        {(modoExportacao || modoSelecao) && (
+                          <td style={{ padding: '12px 10px', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selecionadasContas.includes(c.id)}
+                              onChange={() => toggleContaSelecionada(c.id)}
+                              style={{ cursor: 'pointer', width: 15, height: 15, accentColor: C.amber }}
+                            />
+                          </td>
+                        )}
+                        {/* Código */}
+                        <td style={{ padding: '12px 14px' }}>
+                          <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(245, 158, 11, 0.1)', color: c.tipo === 'receber' ? '#10B981' : C.amber, border: `1px solid rgba(245, 158, 11, 0.3)`, padding: '3px 7px', borderRadius: 4, letterSpacing: 0.5, fontFamily: 'monospace' }}>
+                            {fmtCodigo(c) || `#${c.id.slice(0, 5)}`}
+                          </span>
+                        </td>
+                        {/* Tipo */}
+                        <td style={{ padding: '12px 14px' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: 6, background: c.tipo === 'receber' ? '#34D39918' : '#F8717118', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {c.tipo === 'receber' ? <ArrowUpRight size={13} color="#34D399" /> : <ArrowDownRight size={13} color="#F87171" />}
+                          </div>
+                        </td>
+                        {/* Descrição & Vínculo */}
+                        <td style={{ padding: '12px 14px', color: C.ink, fontWeight: 600, maxWidth: 260 }}>
+                          <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                            <span>{c.descricao}</span>
+                            {(() => {
+                              const anexos = parseAnexos(c.comprovante_url)
+                              if (anexos.length === 0) return null
+                              return (
+                                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
+                                  {anexos.map((url, idx) => (
+                                    <a
+                                      key={idx}
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      title={`Abrir Anexo ${idx + 1}`}
+                                      onClick={e => e.stopPropagation()}
+                                      style={{ color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 2, textDecoration: 'none', background: 'rgba(245, 158, 11, 0.12)', padding: '1px 5px', borderRadius: 3, fontSize: 10, fontWeight: 700 }}
+                                    >
+                                      <Eye size={11} />
+                                      <span>{anexos.length > 1 ? `${idx + 1}` : ''}</span>
+                                    </a>
+                                  ))}
+                                </div>
+                              )
+                            })()}
+                          </div>
+                          {c.categoria && (
+                            <div style={{ marginTop: 4 }}>
+                              <span style={{ fontSize: 10, color: C.inkSoft, background: '#ffffff0a', padding: '1px 6px', borderRadius: 3 }}>
+                                {c.categoria}
+                              </span>
+                            </div>
                           )}
-                          {podeEditar && (
-                             <button onClick={() => iniciarEdicao(c)} title="Editar Lançamento" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                               <Edit3 size={13} />
-                             </button>
+                          {c.observacoes && (
+                            <div style={{ marginTop: 6 }} onClick={e => e.stopPropagation()}>
+                              <ObservacaoExpandivel text={c.observacoes} maxLength={55} />
+                            </div>
                           )}
-                          <label title="Anexar Comprovantes / Documentos" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
-                            <Paperclip size={13} />
-                            <input hidden type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" onChange={e => { const files = e.target.files; if(files && files.length > 0) void anexarComprovantePosterior(c.id, c.empresa_id, files); e.currentTarget.value = '' }} />
-                          </label>
-                          {podeDeletar && (
-                            <button onClick={() => excluir(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}><X size={13} /></button>
+                        </td>
+                        {/* Empresa / Obra */}
+                        <td style={{ padding: '12px 14px', color: C.inkSoft }}>
+                          <div style={{ borderLeft: `2px solid ${c.empresa?.cor ?? '#fff'}`, paddingLeft: 6, fontWeight: 600, color: C.ink }}>
+                            {c.empresa?.nome_fantasia ?? c.empresa?.razao_social ?? '—'}
+                          </div>
+                          {c.obra && (
+                            <div style={{ fontSize: 10, color: C.amber, paddingLeft: 6, marginTop: 2 }}>
+                              Obra: {c.obra.nome}
+                            </div>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                    
-                    {/* Expansion Row */}
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <tr style={{ borderBottom: `1px solid ${C.border}`, background: '#12141C' }}>
-                          <td colSpan={8} style={{ padding: 0 }}>
-                            <motion.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              style={{ overflow: 'hidden' }}
-                            >
-                              <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-                                
-                                {/* Standard Details */}
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+                        </td>
+                        {/* Fornecedor & Domicílio Bancário */}
+                        <td style={{ padding: '12px 14px', color: C.inkSoft, maxWidth: 220, wordBreak: 'break-word' }}>
+                          <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.razao_social ?? c.fornecedor?.nome_fantasia ?? 'Geral'}</div>
+                          {c.fornecedor?.pix && <div style={{ fontSize: 10, color: '#34D399', marginTop: 2 }}>PIX: {c.fornecedor.pix}</div>}
+                          {(c.fornecedor?.banco) && <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
+                            Bc: {c.fornecedor.banco} {c.fornecedor.agencia ? `Ag: ${c.fornecedor.agencia}` : ''} {c.fornecedor.conta ? `Cc: ${c.fornecedor.conta}` : ''}
+                          </div>}
+                        </td>
+                        {/* Vencimento */}
+                        <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>
+                          <div style={{ fontWeight: 600, color: venc ? '#EF4444' : C.ink }}>{fmtDate(dataPrevisao)}</div>
+                          {venc && <div style={{ fontSize: 8.5, fontWeight: 900, color: '#EF4444' }}>ATRASADO</div>}
+                        </td>
+                        {/* Valor */}
+                        <td style={{ padding: '12px 14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                          <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'monospace' }}>
+                            <span>{fmt((pagoParcial || totalPagoHistorico > 0) ? valorCheioAbatido : valorBase)}</span>
+                            {ultimoDesconto?.valor_novo !== undefined && (
+                              <span style={{ fontSize: 9, color: '#34D399', background: '#34D39918', border: '1px solid #34D39933', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
+                                C/ Desconto
+                              </span>
+                            )}
+                          </div>
+                          {valorNegociadoHoje !== undefined && valorNegociadoHoje > 0 && (
+                            <div style={{ marginTop: 4 }}>
+                              <div style={{ fontSize: 10, color: C.amber, fontWeight: 800 }}>
+                                {c.tipo === 'receber' ? 'A receber (hoje): ' : 'A pagar (hoje): '}{fmt(valorNegociadoHoje)}
+                              </div>
+                            </div>
+                          )}
+                        </td>
+                        {/* Status */}
+                        <td style={{ padding: '12px 14px' }}>
+                          <span style={{
+                            fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
+                            letterSpacing: 0.4,
+                            background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Aguardando aprovação' ? '#F59E0B20' : c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#F59E0B20' : venc ? '#F8717120' : C.amber + '20',
+                            color: c.status === 'Bloqueado' ? '#FB923C' : c.status === 'Aguardando aprovação' ? '#F59E0B' : c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#F59E0B' : venc ? '#F87171' : C.amber,
+                            border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Aguardando aprovação' ? '1px solid #F59E0B44' : 'none',
+                            boxShadow: c.status === 'Bloqueado' ? '0 0 8px #F9731633' : 'none'
+                          }}>
+                            {c.status === 'Bloqueado' ? 'BLOQUEADO' : c.status === 'Aguardando aprovação' ? 'AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : (c.status || 'LANÇADO').toUpperCase()}
+                          </span>
+                          {c.criado_por && (
+                            <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
+                              Por: {c.criado_por}
+                            </div>
+                          )}
+                        </td>
+                        {/* Ações */}
+                        <td
+                          style={{
+                            padding: '10px 14px',
+                            whiteSpace: 'nowrap',
+                            position: 'sticky',
+                            right: 0,
+                            background: isExpanded ? C.bgWhite : C.bgPanel,
+                            borderLeft: `1px solid ${C.border}`,
+                            zIndex: 5
+                          }}
+                          onClick={e => e.stopPropagation()}
+                        >
+                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            {podeAlterarStatus && (
+                              <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 125, padding: '4px 6px', fontSize: 10 }}>
+                                <option value="Lançado">Lançado</option>
+                                <option value="Bloqueado">Bloqueado</option>
+                                <option value="Aguardando aprovação">Aguardando aprovação</option>
+                                <option value="Liberado/OK">Liberado/OK</option>
+                                <option value="A pagar">A pagar</option>
+                                <option value="Pago Parcial">Pago Parcial</option>
+                                <option value="Pago">Pago</option>
+                                <option value="Pago sem Nota Fiscal">Paga S/NF</option>
+                                <option value="Negado">Negado</option>
+                              </select>
+                            )}
 
-                                  <div>
-                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Data e Horário do Lançamento</div>
-                                    <div style={{ fontSize: 13, color: C.ink, marginTop: 4 }}>
-                                      🕒 {c.created_at ? new Date(c.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—'}
-                                      {c.criado_por ? <span style={{ color: C.inkSoft, fontSize: 11 }}> por {c.criado_por}</span> : ''}
+                            {c.is_privada && (
+                              <button onClick={() => setAcessosContaPrivada(c)} title="Gerenciar Acessos" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
+                                <Shield size={13} />
+                              </button>
+                            )}
+                            {podeEditar && (
+                              <button onClick={() => iniciarEdicao(c)} title="Editar Lançamento" style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
+                                <Edit3 size={13} />
+                              </button>
+                            )}
+                            <label title="Anexar Comprovantes / Documentos" style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}>
+                              <Paperclip size={13} />
+                              <input hidden type="file" multiple accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx" onChange={e => { const files = e.target.files; if(files && files.length > 0) void anexarComprovantePosterior(c.id, c.empresa_id, files); e.currentTarget.value = '' }} />
+                            </label>
+                            {podeDeletar && (
+                              <button onClick={() => excluir(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}><X size={13} /></button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Expansion Row */}
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.bgWhite }}>
+                            <td colSpan={9} style={{ padding: 0 }}>
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                style={{ overflow: 'hidden' }}
+                              >
+                                <div style={{
+                                  position: 'sticky',
+                                  left: 0,
+                                  maxWidth: 'calc(100vw - 320px)',
+                                  width: '100%',
+                                  boxSizing: 'border-box',
+                                  padding: '20px 24px',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  gap: 18,
+                                  background: C.bgWhite
+                                }}>
+                                  {/* Standard Details */}
+                                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+                                    <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14 }}>
+                                      <div style={{ fontSize: 10.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Data e Horário do Lançamento</div>
+                                      <div style={{ fontSize: 13, color: C.ink, marginTop: 6, fontWeight: 600 }}>
+                                        {c.created_at ? new Date(c.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                      </div>
+                                      {c.criado_por && (
+                                        <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>
+                                          Lançado por: <strong style={{ color: C.ink }}>{c.criado_por}</strong>
+                                        </div>
+                                      )}
+                                      {c.aprovado_por && (
+                                        <div style={{ fontSize: 11, color: '#059669', marginTop: 4, fontWeight: 700 }}>
+                                          ✓ Aprovado por: {c.aprovado_por}
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14 }}>
+                                      <div style={{ fontSize: 10.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Observações do Lançamento</div>
+                                      <div style={{ marginTop: 6 }}>
+                                        <ObservacaoExpandivel text={c.observacoes} maxLength={120} showTitleLabel={false} />
+                                      </div>
+                                    </div>
+
+                                    <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14 }}>
+                                      <div style={{ fontSize: 10.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 8 }}>
+                                        Documentos Anexados ({parseAnexos(c.comprovante_url).length})
+                                      </div>
+                                      {(() => {
+                                        const anexos = parseAnexos(c.comprovante_url)
+                                        return (
+                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                            {anexos.length > 0 ? (
+                                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                                {anexos.map((url, idx) => {
+                                                  const isImg = /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(url)
+                                                  return (
+                                                    <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '5px 10px', borderRadius: 6 }}>
+                                                      <a
+                                                        href={url}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                        style={{ ...btnGhost, fontSize: 11, color: C.amber, border: 'none', padding: 0, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, fontWeight: 700 }}
+                                                      >
+                                                        <Paperclip size={13} />
+                                                        <span>{isImg ? `Imagem ${idx + 1}` : `Documento ${idx + 1}`} ↗</span>
+                                                      </a>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => void removerAnexoPosterior(c.id, url)}
+                                                        title="Remover este anexo"
+                                                        style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '2px 4px', display: 'inline-flex', alignItems: 'center' }}
+                                                      >
+                                                        <X size={12} />
+                                                      </button>
+                                                    </div>
+                                                  )
+                                                })}
+                                              </div>
+                                            ) : (
+                                              <div style={{ fontSize: 11.5, color: C.inkSoft, fontStyle: 'italic' }}>Nenhum documento anexado.</div>
+                                            )}
+
+                                            <label style={{ ...btnGhost, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, color: C.amber, border: `1px solid ${C.amber}66`, padding: '6px 12px', alignSelf: 'flex-start', marginTop: 4, background: C.bgWhite }}>
+                                              <Paperclip size={13} /> + Adicionar Anexo(s)
+                                              <input
+                                                hidden
+                                                type="file"
+                                                multiple
+                                                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
+                                                onChange={e => {
+                                                  const files = e.target.files
+                                                  if (files && files.length > 0) void anexarComprovantePosterior(c.id, c.empresa_id, files)
+                                                  e.currentTarget.value = ''
+                                                }}
+                                              />
+                                            </label>
+                                          </div>
+                                        )
+                                      })()}
+                                    </div>
+
+                                    <div style={{ background: C.bgPanel, padding: 14, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                                      <div style={{ fontSize: 10.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 8 }}>Resumo Financeiro</div>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.inkSoft, marginBottom: 5 }}>
+                                        <span>Valor Original:</span>
+                                        <span style={{ fontWeight: 700, color: C.ink }}>{fmt(c.valor)}</span>
+                                      </div>
+                                      {ultimoDesconto?.valor_novo !== undefined && (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#059669', marginBottom: 5, fontWeight: 700 }}>
+                                          <span>Valor c/ Desconto:</span>
+                                          <span>{fmt(Number(ultimoDesconto.valor_novo))}</span>
+                                        </div>
+                                      )}
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#059669', marginBottom: 5 }}>
+                                        <span>Total Pago (Amortizado):</span>
+                                        <span style={{ fontWeight: 700 }}>{fmt(totalAbatido)}</span>
+                                      </div>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.amber, fontWeight: 800, marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+                                        <span>{c.tipo === 'receber' ? 'Saldo a Receber:' : 'Saldo a Pagar:'}</span>
+                                        <span style={{ fontFamily: 'monospace' }}>{fmt(valorCheioAbatido)}</span>
+                                      </div>
                                     </div>
                                   </div>
 
-                                  <div>
-                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800 }}>Observações do Lançamento</div>
-                                    <div style={{ marginTop: 4 }}>
-                                      <ObservacaoExpandivel text={c.observacoes} maxLength={100} showTitleLabel={false} />
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 6 }}>
-                                      Documentos / Comprovantes Anexados ({parseAnexos(c.comprovante_url).length})
-                                    </div>
-                                    {(() => {
-                                      const anexos = parseAnexos(c.comprovante_url)
-                                      return (
-                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                          {anexos.length > 0 ? (
-                                            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                                              {anexos.map((url, idx) => {
-                                                const isImg = /\.(jpg|jpeg|png|webp|gif)(\?.*)?$/i.test(url)
+                                  {/* Negotiation Panel */}
+                                  {(isAdminGeral || podePagar || podeAprovar || podeLancar || colaboradorAtivo.cargo === 'admin_empresa') && (
+                                    <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 18 }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                          <Shield size={16} color={C.amber} />
+                                          <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 800, color: C.ink }}>Gestão de Pagamentos Parciais & Acordos</h3>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => openRestaurarValorCheioModal(c)}
+                                          style={{ ...btnGhost, fontSize: 10, padding: '4px 10px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 5, background: C.bgWhite }}
+                                        >
+                                          <RefreshCw size={11} /> Restaurar Valor Cheio
+                                        </button>
+                                      </div>
+                                      
+                                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 24, alignItems: 'start' }}>
+                                        {/* Left: Nova Negociação */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: C.bgWhite, padding: 16, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                                          <div style={{ fontSize: 12, fontWeight: 800, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>Registrar Nova Negociação</div>
+                                          
+                                          <select 
+                                            style={input} 
+                                            value={formNegociacao.tipo} 
+                                            onChange={e => setFormNegociacao(f => ({ ...f, tipo: e.target.value as any, valor_pago: '', valor_novo: '', nova_data: '' }))}
+                                          >
+                                            <option value="observacao">Apenas Observação / Registro</option>
+                                            <option value="desconto">Acordo de Desconto</option>
+                                            <option value="pagamento_parcial">Pagamento Parcial (Amortização)</option>
+                                            <option value="prorrogacao">Prorrogação de Vencimento</option>
+                                          </select>
+
+                                          {formNegociacao.tipo === 'desconto' && (
+                                            <input style={input} type="number" step="0.01" placeholder="Novo Valor Acordado (R$)" value={formNegociacao.valor_novo} onChange={e => setFormNegociacao(f => ({ ...f, valor_novo: e.target.value }))} />
+                                          )}
+
+                                          {formNegociacao.tipo === 'pagamento_parcial' && (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                              <input style={input} type="number" step="0.01" placeholder="Valor Pago Agora (R$)" value={formNegociacao.valor_pago} onChange={e => setFormNegociacao(f => ({ ...f, valor_pago: e.target.value }))} />
+                                              {formNegociacao.valor_pago && (
+                                                <div style={{ fontSize: 11, color: '#059669', fontWeight: 700 }}>
+                                                  Saldo Devedor Calculado: {fmt(c.valor - Number(formNegociacao.valor_pago))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+
+                                          {formNegociacao.tipo === 'prorrogacao' && (
+                                            <input style={input} type="date" placeholder="Nova Data" value={formNegociacao.nova_data} onChange={e => setFormNegociacao(f => ({ ...f, nova_data: e.target.value }))} />
+                                          )}
+
+                                          <textarea 
+                                            style={{ ...input, resize: 'vertical', minHeight: 65 }} 
+                                            placeholder="Histórico, justificativa ou observações do acordo..." 
+                                            value={formNegociacao.descricao} 
+                                            onChange={e => setFormNegociacao(f => ({ ...f, descricao: e.target.value }))} 
+                                          />
+
+                                          <button 
+                                            onClick={() => void salvarNegociacao(c)} 
+                                            disabled={savingNegociacao}
+                                            style={{ ...btn(C.amber), alignSelf: 'flex-start' }}
+                                          >
+                                            {savingNegociacao ? 'Salvando...' : 'Salvar Registro'}
+                                          </button>
+                                        </div>
+
+                                        {/* Right: Histórico */}
+                                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                          <div style={{ fontSize: 12, fontWeight: 800, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                                            Histórico de Acordos & Movimentações
+                                          </div>
+
+                                          {(!c.historico_negociacao || c.historico_negociacao.length === 0) ? (
+                                            <div style={{ fontSize: 11.5, color: C.inkSoft, fontStyle: 'italic', padding: 16, background: C.bgWhite, borderRadius: 8, border: `1px solid ${C.border}`, textAlign: 'center' }}>
+                                              Nenhum acordo ou movimentação registrado para esta conta.
+                                            </div>
+                                          ) : (
+                                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 280, overflowY: 'auto', paddingRight: 4 }}>
+                                              {[...c.historico_negociacao].reverse().map(hist => {
+                                                const isStatus = hist.tipo === 'alteracao_status'
+                                                const borderColor = isStatus ? C.amber : hist.tipo === 'desconto' ? '#059669' : hist.tipo === 'pagamento_parcial' ? '#059669' : C.amber
+                                                const tipoTitulo = isStatus ? 'Alteração de Status' : hist.tipo === 'desconto' ? 'Acordo de Desconto' : hist.tipo === 'pagamento_parcial' ? 'Pagamento Parcial' : hist.tipo === 'prorrogacao' ? 'Prorrogação' : 'Observação'
                                                 return (
-                                                  <div key={idx} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#0B0C0E', border: `1px solid ${C.border}`, padding: '5px 9px', borderRadius: 5 }}>
-                                                    <a
-                                                      href={url}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      style={{ ...btnGhost, fontSize: 11, color: C.amber, border: 'none', padding: 0, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-                                                    >
-                                                      <Paperclip size={13} />
-                                                      <span>{isImg ? `Imagem ${idx + 1}` : `Documento ${idx + 1}`} ↗</span>
-                                                    </a>
-                                                    <button
-                                                      type="button"
-                                                      onClick={() => void removerAnexoPosterior(c.id, url)}
-                                                      title="Remover este anexo"
-                                                      style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: '2px 4px', display: 'inline-flex', alignItems: 'center' }}
-                                                    >
-                                                      <X size={12} />
-                                                    </button>
+                                                  <div key={hist.id} style={{ background: C.bgWhite, border: `1px solid ${C.border}`, padding: 12, borderRadius: 8, borderLeft: `3px solid ${borderColor}` }}>
+                                                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                                      <strong style={{ fontSize: 11.5, color: borderColor, fontWeight: 800 }}>
+                                                        {tipoTitulo}
+                                                      </strong>
+                                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                                        <span style={{ fontSize: 10.5, color: C.inkSoft }}>
+                                                          {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                        {!isStatus && (
+                                                          <>
+                                                            <button
+                                                              onClick={() => openEditNegociacao(c.id, hist)}
+                                                              title="Editar negociação"
+                                                              style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                                                            >
+                                                              <Edit3 size={12} />
+                                                            </button>
+                                                            <button
+                                                              onClick={() => void excluirNegociacaoItem(c, hist.id)}
+                                                              title="Excluir negociação"
+                                                              style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                                                            >
+                                                              <X size={12} />
+                                                            </button>
+                                                          </>
+                                                        )}
+                                                      </div>
+                                                    </div>
+                                                    <div style={{ fontSize: 11, color: C.ink, fontWeight: 700, marginBottom: 4 }}>
+                                                      Por: {hist.autor || 'Usuário'}
+                                                      {hist.editado_por && <span style={{ color: C.inkSoft, fontSize: 9.5, marginLeft: 6, fontWeight: 400 }}>(editado por {hist.editado_por})</span>}
+                                                    </div>
+                                                    <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>{hist.descricao}</div>
+                                                    
+                                                    {hist.tipo === 'desconto' && hist.valor_novo && (
+                                                      <div style={{ marginTop: 6, fontSize: 11, color: '#059669', fontWeight: 700 }}>Novo Valor: {fmt(hist.valor_novo)}</div>
+                                                    )}
+                                                    {hist.tipo === 'pagamento_parcial' && hist.valor_pago && (
+                                                      <div style={{ marginTop: 6, fontSize: 11, color: '#059669', fontWeight: 700 }}>Pago: {fmt(hist.valor_pago)}</div>
+                                                    )}
+                                                    {hist.tipo === 'prorrogacao' && hist.nova_data && (
+                                                      <div style={{ marginTop: 6, fontSize: 11, color: C.amber, fontWeight: 700 }}>Nova Data: {fmtDate(hist.nova_data)}</div>
+                                                    )}
                                                   </div>
                                                 )
                                               })}
                                             </div>
-                                          ) : (
-                                            <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic' }}>Nenhum documento anexado.</div>
                                           )}
-
-                                          <label style={{ ...btnGhost, fontSize: 11, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, color: C.amber, border: `1px solid ${C.amber}40`, padding: '6px 12px', alignSelf: 'flex-start', marginTop: 4 }}>
-                                            <Paperclip size={13} /> + Adicionar Anexo(s)
-                                            <input
-                                              hidden
-                                              type="file"
-                                              multiple
-                                              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx"
-                                              onChange={e => {
-                                                const files = e.target.files
-                                                if (files && files.length > 0) void anexarComprovantePosterior(c.id, c.empresa_id, files)
-                                                e.currentTarget.value = ''
-                                              }}
-                                            />
-                                          </label>
                                         </div>
-                                      )
-                                    })()}
-                                  </div>
-                                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: 12, borderRadius: 6, border: `1px solid rgba(255,255,255,0.05)` }}>
-                                    <div style={{ fontSize: 10, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 800, marginBottom: 8 }}>Resumo Financeiro</div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: C.inkSoft, marginBottom: 4 }}>
-                                      <span>Valor Cheio (Original):</span>
-                                      <span style={{ fontWeight: 700, color: C.ink }}>{fmt(c.valor)}</span>
-                                    </div>
-                                    {ultimoDesconto?.valor_novo !== undefined && (
-                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#34D399', marginBottom: 4 }}>
-                                        <span>Valor c/ Desconto:</span>
-                                        <span>{fmt(Number(ultimoDesconto.valor_novo))}</span>
                                       </div>
-                                    )}
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: '#34D399', marginBottom: 4 }}>
-                                      <span>Total Pago (Amortizado):</span>
-                                      <span style={{ fontWeight: 700 }}>{fmt(totalAbatido)}</span>
                                     </div>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: C.amber, fontWeight: 800, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                                      <span>{c.tipo === 'receber' ? 'A Receber:' : 'A Pagar:'}</span>
-                                      <span>{fmt(valorCheioAbatido)}</span>
-                                    </div>
-                                  </div>
+                                  )}
+
                                 </div>
+                              </motion.div>
+                            </td>
+                          </tr>
+                        )}
+                      </AnimatePresence>
+                    </Fragment>
+                  )
+                })}
+                {filtered.length === 0 && (
+                  <tr><td colSpan={8} style={{ padding: '24px 14px', color: C.inkSoft, textAlign: 'center' }}>Nenhum lançamento financeiro encontrado.</td></tr>
+                )}
+              </tbody>
+            </table>
+            </div>
 
-                                {/* Negotiation Panel - Available for all management roles */}
-                                {(isAdminGeral || podePagar || podeAprovar || podeLancar || colaboradorAtivo.cargo === 'admin_empresa') && (
-                                  <div style={{ background: '#0B0C0E', border: `1px solid ${C.amber}40`, borderRadius: 8, padding: 16 }}>
-                                    <h3 style={{ margin: '0 0 16px', fontSize: 14, color: C.amber, display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <Shield size={16} /> Gestão de Pagamentos Parciais & Acordos
-                                    </h3>
-                                    
-                                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, alignItems: 'start' }}>
-                                      
-                                      {/* Left: Nova Negociação */}
-                                      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                                        <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Registrar Nova Negociação</div>
-                                        
-                                        <select 
-                                          style={input} 
-                                          value={formNegociacao.tipo} 
-                                          onChange={e => setFormNegociacao(f => ({ ...f, tipo: e.target.value as any, valor_pago: '', valor_novo: '', nova_data: '' }))}
-                                        >
-                                          <option value="observacao">Apenas Observação / Registro</option>
-                                          <option value="desconto">Acordo de Desconto</option>
-                                          <option value="pagamento_parcial">Pagamento Parcial (Amortização)</option>
-                                          <option value="prorrogacao">Prorrogação de Vencimento</option>
-                                        </select>
+            {/* ── BARRA DE PAGINAÇÃO & CONTROLE DE PERFORMANCE ── */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, padding: '12px 16px', background: C.bgPanel, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 11.5, color: C.inkSoft, fontWeight: 600 }}>
+                  {filtered.length === 0 ? 'Nenhum lançamento encontrado' : (
+                    itensPorPagina === 'todos' 
+                      ? `Exibindo todos os ${filtered.length} lançamentos`
+                      : `Exibindo ${(paginaAtual - 1) * Number(itensPorPagina) + 1}–${Math.min(paginaAtual * Number(itensPorPagina), filtered.length)} de ${filtered.length} lançamentos`
+                  )}
+                </span>
 
-                                        {formNegociacao.tipo === 'desconto' && (
-                                          <input style={input} type="number" step="0.01" placeholder="Novo Valor Acordado (R$)" value={formNegociacao.valor_novo} onChange={e => setFormNegociacao(f => ({ ...f, valor_novo: e.target.value }))} />
-                                        )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 11, color: C.inkSoft }}>Por página:</span>
+                  <select
+                    value={itensPorPagina}
+                    onChange={e => {
+                      const val = e.target.value === 'todos' ? 'todos' : Number(e.target.value)
+                      setItensPorPagina(val)
+                      setPaginaAtual(1)
+                    }}
+                    style={{ ...input, width: 'auto', padding: '3px 8px', fontSize: 11, height: 28, background: C.bgWhite }}
+                  >
+                    <option value={25}>25</option>
+                    <option value={50}>50 (Padrão)</option>
+                    <option value={100}>100</option>
+                    <option value={200}>200</option>
+                    <option value="todos">Todos</option>
+                  </select>
+                </div>
+              </div>
 
-                                        {formNegociacao.tipo === 'pagamento_parcial' && (
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                            <input style={input} type="number" step="0.01" placeholder="Valor Pago Agora (R$)" value={formNegociacao.valor_pago} onChange={e => setFormNegociacao(f => ({ ...f, valor_pago: e.target.value }))} />
-                                            <button
-                                             type="button"
-                                             onClick={() => openRestaurarValorCheioModal(c)}
-                                             style={{ ...btnGhost, fontSize: 9, padding: '3px 8px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                           >
-                                             <RefreshCw size={10} /> Restaurar Valor Cheio
-                                           </button>
-                                            {formNegociacao.valor_pago && (
-                                              <div style={{ fontSize: 11, color: '#34D399', fontWeight: 600 }}>
-                                                Saldo Devedor Calculado: {fmt(c.valor - Number(formNegociacao.valor_pago))}
-                                              </div>
-                                            )}
-                                          </div>
-                                        )}
+              {itensPorPagina !== 'todos' && totalPaginas > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    disabled={paginaAtual <= 1}
+                    onClick={() => setPaginaAtual(1)}
+                    style={{ ...btnGhost, padding: '4px 8px', fontSize: 11, opacity: paginaAtual <= 1 ? 0.4 : 1, cursor: paginaAtual <= 1 ? 'not-allowed' : 'pointer' }}
+                    title="Primeira página"
+                  >
+                    «
+                  </button>
+                  <button
+                    type="button"
+                    disabled={paginaAtual <= 1}
+                    onClick={() => setPaginaAtual(p => Math.max(1, p - 1))}
+                    style={{ ...btnGhost, padding: '4px 10px', fontSize: 11, opacity: paginaAtual <= 1 ? 0.4 : 1, cursor: paginaAtual <= 1 ? 'not-allowed' : 'pointer' }}
+                  >
+                    Anterior
+                  </button>
 
-                                        {formNegociacao.tipo === 'prorrogacao' && (
-                                          <input style={input} type="date" placeholder="Nova Data" value={formNegociacao.nova_data} onChange={e => setFormNegociacao(f => ({ ...f, nova_data: e.target.value }))} />
-                                        )}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    {Array.from({ length: totalPaginas }, (_, i) => i + 1)
+                      .filter(p => p === 1 || p === totalPaginas || Math.abs(p - paginaAtual) <= 2)
+                      .map((p, idx, arr) => {
+                        const prev = arr[idx - 1]
+                        return (
+                          <React.Fragment key={p}>
+                            {prev && p - prev > 1 && <span style={{ fontSize: 11, color: C.inkSoft, padding: '0 2px' }}>...</span>}
+                            <button
+                              type="button"
+                              onClick={() => setPaginaAtual(p)}
+                              style={{
+                                padding: '4px 9px',
+                                borderRadius: 4,
+                                fontSize: 11,
+                                fontWeight: paginaAtual === p ? 800 : 600,
+                                background: paginaAtual === p ? C.amber : C.bgWhite,
+                                color: paginaAtual === p ? '#000' : C.ink,
+                                border: `1px solid ${paginaAtual === p ? C.amber : C.border}`,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              {p}
+                            </button>
+                          </React.Fragment>
+                        )
+                      })}
+                  </div>
 
-                                        <textarea 
-                                          style={{ ...input, resize: 'vertical', minHeight: 60 }} 
-                                          placeholder="Histórico, justificativa ou observações do acordo..." 
-                                          value={formNegociacao.descricao} 
-                                          onChange={e => setFormNegociacao(f => ({ ...f, descricao: e.target.value }))} 
-                                        />
-
-                                        <button 
-                                          onClick={() => void salvarNegociacao(c)} 
-                                          disabled={savingNegociacao}
-                                          style={{ ...btn(C.amber), alignSelf: 'flex-start' }}
-                                        >
-                                          {savingNegociacao ? 'Salvando...' : 'Salvar Registro'}
-                                        </button>
-                                      </div>
-
-                                      {/* Right: Histórico */}
-                                      <div>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                                          <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>Histórico da Conta</div>
-                                          <button
-                                            type="button"
-                                            onClick={() => openRestaurarValorCheioModal(c)}
-                                            style={{ ...btnGhost, fontSize: 9, padding: '3px 8px', borderColor: C.amber, color: C.amber, display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                          >
-                                            <RefreshCw size={10} /> Restaurar Valor Cheio
-                                          </button>
-                                        </div>
-
-                                        {(!c.historico_negociacao || c.historico_negociacao.length === 0) ? (
-                                          <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic', padding: 12, background: 'rgba(255,255,255,0.02)', borderRadius: 6 }}>
-                                            Nenhum acordo ou negociação registrado.
-                                          </div>
-                                        ) : (
-                                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 220, overflowY: 'auto', paddingRight: 8 }}>
-                                            {[...c.historico_negociacao].reverse().map(hist => {
-                                              const isStatus = hist.tipo === 'alteracao_status'
-                                              const borderColor = isStatus ? '#3B82F6' : hist.tipo === 'desconto' ? '#10B981' : hist.tipo === 'pagamento_parcial' ? '#34D399' : C.amber
-                                              const tipoTitulo = isStatus ? 'Alteração / Status' : hist.tipo === 'desconto' ? 'Desconto' : hist.tipo === 'pagamento_parcial' ? 'Pgto Parcial' : hist.tipo === 'prorrogacao' ? 'Prorrogação' : 'Observação'
-                                              return (
-                                                <div key={hist.id} style={{ background: isStatus ? 'rgba(59,130,246,0.06)' : 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 6, borderLeft: `3px solid ${borderColor}` }}>
-                                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                                    <strong style={{ fontSize: 11, color: borderColor }}>
-                                                      {tipoTitulo}
-                                                    </strong>
-                                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                                      <span style={{ fontSize: 10, color: C.inkSoft }}>
-                                                        {new Date(hist.data).toLocaleDateString('pt-BR')} {new Date(hist.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
-                                                      </span>
-                                                      {!isStatus && (
-                                                        <>
-                                                          <button
-                                                            onClick={() => openEditNegociacao(c.id, hist)}
-                                                            title="Editar negociação"
-                                                            style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
-                                                          >
-                                                            <Edit3 size={11} />
-                                                          </button>
-                                                          <button
-                                                            onClick={() => void excluirNegociacaoItem(c, hist.id)}
-                                                            title="Excluir negociação"
-                                                            style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
-                                                          >
-                                                            <X size={11} />
-                                                          </button>
-                                                        </>
-                                                      )}
-                                                    </div>
-                                                  </div>
-                                                  <div style={{ fontSize: 11, color: C.amber, fontWeight: 600, marginBottom: 4 }}>
-                                                    👤 Por: {hist.autor || 'Usuário'}
-                                                    {hist.editado_por && <span style={{ color: C.inkSoft, fontSize: 9, marginLeft: 6 }}>(editado por {hist.editado_por})</span>}
-                                                  </div>
-                                                  <div style={{ fontSize: 12, color: C.ink, lineHeight: 1.4 }}>{hist.descricao}</div>
-                                                  
-                                                  {hist.tipo === 'desconto' && hist.valor_novo && (
-                                                    <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Novo Valor: {fmt(hist.valor_novo)}</div>
-                                                  )}
-                                                  {hist.tipo === 'pagamento_parcial' && hist.valor_pago && (
-                                                    <div style={{ marginTop: 4, fontSize: 11, color: '#34D399', fontWeight: 600 }}>Pago: {fmt(hist.valor_pago)}</div>
-                                                  )}
-                                                  {hist.tipo === 'prorrogacao' && hist.nova_data && (
-                                                    <div style={{ marginTop: 4, fontSize: 11, color: C.amber, fontWeight: 600 }}>Nova Data: {fmtDate(hist.nova_data)}</div>
-                                                  )}
-                                                </div>
-                                              )
-                                            })}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-
-                              </div>
-                            </motion.div>
-                          </td>
-                        </tr>
-                      )}
-                    </AnimatePresence>
-                  </Fragment>
-                )
-              })}
-              {filtered.length === 0 && (
-                <tr><td colSpan={8} style={{ padding: '24px 14px', color: C.inkSoft, textAlign: 'center' }}>Nenhum lançamento financeiro encontrado.</td></tr>
+                  <button
+                    type="button"
+                    disabled={paginaAtual >= totalPaginas}
+                    onClick={() => setPaginaAtual(p => Math.min(totalPaginas, p + 1))}
+                    style={{ ...btnGhost, padding: '4px 10px', fontSize: 11, opacity: paginaAtual >= totalPaginas ? 0.4 : 1, cursor: paginaAtual >= totalPaginas ? 'not-allowed' : 'pointer' }}
+                  >
+                    Próxima
+                  </button>
+                  <button
+                    type="button"
+                    disabled={paginaAtual >= totalPaginas}
+                    onClick={() => setPaginaAtual(totalPaginas)}
+                    style={{ ...btnGhost, padding: '4px 8px', fontSize: 11, opacity: paginaAtual >= totalPaginas ? 0.4 : 1, cursor: paginaAtual >= totalPaginas ? 'not-allowed' : 'pointer' }}
+                    title="Última página"
+                  >
+                    »
+                  </button>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
+          </div>
+        )
       )}
       
       {/* Modal de Edição de Conta Completa */}
@@ -5463,35 +7079,44 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         </div>
       )}
       {acessosContaPrivada && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setAcessosContaPrivada(null)}>
-          <div style={{ background: '#0F1115', border: `1px solid ${C.border}`, borderRadius: 12, padding: 24, width: '100%', maxWidth: 500 }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 18, color: C.ink }}>Gerenciar Acessos</h3>
-                <p style={{ margin: '4px 0 0 0', fontSize: 12, color: C.inkSoft }}>Lançamento Confidencial: {acessosContaPrivada.descricao}</p>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(3px)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setAcessosContaPrivada(null)}>
+          <div style={{ ...card, background: C.bgPanel, padding: 24, width: '100%', maxWidth: 500, boxShadow: '0 20px 40px rgba(0,0,0,0.18)' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Shield size={18} color={C.amber} />
+                <div>
+                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: C.ink }}>Gerenciar Acessos</h3>
+                  <p style={{ margin: '3px 0 0 0', fontSize: 11.5, color: C.inkSoft }}>Lançamento Confidencial: {acessosContaPrivada.descricao}</p>
+                </div>
               </div>
-              <button onClick={() => setAcessosContaPrivada(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={20} /></button>
+              <button onClick={() => setAcessosContaPrivada(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
             </div>
-            <div style={{ background: '#12141C', padding: 12, borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 400, overflowY: 'auto' }}>
+            <div style={{ background: C.bgWhite, padding: 10, borderRadius: 8, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto' }}>
               {colaboradores.map(colab => {
                 const isPermitido = acessosContaPrivada.usuarios_permitidos?.includes(colab.id) || false;
                 const isAdmin = colab.cargo === 'admin_geral';
                 return (
-                  <label key={colab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, borderRadius: 6, background: isPermitido ? '#34D39910' : 'transparent', border: `1px solid ${isPermitido ? '#34D39930' : 'transparent'}`, cursor: isAdmin ? 'not-allowed' : 'pointer' }}>
+                  <label key={colab.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 6, background: isPermitido || isAdmin ? '#F59E0B12' : 'transparent', border: `1px solid ${isPermitido || isAdmin ? '#F59E0B33' : 'transparent'}`, cursor: isAdmin ? 'not-allowed' : 'pointer' }}>
                     <input 
                       type="checkbox" 
                       checked={isPermitido || isAdmin} 
                       disabled={isAdmin}
                       onChange={() => toggleAcessoColaboradorContaPrivada(colab.id)} 
+                      style={{ cursor: isAdmin ? 'not-allowed' : 'pointer', accentColor: C.amber }}
                     />
                     <div style={{ flex: 1 }}>
-                      <span style={{ fontSize: 13, color: isPermitido || isAdmin ? '#34D399' : C.ink }}>{colab.nome}</span>
+                      <span style={{ fontSize: 12.5, fontWeight: isPermitido || isAdmin ? 700 : 500, color: C.ink }}>{colab.nome}</span>
                       <span style={{ fontSize: 11, color: C.inkSoft, marginLeft: 8 }}>({colab.cargo.replace('_', ' ')})</span>
-                      {isAdmin && <span style={{ fontSize: 10, marginLeft: 8, color: C.amber }}>(Acesso obrigatório)</span>}
+                      {isAdmin && <span style={{ fontSize: 10, marginLeft: 8, color: C.amber, fontWeight: 700 }}>(Acesso obrigatório)</span>}
                     </div>
                   </label>
                 )
               })}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+              <button onClick={() => setAcessosContaPrivada(null)} style={{ ...btn(C.amber), padding: '7px 18px' }}>
+                Concluir
+              </button>
             </div>
           </div>
         </div>
@@ -5549,7 +7174,7 @@ function SeletorMultiEmpresas({
   }
 
   return (
-    <div style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, marginTop: 6, width: '100%' }}>
+    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, marginTop: 6, width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft }}>
           EMPRESAS VINCULADAS ({selectedIds.length}/{empresas.length})
@@ -5613,7 +7238,7 @@ function SeletorMultiObras({
   }
 
   return (
-    <div style={{ background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, marginTop: 6, width: '100%' }}>
+    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, marginTop: 6, width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
         <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft }}>
           OBRAS VINCULADAS ({selectedIds.length}/{obras.length})
@@ -5663,16 +7288,21 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   const [savingPerms, setSavingPerms] = useState<string | null>(null)
   const [globalLimite, setGlobalLimite] = useState<number>(0)
   const [savingGlobalLimite, setSavingGlobalLimite] = useState(false)
-  const [editingCargoNome, setEditingCargoNome] = useState<string | null>(null) // codigo do cargo em edicao
+  const [editingCargoNome, setEditingCargoNome] = useState<string | null>(null)
   const [editingCargoNomeValue, setEditingCargoNomeValue] = useState('')
   const [savingCargoNome, setSavingCargoNome] = useState(false)
   
-  // States do Novo Colaborador
+  // Busca & Filtros de Colaboradores
+  const [searchColab, setSearchColab] = useState('')
+  const [filterCargo, setFilterCargo] = useState('todos')
+  const [cargoAtivoMatriz, setCargoAtivoMatriz] = useState<string>('todos')
+
+  // States do Novo Colaborador & Novo Cargo
   const [showColForm, setShowColForm] = useState(false)
   const [savingCol, setSavingCol] = useState(false)
   const [showCargoForm, setShowCargoForm] = useState(false)
   const [savingCargo, setSavingCargo] = useState(false)
-  const [cargoForm, setCargoForm] = useState({ codigo: '', nome: '', descricao: '', apps: 'rh' })
+  const [cargoForm, setCargoForm] = useState({ codigo: '', nome: '', descricao: '', apps: 'financeiro,rh' })
   const [colForm, setColForm] = useState({
     nome: '',
     email: '',
@@ -5681,14 +7311,68 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     empresa_id: ''
   })
 
-  // State para Edição de Colaborador Individual (Modal de Override)
+  // State para Edição de Colaborador Individual
   const [editColForm, setEditColForm] = useState<Colaborador | null>(null)
   const [savingEditCol, setSavingEditCol] = useState(false)
 
   // State para overrides de cargo e empresas nas solicitações pendentes
   const [solOverrides, setSolOverrides] = useState<Record<string, { cargo: string; empresas_ids: string[] }>>({})
 
-  // Se o usuário ativo for admin por empresa, já pré-define o formulário para a empresa dele
+  // Lista unificada de todos os cargos disponíveis
+  const listaCargosDisponiveis = useMemo(() => {
+    const map = new Map<string, { codigo: string; nome: string }>()
+    
+    Object.entries(NOMES_CARGOS).forEach(([codigo, nome]) => {
+      map.set(codigo, { codigo, nome })
+    })
+
+    configPermissoes.forEach(cp => {
+      if (!map.has(cp.cargo)) {
+        map.set(cp.cargo, { codigo: cp.cargo, nome: NOMES_CARGOS[cp.cargo] || cp.cargo })
+      }
+    })
+
+    cargos.forEach(c => {
+      map.set(c.codigo, { codigo: c.codigo, nome: c.nome || NOMES_CARGOS[c.codigo] || c.codigo })
+    })
+
+    colaboradores.forEach(c => {
+      if (c.cargo && !map.has(c.cargo)) {
+        map.set(c.cargo, { codigo: c.cargo, nome: NOMES_CARGOS[c.cargo] || c.cargo })
+      }
+    })
+
+    return Array.from(map.values())
+  }, [cargos, configPermissoes, colaboradores])
+
+  // Lista resiliente de configurações de permissões
+  const listaConfigExibicao = useMemo(() => {
+    const map = new Map<string, ConfigPermissao>()
+    configPermissoes.forEach(cp => {
+      map.set(cp.cargo, cp)
+    })
+
+    listaCargosDisponiveis.forEach(cargo => {
+      if (!map.has(cargo.codigo)) {
+        map.set(cargo.codigo, {
+          cargo: cargo.codigo,
+          pode_empresas: cargo.codigo === 'admin_geral',
+          pode_fornecedores: true,
+          pode_lancar: true,
+          pode_pagar: cargo.codigo === 'admin_geral',
+          pode_aprovar: cargo.codigo === 'admin_geral',
+          limite_valor: cargo.codigo === 'admin_geral' ? 99999999 : 0,
+          apps: 'financeiro',
+          abas_financeiro: 'historico,contas,empresas,fornecedores,obras',
+          pode_alterar_status: true,
+          pode_excluir_lancamento: false,
+        })
+      }
+    })
+
+    return Array.from(map.values())
+  }, [configPermissoes, listaCargosDisponiveis])
+
   useEffect(() => {
     if (colaboradorAtivo.cargo === 'admin_empresa' && colaboradorAtivo.empresa_id) {
       setColForm(f => ({
@@ -5717,7 +7401,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         setGlobalLimite((p as ConfigPermissao[])[0].limite_valor || 0)
       }
 
-      // Carrega solicitações pendentes
       let querySol = supabase.from('solicitacoes_acesso').select('*').eq('status', 'pendente')
       if (colaboradorAtivo.cargo === 'admin_empresa' && colaboradorAtivo.empresa_id) {
         querySol = querySol.eq('empresa_id', colaboradorAtivo.empresa_id)
@@ -5731,21 +7414,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     }
   }, [colaboradorAtivo])
 
-  // Salvar limite global
-  const salvarLimiteGlobal = async () => {
-    setSavingGlobalLimite(true)
-    const { error: permError } = await supabase.from('config_permissoes').update({ limite_valor: globalLimite }).not('cargo', 'is', null)
-    const { error: colError } = await supabase.from('colaboradores').update({ limite_valor: globalLimite }).not('id', 'is', null)
-    
-    if (permError || colError) {
-      toast('Erro ao atualizar limite global.', 'error')
-    } else {
-      toast('Limite global de autoliberação atualizado com sucesso.', 'success')
-      await loadData()
-      onRefresh()
-    }
-    setSavingGlobalLimite(false)
-  }
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const criarCargo = async () => {
     if (!isGeral) return
@@ -5763,29 +7434,27 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       cargo: codigo,
       pode_empresas: false,
       pode_fornecedores: false,
-      pode_lancar: false,
+      pode_lancar: true,
       pode_pagar: false,
       pode_aprovar: false,
       limite_valor: 0,
       apps: cargoForm.apps.trim() || 'financeiro',
+      abas_financeiro: 'historico,contas',
+      pode_alterar_status: true,
+      pode_excluir_lancamento: false
     })
     if (permError) {
       await supabase.from('cargos_sistema').delete().eq('codigo', codigo)
       setSavingCargo(false)
-      return toast('Cargo criado parcialmente; permissões falharam: ' + permError.message, 'error')
+      return toast('Cargo criado parcialmente: ' + permError.message, 'error')
     }
-    setCargoForm({ codigo: '', nome: '', descricao: '', apps: 'rh' })
+    setCargoForm({ codigo: '', nome: '', descricao: '', apps: 'financeiro,rh' })
     setShowCargoForm(false)
     setSavingCargo(false)
     await loadData()
-    toast(`Cargo "${nome}" criado. Agora configure as permissões na matriz abaixo.`, 'success')
+    toast(`Cargo "${nome}" criado com sucesso!`, 'success')
   }
 
-  useEffect(() => {
-    loadData()
-  }, [loadData])
-
-  // Salvar alterações de permissões de um cargo
   const salvarConfigCargo = async (cargo: string, config: ConfigPermissao) => {
     setSavingPerms(cargo)
     await supabase.from('config_permissoes').update({
@@ -5803,7 +7472,8 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     
     await loadData()
     setSavingPerms(null)
-    onRefresh() // Atualiza sessao
+    toast('Regras do cargo atualizadas!', 'success')
+    onRefresh()
   }
 
   const salvarNomeCargo = async (codigo: string) => {
@@ -5825,7 +7495,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     }
   }
 
-  // Excluir cargo do sistema
   const excluirCargo = async (codigo: string) => {
     if (['admin_geral', 'admin_empresa'].includes(codigo)) {
       return toast('Não é possível excluir cargos nativos do sistema.', 'error')
@@ -5845,7 +7514,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
 
     try {
       setLoading(true)
-
       if (colsAfetados.length > 0) {
         await supabase
           .from('colaboradores')
@@ -5866,11 +7534,10 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     }
   }
 
-  // Cadastrar novo colaborador
   const criarColaborador = async () => {
-    if (!colForm.nome.trim()) return
+    if (!colForm.nome.trim()) { toast('Informe o nome do colaborador.', 'error'); return }
     if (!colForm.email.trim()) { toast('Informe um e-mail para o colaborador.', 'error'); return }
-    if (colForm.senha.trim().length < 8) { toast('Defina uma senha de acesso com no mínimo 8 caracteres.', 'error'); return }
+    if (colForm.senha.trim().length < 8) { toast('Defina uma senha com no mínimo 8 caracteres.', 'error'); return }
     setSavingCol(true)
     
     const empresaIdDestino = colaboradorAtivo.cargo === 'admin_empresa'
@@ -5883,13 +7550,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
 
     if (error || result?.error) {
       let detail = result?.error || error?.message || 'não foi possível concluir'
-      const response = (error as { context?: Response } | null)?.context
-      if (response) {
-        try {
-          const body = await response.clone().json() as { error?: string }
-          detail = body.error || detail
-        } catch { /* mantém a mensagem padrão */ }
-      }
       toast('Erro ao criar colaborador: ' + detail, 'error')
     } else {
       setColForm({
@@ -5900,12 +7560,13 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         empresa_id: colaboradorAtivo.cargo === 'admin_empresa' ? (colaboradorAtivo.empresa_id || '') : ''
       })
       setShowColForm(false)
+      toast('Colaborador criado com sucesso!', 'success')
       onRefresh()
+      await loadData()
     }
     setSavingCol(false)
   }
 
-  // Salvar permissões customizadas de uma pessoa específica
   const handleSaveColaboradorPerms = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editColForm) return
@@ -5927,7 +7588,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
           pode_lancar: editColForm.pode_lancar,
           pode_pagar: editColForm.pode_pagar,
           pode_aprovar: editColForm.pode_aprovar,
-          limite_valor: Number(editColForm.limite_valor),
+          limite_valor: Number(editColForm.limite_valor || 0),
           apps: editColForm.apps,
           abas_financeiro: editColForm.abas_financeiro || null,
           pode_alterar_status: editColForm.pode_alterar_status ?? true,
@@ -5937,12 +7598,12 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         .eq('id', editColForm.id)
 
       if (error) throw error
-      toast('Configurações salvas para ' + editColForm.nome, 'success')
+      toast('Acessos atualizados para ' + editColForm.nome, 'success')
       setEditColForm(null)
       onRefresh()
       await loadData()
     } catch (err: any) {
-      toast('Erro ao salvar permissões da pessoa: ' + err.message, 'error')
+      toast('Erro ao salvar permissões: ' + err.message, 'error')
     } finally {
       setSavingEditCol(false)
     }
@@ -5969,27 +7630,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     }
   }
 
-  const alterarEmpresasColaborador = async (id: string, novasEmpresasIds: string[]) => {
-    try {
-      const { error } = await supabase
-        .from('colaboradores')
-        .update({
-          empresa_id: novasEmpresasIds[0] || null,
-          empresas_ids: novasEmpresasIds
-        })
-        .eq('id', id)
-      if (error) throw error
-      toast('Empresas vinculadas com sucesso!', 'success')
-      await loadData()
-      onRefresh()
-    } catch (err: any) {
-      toast('Erro ao vincular empresas: ' + (err?.message || err), 'error')
-    }
-  }
-
-  // Aprovar solicitação de acesso
   const aprovarSolicitacao = async (sol: SolicitacaoAcesso) => {
-    // Aplica o cargo e empresas selecionados pelo admin no painel (ou usa os padrões da solicitação)
     const override = solOverrides[sol.id]
     const cargoDefinido = override?.cargo || sol.cargo_solicitado
     const empresasIdsDefinidas = override?.empresas_ids !== undefined
@@ -5998,7 +7639,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
 
     setLoading(true)
     try {
-      // Usamos 'create_user' porque a edge function implantada pode não ter 'approve_user'
       const { data: result, error: functionError } = await supabase.functions.invoke('admin-users', {
         body: {
           action: 'create_user',
@@ -6014,19 +7654,11 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
 
       if (functionError || result?.error) {
         let detail = result?.error || functionError?.message || 'não foi possível criar o colaborador'
-        const response = (functionError as { context?: Response } | null)?.context
-        if (response) {
-          try {
-            const body = await response.clone().json() as { error?: string }
-            detail = body.error || detail
-          } catch { /* mantem mensagem padrao */ }
-        }
         toast('Erro ao aprovar colaborador: ' + detail, 'error')
         setLoading(false)
         return
       }
 
-      // Atualiza a solicitação diretamente via client usando as políticas RLS do RH
       await supabase.from('solicitacoes_acesso').update({
         status: 'aprovado',
         aprovado_por: colaboradorAtivo.id,
@@ -6037,17 +7669,15 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       onRefresh()
       await loadData()
     } catch (err: any) {
-      toast('Erro inesperado na aprovação: ' + (err?.message || err), 'error')
+      toast('Erro na aprovação: ' + (err?.message || err), 'error')
     } finally {
       setLoading(false)
     }
   }
 
-  // Rejeitar solicitação de acesso
   const rejeitarSolicitacao = async (id: string) => {
     setLoading(true)
     try {
-      // Atualiza a solicitação diretamente via client usando as políticas RLS do RH
       const { error } = await supabase.from('solicitacoes_acesso').update({
         status: 'rejeitado',
         aprovado_por: colaboradorAtivo.id,
@@ -6063,7 +7693,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       toast('Solicitação de acesso rejeitada.', 'info')
       await loadData()
     } catch (err: any) {
-      toast('Erro inesperado na rejeição: ' + (err?.message || err), 'error')
+      toast('Erro na rejeição: ' + (err?.message || err), 'error')
     } finally {
       setLoading(false)
     }
@@ -6093,13 +7723,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       })
       if (error || result?.error) {
         let detail = result?.error || error?.message || 'nao foi possivel excluir'
-        const response = (error as { context?: Response } | null)?.context
-        if (response) {
-          try {
-            const body = await response.clone().json() as { error?: string }
-            detail = body.error || detail
-          } catch { /* mantem */ }
-        }
         toast('Erro ao excluir colaborador: ' + detail, 'error')
         return
       }
@@ -6113,7 +7736,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     }
   }
 
-  // Alternar checkbox de uma permissão localmente antes de salvar
   const handleToggle = (cargo: string, campo: keyof ConfigPermissao) => {
     setConfigPermissoes(prev => prev.map(c => {
       if (c.cargo === cargo) {
@@ -6123,7 +7745,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     }))
   }
 
-  // Toggle de aplicativos do Cargo
   const handleToggleAppCargo = (cargo: string, appId: string) => {
     setConfigPermissoes(prev => prev.map(c => {
       if (c.cargo === cargo) {
@@ -6140,7 +7761,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     }))
   }
 
-  // Toggle de aplicativos do Colaborador (Edição individual)
   const handleToggleAppColaborador = (appId: string) => {
     if (!editColForm) return
     const appsList = editColForm.apps ? editColForm.apps.split(',').map((x: string) => x.trim()).filter(Boolean) : []
@@ -6156,7 +7776,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     })
   }
 
-  // Toggle de aba do financeiro para um cargo
   const handleToggleAbaFinanceiro = (cargo: string, abaId: string) => {
     setConfigPermissoes(prev => prev.map(c => {
       if (c.cargo === cargo) {
@@ -6170,7 +7789,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     }))
   }
 
-  // Toggle de aba do financeiro para colaborador individual
   const handleToggleAbaFinanceiroColaborador = (abaId: string) => {
     if (!editColForm) return
     const abasList = editColForm.abas_financeiro ? editColForm.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
@@ -6180,99 +7798,181 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     setEditColForm({ ...editColForm, abas_financeiro: newAbasList.join(',') })
   }
 
-  // handleLimiteChange removido pois o limite agora é global
+  // Filtragem de colaboradores
+  const colaboradoresFiltrados = useMemo(() => {
+    return colaboradores.filter(c => {
+      if (colaboradorAtivo.cargo !== 'admin_geral') {
+        const idsAtivo = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
+        if (idsAtivo.length > 0) {
+          const idsColab = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
+          const matchEmpresa = idsColab.some(id => idsAtivo.includes(id)) || (c.empresa_id ? idsAtivo.includes(c.empresa_id) : false)
+          if (!matchEmpresa) return false
+        }
+      }
 
-  // Filtra colaboradores mostrados
-  // Se for admin por empresa, só vê os da mesma empresa
-  const colaboradoresFiltrados = colaboradores.filter(c => {
-    if (colaboradorAtivo.cargo === 'admin_geral') return true
-    const idsAtivo = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-    if (idsAtivo.length === 0) return true
-    const idsColab = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
-    return idsColab.some(id => idsAtivo.includes(id)) || (c.empresa_id ? idsAtivo.includes(c.empresa_id) : false)
-  })
+      if (filterCargo !== 'todos' && c.cargo !== filterCargo) return false
+
+      if (searchColab.trim()) {
+        const q = searchColab.toLowerCase().trim()
+        const matchNome = c.nome && c.nome.toLowerCase().includes(q)
+        const matchEmail = c.email && c.email.toLowerCase().includes(q)
+        const cargoNome = listaCargosDisponiveis.find(cargo => cargo.codigo === c.cargo)?.nome || ''
+        const matchCargo = cargoNome.toLowerCase().includes(q)
+        if (!matchNome && !matchEmail && !matchCargo) return false
+      }
+
+      return true
+    })
+  }, [colaboradores, colaboradorAtivo, filterCargo, searchColab, listaCargosDisponiveis])
 
   const isGeral = colaboradorAtivo.cargo === 'admin_geral'
 
+  // Estatísticas de Gestão de Acessos
+  const totalColabs = colaboradores.length
+  const totalSolicitacoes = solicitacoes.length
+  const totalCargos = listaCargosDisponiveis.length
+  const totalAdmins = colaboradores.filter(c => c.cargo === 'admin_geral' || c.cargo === 'admin_empresa').length
+
   return (
-    <div>
-      {isGeral && (
-        <div style={{ ...card, marginBottom: 20, borderColor: C.amber + '55' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>Cargos e permissões</h3>
-              <p style={{ margin: '5px 0 0', fontSize: 11, color: C.inkSoft }}>Crie um perfil uma vez, defina os módulos e depois atribua-o aos colaboradores.</p>
-            </div>
-            <button style={{ ...btn(), padding: '7px 12px', fontSize: 10 }} onClick={() => setShowCargoForm(value => !value)}><Sliders size={13} /> {showCargoForm ? 'Fechar' : 'Criar novo cargo'}</button>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* ── KPI HEADER: VISÃO GERAL DE IDENTIDADE & ACESSOS ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 8, background: '#F59E0B15', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Users size={18} color={C.amber} />
           </div>
-          {showCargoForm && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr 1.5fr auto', gap: 9, alignItems: 'end', marginTop: 14 }}>
-              <div><label style={label}>Código</label><input style={input} value={cargoForm.codigo} onChange={event => setCargoForm({ ...cargoForm, codigo: event.target.value })} placeholder="ex: mestre_obra" /></div>
-              <div><label style={label}>Nome do cargo</label><input style={input} value={cargoForm.nome} onChange={event => setCargoForm({ ...cargoForm, nome: event.target.value })} placeholder="Mestre de obra" /></div>
-              <div><label style={label}>Descrição</label><input style={input} value={cargoForm.descricao} onChange={event => setCargoForm({ ...cargoForm, descricao: event.target.value })} placeholder="O que este cargo faz" /></div>
-              <div><label style={label}>Módulos (separados por vírgula)</label><input style={input} value={cargoForm.apps} onChange={event => setCargoForm({ ...cargoForm, apps: event.target.value })} placeholder="rh,obras,rdo" /></div>
-              <button style={{ ...btn('#10B981'), padding: '9px 12px', fontSize: 10 }} disabled={savingCargo} onClick={() => void criarCargo()}>{savingCargo ? 'Salvando...' : 'Criar cargo'}</button>
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Colaboradores</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.ink, marginTop: 1 }}>{totalColabs}</div>
+          </div>
+        </div>
+
+        <div style={{ background: totalSolicitacoes > 0 ? '#F59E0B10' : C.bgPanel, border: `1px solid ${totalSolicitacoes > 0 ? C.amber : C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 8, background: totalSolicitacoes > 0 ? '#F59E0B25' : C.bgWhite, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={18} color={totalSolicitacoes > 0 ? C.amber : C.inkSoft} />
+          </div>
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: totalSolicitacoes > 0 ? C.amber : C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Solicitações Pendentes</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: totalSolicitacoes > 0 ? C.amber : C.ink, marginTop: 1 }}>
+              {totalSolicitacoes} {totalSolicitacoes > 0 && <span style={{ fontSize: 10, fontWeight: 800, padding: '1px 6px', background: C.amber, color: '#000', borderRadius: 10, marginLeft: 6 }}>Requer Ação</span>}
             </div>
-          )}
+          </div>
+        </div>
+
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 8, background: '#10B98115', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <ShieldCheck size={18} color="#10B981" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Cargos & Perfis</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.ink, marginTop: 1 }}>{totalCargos} perfis</div>
+          </div>
+        </div>
+
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 38, height: 38, borderRadius: 8, background: '#6366F115', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Shield size={18} color="#6366F1" />
+          </div>
+          <div>
+            <div style={{ fontSize: 10.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Administradores</div>
+            <div style={{ fontSize: 18, fontWeight: 900, color: C.ink, marginTop: 1 }}>{totalAdmins} gestores</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── SEÇÃO: NOVO CARGO (DRAWER / FORM) ── */}
+      {isGeral && showCargoForm && (
+        <div style={{ ...card, background: C.bgPanel, border: `1px solid ${C.amber}`, padding: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 10, marginBottom: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Sliders size={16} color={C.amber} />
+              <h4 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink }}>Criar Novo Perfil de Cargo</h4>
+            </div>
+            <button onClick={() => setShowCargoForm(false)} style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer' }}>
+              <X size={16} />
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, alignItems: 'end' }}>
+            <div>
+              <label style={label}>Código Interno *</label>
+              <input style={input} value={cargoForm.codigo} onChange={e => setCargoForm({ ...cargoForm, codigo: e.target.value })} placeholder="ex: engenheiro_chefe" />
+            </div>
+            <div>
+              <label style={label}>Nome de Exibição *</label>
+              <input style={input} value={cargoForm.nome} onChange={e => setCargoForm({ ...cargoForm, nome: e.target.value })} placeholder="ex: Engenheiro Chefe" />
+            </div>
+            <div>
+              <label style={label}>Descrição de Funções</label>
+              <input style={input} value={cargoForm.descricao} onChange={e => setCargoForm({ ...cargoForm, descricao: e.target.value })} placeholder="ex: Aprovação técnica e medições" />
+            </div>
+            <div>
+              <label style={label}>Módulos Iniciais</label>
+              <input style={input} value={cargoForm.apps} onChange={e => setCargoForm({ ...cargoForm, apps: e.target.value })} placeholder="financeiro,rh,obras" />
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button style={{ ...btn(C.amber), flex: 1, padding: '9px 14px' }} disabled={savingCargo} onClick={() => void criarCargo()}>
+                {savingCargo ? 'Salvando...' : 'Salvar Cargo'}
+              </button>
+              <button style={btnGhost} onClick={() => setShowCargoForm(false)}>
+                Cancelar
+              </button>
+            </div>
+          </div>
         </div>
       )}
-      <div style={{ display: 'grid', gridTemplateColumns: isGeral ? '1.2fr 1.8fr' : '1fr', gap: 24, alignItems: 'start' }}>
+
+      {/* ── LAYOUT PRINCIPAL DE GESTÃO EM DUAS COLUNAS ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(360px, 1.1fr) minmax(360px, 0.9fr)', gap: 20, alignItems: 'start' }}>
         
-        {/* COLUNA ESQUERDA: LISTA DE COLABORADORES E SOLICITAÇÕES */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* ══ COLUNA ESQUERDA: COLABORADORES & SOLICITAÇÕES ══ */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           
           {/* SEÇÃO: SOLICITAÇÕES PENDENTES */}
           {solicitacoes.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.amber, animation: 'pulse 1.5s infinite' }} />
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>Solicitações de Acesso Pendentes</h3>
-                <style>{`@keyframes pulse { 0% { opacity: 0.3 } 50% { opacity: 1 } 100% { opacity: 0.3 } }`}</style>
+            <div style={{ background: '#F59E0B08', border: `1.5px solid ${C.amber}`, borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: C.amber, animation: 'pulse 1.5s infinite' }} />
+                  <h4 style={{ margin: 0, fontSize: 13.5, fontWeight: 900, color: C.ink }}>Solicitações de Acesso Pendentes ({solicitacoes.length})</h4>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 800, color: C.amber, background: '#F59E0B20', padding: '2px 8px', borderRadius: 4 }}>Ação Requerida</span>
               </div>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {solicitacoes.map(sol => {
                   const currentOverride = solOverrides[sol.id]
                   const cargoSelecionado = currentOverride?.cargo || sol.cargo_solicitado
-                  const empresaIdSelecionada = currentOverride?.empresas_ids?.[0] !== undefined ? currentOverride.empresas_ids[0] : (sol.empresa_id || '')
-                  const empresaNome = empresas.find(e => e.id === empresaIdSelecionada)?.nome_fantasia || 'Sem empresa vinculada'
-
                   return (
-                    <div key={sol.id} style={{ ...card, borderColor: C.amber, padding: 16, background: '#171410' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-                        <div style={{ flex: 1, minWidth: 240 }}>
-                          <div style={{ fontWeight: 800, fontSize: 14, color: C.ink }}>{sol.nome}</div>
-                          <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>
-                            Solicitou acesso em: <strong>{new Date(sol.created_at).toLocaleDateString('pt-BR')}</strong>
-                          </div>
-                          <div style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic', marginTop: 4 }}>
-                            E-mail: {sol.email}
+                    <div key={sol.id} style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
+                        <div style={{ flex: 1, minWidth: 220 }}>
+                          <div style={{ fontWeight: 800, fontSize: 13.5, color: C.ink }}>{sol.nome}</div>
+                          <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
+                            {sol.email} · Pedido em: <strong>{new Date(sol.created_at).toLocaleDateString('pt-BR')}</strong>
                           </div>
                           {sol.mensagem && (
-                            <div style={{ fontSize: 11, background: '#0B0C0E77', borderLeft: `2px solid ${C.amber}`, padding: '6px 10px', marginTop: 8, color: C.ink, borderRadius: '0 4px 4px 0' }}>
+                            <div style={{ fontSize: 11, background: C.bgPanel, borderLeft: `3px solid ${C.amber}`, padding: '6px 10px', marginTop: 8, color: C.ink, borderRadius: '0 4px 4px 0' }}>
                               &ldquo;{sol.mensagem}&rdquo;
                             </div>
                           )}
 
-                          {/* Seletor de Cargo e Multi-Empresas para o Adm aprovar */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <span style={{ fontSize: 9, color: C.inkSoft, fontWeight: 800 }}>CARGO DEFINIDO:</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 10, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase' }}>Atribuir Cargo:</span>
                               <select
                                 value={cargoSelecionado}
                                 onChange={e => setSolOverrides(prev => ({
                                   ...prev,
                                   [sol.id]: { cargo: e.target.value, empresas_ids: e.target.value === 'admin_geral' ? [] : (prev[sol.id]?.empresas_ids || (sol.empresas_ids || (sol.empresa_id ? [sol.empresa_id] : []))) }
                                 }))}
-                                style={{ ...input, width: 200, padding: '4px 8px', fontSize: 11, height: 28, borderColor: C.amber + '88' }}
+                                style={{ ...input, width: 190, padding: '3px 8px', fontSize: 11, background: C.bgPanel }}
                               >
-                                {cargos.map(cargo => (
+                                {listaCargosDisponiveis.map(cargo => (
                                   <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
                                 ))}
                               </select>
                             </div>
 
-                            {/* Seletor Multi-Empresas (para cargos nao-gerais) */}
                             {isGeral && cargoSelecionado !== 'admin_geral' && (
                               <SeletorMultiEmpresas
                                 empresas={empresas}
@@ -6286,16 +7986,16 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginTop: 4 }}>
+                        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                           <button
                             onClick={() => aprovarSolicitacao(sol)}
-                            style={{ ...btn('#10B981'), padding: '7px 14px', fontSize: 11 }}
+                            style={{ ...btn('#059669'), padding: '6px 12px', fontSize: 11 }}
                           >
-                            <Check size={13} /> Aprovar Acesso
+                            <Check size={13} /> Aprovar
                           </button>
                           <button
                             onClick={() => rejeitarSolicitacao(sol.id)}
-                            style={{ ...btnGhost, borderColor: '#EF444455', color: '#EF4444', padding: '7px 12px', fontSize: 11 }}
+                            style={{ ...btnGhost, borderColor: '#EF444455', color: '#EF4444', padding: '6px 10px', fontSize: 11 }}
                           >
                             <X size={13} /> Recusar
                           </button>
@@ -6308,377 +8008,506 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
             </div>
           )}
 
-          {/* SEÇÃO: COLABORADORES */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>
-                {isGeral ? 'Colaboradores Cadastrados (Grupo)' : 'Colaboradores Cadastrados (Esta Filial)'}
-              </h3>
-              <button style={{ ...btn(), padding: '6px 12px', fontSize: 11 }} onClick={() => setShowColForm(v => !v)}>
-                <UserPlus size={13} /> Convidar
-              </button>
+          {/* BARRA DE CONTROLE: LISTA DE COLABORADORES */}
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <Users size={16} color={C.amber} />
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink }}>
+                  {isGeral ? 'Equipe & Colaboradores do Grupo' : 'Colaboradores da Unidade'}
+                </h3>
+                <span style={{ fontSize: 10.5, fontWeight: 800, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '1px 6px', borderRadius: 10, color: C.inkSoft }}>
+                  {colaboradoresFiltrados.length}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8 }}>
+                {isGeral && (
+                  <button style={{ ...btnGhost, padding: '6px 10px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => setShowCargoForm(v => !v)}>
+                    <Sliders size={12} /> Novo Cargo
+                  </button>
+                )}
+                <button style={{ ...btn(C.amber), padding: '6px 12px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 5 }} onClick={() => setShowColForm(v => !v)}>
+                  <UserPlus size={13} /> Convidar Usuário
+                </button>
+              </div>
             </div>
 
+            {/* Filtro e Busca de Colaboradores */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 180 }}>
+                <Search size={13} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} />
+                <input
+                  style={{ ...input, paddingLeft: 30, paddingRight: searchColab ? 28 : 10, fontSize: 11.5, height: 32 }}
+                  placeholder="Buscar colaborador por nome, e-mail ou cargo..."
+                  value={searchColab}
+                  onChange={e => setSearchColab(e.target.value)}
+                />
+                {searchColab && (
+                  <button onClick={() => setSearchColab('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', display: 'flex' }}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              <select
+                style={{ ...input, width: 'auto', minWidth: 140, fontSize: 11, height: 32, padding: '4px 8px' }}
+                value={filterCargo}
+                onChange={e => setFilterCargo(e.target.value)}
+              >
+                <option value="todos">Todos os Cargos</option>
+                {listaCargosDisponiveis.map(c => (
+                  <option key={c.codigo} value={c.codigo}>{c.nome}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* FORMULÁRIO RÁPIDO DE CONVITE / NOVO COLABORADOR */}
             {showColForm && (
-              <div style={{ ...card, borderColor: C.amber + '33' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ background: C.bgWhite, border: `1px solid ${C.amber}`, borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>Novo Colaborador</span>
+                  <button onClick={() => setShowColForm(false)} style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer' }}><X size={14} /></button>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div>
                     <label style={label}>Nome Completo *</label>
-                    <input style={input} value={colForm.nome} onChange={e => setColForm(c => ({ ...c, nome: e.target.value }))} placeholder="Ex: João da Silva" />
+                    <input style={input} value={colForm.nome} onChange={e => setColForm(c => ({ ...c, nome: e.target.value }))} placeholder="Ex: Lucas Ferreira" />
                   </div>
                   <div>
                     <label style={label}>E-mail de Acesso *</label>
-                    <input style={input} type="email" value={colForm.email} onChange={e => setColForm(c => ({ ...c, email: e.target.value }))} placeholder="Ex: joao@grupo.com" />
+                    <input style={input} type="email" value={colForm.email} onChange={e => setColForm(c => ({ ...c, email: e.target.value }))} placeholder="lucas@empresa.com" />
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <label style={label}>Senha Inicial (mín. 8 caracteres) *</label>
+                    <input style={input} type="password" minLength={8} value={colForm.senha} onChange={e => setColForm(c => ({ ...c, senha: e.target.value }))} placeholder="••••••••" />
                   </div>
                   <div>
-                    <label style={label}>Senha de Acesso *</label>
-                    <input style={input} type="password" minLength={8} value={colForm.senha} onChange={e => setColForm(c => ({ ...c, senha: e.target.value }))} placeholder="Mínimo 8 caracteres" />
+                    <label style={label}>Cargo / Nível de Acesso</label>
+                    <select style={input} value={colForm.cargo} onChange={e => setColForm(c => ({ ...c, cargo: e.target.value }))}>
+                      {listaCargosDisponiveis.filter(c => isGeral ? true : c.codigo !== 'admin_geral').map(cargo => (
+                        <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
+                      ))}
+                    </select>
                   </div>
-                  
-                  {isGeral ? (
-                    <>
-                      <div>
-                        <label style={label}>Cargo / Nível de Acesso</label>
-                        <select style={input} value={colForm.cargo} onChange={e => setColForm(c => ({ ...c, cargo: e.target.value }))}>
-                          {configPermissoes.map(config => <option key={config.cargo} value={config.cargo}>{NOMES_CARGOS[config.cargo] || cargos.find(cargo => cargo.codigo === config.cargo)?.nome || config.cargo}</option>)}
-                        </select>
-                      </div>
+                </div>
 
-                      {colForm.cargo === 'admin_empresa' && (
-                        <div>
-                          <label style={label}>Empresa Atribuída</label>
-                          <select style={input} value={colForm.empresa_id} onChange={e => setColForm(c => ({ ...c, empresa_id: e.target.value }))}>
-                            <option value="">Selecione...</option>
-                            {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
-                          </select>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div>
-                      <label style={label}>Cargo / Nível de Acesso</label>
-                      <select style={input} value={colForm.cargo} onChange={e => setColForm(c => ({ ...c, cargo: e.target.value }))}>
-                        {configPermissoes.filter(config => config.cargo !== 'admin_geral').map(config => <option key={config.cargo} value={config.cargo}>{NOMES_CARGOS[config.cargo] || cargos.find(cargo => cargo.codigo === config.cargo)?.nome || config.cargo}</option>)}
-                      </select>
-                    </div>
-                  )}
-
-                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                    <button style={btn()} onClick={criarColaborador} disabled={savingCol}>{savingCol ? 'Salvando...' : 'Criar Colaborador'}</button>
-                    <button style={btnGhost} onClick={() => setShowColForm(false)}>Cancelar</button>
+                {isGeral && colForm.cargo === 'admin_empresa' && (
+                  <div>
+                    <label style={label}>Empresa Atribuída</label>
+                    <select style={input} value={colForm.empresa_id} onChange={e => setColForm(c => ({ ...c, empresa_id: e.target.value }))}>
+                      <option value="">Selecione...</option>
+                      {empresas.map(e => <option key={e.id} value={e.id}>{e.nome_fantasia ?? e.razao_social}</option>)}
+                    </select>
                   </div>
+                )}
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+                  <button style={btnGhost} onClick={() => setShowColForm(false)}>Cancelar</button>
+                  <button style={btn(C.amber)} onClick={criarColaborador} disabled={savingCol}>{savingCol ? 'Criando...' : 'Cadastrar Usuário'}</button>
                 </div>
               </div>
             )}
 
-            {/* Lista de colaboradores */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {colaboradoresFiltrados.map(c => {
-                const isAtivo = c.id === colaboradorAtivo.id
-                const linkedEmpresaIds = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
-                const empresaNome = linkedEmpresaIds.length > 0
-                  ? linkedEmpresaIds.map(id => empresas.find(e => e.id === id)?.nome_fantasia || empresas.find(e => e.id === id)?.razao_social).filter(Boolean).join(', ')
-                  : 'Administração Geral'
-                return (
-                  <div key={c.id} style={{ ...card, borderColor: isAtivo ? C.amber : C.border, padding: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ fontWeight: 800, fontSize: 13, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {c.nome}
-                          {isAtivo && (
-                            <span style={{ fontSize: 9, background: C.amber + '22', color: C.amber, padding: '1px 5px', borderRadius: 4 }}>
-                              VOCÊ (LOGADO)
-                            </span>
-                          )}
-                          {c.override_permissoes && (
-                            <span style={{ fontSize: 9, background: '#10B98122', color: '#10B981', padding: '1px 5px', borderRadius: 4 }}>
-                              ACESSO INDIVIDUALIZADO
-                            </span>
-                          )}
-                        </div>
-                        <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
-                          {cargos.find(cargo => cargo.codigo === c.cargo)?.nome || NOMES_CARGOS[c.cargo] || c.cargo} · Empresas: {empresaNome}
-                        </div>
-                        {c.email && <div style={{ fontSize: 10, color: C.inkSoft }}>{c.email}</div>}
-                      </div>
+            {/* LISTA DE COLABORADORES */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 620, overflowY: 'auto', paddingRight: 2 }}>
+              {colaboradoresFiltrados.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 10px', color: C.inkSoft, fontSize: 12 }}>
+                  Nenhum colaborador encontrado com os filtros atuais.
+                </div>
+              ) : (
+                colaboradoresFiltrados.map(c => {
+                  const isAtivo = c.id === colaboradorAtivo.id
+                  const linkedEmpresaIds = c.empresas_ids || (c.empresa_id ? [c.empresa_id] : [])
+                  const empresasLabels = linkedEmpresaIds.length > 0
+                    ? linkedEmpresaIds.map(id => empresas.find(e => e.id === id)?.nome_fantasia || empresas.find(e => e.id === id)?.razao_social).filter(Boolean)
+                    : ['Todas Empresas (Global)']
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-                        {isGeral && (
-                          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  const cargoInfo = listaCargosDisponiveis.find(cargo => cargo.codigo === c.cargo)?.nome || NOMES_CARGOS[c.cargo] || c.cargo
+                  const iniciais = (c.nome || 'U').split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()
+
+                  return (
+                    <div key={c.id} style={{ background: C.bgWhite, border: `1px solid ${isAtivo ? C.amber : C.border}`, borderRadius: 8, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8, transition: 'all 0.15s ease' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: '50%', background: isAtivo ? C.amber : '#F4F4F6', color: isAtivo ? '#000' : C.ink, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 12, border: `1px solid ${isAtivo ? C.amber : C.border}`, flexShrink: 0 }}>
+                            {iniciais}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: 13, color: C.ink, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <span>{c.nome}</span>
+                              {isAtivo && (
+                                <span style={{ fontSize: 9, background: '#F59E0B20', color: C.amber, padding: '1px 6px', borderRadius: 4, fontWeight: 800 }}>
+                                  VOCÊ
+                                </span>
+                              )}
+                              {c.override_permissoes && (
+                                <span style={{ fontSize: 9, background: '#10B98118', color: '#10B981', padding: '1px 6px', borderRadius: 4, fontWeight: 800 }}>
+                                  CUSTOMIZADO
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
+                              {c.email || 'Sem e-mail informado'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Ações Rápidas */}
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                          {isGeral && (
                             <select
                               value={c.cargo}
                               disabled={isAtivo}
                               onChange={e => void alterarCargoColaborador(c.id, e.target.value)}
-                              style={{ ...input, width: 145, padding: '3px 6px', fontSize: 10, height: 26 }}
-                              title="Alterar cargo do colaborador"
+                              style={{
+                                ...input,
+                                width: 140,
+                                padding: '3px 6px',
+                                fontSize: 10.5,
+                                fontWeight: 700,
+                                height: 28,
+                                background: C.bgPanel,
+                                cursor: isAtivo ? 'not-allowed' : 'pointer'
+                              }}
+                              title="Alterar cargo"
                             >
-                              {cargos.map(cargo => (
-                                <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
+                              {listaCargosDisponiveis.map(cargo => (
+                                <option key={cargo.codigo} value={cargo.codigo}>
+                                  {cargo.nome}
+                                </option>
                               ))}
                             </select>
-                            {/* Botão editar permissões individuais */}
+                          )}
+
+                          <button
+                            onClick={() => setEditColForm(c)}
+                            title="Editar acessos e empresas desta pessoa"
+                            style={{ ...btnGhost, padding: '4px 8px', fontSize: 10.5, display: 'inline-flex', alignItems: 'center', gap: 4, color: C.amber, borderColor: `${C.amber}44` }}
+                          >
+                            <Edit3 size={12} /> Acessos
+                          </button>
+
+                          {isGeral && !isAtivo && (
                             <button
-                              onClick={() => setEditColForm(c)}
-                              title="Editar Acessos desta Pessoa"
-                              style={{ background: 'none', border: 'none', color: C.amber, cursor: 'pointer', padding: 4 }}
+                              onClick={() => excluirColaborador(c.id)}
+                              title="Excluir Colaborador"
+                              style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 4, display: 'flex' }}
                             >
-                              <Edit3 size={14} />
+                              <Trash2 size={13} />
                             </button>
-                            {!isAtivo && (
-                              <button onClick={() => excluirColaborador(c.id)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
-                                <X size={13} />
-                              </button>
-                            )}
-                          </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Chips de Empresas & Cargo */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', borderTop: `1px solid ${C.border}`, paddingTop: 6 }}>
+                        <span style={{ fontSize: 10, color: C.ink, fontWeight: 700, background: C.bgPanel, padding: '2px 7px', borderRadius: 4, border: `1px solid ${C.border}` }}>
+                          {cargoInfo}
+                        </span>
+                        {empresasLabels.slice(0, 2).map((empNome, idx) => (
+                          <span key={idx} style={{ fontSize: 9.5, color: C.inkSoft, background: C.bgPanel, padding: '2px 6px', borderRadius: 4 }}>
+                            🏢 {empNome}
+                          </span>
+                        ))}
+                        {empresasLabels.length > 2 && (
+                          <span style={{ fontSize: 9.5, color: C.inkSoft, background: C.bgPanel, padding: '2px 5px', borderRadius: 4 }}>
+                            +{empresasLabels.length - 2} empresas
+                          </span>
                         )}
                       </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })
+              )}
             </div>
           </div>
         </div>
 
-        {/* COLUNA DIREITA: MATRIZ DE PERMISSÕES DOS CARGOS (APENAS PARA ADMIN GERAL) */}
-        {isGeral && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* ══ COLUNA DIREITA: MATRIZ DE REGRAS & PERMISSÕES DOS CARGOS ══ */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <ShieldCheck size={16} color={C.amber} />
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink }}>Regras & Permissões dos Cargos</h3>
+              </div>
+              {!isGeral && (
+                <span style={{ fontSize: 10, color: C.inkSoft, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+                  Somente Leitura
+                </span>
+              )}
+            </div>
 
+            {/* Pílulas de Seleção de Cargo para navegação rápida */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+              <button
+                type="button"
+                onClick={() => setCargoAtivoMatriz('todos')}
+                style={{
+                  fontSize: 10.5,
+                  padding: '4px 9px',
+                  borderRadius: 6,
+                  fontWeight: cargoAtivoMatriz === 'todos' ? 800 : 600,
+                  cursor: 'pointer',
+                  border: `1px solid ${cargoAtivoMatriz === 'todos' ? C.amber : C.border}`,
+                  background: cargoAtivoMatriz === 'todos' ? '#F59E0B18' : C.bgWhite,
+                  color: cargoAtivoMatriz === 'todos' ? C.amber : C.ink,
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Todos os Cargos ({listaConfigExibicao.length})
+              </button>
+              {listaConfigExibicao.map(cfg => {
+                const labelCargo = listaCargosDisponiveis.find(c => c.codigo === cfg.cargo)?.nome || NOMES_CARGOS[cfg.cargo] || cfg.cargo
+                const isSel = cargoAtivoMatriz === cfg.cargo
+                return (
+                  <button
+                    key={cfg.cargo}
+                    type="button"
+                    onClick={() => setCargoAtivoMatriz(cfg.cargo)}
+                    style={{
+                      fontSize: 10.5,
+                      padding: '4px 9px',
+                      borderRadius: 6,
+                      fontWeight: isSel ? 800 : 600,
+                      cursor: 'pointer',
+                      border: `1px solid ${isSel ? C.amber : C.border}`,
+                      background: isSel ? '#F59E0B18' : C.bgWhite,
+                      color: isSel ? C.amber : C.ink,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {labelCargo}
+                  </button>
+                )
+              })}
+            </div>
 
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink }}>Regras & Permissões dos Cargos</h3>
-
-            {loading ? (
-              <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando permissões...</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {configPermissoes.map(cfg => {
+            {/* CARDS DE CONFIGURAÇÃO DE CADA CARGO */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: 680, overflowY: 'auto', paddingRight: 2 }}>
+              {listaConfigExibicao
+                .filter(cfg => cargoAtivoMatriz === 'todos' || cargoAtivoMatriz === cfg.cargo)
+                .map(cfg => {
                   const saving = savingPerms === cfg.cargo
-                  const labelCargo = NOMES_CARGOS[cfg.cargo] || cfg.cargo
+                  const labelCargo = listaCargosDisponiveis.find(c => c.codigo === cfg.cargo)?.nome || NOMES_CARGOS[cfg.cargo] || cfg.cargo
                   const appsList = cfg.apps ? cfg.apps.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                  const abasList = cfg.abas_financeiro ? cfg.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                  const membrosCount = colaboradores.filter(c => c.cargo === cfg.cargo).length
 
                   return (
-                    <div key={cfg.cargo} style={{ ...card, padding: 18 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8, marginBottom: 12 }}>
+                    <div key={cfg.cargo} style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {/* Header do Cargo */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           {editingCargoNome === cfg.cargo ? (
                             <>
                               <input
                                 value={editingCargoNomeValue}
                                 onChange={e => setEditingCargoNomeValue(e.target.value)}
-                                style={{ ...input, width: 160, padding: '2px 8px', fontSize: 13, fontWeight: 800, color: C.amber }}
+                                style={{ ...input, width: 160, padding: '2px 8px', fontSize: 12.5, fontWeight: 800, color: C.amber }}
                                 onKeyDown={e => { if (e.key === 'Enter') salvarNomeCargo(cfg.cargo); if (e.key === 'Escape') setEditingCargoNome(null) }}
                                 autoFocus
                               />
-                              <button onClick={() => salvarNomeCargo(cfg.cargo)} disabled={savingCargoNome} style={{ ...btn(), padding: '2px 8px', fontSize: 10 }}>
-                                {savingCargoNome ? '...' : 'OK'}
+                              <button onClick={() => salvarNomeCargo(cfg.cargo)} disabled={savingCargoNome} style={{ ...btn(C.amber), padding: '3px 8px', fontSize: 10 }}>
+                                OK
                               </button>
-                              <button onClick={() => setEditingCargoNome(null)} style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 2 }}>
+                              <button onClick={() => setEditingCargoNome(null)} style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer' }}>
                                 <X size={13} />
                               </button>
                             </>
                           ) : (
                             <>
-                              <span style={{ fontWeight: 900, fontSize: 14, color: C.amber }}>{cargos.find(c => c.codigo === cfg.cargo)?.nome || labelCargo}</span>
-                              {cfg.cargo !== 'admin_geral' && (
+                              <span style={{ fontWeight: 900, fontSize: 13.5, color: C.ink }}>{labelCargo}</span>
+                              <span style={{ fontSize: 9.5, fontWeight: 700, color: C.inkSoft, background: C.bgPanel, padding: '1px 6px', borderRadius: 10 }}>
+                                {membrosCount} usuário(s)
+                              </span>
+                              {isGeral && cfg.cargo !== 'admin_geral' && (
                                 <button
-                                  title="Editar nome do cargo"
-                                  onClick={() => { setEditingCargoNome(cfg.cargo); setEditingCargoNomeValue(cargos.find(c => c.codigo === cfg.cargo)?.nome || labelCargo) }}
-                                  style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                                  title="Editar nome deste cargo"
+                                  onClick={() => { setEditingCargoNome(cfg.cargo); setEditingCargoNomeValue(labelCargo) }}
+                                  style={{ border: 0, background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2, display: 'flex' }}
                                 >
-                                  <Edit3 size={12} />
+                                  <Edit3 size={11} />
                                 </button>
                               )}
                             </>
                           )}
                         </div>
-                        {cfg.cargo !== 'admin_geral' && (
+
+                        {cfg.cargo !== 'admin_geral' ? (
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             <button 
-                              style={{ ...btn(), padding: '4px 10px', fontSize: 10 }}
+                              style={{ ...btn(C.amber), padding: '4px 10px', fontSize: 10 }}
                               onClick={() => salvarConfigCargo(cfg.cargo, cfg)}
                               disabled={saving}
                             >
-                              {saving ? 'Gravando...' : 'Salvar Regras'}
+                              {saving ? 'Salvando...' : 'Salvar Regras'}
                             </button>
-                            {cfg.cargo !== 'admin_empresa' && (
+                            {cfg.cargo !== 'admin_empresa' && isGeral && (
                               <button
-                                style={{ ...btnGhost, borderColor: '#EF444455', color: '#EF4444', padding: '4px 8px', fontSize: 10 }}
+                                style={{ ...btnGhost, borderColor: '#EF444444', color: '#EF4444', padding: '4px 7px', fontSize: 10 }}
                                 onClick={() => excluirCargo(cfg.cargo)}
                                 title="Excluir este cargo"
                               >
-                                <Trash2 size={12} /> Excluir
+                                <Trash2 size={11} />
                               </button>
                             )}
                           </div>
-                        )}
-                        {cfg.cargo === 'admin_geral' && (
-                          <span style={{ fontSize: 9, color: C.inkSoft, fontStyle: 'italic' }}>Administrador Geral (Acesso Irrestrito)</span>
+                        ) : (
+                          <span style={{ fontSize: 9.5, color: C.inkSoft, fontStyle: 'italic' }}>Acesso Irrestrito (Geral)</span>
                         )}
                       </div>
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: 16 }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', marginBottom: 4 }}>Ações no Financeiro</span>
+                      {/* Seção 1: Módulos do Sistema */}
+                      <div>
+                        <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                          1. Módulos Autorizados na Sidebar
+                        </span>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          {ALL_APPS.map(app => {
+                            const desabilitar = cfg.cargo === 'admin_geral'
+                            const valorCheck = desabilitar || appsList.includes(app.id)
+                            return (
+                              <label key={app.id} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: desabilitar ? 'default' : 'pointer', fontSize: 11, color: C.ink, background: valorCheck ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4, border: `1px solid ${valorCheck ? '#F59E0B22' : 'transparent'}` }}>
+                                <button type="button" disabled={desabilitar} onClick={() => handleToggleAppCargo(cfg.cargo, app.id)} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: desabilitar ? 'default' : 'pointer', display: 'flex', alignItems: 'center' }}>
+                                  {valorCheck ? <ToggleRight size={18} color={desabilitar ? C.inkSoft : C.amber} /> : <ToggleLeft size={18} color={C.border} />}
+                                </button>
+                                <span>{app.nome}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Seção 2: Abas do Financeiro */}
+                      {cfg.cargo !== 'admin_geral' && (
+                        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                              2. Abas do Financeiro
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const ALL_ABAS_IDS = ['historico','contas','empresas','fornecedores','obras']
+                                const todasMarcadas = ALL_ABAS_IDS.every(a => abasList.includes(a))
+                                setConfigPermissoes(prev => prev.map(c => c.cargo === cfg.cargo
+                                  ? { ...c, abas_financeiro: todasMarcadas ? '' : ALL_ABAS_IDS.join(',') }
+                                  : c
+                                ))
+                              }}
+                              style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
+                            >
+                              {(() => {
+                                const ALL_ABAS_IDS = ['historico','contas','empresas','fornecedores','obras']
+                                return ALL_ABAS_IDS.every(a => abasList.includes(a)) ? 'Desmarcar todas' : '✓ Selecionar todas'
+                              })()}
+                            </button>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                             {([
-                              ['pode_empresas', 'Gerenciar Empresas'],
-                              ['pode_fornecedores', 'Gerenciar Fornecedores'],
-                              ['pode_lancar', 'Registrar Lançamentos / Contas'],
-                              ['pode_pagar', 'Marcar Contas como Pagas'],
-                              ['pode_aprovar', 'Aprovar Contas acima do limite'],
+                              ['historico',    'Histórico & Fluxo'],
+                              ['contas',       'Lançar Conta'],
+                              ['empresas',     'Empresas'],
+                              ['fornecedores', 'Fornecedores'],
+                              ['obras',        'Obras & Métricas'],
+                            ] as const).map(([abaId, abaLabel]) => {
+                              const checked = abasList.includes(abaId)
+                              return (
+                                <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4, border: `1px solid ${checked ? '#F59E0B22' : 'transparent'}` }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => handleToggleAbaFinanceiro(cfg.cargo, abaId)}
+                                    style={{ accentColor: C.amber, cursor: 'pointer' }}
+                                  />
+                                  {abaLabel}
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Seção 3: Governança & Ações Críticas */}
+                      {cfg.cargo !== 'admin_geral' && (
+                        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+                          <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
+                            3. Governança & Ações Críticas
+                          </span>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                            {([
+                              ['pode_lancar',              'Lançar Contas'],
+                              ['pode_alterar_status',      'Alterar Status'],
+                              ['pode_aprovar',             'Aprovar Contas'],
+                              ['pode_pagar',               'Marcar como Pago'],
+                              ['pode_empresas',            'Editar Empresas'],
+                              ['pode_fornecedores',        'Editar Fornecedores'],
+                              ['pode_excluir_lancamento',  'Excluir Lançamentos'],
                             ] as const).map(([campo, desc]) => {
-                              const desabilitar = cfg.cargo === 'admin_geral'
-                              const valorCheck = cfg[campo]
+                              const valorCheck = cfg[campo as keyof ConfigPermissao] as boolean
                               return (
-                                <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: desabilitar ? 'default' : 'pointer', fontSize: 12, color: desabilitar ? C.inkSoft : C.ink }}>
-                                  <button type="button" disabled={desabilitar} onClick={() => handleToggle(cfg.cargo, campo)} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: desabilitar ? 'default' : 'pointer', display: 'flex', alignItems: 'center' }}>
-                                    {valorCheck ? <ToggleRight size={22} color={desabilitar ? C.inkSoft : C.amber} /> : <ToggleLeft size={22} color={C.border} />}
+                                <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 11, color: C.ink, background: valorCheck ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4, border: `1px solid ${valorCheck ? '#F59E0B22' : 'transparent'}` }}>
+                                  <button type="button" onClick={() => handleToggle(cfg.cargo, campo as keyof ConfigPermissao)} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                    {valorCheck ? <ToggleRight size={18} color={C.amber} /> : <ToggleLeft size={18} color={C.border} />}
                                   </button>
-                                  {desc}
-                                </label>
-                              )
-                            })}
-                          </div>
-
-
-                        </div>
-
-                        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-                          <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Módulos Visíveis na Sidebar</span>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                            {ALL_APPS.map(app => {
-                              const desabilitar = cfg.cargo === 'admin_geral'
-                              const valorCheck = desabilitar || appsList.includes(app.id)
-                              return (
-                                <label key={app.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: desabilitar ? 'default' : 'pointer', fontSize: 11.5, color: desabilitar ? C.inkSoft : C.ink }}>
-                                  <button type="button" disabled={desabilitar} onClick={() => handleToggleAppCargo(cfg.cargo, app.id)} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: desabilitar ? 'default' : 'pointer', display: 'flex', alignItems: 'center' }}>
-                                    {valorCheck ? <ToggleRight size={20} color={desabilitar ? C.inkSoft : C.amber} /> : <ToggleLeft size={20} color={C.border} />}
-                                  </button>
-                                  {app.nome}
+                                  <span>{desc}</span>
                                 </label>
                               )
                             })}
                           </div>
                         </div>
-
-                        {/* ABAS VISÍVEIS NO FINANCEIRO */}
-                        {cfg.cargo !== 'admin_geral' && (
-                          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                              <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>Abas Visíveis no Financeiro</span>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const ALL_ABAS_IDS = ['dashboard','historico','contas','empresas','fornecedores','obras']
-                                  const abasList = cfg.abas_financeiro ? cfg.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                                  const todasMarcadas = ALL_ABAS_IDS.every(a => abasList.includes(a))
-                                  setConfigPermissoes(prev => prev.map(c => c.cargo === cfg.cargo
-                                    ? { ...c, abas_financeiro: todasMarcadas ? '' : ALL_ABAS_IDS.join(',') }
-                                    : c
-                                  ))
-                                }}
-                                style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
-                              >
-                                {(() => {
-                                  const ALL_ABAS_IDS = ['dashboard','historico','contas','empresas','fornecedores','obras']
-                                  const abasList = cfg.abas_financeiro ? cfg.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                                  return ALL_ABAS_IDS.every(a => abasList.includes(a)) ? 'Desmarcar todas' : '✓ Selecionar todas'
-                                })()}
-                              </button>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                              {([
-                                ['historico',    '📋 Histórico & Fluxo'],
-                                ['contas',       '➕ Lançar Conta'],
-                                ['empresas',     '🏢 Empresas'],
-                                ['fornecedores', '👥 Fornecedores'],
-                                ['obras',        '🏗️ Obras & Métricas'],
-                              ] as const).map(([abaId, abaLabel]) => {
-                                const abasList = cfg.abas_financeiro ? cfg.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                                const checked = abasList.includes(abaId)
-                                return (
-                                  <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4 }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={() => handleToggleAbaFinanceiro(cfg.cargo, abaId)}
-                                      style={{ accentColor: C.amber, cursor: 'pointer' }}
-                                    />
-                                    {abaLabel}
-                                  </label>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* AÇÕES NO HISTÓRICO & FLUXO */}
-                        {cfg.cargo !== 'admin_geral' && (
-                          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-                            <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Ações no Histórico & Fluxo</span>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              {([
-                                ['pode_alterar_status',      'Alterar status dos lançamentos'],
-                                ['pode_aprovar',             'Aprovar lançamentos pendentes'],
-                                ['pode_pagar',               'Marcar como pago'],
-                                ['pode_excluir_lancamento',  'Excluir lançamentos'],
-                              ] as const).map(([campo, desc]) => {
-                                const valorCheck = cfg[campo as keyof ConfigPermissao] as boolean
-                                return (
-                                  <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: C.ink }}>
-                                    <button type="button" onClick={() => handleToggle(cfg.cargo, campo as keyof ConfigPermissao)} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                      {valorCheck ? <ToggleRight size={22} color={C.amber} /> : <ToggleLeft size={22} color={C.border} />}
-                                    </button>
-                                    {desc}
-                                  </label>
-                                )
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   )
                 })}
-              </div>
-            )}
+            </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* MODAL: PERMISSÕES INDIVIDUAIS (POR PESSOA) */}
+      {/* ══ MODAL: PERMISSÕES INDIVIDUAIS (POR COLABORADOR) ══ */}
       <AnimatePresence>
         {editColForm && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setEditColForm(null)}>
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
-              style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, width: '100%', maxWidth: 500, maxHeight: '88vh', overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}
+              style={{ ...card, background: C.bgPanel, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto', padding: 22, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 20px 40px rgba(0,0,0,0.2)' }}
+              onClick={e => e.stopPropagation()}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-                <div>
-                  <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, textTransform: 'uppercase' }}>Permissões Individuais</span>
-                  <h3 style={{ fontSize: 15, fontWeight: 900, color: C.ink, margin: '2px 0 0' }}>{editColForm.nome}</h3>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Shield size={18} color={C.amber} />
+                  <div>
+                    <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, textTransform: 'uppercase' }}>Acessos & Vinculações</span>
+                    <h3 style={{ fontSize: 15, fontWeight: 900, color: C.ink, margin: 0 }}>{editColForm.nome}</h3>
+                  </div>
                 </div>
-                <button onClick={() => setEditColForm(null)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
+                <button onClick={() => setEditColForm(null)} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
               </div>
 
-              <form onSubmit={handleSaveColaboradorPerms} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <form onSubmit={handleSaveColaboradorPerms} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 <div>
-                  <label style={label}>Cargo / Nível de Acesso</label>
+                  <label style={label}>Cargo Principal</label>
                   <select
-                    style={input}
+                    style={{ ...input, background: C.bgWhite, color: C.ink, fontWeight: 700 }}
                     value={editColForm.cargo}
                     onChange={e => setEditColForm({ ...editColForm, cargo: e.target.value })}
                   >
-                    {cargos.map(cargo => (
-                      <option key={cargo.codigo} value={cargo.codigo}>{cargo.nome}</option>
+                    {listaCargosDisponiveis.map(cargo => (
+                      <option key={cargo.codigo} value={cargo.codigo}>
+                        {cargo.nome}
+                      </option>
                     ))}
                   </select>
                 </div>
 
-                {/* Empresas vinculadas (para cargos nao-gerais) */}
+                {/* Empresas Vinculadas */}
                 {editColForm.cargo !== 'admin_geral' && (
                   <div>
-                    <label style={label}>Empresas Vinculadas *</label>
+                    <label style={label}>Empresas Autorizadas</label>
                     <SeletorMultiEmpresas
                       empresas={empresas}
                       selectedIds={editColForm.empresas_ids || (editColForm.empresa_id ? [editColForm.empresa_id] : [])}
@@ -6691,7 +8520,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                   </div>
                 )}
 
-                {/* Obras vinculadas (para cargos nao-gerais) */}
+                {/* Obras Vinculadas */}
                 {editColForm.cargo !== 'admin_geral' && (
                   <div>
                     <label style={label}>Obras Vinculadas</label>
@@ -6706,50 +8535,51 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                   </div>
                 )}
 
-                <div style={{ background: '#12141C', border: `1px solid ${C.border}`, padding: 12, borderRadius: 6 }}>
+                {/* Toggle Override */}
+                <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, padding: 12, borderRadius: 8 }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 12, fontWeight: 800, color: C.ink }}>
                     <button type="button" onClick={() => setEditColForm({ ...editColForm, override_permissoes: !editColForm.override_permissoes })} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                       {editColForm.override_permissoes ? <ToggleRight size={24} color={C.amber} /> : <ToggleLeft size={24} color={C.border} />}
                     </button>
-                    Personalizar acessos desta pessoa (sobrescrever cargo)
+                    Personalizar acessos desta conta (Sobrescrever cargo)
                   </label>
-                  <p style={{ fontSize: 10, color: C.inkSoft, margin: '6px 0 0 34px', lineHeight: 1.4 }}>
-                    Se ativado, esta conta usa as regras abaixo em vez das regras do cargo ({NOMES_CARGOS[editColForm.cargo]}).
+                  <p style={{ fontSize: 10.5, color: C.inkSoft, margin: '6px 0 0 34px', lineHeight: 1.4 }}>
+                    Se ativado, este colaborador usará permissões exclusivas personalizadas abaixo em vez de herdar as regras globais do cargo.
                   </p>
                 </div>
 
-                {editColForm.override_permissoes ? (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>Ações Financeiras</span>
+                {editColForm.override_permissoes && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, background: C.bgWhite, padding: 12, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>Ações Financeiras Específicas</span>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                       {([
-                        ['pode_empresas', 'Gerenciar Empresas'],
-                        ['pode_fornecedores', 'Gerenciar Fornecedores'],
-                        ['pode_lancar', 'Registrar Lançamentos / Contas'],
-                        ['pode_pagar', 'Marcar Contas como Pagas'],
-                        ['pode_aprovar', 'Aprovar Contas acima do limite'],
+                        ['pode_lancar',              'Lançar Contas'],
+                        ['pode_alterar_status',      'Alterar Status'],
+                        ['pode_aprovar',             'Aprovar Contas'],
+                        ['pode_pagar',               'Marcar como Pago'],
+                        ['pode_empresas',            'Editar Empresas'],
+                        ['pode_fornecedores',        'Editar Fornecedores'],
+                        ['pode_excluir_lancamento',  'Excluir Lançamentos'],
                       ] as const).map(([campo, desc]) => (
-                        <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: C.ink }}>
+                        <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 11, color: C.ink }}>
                           <button type="button" onClick={() => setEditColForm({ ...editColForm, [campo]: !editColForm[campo] })} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                            {editColForm[campo] ? <ToggleRight size={22} color={C.amber} /> : <ToggleLeft size={22} color={C.border} />}
+                            {editColForm[campo] ? <ToggleRight size={18} color={C.amber} /> : <ToggleLeft size={18} color={C.border} />}
                           </button>
                           {desc}
                         </label>
                       ))}
                     </div>
 
-
-
-                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Módulos Visíveis (Sidebar)</span>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Módulos Autorizados</span>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                         {ALL_APPS.map(app => {
                           const appsCol = editColForm.apps ? editColForm.apps.split(',').map((x: string) => x.trim()).filter(Boolean) : []
                           const valorCheck = appsCol.includes(app.id)
                           return (
-                            <label key={app.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11.5, color: C.ink }}>
+                            <label key={app.id} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 11, color: C.ink }}>
                               <button type="button" onClick={() => handleToggleAppColaborador(app.id)} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                {valorCheck ? <ToggleRight size={20} color={C.amber} /> : <ToggleLeft size={20} color={C.border} />}
+                                {valorCheck ? <ToggleRight size={18} color={C.amber} /> : <ToggleLeft size={18} color={C.border} />}
                               </button>
                               {app.nome}
                             </label>
@@ -6758,40 +8588,20 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                       </div>
                     </div>
 
-                    {/* ABAS VISÍVEIS NO FINANCEIRO (individual) */}
-                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                        <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>Abas Visíveis no Financeiro</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const ALL_ABAS_IDS = ['dashboard','historico','contas','empresas','fornecedores','obras']
-                            const abasList = editColForm.abas_financeiro ? editColForm.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                            const todasMarcadas = ALL_ABAS_IDS.every(a => abasList.includes(a))
-                            setEditColForm({ ...editColForm, abas_financeiro: todasMarcadas ? '' : ALL_ABAS_IDS.join(',') })
-                          }}
-                          style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9, fontWeight: 800, cursor: 'pointer' }}
-                        >
-                          {(() => {
-                            const ALL_ABAS_IDS = ['dashboard','historico','contas','empresas','fornecedores','obras']
-                            const abasList = editColForm.abas_financeiro ? editColForm.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                            return ALL_ABAS_IDS.every(a => abasList.includes(a)) ? 'Desmarcar todas' : '✓ Selecionar todas'
-                          })()}
-                        </button>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Abas do Financeiro</span>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                         {([
-                          ['dashboard',    '📊 Dashboard'],
-                          ['historico',    '📋 Histórico & Fluxo'],
-                          ['contas',       '➕ Lançar Conta'],
-                          ['empresas',     '🏢 Empresas'],
-                          ['fornecedores', '👥 Fornecedores'],
-                          ['obras',        '🏗️ Obras & Métricas'],
+                          ['historico',    'Histórico & Fluxo'],
+                          ['contas',       'Lançar Conta'],
+                          ['empresas',     'Empresas'],
+                          ['fornecedores', 'Fornecedores'],
+                          ['obras',        'Obras & Métricas'],
                         ] as const).map(([abaId, abaLabel]) => {
                           const abasList = editColForm.abas_financeiro ? editColForm.abas_financeiro.split(',').map((x: string) => x.trim()).filter(Boolean) : []
                           const checked = abasList.includes(abaId)
                           return (
-                            <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4 }}>
+                            <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.ink, cursor: 'pointer' }}>
                               <input
                                 type="checkbox"
                                 checked={checked}
@@ -6804,36 +8614,12 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                         })}
                       </div>
                     </div>
-
-                    {/* AÇÕES NO HISTÓRICO & FLUXO (individual) */}
-                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Ações no Histórico & Fluxo</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {([
-                          ['pode_alterar_status',     'Alterar status dos lançamentos'] as const,
-                          ['pode_aprovar',            'Aprovar lançamentos pendentes'] as const,
-                          ['pode_pagar',              'Marcar como pago'] as const,
-                          ['pode_excluir_lancamento', 'Excluir lançamentos'] as const,
-                        ]).map(([campo, desc]) => (
-                          <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: C.ink }}>
-                            <button type="button" onClick={() => setEditColForm({ ...editColForm, [campo]: !editColForm[campo as keyof typeof editColForm] })} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                              {editColForm[campo as keyof typeof editColForm] ? <ToggleRight size={22} color={C.amber} /> : <ToggleLeft size={22} color={C.border} />}
-                            </button>
-                            {desc}
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ padding: '20px 10px', textAlign: 'center', color: C.inkSoft, fontSize: 12, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
-                    Esta conta herdará todas as permissões globais do cargo <strong>{NOMES_CARGOS[editColForm.cargo]}</strong>.
                   </div>
                 )}
 
-                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-                  <button type="submit" disabled={savingEditCol} style={btn(C.amber)}>{savingEditCol ? 'Gravando...' : 'Salvar Permissões'}</button>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
                   <button type="button" onClick={() => setEditColForm(null)} style={btnGhost}>Cancelar</button>
+                  <button type="submit" disabled={savingEditCol} style={btn(C.amber)}>{savingEditCol ? 'Salvando...' : 'Salvar Alterações'}</button>
                 </div>
               </form>
             </motion.div>
@@ -6843,6 +8629,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     </div>
   )
 }
+
 
 // ════════════════════════════════════════════════════════
 //  MODAL IMPORTAÇÃO DE EXCEL / HISTÓRICO RETROATIVO
@@ -7146,7 +8933,7 @@ function ImportarExcelModal({
                 </button>
               </div>
 
-              <div style={{ border: `2px dashed ${C.border}`, borderRadius: 10, padding: 40, textAlign: 'center', background: '#0B0C0E', cursor: 'pointer' }} onClick={() => document.getElementById('excel-input-file')?.click()}>
+              <div style={{ border: `2px dashed ${C.border}`, borderRadius: 10, padding: 40, textAlign: 'center', background: C.bgWhite, cursor: 'pointer' }} onClick={() => document.getElementById('excel-input-file')?.click()}>
                 <input id="excel-input-file" type="file" accept=".xlsx, .xls, .csv" style={{ display: 'none' }} onChange={e => e.target.files?.[0] && processarArquivo(e.target.files[0])} />
                 <Upload size={36} color={C.amber} style={{ marginBottom: 12 }} />
                 <div style={{ fontSize: 14, fontWeight: 800, color: C.ink, marginBottom: 4 }}>Clique para selecionar a planilha (.xlsx, .csv)</div>
@@ -7155,7 +8942,7 @@ function ImportarExcelModal({
             </div>
           ) : (
             <>
-              <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 8, padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <FileSpreadsheet size={20} color={C.amber} />
                   <div>
@@ -7166,7 +8953,7 @@ function ImportarExcelModal({
                 <button onClick={() => { setFile(null); setSheetData([]); setColumns([]) }} style={{ ...btnGhost, color: '#EF4444', fontSize: 10, padding: '4px 10px' }}>Trocar arquivo</button>
               </div>
 
-              <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+              <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
                 <h4 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, color: C.amber, textTransform: 'uppercase' }}>🔗 Mapeamento de Colunas da Planilha</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                   <div>
@@ -7228,7 +9015,7 @@ function ImportarExcelModal({
                 </div>
               </div>
 
-              <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+              <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
                 <h4 style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, color: C.ink, textTransform: 'uppercase' }}>⚙️ Definições para os Lançamentos</h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
                   <div>
@@ -7256,14 +9043,14 @@ function ImportarExcelModal({
               </div>
 
               {sheetData.length > 0 && (
-                <div style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
+                <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 16 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                     <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>📋 Prévia dos primeiros lançamentos ({sheetData.length} total)</span>
                   </div>
                   <div style={{ overflowX: 'auto', maxHeight: 180, border: `1px solid ${C.border}`, borderRadius: 4 }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, color: C.ink }}>
                       <thead>
-                        <tr style={{ background: '#0B0C0E', borderBottom: `1px solid ${C.border}`, color: C.inkSoft, textAlign: 'left' }}>
+                        <tr style={{ background: C.bgWhite, borderBottom: `1px solid ${C.border}`, color: C.inkSoft, textAlign: 'left' }}>
                           <th style={{ padding: '6px 10px' }}>Descrição</th>
                           <th style={{ padding: '6px 10px' }}>Valor</th>
                           <th style={{ padding: '6px 10px' }}>Data</th>
@@ -7302,5 +9089,13 @@ function ImportarExcelModal({
         </div>
       </div>
     </div>
+  )
+}
+
+export default function FinanceiroPage() {
+  return (
+    <React.Suspense fallback={<div style={{ padding: 40, textAlign: 'center', color: C.inkSoft, fontSize: 13 }}>Carregando Financeiro...</div>}>
+      <FinanceiroContent />
+    </React.Suspense>
   )
 }

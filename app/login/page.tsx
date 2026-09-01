@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
@@ -16,8 +16,9 @@ import {
   Building2,
   ShieldCheck,
   ArrowRight,
-  KeyRound,
-  ArrowLeft
+  ArrowLeft,
+  Check,
+  ExternalLink
 } from 'lucide-react'
 
 export default function LoginPage() {
@@ -58,66 +59,6 @@ export default function LoginPage() {
       authListener.subscription.unsubscribe()
     }
   }, [router])
-
-  // Canvas de partículas animadas em background
-  const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  useEffect(() => {
-    const canvas = canvasRef.current
-    const ctx = canvas?.getContext('2d')
-    if (!canvas || !ctx) return
-
-    const setSize = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
-    }
-    setSize()
-
-    type Particle = { x: number; y: number; v: number; o: number }
-    let particles: Particle[] = []
-    let raf = 0
-
-    const makeParticle = (): Particle => ({
-      x: Math.random() * canvas.width,
-      y: Math.random() * canvas.height,
-      v: Math.random() * 0.25 + 0.05,
-      o: Math.random() * 0.35 + 0.15,
-    })
-
-    const init = () => {
-      particles = []
-      const count = Math.floor((canvas.width * canvas.height) / 9000)
-      for (let i = 0; i < count; i++) particles.push(makeParticle())
-    }
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height)
-      particles.forEach((p) => {
-        p.y -= p.v
-        if (p.y < 0) {
-          p.x = Math.random() * canvas.width
-          p.y = canvas.height + Math.random() * 40
-          p.v = Math.random() * 0.25 + 0.05
-          p.o = Math.random() * 0.35 + 0.15
-        }
-        ctx.fillStyle = `rgba(245, 158, 11, ${p.o * 0.7})`
-        ctx.fillRect(p.x, p.y, 0.8, 2.2)
-      })
-      raf = requestAnimationFrame(draw)
-    }
-
-    const onResize = () => {
-      setSize()
-      init()
-    }
-
-    window.addEventListener('resize', onResize)
-    init()
-    raf = requestAnimationFrame(draw)
-    return () => {
-      window.removeEventListener('resize', onResize)
-      cancelAnimationFrame(raf)
-    }
-  }, [])
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -262,96 +203,100 @@ export default function LoginPage() {
   }
 
   return (
-    <section className="fixed inset-0 bg-[#090A0E] text-zinc-100 flex flex-col justify-between overflow-y-auto selection:bg-amber-500/30 selection:text-amber-200">
-      <style>{`
-        .card-animate {
-          opacity: 0;
-          transform: translateY(16px);
-          animation: fadeUp 0.7s cubic-bezier(.22,.61,.36,1) 0.2s forwards;
-        }
-        @keyframes fadeUp {
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        .accent-lines { position: absolute; inset: 0; pointer-events: none; opacity: .45; }
-        .hline, .vline { position: absolute; background: #1F2430; will-change: transform, opacity; }
-        .hline { left: 0; right: 0; height: 1px; transform: scaleX(0); transform-origin: 50% 50%; animation: drawX .8s cubic-bezier(.22,.61,.36,1) forwards; }
-        .vline { top: 0; bottom: 0; width: 1px; transform: scaleY(0); transform-origin: 50% 0%; animation: drawY .9s cubic-bezier(.22,.61,.36,1) forwards; }
-        .hline:nth-child(1) { top: 15%; animation-delay: .08s; }
-        .hline:nth-child(2) { top: 50%; animation-delay: .18s; }
-        .hline:nth-child(3) { top: 85%; animation-delay: .28s; }
-        .vline:nth-child(4) { left: 18%; animation-delay: .15s; }
-        .vline:nth-child(5) { left: 50%; animation-delay: .25s; }
-        .vline:nth-child(6) { left: 82%; animation-delay: .35s; }
-        @keyframes drawX { 0% { transform: scaleX(0); opacity: 0; } 60% { opacity: .9; } 100% { transform: scaleX(1); opacity: .45; } }
-        @keyframes drawY { 0% { transform: scaleY(0); opacity: 0; } 60% { opacity: .9; } 100% { transform: scaleY(1); opacity: .45; } }
-        .tab-panel { transition: opacity .24s ease, transform .24s ease; }
-      `}</style>
+    <main data-theme="dark" className="h-screen w-screen overflow-hidden flex flex-col lg:flex-row bg-[#1E1E1E] text-white selection:bg-[#FFE500] selection:text-[#0A0A0A] font-sans">
+      
+      {/* ── LEFT HERO BANNER (CLEAN ARCHITECTURAL IMAGE SIDE - FIXED RATIO) */}
+      <section className="relative hidden lg:flex lg:w-[50%] xl:w-[55%] h-full flex-shrink-0 flex-col justify-between p-10 xl:p-14 overflow-hidden border-r border-[#2E2E2E]">
+        {/* Background Image: Full photo with subtle dark gradient */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+          style={{ backgroundImage: `url('/login-bg.png')` }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-[#1E1E1E]/85 via-transparent to-[#1E1E1E]/90 pointer-events-none" />
 
-      {/* Subtle vignette radial & Amber glow */}
-      <div className="absolute inset-0 pointer-events-none [background:radial-gradient(70%_55%_at_50%_25%,rgba(245,158,11,0.07),transparent_70%)]" />
-
-      {/* Animated accent grid lines */}
-      <div className="accent-lines">
-        <div className="hline" />
-        <div className="hline" />
-        <div className="hline" />
-        <div className="vline" />
-        <div className="vline" />
-        <div className="vline" />
-      </div>
-
-      {/* Particles canvas */}
-      <canvas
-        ref={canvasRef}
-        className="absolute inset-0 w-full h-full opacity-60 mix-blend-screen pointer-events-none"
-      />
-
-      {/* Header bar */}
-      <header className="relative z-10 w-full flex items-center justify-between px-6 py-5 border-b border-zinc-800/60 bg-[#090A0E]/60 backdrop-blur-md">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-amber-700 flex items-center justify-center shadow-lg shadow-amber-500/20">
-            <Building2 className="w-4 h-4 text-zinc-950 font-bold" />
+        {/* Top Header on Hero */}
+        <div className="relative z-10 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/logo-jwa.png" alt="JWA Engenharia" className="h-8 w-auto object-contain drop-shadow" />
+            <div className="border-l border-white/20 pl-3">
+              <span className="font-extrabold text-xs tracking-wider uppercase text-white block">
+                Portal Construtora
+              </span>
+              <span className="text-[9.5px] text-[#FFE500] font-black tracking-widest uppercase block">
+                JWA Engenharia
+              </span>
+            </div>
           </div>
-          <span className="text-xs font-bold tracking-[0.18em] uppercase text-zinc-300">
-            Portal da Construtora
-          </span>
         </div>
-        <div className="flex items-center gap-2 text-[11px] font-medium text-zinc-400 bg-zinc-900/80 border border-zinc-800/80 px-3 py-1.5 rounded-full">
-          <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
-          <span>Ambiente Seguro</span>
-        </div>
-      </header>
 
-      {/* Center Container */}
-      <div className="relative z-10 w-full my-auto flex items-center justify-center p-4 py-8">
-        <div className="card-animate w-full max-w-md bg-[#12141C]/85 border border-[#1E2230] rounded-2xl p-7 sm:p-9 shadow-2xl shadow-black/80 backdrop-blur-xl">
+        {/* Center Space: completely clean to highlight the photo & JWA mark */}
+        <div className="my-auto pointer-events-none" />
+
+        {/* Hero Footer */}
+        <div className="relative z-10 flex items-center justify-between text-xs text-zinc-300 pt-5 border-t border-white/20">
+          <div className="flex items-center gap-2">
+            <span>© {new Date().getFullYear()} JWA Engenharia.</span>
+            <span className="text-zinc-400">Todos os direitos reservados.</span>
+          </div>
+          <a 
+            href="https://www.jwasa.com.br" 
+            target="_blank" 
+            rel="noreferrer"
+            className="flex items-center gap-1.5 text-[#FFE500] hover:text-white font-bold transition-colors"
+          >
+            <span>www.jwasa.com.br</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </section>
+
+      {/* ── RIGHT FORM CONTAINER (CLEAN CANVAS - NO BOXES - FIXED HEIGHT) ─ */}
+      <section className="flex-1 h-full flex flex-col justify-between p-6 sm:p-10 lg:p-12 xl:p-16 overflow-y-auto bg-[#1E1E1E]">
+        
+        {/* Mobile Header */}
+        <div className="lg:hidden flex items-center justify-between pb-6 border-b border-[#2E2E2E]">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo-jwa.png" alt="JWA Engenharia" className="h-7 w-auto object-contain" />
+            <div className="border-l border-[#2E2E2E] pl-2">
+              <span className="font-extrabold text-xs uppercase tracking-wider text-white block">Portal Construtora</span>
+              <span className="text-[9px] text-[#FFE500] font-black uppercase tracking-widest block">JWA Engenharia</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Center Form Section (No Outer Box - Clean Style) */}
+        <div className="my-auto w-full max-w-md mx-auto py-6">
           
-          {/* Card Title & Desc */}
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-black tracking-tight text-zinc-50">
+          {/* Header & Title */}
+          <div className="mb-7">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-5 h-1.5 bg-[#FFE500] rounded-sm" />
+              <div className="w-5 h-1.5 bg-white rounded-sm" />
+              <span className="text-[11px] font-black uppercase tracking-widest text-[#FFE500]">
+                JWA Engenharia
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white font-display">
               {tab === 'login' && 'Acessar o Sistema'}
-              {tab === 'solicitar' && 'Solicitar Conta'}
+              {tab === 'solicitar' && 'Solicitar Acesso'}
               {tab === 'recuperar' && 'Recuperar Senha'}
             </h1>
-            <p className="text-xs text-zinc-400 mt-1.5">
-              {tab === 'login' && 'Informe suas credenciais para gerenciar obras e finanças'}
-              {tab === 'solicitar' && 'Preencha seus dados para análise do Administrador Geral'}
-              {tab === 'recuperar' && 'Enviaremos um link direto para você cadastrar uma nova senha'}
+            <p className="text-xs sm:text-sm text-zinc-400 mt-2">
+              {tab === 'login' && 'Informe suas credenciais corporativas para gerenciar obras e finanças.'}
+              {tab === 'solicitar' && 'Preencha seus dados para solicitação de cadastro junto à diretoria.'}
+              {tab === 'recuperar' && 'Enviaremos um link de redefinição direto para o seu e-mail.'}
             </p>
           </div>
 
-          {/* Switch Tabs com 3 opções: Entrar, Criar Conta e Esqueci Senha */}
-          <div className="grid grid-cols-3 p-1 bg-[#090A0E] border border-zinc-800/80 rounded-xl mb-6">
+          {/* Segmented Tab Switcher */}
+          <div className="grid grid-cols-3 p-1 bg-[#252525] border border-[#333333] rounded-xl mb-7">
             <button
               type="button"
               onClick={() => { setTab('login'); setErro(null); setSucessoRecuperar(false) }}
-              className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 tab === 'login'
-                  ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-[#FFE500] text-[#0A0A0A] font-black shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               Entrar
@@ -359,10 +304,10 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => { setTab('solicitar'); setErro(null); setSucessoRecuperar(false) }}
-              className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 tab === 'solicitar'
-                  ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-[#FFE500] text-[#0A0A0A] font-black shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               Criar Conta
@@ -370,41 +315,39 @@ export default function LoginPage() {
             <button
               type="button"
               onClick={() => { setTab('recuperar'); setErro(null); setSucessoRecuperar(false) }}
-              className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+              className={`py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 tab === 'recuperar'
-                  ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
-                  : 'text-zinc-400 hover:text-zinc-200'
+                  ? 'bg-[#FFE500] text-[#0A0A0A] font-black shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
               }`}
             >
               Recuperar
             </button>
           </div>
 
-          {/* TAB: LOGIN */}
+          {/* ── TAB 1: LOGIN ────────────────────────────────────────── */}
           {tab === 'login' && (
-            <form onSubmit={handleLogin} className="tab-panel space-y-4">
-              {/* E-mail */}
+            <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                  E-mail de Acesso
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                  E-mail Corporativo
                 </label>
                 <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     required
-                    placeholder="seu.email@construtora.com.br"
-                    className="w-full pl-10 pr-3.5 py-2.5 bg-[#090A0E] border border-zinc-800 rounded-lg text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 transition-colors"
+                    placeholder="seu.nome@jwasa.com.br"
+                    className="w-full pl-10 pr-3.5 py-3.5 bg-[#252525] border border-[#383838] rounded-xl text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#FFE500] focus:ring-1 focus:ring-[#FFE500]/50 transition-colors"
                   />
                 </div>
               </div>
 
-              {/* Senha */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
                     Senha
                   </label>
                   <button
@@ -415,53 +358,51 @@ export default function LoginPage() {
                       setErro(null)
                       setSucessoRecuperar(false)
                     }}
-                    className="text-[11px] text-amber-500 hover:text-amber-400 transition-colors cursor-pointer font-medium"
+                    className="text-[11px] text-[#F59E0B] hover:text-[#FFE500] transition-colors cursor-pointer font-bold"
                   >
                     Esqueceu a senha?
                   </button>
                 </div>
                 <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                   <input
                     type={showSenha ? 'text' : 'password'}
                     value={senha}
                     onChange={(e) => setSenha(e.target.value)}
                     required
                     placeholder="••••••••"
-                    className="w-full pl-10 pr-10 py-2.5 bg-[#090A0E] border border-zinc-800 rounded-lg text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 transition-colors"
+                    className="w-full pl-10 pr-10 py-3.5 bg-[#252525] border border-[#383838] rounded-xl text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#FFE500] focus:ring-1 focus:ring-[#FFE500]/50 transition-colors"
                   />
                   <button
                     type="button"
                     onClick={() => setShowSenha((p) => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors p-1 cursor-pointer"
                   >
                     {showSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {/* Erro */}
               {erro && (
-                <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs font-semibold text-red-400">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
+                <div className="flex items-start gap-2.5 p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-xs font-semibold text-red-400">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                   <span>{erro}</span>
                 </div>
               )}
 
-              {/* Submit */}
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full mt-2 py-3 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-sm tracking-wide shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+                className="w-full mt-3 py-3.5 rounded-xl bg-[#FFE500] hover:bg-[#F59E0B] text-[#0A0A0A] font-black text-sm uppercase tracking-wider shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
               >
                 {loading ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Entrando...</span>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#0A0A0A]" />
+                    <span>Autenticando...</span>
                   </>
                 ) : (
                   <>
-                    <span>Entrar no Portal</span>
+                    <span>Entrar no Sistema</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -469,18 +410,18 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* TAB: RECUPERAR SENHA */}
+          {/* ── TAB 2: RECUPERAR SENHA ───────────────────────────────── */}
           {tab === 'recuperar' && (
-            <div className="tab-panel">
+            <div>
               {sucessoRecuperar ? (
-                <div className="text-center py-4 space-y-4">
+                <div className="text-center py-6 space-y-4 bg-[#252525] border border-[#383838] rounded-xl p-6">
                   <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-zinc-100">E-mail Enviado!</h3>
+                    <h3 className="text-base font-bold text-white">E-mail Enviado!</h3>
                     <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                      Enviamos as instruções para <strong className="text-amber-400">{emailRecuperar}</strong>. Acesse o link no seu e-mail para cadastrar sua nova senha.
+                      Enviamos as instruções para <strong className="text-[#FFE500]">{emailRecuperar}</strong>. Acesse o link no seu e-mail para cadastrar sua nova senha.
                     </p>
                   </div>
                   <button
@@ -490,7 +431,7 @@ export default function LoginPage() {
                       setSucessoRecuperar(false)
                       setErro(null)
                     }}
-                    className="mt-2 w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 font-bold text-xs cursor-pointer transition-colors"
+                    className="mt-2 w-full py-3 rounded-xl bg-[#2E2E2E] hover:bg-[#383838] text-white font-bold text-xs cursor-pointer transition-colors"
                   >
                     Voltar ao Login
                   </button>
@@ -498,25 +439,25 @@ export default function LoginPage() {
               ) : (
                 <form onSubmit={handleRecuperarSenha} className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
                       E-mail Cadastrado *
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                       <input
                         type="email"
                         value={emailRecuperar}
                         onChange={(e) => setEmailRecuperar(e.target.value)}
                         required
-                        placeholder="seu.email@construtora.com.br"
-                        className="w-full pl-10 pr-3.5 py-2.5 bg-[#090A0E] border border-zinc-800 rounded-lg text-sm text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 transition-colors"
+                        placeholder="seu.nome@jwasa.com.br"
+                        className="w-full pl-10 pr-3.5 py-3.5 bg-[#252525] border border-[#383838] rounded-xl text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#FFE500] focus:ring-1 focus:ring-[#FFE500]/50 transition-colors"
                       />
                     </div>
                   </div>
 
                   {erro && (
-                    <div className="flex items-center gap-2 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-xs font-semibold text-red-400">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    <div className="flex items-start gap-2.5 p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-xs font-semibold text-red-400">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>{erro}</span>
                     </div>
                   )}
@@ -524,11 +465,11 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full mt-2 py-3 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-sm tracking-wide shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+                    className="w-full mt-3 py-3.5 rounded-xl bg-[#FFE500] hover:bg-[#F59E0B] text-[#0A0A0A] font-black text-sm uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <Loader2 className="w-4 h-4 animate-spin text-[#0A0A0A]" />
                         <span>Enviando Link...</span>
                       </>
                     ) : (
@@ -545,7 +486,7 @@ export default function LoginPage() {
                       setTab('login')
                       setErro(null)
                     }}
-                    className="w-full py-2 text-xs text-zinc-400 hover:text-zinc-200 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    className="w-full py-2.5 text-xs text-zinc-400 hover:text-white transition-colors flex items-center justify-center gap-1.5 cursor-pointer font-semibold"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                     <span>Voltar para o Login</span>
@@ -555,18 +496,18 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* TAB: SOLICITAR CONTA */}
+          {/* ── TAB 3: SOLICITAR CONTA ───────────────────────────────── */}
           {tab === 'solicitar' && (
-            <div className="tab-panel">
+            <div>
               {sucessoSol ? (
-                <div className="text-center py-6 space-y-4">
+                <div className="text-center py-6 space-y-4 bg-[#252525] border border-[#383838] rounded-xl p-6">
                   <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-zinc-100">Solicitação Enviada!</h3>
-                    <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                      Seu pedido de cadastro foi registrado. Assim que o Administrador Geral aprovar, você poderá realizar seu login.
+                    <h3 className="text-base font-bold text-white">Solicitação Registrada!</h3>
+                    <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
+                      Seu pedido de cadastro foi enviado com sucesso. Assim que a diretoria autorizar, você poderá realizar seu login.
                     </p>
                   </div>
                   <button
@@ -579,91 +520,87 @@ export default function LoginPage() {
                       setSenhaSol('')
                       setMensagemSol('')
                     }}
-                    className="mt-2 px-5 py-2.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs cursor-pointer transition-colors"
+                    className="mt-2 px-6 py-3 rounded-xl bg-[#FFE500] hover:bg-[#F59E0B] text-[#0A0A0A] font-black text-xs uppercase tracking-wider cursor-pointer transition-colors"
                   >
-                    Voltar para o Login
+                    Voltar ao Login
                   </button>
                 </div>
               ) : (
                 <form onSubmit={handleSolicitar} className="space-y-3.5">
-                  {/* Nome Completo */}
                   <div className="space-y-1">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
                       Nome Completo *
                     </label>
                     <div className="relative">
-                      <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                      <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                       <input
                         type="text"
                         value={nomeSol}
                         onChange={(e) => setNomeSol(e.target.value)}
                         required
-                        placeholder="Ex: Vitor Correia"
-                        className="w-full pl-10 pr-3.5 py-2 bg-[#090A0E] border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 transition-colors"
+                        placeholder="Ex: Engenheiro Carlos Silva"
+                        className="w-full pl-10 pr-3.5 py-3 bg-[#252525] border border-[#383838] rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#FFE500] focus:ring-1 focus:ring-[#FFE500]/50 transition-colors"
                       />
                     </div>
                   </div>
 
-                  {/* E-mail */}
                   <div className="space-y-1">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
                       E-mail de Acesso *
                     </label>
                     <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                       <input
                         type="email"
                         value={emailSol}
                         onChange={(e) => setEmailSol(e.target.value)}
                         required
-                        placeholder="seu.email@construtora.com.br"
-                        className="w-full pl-10 pr-3.5 py-2 bg-[#090A0E] border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 transition-colors"
+                        placeholder="seu.email@jwasa.com.br"
+                        className="w-full pl-10 pr-3.5 py-3 bg-[#252525] border border-[#383838] rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#FFE500] focus:ring-1 focus:ring-[#FFE500]/50 transition-colors"
                       />
                     </div>
                   </div>
 
-                  {/* Senha Desejada */}
                   <div className="space-y-1">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
                       Senha Desejada *
                     </label>
                     <div className="relative">
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                       <input
                         type={showSenhaSol ? 'text' : 'password'}
                         value={senhaSol}
                         onChange={(e) => setSenhaSol(e.target.value)}
                         required
-                        placeholder="Mínimo 6 caracteres"
-                        className="w-full pl-10 pr-10 py-2 bg-[#090A0E] border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 transition-colors"
+                        placeholder="Mínimo 6 dígitos"
+                        className="w-full pl-10 pr-10 py-3 bg-[#252525] border border-[#383838] rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#FFE500] focus:ring-1 focus:ring-[#FFE500]/50 transition-colors"
                       />
                       <button
                         type="button"
                         onClick={() => setShowSenhaSol((p) => !p)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white transition-colors p-1 cursor-pointer"
                       >
                         {showSenhaSol ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
 
-                  {/* Justificativa */}
                   <div className="space-y-1">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-400">
-                      Justificativa / Motivo (Opcional)
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                      Função / Obra (Opcional)
                     </label>
                     <textarea
                       value={mensagemSol}
                       onChange={(e) => setMensagemSol(e.target.value)}
-                      placeholder="Ex: Engenheiro responsável pela obra Horizon Tower..."
+                      placeholder="Ex: Engenheiro residente da Obra Horizon..."
                       rows={2}
-                      className="w-full p-2.5 bg-[#090A0E] border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder:text-zinc-600 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 transition-colors resize-none"
+                      className="w-full p-2.5 bg-[#252525] border border-[#383838] rounded-xl text-xs text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#FFE500] focus:ring-1 focus:ring-[#FFE500]/50 transition-colors resize-none"
                     />
                   </div>
 
                   {erro && (
-                    <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/30 rounded-lg text-xs font-semibold text-red-400">
-                      <AlertCircle className="w-4 h-4 shrink-0" />
+                    <div className="flex items-start gap-2.5 p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs font-semibold text-red-400">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                       <span>{erro}</span>
                     </div>
                   )}
@@ -671,16 +608,16 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full mt-2 py-2.5 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-zinc-950 font-black text-xs tracking-wide shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
+                    className="w-full mt-3 py-3 rounded-xl bg-[#FFE500] hover:bg-[#F59E0B] text-[#0A0A0A] font-black text-xs uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
                   >
                     {loading ? (
                       <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Enviando...</span>
+                        <Loader2 className="w-4 h-4 animate-spin text-[#0A0A0A]" />
+                        <span>Processando...</span>
                       </>
                     ) : (
                       <>
-                        <span>Enviar Solicitação</span>
+                        <span>Enviar Pedido de Acesso</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
@@ -689,13 +626,17 @@ export default function LoginPage() {
               )}
             </div>
           )}
-        </div>
-      </div>
 
-      {/* Footer */}
-      <footer className="relative z-10 w-full py-4 text-center text-[11px] text-zinc-500 border-t border-zinc-800/40">
-        Portal de Engenharia & Gestão Corporativa · Todos os direitos reservados
-      </footer>
-    </section>
+        </div>
+
+        {/* ── FOOTER: LINHA DIVISÓRIA COM TEXTO EM BAIXO ───────────── */}
+        <div className="pt-6 border-t border-[#2E2E2E] text-center text-xs text-zinc-500">
+          <span>Portal de Engenharia & Gestão Corporativa · Todos os direitos reservados</span>
+        </div>
+      </section>
+
+    </main>
   )
 }
+
+

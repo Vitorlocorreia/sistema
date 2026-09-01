@@ -5,7 +5,8 @@ import {
   Plus, FileText, Calendar, Building, Sun, CloudRain, Cloud,
   UserCheck, AlertTriangle, Hammer, CheckCircle2, FileUp,
   Search, X, Check, Eye, Printer, Award, Clock, Trash2, Edit3, History, Save,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Users, Wrench, Camera, ShieldCheck,
+  ArrowRight, ArrowLeft, UploadCloud
 } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { PageTitle } from '@/components/PageTitle'
@@ -16,6 +17,8 @@ import { supabase } from '@/lib/supabase'
 import { motion, AnimatePresence } from 'motion/react'
 import type { Obra, Rdo, RdoCompleto } from '@/lib/types'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
+import { flushSync } from 'react-dom'
+import { useConfirm } from '@/hooks/useConfirm'
 
 type EfetivoTerceiroForm = { empresa_nome: string; funcao: string; quantidade: string; observacoes: string }
 type PlanejadoExecutadoForm = { servico: string; unidade: string; planejada: string; executada: string; observacoes: string }
@@ -79,9 +82,9 @@ function TextoExpandivel({ text, maxLength = 120, textColor = C.ink }: { text: s
   )
 }
 
-// ─── STYLES ──────────────────────────────────────────────────────────────────
+// ─── STYLES & INDUSTRIAL TOKENS ──────────────────────────────────────────────
 const inputStyle: React.CSSProperties = {
-  background: '#0B0C0E',
+  background: C.bgCard,
   border: `1px solid ${C.border}`,
   borderRadius: 4,
   color: C.ink,
@@ -89,6 +92,7 @@ const inputStyle: React.CSSProperties = {
   fontSize: 12,
   width: '100%',
   outline: 'none',
+  transition: 'border-color 0.15s ease',
 }
 
 const labelStyle: React.CSSProperties = {
@@ -97,11 +101,16 @@ const labelStyle: React.CSSProperties = {
   color: C.inkSoft,
   textTransform: 'uppercase' as const,
   display: 'block',
-  marginBottom: 4,
+  marginBottom: 5,
+  letterSpacing: '0.05em',
 }
 
-import { flushSync } from 'react-dom'
-import { useConfirm } from '@/hooks/useConfirm'
+const cardIndustrial: React.CSSProperties = {
+  background: C.bgWhite,
+  border: `1px solid ${C.border}`,
+  borderRadius: 6,
+  padding: '14px',
+}
 
 // ─── MAIN COMPONENT ──────────────────────────────────────────────────────────
 export default function RDO() {
@@ -117,6 +126,7 @@ export default function RDO() {
   const [search, setSearch] = useState('')
   const [filterObra, setFilterObra] = useState('Todas')
   const [filterStatus, setFilterStatus] = useState('Todos')
+  const [filterDatePreset, setFilterDatePreset] = useState<'todos' | 'hoje' | '7dias' | 'mes'>('todos')
   const [selectedRdoIds, setSelectedRdoIds] = useState<string[]>([])
   const [overridePrintRdos, setOverridePrintRdos] = useState<RdoCompleto[] | null>(null)
   const [fotoExpandida, setFotoExpandida] = useState<{ url: string; legenda: string } | null>(null)
@@ -200,19 +210,22 @@ export default function RDO() {
     } catch { }
 
     const [
-      { data: r },
-      { data: o }
+      { data: r, error: rError },
+      { data: o, error: oError }
     ] = await Promise.all([
       supabase.from('rdos').select('*, obra:obras(nome), atividades:rdo_atividades(*), equipamentos:rdo_equipamentos(*), terceiros:rdo_efetivos_terceiros(*), planejado_executado:rdo_planejado_executado(*), fotos(*)').order('data', { ascending: false }),
       supabase.from('obras').select('*').order('nome')
     ])
 
+    if (rError) console.error('[RDO] Erro ao carregar RDOs:', rError)
+    if (oError) console.error('[RDO] Erro ao carregar Obras:', oError)
+
     let rdosList = (r as RdoCompleto[]) ?? []
     let oList = o ?? []
 
-    // Filtrar por acesso à obra
-    if (colab && colab.cargo !== 'admin_geral') {
-      const oIds = colab.obras_ids || []
+    // Filtrar por acesso à obra (somente se restrição for explicitamente configurada)
+    if (colab && colab.cargo && colab.cargo !== 'admin_geral' && Array.isArray(colab.obras_ids) && colab.obras_ids.length > 0) {
+      const oIds = colab.obras_ids
       oList = oList.filter((ob: any) => oIds.includes(ob.id))
       rdosList = rdosList.filter((rdo: any) => oIds.includes(rdo.obra_id))
     }
@@ -241,15 +254,43 @@ export default function RDO() {
   useEffect(() => { loadData() }, [loadData])
 
   const filteredRdos = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split('T')[0]
+    const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]
+
     return rdos.filter(r => {
       const matchesSearch =
         (r.responsavel ?? '').toLowerCase().includes(search.toLowerCase()) ||
-        (r.resumo ?? '').toLowerCase().includes(search.toLowerCase())
+        (r.resumo ?? '').toLowerCase().includes(search.toLowerCase()) ||
+        (r.obra?.nome ?? '').toLowerCase().includes(search.toLowerCase())
+
       const matchesObra = filterObra === 'Todas' || r.obra?.nome === filterObra
       const matchesStatus = filterStatus === 'Todos' || r.status === filterStatus
-      return matchesSearch && matchesObra && matchesStatus
+
+      let matchesDate = true
+      if (filterDatePreset === 'hoje') {
+        matchesDate = r.data === today
+      } else if (filterDatePreset === '7dias') {
+        matchesDate = r.data >= sevenDaysAgo
+      } else if (filterDatePreset === 'mes') {
+        matchesDate = r.data >= firstDayOfMonth
+      }
+
+      return matchesSearch && matchesObra && matchesStatus && matchesDate
     })
-  }, [rdos, search, filterObra, filterStatus])
+  }, [rdos, search, filterObra, filterStatus, filterDatePreset])
+
+  // KPIs
+  const stats = useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    const totalMes = rdos.length
+    const emitidosHoje = rdos.filter(r => r.data === todayStr).length
+    const pendentes = rdos.filter(r => r.status !== 'Aprovado').length
+    const totalEfetivo = selectedRdo 
+      ? Number(selectedRdo.efetivo_proprio || 0) + Number(selectedRdo.efetivo_terceiros || 0)
+      : 0
+    return { totalMes, emitidosHoje, pendentes, totalEfetivo }
+  }, [rdos, selectedRdo])
 
   const toggleSelectRdo = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
@@ -329,16 +370,18 @@ export default function RDO() {
     toast(`${selectedRdoIds.length} diário(s) excluído(s).`, 'success')
   }
 
-  const getWeatherIcon = (weather?: string) => {
+  const getWeatherIcon = (weather?: string, size = 15) => {
     switch ((weather || '').toLowerCase()) {
       case 'sol':
       case 'ensolarado':
-        return <Sun size={16} color={C.amber} />
+        return <Sun size={size} color={C.amber} />
       case 'chuva':
       case 'chuvoso':
-        return <CloudRain size={16} color="#3B82F6" />
+        return <CloudRain size={size} color={C.inkSoft} />
+      case 'nublado':
+        return <Cloud size={size} color="#9CA3AF" />
       default:
-        return <Cloud size={16} color={C.inkSoft} />
+        return <Sun size={size} color="#FFE500" />
     }
   }
 
@@ -587,45 +630,136 @@ export default function RDO() {
 
   return (
     <>
-      <PageTitle modulo="Escout" titulo="Diário de Obra Digital" />
+      <PageTitle
+        modulo="Escout"
+        titulo="Diário de Obra Digital"
+        subtitle="Registro diário de avanço físico, condições meteorológicas, efetivo de canteiro e controle de qualidade."
+        action={
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setIsCreateOpen(true)}
+            style={{
+              background: '#F59E0B',
+              color: '#0A0A0A',
+              border: 'none',
+              borderRadius: 4,
+              padding: '8px 18px',
+              fontSize: 12,
+              fontWeight: 900,
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              cursor: 'pointer',
+              boxShadow: '0 4px 14px rgba(245, 158, 11, 0.25)'
+            }}
+          >
+            <Plus size={16} strokeWidth={3} />
+            Novo Diário de Obra
+          </motion.button>
+        }
+      />
+
+      {/* KPI Top Bar */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, marginBottom: 20 }}>
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: 'rgba(255, 229, 0, 0.15)', border: '1px solid rgba(255, 229, 0, 0.3)', padding: 10, borderRadius: 6 }}>
+            <FileText size={20} color={C.amber} />
+          </div>
+          <div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total de Diários</span>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, lineHeight: 1.2 }}>{stats.totalMes}</div>
+          </div>
+        </div>
+
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: 10, borderRadius: 6 }}>
+            <Calendar size={20} color={C.amber} />
+          </div>
+          <div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Emitidos Hoje</span>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, lineHeight: 1.2 }}>{stats.emitidosHoje}</div>
+          </div>
+        </div>
+
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', padding: 10, borderRadius: 6 }}>
+            <Users size={20} color="#10B981" />
+          </div>
+          <div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Efetivo no RDO Atual</span>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, lineHeight: 1.2 }}>{stats.totalEfetivo} colab.</div>
+          </div>
+        </div>
+
+        <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
+          <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: 10, borderRadius: 6 }}>
+            <Clock size={20} color="#F59E0B" />
+          </div>
+          <div>
+            <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pendentes Assinatura</span>
+            <div style={{ fontSize: 20, fontWeight: 900, color: stats.pendentes > 0 ? '#F59E0B' : '#10B981', lineHeight: 1.2 }}>{stats.pendentes}</div>
+          </div>
+        </div>
+      </div>
 
       {loading ? (
-        <p style={{ color: C.inkSoft, fontSize: 13 }}>Carregando diários...</p>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '60px', color: C.inkSoft, gap: 12 }}>
+          <div style={{ width: 18, height: 18, border: '2px solid #F59E0B', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+          <span style={{ fontSize: 13, fontWeight: 700 }}>Carregando diários de obra...</span>
+        </div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* List Section (5 Cols) */}
-          <div className="lg:col-span-5 flex flex-column gap-4">
+          <div className="lg:col-span-5 flex flex-col gap-4">
             <Panel
-              title="Diários Emitidos"
+              title={`Histórico de Emissões (${filteredRdos.length})`}
               action={
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setIsCreateOpen(true)}
-                  style={{
-                    all: 'unset', cursor: 'pointer',
-                    background: C.amber, color: '#0B0C0E',
-                    padding: '6px 12px', borderRadius: 2,
-                    fontSize: 10, fontWeight: 900, textTransform: 'uppercase',
-                    display: 'flex', alignItems: 'center', gap: 4
-                  }}
-                >
-                  <Plus size={12} /> Novo Diário
-                </motion.button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {(['todos', 'hoje', '7dias', 'mes'] as const).map(preset => (
+                    <button
+                      key={preset}
+                      onClick={() => setFilterDatePreset(preset)}
+                      style={{
+                        background: filterDatePreset === preset ? C.amber : C.bgWhite,
+                        color: filterDatePreset === preset ? '#0A0A0A' : C.inkSoft,
+                        border: `1px solid ${filterDatePreset === preset ? C.amber : C.border}`,
+                        borderRadius: 3,
+                        padding: '3px 8px',
+                        fontSize: 9.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        textTransform: 'uppercase'
+                      }}
+                    >
+                      {preset === '7dias' ? '7 dias' : preset === 'mes' ? 'Mês' : preset}
+                    </button>
+                  ))}
+                </div>
               }
             >
               {/* Search & Filters */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
                 <div style={{ position: 'relative' }}>
-                  <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+                  <Search size={14} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
                   <input
-                    style={{ ...inputStyle, paddingLeft: 30 }}
-                    placeholder="Buscar por diário, obra, resumo..."
+                    style={{ ...inputStyle, paddingLeft: 32 }}
+                    placeholder="Buscar por diário, obra, responsável..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
                   />
+                  {search && (
+                    <button
+                      onClick={() => setSearch('')}
+                      style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer' }}
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 8 }}>
                   <select
                     value={filterObra}
                     onChange={e => setFilterObra(e.target.value)}
@@ -647,28 +781,27 @@ export default function RDO() {
               </div>
 
               {/* Selection Bar for Batch Actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, padding: '8px 10px', background: '#0F1115', border: `1px solid ${C.border}`, borderRadius: 4 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, padding: '7px 10px', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4 }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: C.inkSoft, cursor: 'pointer', userSelect: 'none' }}>
                   <input
                     type="checkbox"
                     checked={filteredRdos.length > 0 && selectedRdoIds.length === filteredRdos.length}
                     onChange={toggleSelectAllFiltered}
-                    style={{ cursor: 'pointer' }}
+                    style={{ cursor: 'pointer', accentColor: '#F59E0B' }}
                   />
-                  <span>Selecionar todos ({filteredRdos.length})</span>
+                  <span style={{ fontWeight: 600 }}>Selecionar todos ({filteredRdos.length})</span>
                 </label>
                 {selectedRdoIds.length > 0 && (
                   <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700 }}>{selectedRdoIds.length} selecionado(s)</span>
                     <button
                       onClick={triggerPrintBatch}
                       style={{
-                        background: '#1e2130',
+                        background: C.bgCard,
                         color: C.ink,
                         border: `1px solid ${C.border}`,
                         borderRadius: 3,
                         padding: '4px 10px',
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: 800,
                         display: 'flex',
                         alignItems: 'center',
@@ -676,17 +809,17 @@ export default function RDO() {
                         cursor: 'pointer'
                       }}
                     >
-                      <Printer size={13} /> Imprimir ({selectedRdoIds.length})
+                      <Printer size={12} /> Imprimir ({selectedRdoIds.length})
                     </button>
                     <button
                       onClick={handleDeleteBatch}
                       style={{
-                        background: '#EF444415',
+                        background: 'rgba(239, 68, 68, 0.12)',
                         color: '#F87171',
-                        border: '1px solid #EF444433',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
                         borderRadius: 3,
                         padding: '4px 10px',
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: 800,
                         display: 'flex',
                         alignItems: 'center',
@@ -694,62 +827,135 @@ export default function RDO() {
                         cursor: 'pointer'
                       }}
                     >
-                      <Trash2 size={13} /> Apagar ({selectedRdoIds.length})
+                      <Trash2 size={12} /> Excluir ({selectedRdoIds.length})
                     </button>
                   </div>
                 )}
               </div>
 
-              {/* RDO List */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 460, overflowY: 'auto' }}>
+              {/* RDO List Cards */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 'calc(100vh - 280px)', minHeight: 480, overflowY: 'auto', paddingRight: 4 }}>
                 {filteredRdos.map(r => {
                   const active = selectedRdo?.id === r.id
                   const isChecked = selectedRdoIds.includes(r.id)
+                  const totalColab = Number(r.efetivo_proprio || 0) + Number(r.efetivo_terceiros || 0)
+                  const qtdFotos = r.fotos?.length || 0
+
                   return (
-                    <div
+                    <motion.div
                       key={r.id}
+                      whileHover={{ x: 2, scale: 1.005 }}
+                      transition={{ duration: 0.12 }}
+                      onClick={() => setSelectedRdo(r)}
                       style={{
                         display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        padding: '10px 12px',
-                        borderRadius: 2,
-                        background: active ? `${C.amber}0a` : C.bgCard,
+                        flexDirection: 'column',
+                        gap: 8,
+                        borderRadius: 6,
+                        background: active ? C.amberDim : C.bgCard,
                         border: `1px solid ${active ? C.amber : C.border}`,
-                        transition: 'all 0.15s'
+                        borderLeft: `4px solid ${active ? C.amber : r.status === 'Aprovado' ? C.green : C.amber}`,
+                        padding: '12px 14px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        boxShadow: active ? '0 0 0 1px rgba(245, 158, 11, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06)' : '0 1px 3px rgba(0, 0, 0, 0.03)'
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={() => {}}
-                        onClick={(e) => toggleSelectRdo(r.id, e)}
-                        style={{ cursor: 'pointer', width: 15, height: 15 }}
-                      />
-                      <div
-                        onClick={() => setSelectedRdo(r)}
-                        style={{ flex: 1, cursor: 'pointer' }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <span style={{ fontSize: 10, fontWeight: 900, color: C.amber }}>RDO-DIGITAL</span>
-                          <span style={{ fontSize: 10, color: C.inkSoft }}>{new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                      {/* Top Row: Date, Checkbox, Status & Delete */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div onClick={e => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center' }}>
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {}}
+                              onClick={(e) => toggleSelectRdo(r.id, e)}
+                              style={{ cursor: 'pointer', width: 14, height: 14, accentColor: '#F59E0B' }}
+                            />
+                          </div>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: 11,
+                            fontWeight: 900,
+                            color: active ? C.amber : C.ink,
+                            background: C.bgWhite,
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            border: `1px solid ${C.border}`
+                          }}>
+                            <Calendar size={11} color="#FFE500" />
+                            {new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR')}
+                          </span>
                         </div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginBottom: 4 }}>{r.obra?.nome ?? 'Sem Obra'}</div>
-                        <div style={{ fontSize: 11, color: C.inkSoft }}>
-                          <TextoExpandivel text={r.resumo} maxLength={60} textColor={C.inkSoft} />
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{
+                            fontSize: 9.5,
+                            fontWeight: 900,
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            background: r.status === 'Aprovado' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                            color: r.status === 'Aprovado' ? '#10B981' : '#F59E0B',
+                            border: `1px solid ${r.status === 'Aprovado' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                            letterSpacing: '0.04em'
+                          }}>
+                            {r.status === 'Aprovado' ? '✓ APROVADO' : '● RASCUNHO'}
+                          </span>
+                          <button
+                            onClick={(e) => handleDeleteRdo(r.id, e)}
+                            title="Excluir RDO"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9CA3AF', padding: 4, display: 'flex', alignItems: 'center', borderRadius: 3 }}
+                            className="hover:text-red-400"
+                          >
+                            <Trash2 size={13} />
+                          </button>
                         </div>
                       </div>
-                      <button
-                        onClick={(e) => handleDeleteRdo(r.id, e)}
-                        title="Excluir RDO"
-                        style={{ all: 'unset', cursor: 'pointer', color: '#F87171aa', padding: 4, display: 'flex', alignItems: 'center' }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
+
+                      {/* Obra Name */}
+                      <div style={{ fontSize: 13.5, fontWeight: 900, color: C.ink, letterSpacing: '0.01em', marginTop: 2 }}>
+                        {r.obra?.nome ?? 'Obra não informada'}
+                      </div>
+
+                      {/* Indicators Row: Clima, Efetivo, Fotos, Responsavel */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 10, fontSize: 11, color: C.inkSoft }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, padding: '2px 7px', borderRadius: 3, border: `1px solid ${C.border}` }}>
+                          {getWeatherIcon(r.clima_manha, 12)}
+                          <span style={{ color: C.ink }}>{r.clima_manha}</span>
+                        </span>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, padding: '2px 7px', borderRadius: 3, border: `1px solid ${C.border}` }}>
+                          <Users size={11} color="#10B981" />
+                          <span style={{ color: C.ink }}>{totalColab} colab.</span>
+                        </span>
+                        {qtdFotos > 0 && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, padding: '2px 7px', borderRadius: 3, border: `1px solid ${C.border}`, color: C.inkSoft }}>
+                            <Camera size={11} color={C.amber} />
+                            <span style={{ color: C.ink }}>{qtdFotos} fotos</span>
+                          </span>
+                        )}
+                        {r.responsavel && (
+                          <span style={{ fontSize: 10.5, color: C.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                            👤 {r.responsavel}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Brief narrative preview */}
+                      {r.resumo && (
+                        <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 10px', fontSize: 11, color: '#9CA3AF', lineHeight: 1.4 }}>
+                          <TextoExpandivel text={r.resumo} maxLength={85} textColor={C.inkSoft} />
+                        </div>
+                      )}
+                    </motion.div>
                   )
                 })}
-                {filteredRdos.length === 0 && <p style={{ color: C.inkSoft, fontSize: 12 }}>Nenhum diário encontrado.</p>}
+                {filteredRdos.length === 0 && (
+                  <div style={{ padding: '40px 15px', textAlign: 'center', color: C.inkSoft, fontSize: 12, background: C.bgCard, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
+                    Nenhum diário de obra encontrado com os filtros selecionados.
+                  </div>
+                )}
               </div>
             </Panel>
           </div>
@@ -758,153 +964,263 @@ export default function RDO() {
           <div className="lg:col-span-7 rdo-detail-scroll">
             {selectedRdo ? (
               <Panel
-                title={`Detalhes do Diário de Obra`}
+                title={`RDO: ${selectedRdo.obra?.nome || 'Obra'} — ${new Date(selectedRdo.data + 'T00:00:00').toLocaleDateString('pt-BR')}`}
                 action={
-                  <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                     {!editMode ? (
-                      <button
-                        onClick={() => openEditMode(selectedRdo)}
-                        style={{ ...inputStyle, background: 'none', border: `1px solid ${C.amber}55`, color: C.amber, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
-                      >
-                        <Edit3 size={13} /> Editar
-                      </button>
-                    ) : (
                       <>
-                        <button onClick={() => setEditMode(false)} style={{ ...inputStyle, background: 'none', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer', color: C.inkSoft }}>
-                          <X size={13} /> Cancelar
+                        <button
+                          onClick={() => openEditMode(selectedRdo)}
+                          style={{
+                            background: 'none',
+                            border: '1px solid rgba(245, 158, 11, 0.4)',
+                            color: '#F59E0B',
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '5px 12px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Edit3 size={13} /> Editar
                         </button>
-                        <button onClick={() => void handleUpdateRdo()} disabled={savingEdit} style={{ ...inputStyle, background: C.amber, color: '#0b0c0e', border: 'none', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', fontSize: 11, cursor: 'pointer', opacity: savingEdit ? 0.6 : 1 }}>
-                          <Save size={13} /> {savingEdit ? 'Salvando...' : 'Salvar'}
-                        </button>
-                      </>
-                    )}
-                    {!editMode && (
-                      <>
                         <button
                           onClick={() => triggerPrintSingle(selectedRdo)}
-                          style={{ ...inputStyle, background: 'none', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
+                          style={{
+                            background: C.bgCard,
+                        color: C.ink,
+                        border: `1px solid ${C.border}`,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '5px 12px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
                         >
-                          <Printer size={13} /> Imprimir
-                        </button>
-                        <button
-                          onClick={(e) => handleDeleteRdo(selectedRdo.id, e)}
-                          style={{ ...inputStyle, background: 'none', border: `1px solid #F8717155`, color: '#F87171', display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', fontSize: 11, cursor: 'pointer' }}
-                        >
-                          <Trash2 size={13} /> Excluir
+                          <Printer size={13} /> Imprimir A4
                         </button>
                         {selectedRdo.status !== 'Aprovado' && (
                           <button
                             onClick={() => handleSignDigital(selectedRdo.id)}
-                            style={{ ...inputStyle, background: C.amber, color: '#0b0c0e', border: 'none', fontWeight: 900, display: 'flex', alignItems: 'center', gap: 5, padding: '4px 12px', fontSize: 11, cursor: 'pointer' }}
+                            style={{
+                              background: '#10B981',
+                              color: '#0A0A0A',
+                              border: 'none',
+                              borderRadius: 4,
+                              fontWeight: 900,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '5px 14px',
+                              fontSize: 11,
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+                            }}
                           >
-                            <Check size={13} /> Assinar
+                            <Check size={14} strokeWidth={3} /> Assinar
                           </button>
                         )}
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => setEditMode(false)}
+                          style={{
+                            background: 'none',
+                            border: `1px solid ${C.border}`,
+                            borderRadius: 4,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '5px 12px',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            color: C.inkSoft
+                          }}
+                        >
+                          <X size={13} /> Cancelar
+                        </button>
+                        <button
+                          onClick={() => void handleUpdateRdo()}
+                          disabled={savingEdit}
+                          style={{
+                            background: '#F59E0B',
+                            color: '#0A0A0A',
+                            border: 'none',
+                            borderRadius: 4,
+                            fontWeight: 900,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            padding: '5px 14px',
+                            fontSize: 11,
+                            cursor: 'pointer',
+                            opacity: savingEdit ? 0.6 : 1
+                          }}
+                        >
+                          <Save size={13} /> {savingEdit ? 'Salvando...' : 'Salvar Alterações'}
+                        </button>
                       </>
                     )}
                   </div>
                 }
               >
-                {/* RDO Doc Render */}
-                <div style={{ padding: 16, background: '#0F1115', border: `1px solid ${C.border}`, borderRadius: 2, display: 'flex', flexDirection: 'column', gap: 20 }}>
+                {/* RDO Document Render */}
+                <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: 18, display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-                  {/* Doc Header */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
+                  {/* Document Official Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${C.border}`, paddingBottom: 14 }}>
                     <div>
-                      <h4 style={{ fontSize: 14, fontWeight: 900, color: C.ink }}>{selectedRdo.obra?.nome ?? 'Obra'}</h4>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <div style={{ width: 12, height: 4, background: C.ink, borderRadius: 1 }} />
+                        <div style={{ width: 12, height: 4, background: '#FFE500', borderRadius: 1 }} />
+                        <span style={{ fontSize: 9.5, fontWeight: 900, color: '#FFE500', letterSpacing: '0.1em' }}>JWA ENGENHARIA</span>
+                      </div>
+                      <h3 style={{ fontSize: 16, fontWeight: 900, color: C.ink, textTransform: 'uppercase', margin: 0 }}>
+                        {selectedRdo.obra?.nome ?? 'Obra sem nome'}
+                      </h3>
                       {editMode ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginTop: 6 }}>
-                          <div><span style={labelStyle}>Responsável</span><input style={inputStyle} value={editGeral.responsavel} onChange={e => setEditGeral(f => ({...f, responsavel: e.target.value}))} /></div>
-                          <div><span style={labelStyle}>Cargo</span><input style={inputStyle} value={editGeral.cargo} onChange={e => setEditGeral(f => ({...f, cargo: e.target.value}))} /></div>
-                          <div><span style={labelStyle}>CREA</span><input style={inputStyle} value={editGeral.crea} onChange={e => setEditGeral(f => ({...f, crea: e.target.value}))} /></div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
+                          <div><span style={labelStyle}>Responsável</span><input style={inputStyle} value={editGeral.responsavel} onChange={e => setEditGeral(f => ({ ...f, responsavel: e.target.value }))} /></div>
+                          <div><span style={labelStyle}>Cargo</span><input style={inputStyle} value={editGeral.cargo} onChange={e => setEditGeral(f => ({ ...f, cargo: e.target.value }))} /></div>
+                          <div><span style={labelStyle}>CREA</span><input style={inputStyle} value={editGeral.crea} onChange={e => setEditGeral(f => ({ ...f, crea: e.target.value }))} /></div>
                         </div>
                       ) : (
-                        <p style={{ fontSize: 11, color: C.inkSoft }}>Responsável: {selectedRdo.responsavel} {selectedRdo.cargo ? `(${selectedRdo.cargo})` : ''}</p>
+                        <p style={{ fontSize: 12, color: C.inkSoft, margin: '4px 0 0' }}>
+                          Responsável Técnico: <strong style={{ color: C.ink }}>{selectedRdo.responsavel}</strong> {selectedRdo.cargo ? `· ${selectedRdo.cargo}` : ''} {selectedRdo.crea ? `· CREA: ${selectedRdo.crea}` : ''}
+                        </p>
                       )}
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <span style={{ fontSize: 13, fontWeight: 900, color: C.amber }}>RDO-DIGITAL</span>
-                      <p style={{ fontSize: 11, color: C.inkSoft }}>Data: {new Date(selectedRdo.data + 'T00:00:00').toLocaleDateString('pt-BR')}</p>
-                    </div>
-                  </div>
-
-                  {/* Conditions */}
-                  {editMode ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
-                      <div><span style={labelStyle}>Clima Manhã</span><select style={inputStyle} value={editGeral.clima_manha} onChange={e => setEditGeral(f => ({...f, clima_manha: e.target.value}))}><option>Sol</option><option>Nublado</option><option>Chuva</option></select></div>
-                      <div><span style={labelStyle}>Clima Tarde</span><select style={inputStyle} value={editGeral.clima_tarde} onChange={e => setEditGeral(f => ({...f, clima_tarde: e.target.value}))}><option>Sol</option><option>Nublado</option><option>Chuva</option></select></div>
-                      <div><span style={labelStyle}>Solo</span><select style={inputStyle} value={editGeral.condicao_solo} onChange={e => setEditGeral(f => ({...f, condicao_solo: e.target.value}))}><option>Seco</option><option>Lama</option></select></div>
-                      <div><span style={labelStyle}>Ef. Próprio</span><input type="number" style={inputStyle} value={editGeral.efetivo_proprio} onChange={e => setEditGeral(f => ({...f, efetivo_proprio: e.target.value}))} /></div>
-                      <div><span style={labelStyle}>Ef. Terc.</span><input type="number" style={inputStyle} value={editGeral.efetivo_terceiros} onChange={e => setEditGeral(f => ({...f, efetivo_terceiros: e.target.value}))} /></div>
-                    </div>
-                  ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                    <div style={{ background: C.bgCard, padding: 8, borderRadius: 2, border: `1px solid ${C.border}` }}>
-                      <span style={labelStyle}>Clima</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, color: C.ink }}>
-                        {getWeatherIcon(selectedRdo.clima_manha)} M / {getWeatherIcon(selectedRdo.clima_tarde)} T
+                      <div style={{
+                        display: 'inline-block',
+                        background: selectedRdo.status === 'Aprovado' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                        border: `1px solid ${selectedRdo.status === 'Aprovado' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                        color: selectedRdo.status === 'Aprovado' ? '#10B981' : '#F59E0B',
+                        fontSize: 10,
+                        fontWeight: 900,
+                        padding: '3px 8px',
+                        borderRadius: 3,
+                        marginBottom: 4
+                      }}>
+                        {selectedRdo.status.toUpperCase()}
+                      </div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.ink }}>
+                        {new Date(selectedRdo.data + 'T00:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
                       </div>
                     </div>
-                    <div style={{ background: C.bgCard, padding: 8, borderRadius: 2, border: `1px solid ${C.border}` }}>
-                      <span style={labelStyle}>Solo</span>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>{selectedRdo.condicao_solo}</span>
-                    </div>
-                    <div style={{ background: C.bgCard, padding: 8, borderRadius: 2, border: `1px solid ${C.border}` }}>
-                      <span style={labelStyle}>Efetivo</span>
-                      <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>{Number(selectedRdo.efetivo_proprio) + Number(selectedRdo.efetivo_terceiros)} colab.</span>
-                    </div>
                   </div>
+
+                  {/* Conditions & Weather Cards */}
+                  {editMode ? (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8 }}>
+                      <div><span style={labelStyle}>Clima Manhã</span><select style={inputStyle} value={editGeral.clima_manha} onChange={e => setEditGeral(f => ({ ...f, clima_manha: e.target.value }))}><option>Sol</option><option>Nublado</option><option>Chuva</option></select></div>
+                      <div><span style={labelStyle}>Clima Tarde</span><select style={inputStyle} value={editGeral.clima_tarde} onChange={e => setEditGeral(f => ({ ...f, clima_tarde: e.target.value }))}><option>Sol</option><option>Nublado</option><option>Chuva</option></select></div>
+                      <div><span style={labelStyle}>Solo</span><select style={inputStyle} value={editGeral.condicao_solo} onChange={e => setEditGeral(f => ({ ...f, condicao_solo: e.target.value }))}><option>Seco</option><option>Lama</option><option>Úmido</option></select></div>
+                      <div><span style={labelStyle}>Ef. Próprio</span><input type="number" style={inputStyle} value={editGeral.efetivo_proprio} onChange={e => setEditGeral(f => ({ ...f, efetivo_proprio: e.target.value }))} /></div>
+                      <div><span style={labelStyle}>Ef. Terc.</span><input type="number" style={inputStyle} value={editGeral.efetivo_terceiros} onChange={e => setEditGeral(f => ({ ...f, efetivo_terceiros: e.target.value }))} /></div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+                      <div style={cardIndustrial}>
+                        <span style={labelStyle}>Clima Manhã / Tarde</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 800, color: C.ink }}>
+                            {getWeatherIcon(selectedRdo.clima_manha)} {selectedRdo.clima_manha} (M)
+                          </div>
+                          <span style={{ color: C.border }}>|</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 800, color: C.ink }}>
+                            {getWeatherIcon(selectedRdo.clima_tarde)} {selectedRdo.clima_tarde} (T)
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={cardIndustrial}>
+                        <span style={labelStyle}>Condição do Solo</span>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: C.ink, marginTop: 4 }}>
+                          {selectedRdo.condicao_solo || 'Seco'}
+                        </div>
+                      </div>
+
+                      <div style={cardIndustrial}>
+                        <span style={labelStyle}>Efetivo Total</span>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#10B981', marginTop: 4 }}>
+                          {Number(selectedRdo.efetivo_proprio || 0) + Number(selectedRdo.efetivo_terceiros || 0)} colaboradores
+                        </div>
+                        <span style={{ fontSize: 10, color: C.inkSoft }}>
+                          ({selectedRdo.efetivo_proprio || 0} próprios, {selectedRdo.efetivo_terceiros || 0} terc.)
+                        </span>
+                      </div>
+                    </div>
                   )}
 
-                  {/* Resumo e Ocorrências */}
+                  {/* Resumo do Dia & Ocorrências */}
                   {editMode ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      <div><span style={labelStyle}>Relato do dia</span><textarea rows={3} style={inputStyle} value={editGeral.resumo} onChange={e => setEditGeral(f => ({...f, resumo: e.target.value}))} /></div>
-                      <div><span style={labelStyle}>Ocorrências</span><textarea rows={2} style={inputStyle} value={editGeral.ocorrencias} onChange={e => setEditGeral(f => ({...f, ocorrencias: e.target.value}))} /></div>
+                      <div><span style={labelStyle}>Relato do dia</span><textarea rows={3} style={inputStyle} value={editGeral.resumo} onChange={e => setEditGeral(f => ({ ...f, resumo: e.target.value }))} /></div>
+                      <div><span style={labelStyle}>Ocorrências</span><textarea rows={2} style={inputStyle} value={editGeral.ocorrencias} onChange={e => setEditGeral(f => ({ ...f, ocorrencias: e.target.value }))} /></div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                        <div><span style={labelStyle}>Def. de Serviços</span><textarea rows={2} style={inputStyle} value={editGeral.definicao_servico} onChange={e => setEditGeral(f => ({...f, definicao_servico: e.target.value}))} /></div>
-                        <div><span style={labelStyle}>Liberações</span><textarea rows={2} style={inputStyle} value={editGeral.liberacoes} onChange={e => setEditGeral(f => ({...f, liberacoes: e.target.value}))} /></div>
+                        <div><span style={labelStyle}>Def. de Serviços</span><textarea rows={2} style={inputStyle} value={editGeral.definicao_servico} onChange={e => setEditGeral(f => ({ ...f, definicao_servico: e.target.value }))} /></div>
+                        <div><span style={labelStyle}>Liberações</span><textarea rows={2} style={inputStyle} value={editGeral.liberacoes} onChange={e => setEditGeral(f => ({ ...f, liberacoes: e.target.value }))} /></div>
                       </div>
                     </div>
                   ) : (
                     <>
                       {selectedRdo.resumo && (
-                        <div>
-                          <span style={labelStyle}>Relato do dia</span>
-                          <div style={{ marginTop: 2 }}>
-                            <TextoExpandivel text={selectedRdo.resumo} maxLength={140} />
+                        <div style={cardIndustrial}>
+                          <span style={labelStyle}>Relato Operacional do Dia</span>
+                          <div style={{ marginTop: 4 }}>
+                            <TextoExpandivel text={selectedRdo.resumo} maxLength={220} />
                           </div>
                         </div>
                       )}
+
                       {selectedRdo.ocorrencias && (
-                        <div>
-                          <span style={labelStyle}>Ocorrências / Observações</span>
-                          <div style={{ fontSize: 12, color: C.red, background: `${C.red}05`, border: `1px solid ${C.red}22`, padding: 10, borderRadius: 2, marginTop: 2 }}>
-                            <TextoExpandivel text={selectedRdo.ocorrencias} maxLength={140} textColor={C.red} />
+                        <div style={{ ...cardIndustrial, background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <AlertTriangle size={14} color="#EF4444" />
+                            <span style={{ ...labelStyle, color: '#EF4444', marginBottom: 0 }}>Ocorrências & Intercorrências</span>
                           </div>
+                          <TextoExpandivel text={selectedRdo.ocorrencias} maxLength={200} textColor="#FCA5A5" />
                         </div>
                       )}
+
                       {(selectedRdo.definicao_servico || selectedRdo.liberacoes) && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                          <div>
-                            <span style={labelStyle}>Definição dos serviços</span>
-                            <TextoExpandivel text={selectedRdo.definicao_servico || '—'} maxLength={100} />
-                          </div>
-                          <div>
-                            <span style={labelStyle}>Liberações</span>
-                            <TextoExpandivel text={selectedRdo.liberacoes || '—'} maxLength={100} />
-                          </div>
+                          {selectedRdo.definicao_servico && (
+                            <div style={cardIndustrial}>
+                              <span style={labelStyle}>Definição de Serviços</span>
+                              <TextoExpandivel text={selectedRdo.definicao_servico} maxLength={120} />
+                            </div>
+                          )}
+                          {selectedRdo.liberacoes && (
+                            <div style={cardIndustrial}>
+                              <span style={labelStyle}>Liberações Técnicas</span>
+                              <TextoExpandivel text={selectedRdo.liberacoes} maxLength={120} />
+                            </div>
+                          )}
                         </div>
                       )}
                     </>
                   )}
 
-                  {/* Activities */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  {/* Activities List */}
+                  <div style={cardIndustrial}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={labelStyle}>Atividades Realizadas</span>
-                      {editMode && <button type="button" onClick={() => setEditAtividades(a => [...a, ''])} style={{ fontSize: 9, color: C.amber, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>+ Adicionar</button>}
+                      {editMode && (
+                        <button type="button" onClick={() => setEditAtividades(a => [...a, ''])} style={{ fontSize: 10, color: '#F59E0B', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>
+                          + Adicionar Atividade
+                        </button>
+                      )}
                     </div>
+
                     {editMode ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {editAtividades.map((a, i) => (
@@ -917,28 +1233,89 @@ export default function RDO() {
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {selectedRdo.atividades?.map((a, i) => (
-                          <div key={i} style={{ fontSize: 12, color: C.ink, display: 'flex', gap: 8 }}>
-                            <span style={{ color: C.amber, fontWeight: 900 }}>•</span>
+                          <div key={i} style={{ fontSize: 12, color: C.ink, display: 'flex', alignItems: 'flex-start', gap: 8, padding: '4px 0' }}>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#FFE500', marginTop: 6, flexShrink: 0 }} />
                             <span>{a.descricao}</span>
                           </div>
                         ))}
-                        {(!selectedRdo.atividades || selectedRdo.atividades.length === 0) && <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhuma atividade registrada.</p>}
+                        {(!selectedRdo.atividades || selectedRdo.atividades.length === 0) && (
+                          <p style={{ fontSize: 11, color: C.inkSoft, margin: 0 }}>Nenhuma atividade registrada.</p>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  {/* Equipments */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={labelStyle}>Equipamentos em Canteiro</span>
-                      {editMode && <button type="button" onClick={() => setEditEquipamentos(e => [...e, { nome: '', status: 'OPERANDO' }])} style={{ fontSize: 9, color: C.amber, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>+ Adicionar</button>}
+                  {/* Planned vs Executed Services */}
+                  {((selectedRdo as any).planejado_executado?.length > 0 || editMode) && (
+                    <div style={cardIndustrial}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={labelStyle}>Planejado vs Executado</span>
+                        {editMode && (
+                          <button type="button" onClick={() => setEditPlanejado(p => [...p, { servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])} style={{ fontSize: 10, color: '#F59E0B', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>
+                            + Adicionar Meta
+                          </button>
+                        )}
+                      </div>
+
+                      {editMode ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {editPlanejado.map((p, i) => (
+                            <div key={i} style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4, padding: 8 }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 30px', gap: 6, marginBottom: 6 }}>
+                                <input style={inputStyle} value={p.servico} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? { ...x, servico: e.target.value } : x))} placeholder="Serviço" />
+                                <input style={inputStyle} value={p.unidade} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? { ...x, unidade: e.target.value } : x))} placeholder="Unidade" />
+                                <input style={inputStyle} type="number" value={p.planejada} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? { ...x, planejada: e.target.value } : x))} placeholder="Planejado" />
+                                <input style={inputStyle} type="number" value={p.executada} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? { ...x, executada: e.target.value } : x))} placeholder="Executado" />
+                                <button type="button" onClick={() => setEditPlanejado(arr => arr.filter((_, j) => j !== i))} style={{ color: '#F87171', background: 'none', border: 'none', cursor: 'pointer' }}><X size={13} /></button>
+                              </div>
+                              <input style={inputStyle} value={p.observacoes} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? { ...x, observacoes: e.target.value } : x))} placeholder="Observações (opcional)" />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ display: 'grid', gap: 8 }}>
+                          {(selectedRdo as any).planejado_executado?.map((item: any) => {
+                            const planned = Number(item.quantidade_planejada) || 0
+                            const executed = Number(item.quantidade_executada) || 0
+                            const percentage = planned > 0 ? Math.min(100, (executed / planned) * 100) : 0
+
+                            return (
+                              <div key={item.id} style={{ padding: 10, background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                                  <strong style={{ color: C.ink }}>{item.servico}</strong>
+                                  <span style={{ fontWeight: 700, color: percentage >= 100 ? '#10B981' : '#F59E0B' }}>
+                                    {executed} / {planned} {item.unidade || ''} ({percentage.toFixed(1)}%)
+                                  </span>
+                                </div>
+                                <div style={{ height: 6, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                                  <div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? '#10B981' : '#F59E0B', transition: 'width 0.3s ease' }} />
+                                </div>
+                                {item.observacoes && <small style={{ display: 'block', marginTop: 5, color: C.inkSoft }}>{item.observacoes}</small>}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
+                  )}
+
+                  {/* Equipments Section */}
+                  <div style={cardIndustrial}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={labelStyle}>Equipamentos em Canteiro</span>
+                      {editMode && (
+                        <button type="button" onClick={() => setEditEquipamentos(e => [...e, { nome: '', status: 'OPERANDO' }])} style={{ fontSize: 10, color: '#F59E0B', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>
+                          + Adicionar Equipamento
+                        </button>
+                      )}
+                    </div>
+
                     {editMode ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {editEquipamentos.map((eq, i) => (
-                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 160px 32px', gap: 6 }}>
-                            <input style={inputStyle} value={eq.nome} onChange={e => setEditEquipamentos(arr => arr.map((x, j) => j === i ? {...x, nome: e.target.value} : x))} placeholder="Nome do equipamento" />
-                            <select style={inputStyle} value={eq.status} onChange={e => setEditEquipamentos(arr => arr.map((x, j) => j === i ? {...x, status: e.target.value as any} : x))}>
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 140px 30px', gap: 6 }}>
+                            <input style={inputStyle} value={eq.nome} onChange={e => setEditEquipamentos(arr => arr.map((x, j) => j === i ? { ...x, nome: e.target.value } : x))} placeholder="Nome do equipamento" />
+                            <select style={inputStyle} value={eq.status} onChange={e => setEditEquipamentos(arr => arr.map((x, j) => j === i ? { ...x, status: e.target.value as any } : x))}>
                               <option value="OPERANDO">OPERANDO</option>
                               <option value="PARADO">PARADO</option>
                               <option value="MANUTENÇÃO">MANUTENÇÃO</option>
@@ -948,55 +1325,56 @@ export default function RDO() {
                         ))}
                       </div>
                     ) : (
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
                         {selectedRdo.equipamentos?.map((eq, i) => (
-                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 10px', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 2, fontSize: 11 }}>
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }}>
                             <span style={{ color: C.ink, fontWeight: 700 }}>{eq.nome}</span>
-                            <span style={{ color: eq.status === 'OPERANDO' ? C.green : C.amber, fontWeight: 800 }}>{eq.status}</span>
+                            <span style={{
+                              fontSize: 9.5,
+                              fontWeight: 800,
+                              padding: '2px 6px',
+                              borderRadius: 3,
+                              color: eq.status === 'OPERANDO' ? '#10B981' : eq.status === 'PARADO' ? '#EF4444' : '#F59E0B',
+                              background: eq.status === 'OPERANDO' ? 'rgba(16, 185, 129, 0.1)' : eq.status === 'PARADO' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)'
+                            }}>
+                              {eq.status}
+                            </span>
                           </div>
                         ))}
-                        {(!selectedRdo.equipamentos || selectedRdo.equipamentos.length === 0) && <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhum equipamento registrado.</p>}
+                        {(!selectedRdo.equipamentos || selectedRdo.equipamentos.length === 0) && (
+                          <p style={{ fontSize: 11, color: C.inkSoft, margin: 0 }}>Nenhum equipamento registrado.</p>
+                        )}
                       </div>
                     )}
                   </div>
 
-                  <div>
-                    <span style={labelStyle}>Efetivo terceirizado — log de empresas e pagamento</span>
-                    {(selectedRdo as any).terceiros?.length ? <div style={{ display: 'grid', gap: 7 }}>{(selectedRdo as any).terceiros.map((item: any) => <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 60px 110px 120px', gap: 8, alignItems: 'center', padding: '8px 10px', background: C.bgCard, border: `1px solid ${C.border}`, fontSize: 11 }}><strong>{item.empresa_nome}</strong><span>{item.funcao || '—'}</span><span>{item.quantidade} col.</span><span>{item.valor_diaria ? `R$ ${Number(item.valor_diaria).toFixed(2)}/dia` : 'Sem valor'}</span><span style={{ color: item.pagamento_status === 'pago' ? C.green : C.amber, fontWeight: 800 }}>{item.pagamento_status}</span>{item.observacoes && <small style={{ gridColumn: '1 / -1', color: C.inkSoft }}>{item.observacoes}</small>}</div>)}</div> : <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhuma empresa terceirizada detalhada neste RDO.</p>}
-                  </div>
-
-                  {/* Planejado x Executado */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={labelStyle}>Planejado x Executado</span>
-                      {editMode && <button type="button" onClick={() => setEditPlanejado(p => [...p, { servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])} style={{ fontSize: 9, color: C.amber, background: 'none', border: 'none', cursor: 'pointer', fontWeight: 800 }}>+ Adicionar</button>}
+                  {/* Subcontractor Team Log */}
+                  {(selectedRdo as any).terceiros?.length > 0 && (
+                    <div style={cardIndustrial}>
+                      <span style={labelStyle}>Efetivo Terceirizado ({((selectedRdo as any).terceiros?.length)} equipes)</span>
+                      <div style={{ display: 'grid', gap: 6, marginTop: 6 }}>
+                        {(selectedRdo as any).terceiros.map((item: any) => (
+                          <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 70px 100px 100px', gap: 8, alignItems: 'center', padding: '7px 10px', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 11 }}>
+                            <strong style={{ color: C.ink }}>{item.empresa_nome}</strong>
+                            <span style={{ color: C.inkSoft }}>{item.funcao || '—'}</span>
+                            <span style={{ color: C.ink }}>{item.quantidade} col.</span>
+                            <span style={{ color: C.inkSoft }}>{item.valor_diaria ? `R$ ${Number(item.valor_diaria).toFixed(2)}` : '—'}</span>
+                            <span style={{ color: item.pagamento_status === 'pago' ? '#10B981' : '#F59E0B', fontWeight: 800 }}>
+                              {item.pagamento_status?.toUpperCase() || 'PENDENTE'}
+                            </span>
+                            {item.observacoes && <small style={{ gridColumn: '1 / -1', color: C.inkSoft }}>Obs: {item.observacoes}</small>}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    {editMode ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {editPlanejado.map((p, i) => (
-                          <div key={i} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, padding: 10 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 32px', gap: 6, marginBottom: 6 }}>
-                              <input style={inputStyle} value={p.servico} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, servico: e.target.value} : x))} placeholder="Serviço" />
-                              <input style={inputStyle} value={p.unidade} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, unidade: e.target.value} : x))} placeholder="Unidade" />
-                              <input style={inputStyle} type="number" value={p.planejada} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, planejada: e.target.value} : x))} placeholder="Planejado" />
-                              <input style={inputStyle} type="number" value={p.executada} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, executada: e.target.value} : x))} placeholder="Executado" />
-                              <button type="button" onClick={() => setEditPlanejado(arr => arr.filter((_, j) => j !== i))} style={{ color: '#F87171', background: 'none', border: 'none', cursor: 'pointer' }}><X size={13} /></button>
-                            </div>
-                            <input style={inputStyle} value={p.observacoes} onChange={e => setEditPlanejado(arr => arr.map((x, j) => j === i ? {...x, observacoes: e.target.value} : x))} placeholder="Observações (opcional)" />
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      (selectedRdo as any).planejado_executado?.length ? <div style={{ display: 'grid', gap: 7 }}>{(selectedRdo as any).planejado_executado.map((item: any) => { const planned = Number(item.quantidade_planejada) || 0; const executed = Number(item.quantidade_executada) || 0; const percentage = planned > 0 ? Math.min(100, executed / planned * 100) : 0; return <div key={item.id} style={{ padding: 9, background: C.bgCard, border: `1px solid ${C.border}`, fontSize: 11 }}><div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{item.servico}</strong><span>{executed} / {planned} {item.unidade || ''} ({percentage.toFixed(1)}%)</span></div><div style={{ height: 5, marginTop: 6, background: '#222530', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? C.green : C.amber }} /></div>{item.observacoes && <small style={{ display: 'block', marginTop: 5, color: C.inkSoft }}>{item.observacoes}</small>}</div> })}</div> : <p style={{ fontSize: 11, color: C.inkSoft }}>Nenhum serviço planejado registrado.</p>
-                    )}
-                  </div>
+                  )}
 
-                  {/* Registro Fotográfico na tela */}
-                  <div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={labelStyle}>📷 Registro Fotográfico e Documentos ({selectedRdo.fotos?.length || 0})</span>
-                      <label style={{ fontSize: 10, color: C.amber, background: 'rgba(245, 158, 11, 0.1)', border: `1px solid ${C.amber}40`, borderRadius: 4, padding: '3px 8px', cursor: 'pointer', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        + Anexar Foto(s) / Documento(s)
+                  {/* Photo Gallery & Evidence */}
+                  <div style={cardIndustrial}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <span style={labelStyle}>📷 Registro Fotográfico de Campo ({selectedRdo.fotos?.length || 0})</span>
+                      <label style={{ fontSize: 10, color: '#F59E0B', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Plus size={12} /> Anexar Fotos
                         <input
                           hidden
                           type="file"
@@ -1032,8 +1410,9 @@ export default function RDO() {
                         />
                       </label>
                     </div>
+
                     {selectedRdo.fotos && selectedRdo.fotos.length > 0 ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10, marginTop: 8 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
                         {selectedRdo.fotos.map(foto => {
                           const url = foto.imagem_url?.startsWith('http')
                             ? foto.imagem_url
@@ -1042,10 +1421,11 @@ export default function RDO() {
                               : ''
                           if (!url) return null
                           const isPdf = foto.imagem_url?.toLowerCase().endsWith('.pdf') || foto.legenda?.toLowerCase().endsWith('.pdf')
+
                           return (
                             <div
                               key={foto.id}
-                              style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', padding: 6, position: 'relative', transition: 'transform 0.15s ease, border-color 0.15s ease' }}
+                              style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4, overflow: 'hidden', padding: 6, position: 'relative' }}
                             >
                               <button
                                 type="button"
@@ -1059,31 +1439,32 @@ export default function RDO() {
                                     }
                                   })()
                                 }}
-                                title="Excluir este anexo do RDO"
-                                style={{ position: 'absolute', top: 6, right: 6, background: 'rgba(0,0,0,0.75)', border: 'none', color: '#F87171', borderRadius: 3, padding: 3, cursor: 'pointer', zIndex: 5, display: 'flex', alignItems: 'center' }}
+                                title="Excluir este anexo"
+                                style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.8)', border: 'none', color: '#F87171', borderRadius: 3, padding: 3, cursor: 'pointer', zIndex: 5, display: 'flex', alignItems: 'center' }}
                               >
                                 <Trash2 size={12} />
                               </button>
+
                               {isPdf ? (
                                 <a
                                   href={url}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 95, background: '#111', borderRadius: 2 }}
+                                  style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 100, background: C.bgWhite, borderRadius: 2 }}
                                 >
-                                  <FileText size={24} color={C.amber} />
-                                  <span style={{ fontSize: 9, color: C.ink, marginTop: 4, fontWeight: 700 }}>Documento PDF ↗</span>
+                                  <FileText size={24} color="#F59E0B" />
+                                  <span style={{ fontSize: 9.5, color: C.ink, marginTop: 4, fontWeight: 700 }}>Documento PDF ↗</span>
                                 </a>
                               ) : (
                                 <img
                                   src={url}
                                   alt={foto.legenda || 'Foto RDO'}
                                   onClick={() => setFotoExpandida({ url, legenda: foto.legenda || 'Foto do RDO' })}
-                                  style={{ width: '100%', height: 95, objectFit: 'cover', borderRadius: 2, cursor: 'pointer' }}
-                                  title="Clique para expandir a imagem"
+                                  style={{ width: '100%', height: 100, objectFit: 'cover', borderRadius: 2, cursor: 'pointer' }}
+                                  title="Clique para expandir"
                                 />
                               )}
-                              <span style={{ fontSize: 9, color: C.inkSoft, display: 'block', marginTop: 4, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <span style={{ fontSize: 9.5, color: C.inkSoft, display: 'block', marginTop: 4, textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {foto.legenda || 'Foto em campo'}
                               </span>
                             </div>
@@ -1091,29 +1472,52 @@ export default function RDO() {
                         })}
                       </div>
                     ) : (
-                      <p style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>Nenhuma foto ou documento anexado a este RDO.</p>
+                      <p style={{ fontSize: 11, color: C.inkSoft, margin: 0 }}>Nenhuma evidência fotográfica anexada.</p>
                     )}
                   </div>
 
-                  {/* Signature block */}
-                  <div style={{ borderTop: `1px dashed ${C.border}`, paddingTop: 14, marginTop: 10 }}>
+                  {/* Digital Signature & Certification Stamp */}
+                  <div style={{ borderTop: `1px dashed ${C.border}`, paddingTop: 14 }}>
                     {selectedRdo.status === 'Aprovado' && selectedRdo.assinatura_at ? (
-                      <div style={{ background: '#10B98110', border: '1px solid #10B98133', borderRadius: 2, padding: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Award size={18} color="#10B981" />
-                        <div>
-                          <div style={{ fontSize: 11, fontWeight: 900, color: '#10B981' }}>ASSINADO DIGITALMENTE</div>
-                          <div style={{ fontSize: 10, color: C.inkSoft }}>Resp. Relatório: {selectedRdo.responsavel} · IP: {selectedRdo.assinatura_ip} · Data/Hora: {new Date(selectedRdo.assinatura_at).toLocaleString('pt-BR')}</div>
-                          {selectedRdo.assinado_por && <div style={{ fontSize: 10, color: '#10B981', marginTop: 2 }}>✓ Assinado por: {selectedRdo.assinado_por}</div>}
+                      <div style={{ background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: 6, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <div style={{ background: 'rgba(16, 185, 129, 0.2)', padding: 10, borderRadius: '50%' }}>
+                          <ShieldCheck size={24} color="#10B981" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 900, color: '#10B981', letterSpacing: '0.04em' }}>
+                            DOCUMENTO AUTENTICADO E ASSINADO DIGITALMENTE
+                          </div>
+                          <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
+                            Assinado por: <strong style={{ color: C.ink }}>{selectedRdo.assinado_por || selectedRdo.responsavel}</strong> · IP: {selectedRdo.assinatura_ip} · Data: {new Date(selectedRdo.assinatura_at).toLocaleString('pt-BR')}
+                          </div>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: C.amber, fontSize: 11, fontWeight: 700 }}>
-                        <Clock size={14} /> Aguardando assinatura digital do Engenheiro Responsável.
+                      <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: 6, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#F59E0B', fontSize: 12, fontWeight: 700 }}>
+                          <Clock size={16} />
+                          Documento em rascunho — aguardando validação e assinatura do Responsável Técnico.
+                        </div>
+                        <button
+                          onClick={() => handleSignDigital(selectedRdo.id)}
+                          style={{
+                            background: '#F59E0B',
+                            color: '#0A0A0A',
+                            border: 'none',
+                            borderRadius: 4,
+                            fontWeight: 900,
+                            padding: '6px 14px',
+                            fontSize: 11,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Assinar Agora
+                        </button>
                       </div>
                     )}
                   </div>
 
-                  {/* ─── HISTÓRICO DE MOVIMENTAÇÕES ─── */}
+                  {/* Change History Timeline */}
                   {(() => {
                     const historico: HistoricoEdicao[] = Array.isArray((selectedRdo as any).historico_edicoes) ? (selectedRdo as any).historico_edicoes : []
                     const criacao: HistoricoEdicao = {
@@ -1126,39 +1530,23 @@ export default function RDO() {
                     const timeline = [criacao, ...historico].reverse()
                     return (
                       <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 12 }}>
-                          <History size={13} color={C.amber} />
-                          <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Histórico de Movimentações</span>
-                          <span style={{ fontSize: 9, background: `${C.amber}22`, color: C.amber, border: `1px solid ${C.amber}44`, padding: '1px 6px', borderRadius: 3 }}>{timeline.length} registro(s)</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                          <History size={14} color="#F59E0B" />
+                          <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Histórico de Alterações</span>
+                          <span style={{ fontSize: 9.5, background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1px 6px', borderRadius: 3 }}>
+                            {timeline.length} registro(s)
+                          </span>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 0, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
                           {timeline.map((item, idx) => (
-                            <div key={item.id} style={{ display: 'flex', gap: 10, position: 'relative' }}>
-                              {/* linha da timeline */}
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 24, flexShrink: 0 }}>
-                                <div style={{ width: 9, height: 9, borderRadius: '50%', background: idx === 0 ? C.amber : C.border, marginTop: 9, zIndex: 1, border: `2px solid ${idx === 0 ? C.amber : C.inkSoft}`, flexShrink: 0 }} />
-                                {idx < timeline.length - 1 && <div style={{ width: 1, flex: 1, background: C.border, minHeight: 16, marginTop: 2 }} />}
-                              </div>
-                              <div style={{ flex: 1, paddingBottom: 14 }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                                  <span style={{ fontSize: 10, fontWeight: 800, color: idx === 0 ? C.amber : C.ink }}>
-                                    {item.id === 'criacao' ? '🟢 Criação do RDO' : `✏️ ${item.resumo_alteracao}`}
-                                  </span>
-                                  <span style={{ fontSize: 9, color: C.inkSoft }}>{new Date(item.data).toLocaleString('pt-BR')}</span>
+                            <div key={item.id} style={{ display: 'flex', gap: 10, fontSize: 11 }}>
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: idx === 0 ? C.amber : C.border, marginTop: 5, flexShrink: 0 }} />
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                                  <strong style={{ color: idx === 0 ? '#FFE500' : C.ink }}>{item.resumo_alteracao}</strong>
+                                  <span style={{ fontSize: 10, color: C.inkSoft }}>{new Date(item.data).toLocaleString('pt-BR')}</span>
                                 </div>
-                                <span style={{ fontSize: 9, color: C.inkSoft }}>por {item.autor}</span>
-                                {item.campos.length > 0 && (
-                                  <div style={{ marginTop: 5, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                    {item.campos.map((c, ci) => (
-                                      <div key={ci} style={{ fontSize: 9, color: C.inkSoft, background: '#0B0C0E', border: `1px solid ${C.border}`, borderRadius: 3, padding: '3px 7px' }}>
-                                        <span style={{ color: C.ink, fontWeight: 700 }}>{c.campo}:</span>{' '}
-                                        <span style={{ color: '#F87171' }}>{c.antes || '(vazio)'}</span>
-                                        {' → '}
-                                        <span style={{ color: C.green }}>{c.depois || '(vazio)'}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                                <span style={{ fontSize: 10, color: C.inkSoft }}>por {item.autor}</span>
                               </div>
                             </div>
                           ))}
@@ -1170,7 +1558,9 @@ export default function RDO() {
                 </div>
               </Panel>
             ) : (
-              <p style={{ color: C.inkSoft, fontSize: 13 }}>Selecione um RDO na lista para visualizar.</p>
+              <div style={{ padding: '60px 20px', textAlign: 'center', color: C.inkSoft, fontSize: 13, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6 }}>
+                Selecione um diário de obra na coluna ao lado para visualizar os detalhes completos.
+              </div>
             )}
           </div>
         </div>
@@ -1179,208 +1569,540 @@ export default function RDO() {
       {/* Create Modal */}
       <AnimatePresence>
         {isCreateOpen && (
-          <div onWheel={event => event.stopPropagation()} onTouchMove={event => event.stopPropagation()} style={{ position: 'fixed', inset: 0, zIndex: 999, background: 'rgba(0, 0, 0, 0.75)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, overflow: 'hidden', overscrollBehavior: 'none' }}>
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 2, width: '100%', maxWidth: 460, maxHeight: 'calc(100dvh - 40px)', overflowY: 'auto', overscrollBehavior: 'contain', scrollbarGutter: 'stable', boxSizing: 'border-box', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 12 }}>
-                <span style={{ fontSize: 12, fontWeight: 900, color: C.ink, textTransform: 'uppercase' }}>Novo Diário de Obra</span>
-                <button onClick={() => setIsCreateOpen(false)} style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft }}><X size={15} /></button>
+          <div
+            onWheel={event => event.stopPropagation()}
+            onTouchMove={event => event.stopPropagation()}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 999,
+              background: 'rgba(5, 6, 8, 0.85)',
+              backdropFilter: 'blur(8px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '16px',
+              overflow: 'hidden',
+              overscrollBehavior: 'none'
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.96, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 10 }}
+              transition={{ duration: 0.2 }}
+              style={{
+                background: C.bgPanel,
+                border: `1px solid ${C.border}`,
+                borderRadius: 8,
+                width: '100%',
+                maxWidth: 780,
+                maxHeight: 'calc(100dvh - 32px)',
+                overflowY: 'auto',
+                overscrollBehavior: 'contain',
+                scrollbarGutter: 'stable',
+                boxSizing: 'border-box',
+                padding: '24px 28px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 18,
+                boxShadow: '0 25px 60px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(255, 229, 0, 0.15)'
+              }}
+            >
+              {/* Modal Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: `1px solid ${C.border}`, paddingBottom: 14 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
+                    <div style={{ width: 12, height: 4, background: C.ink, borderRadius: 1 }} />
+                    <div style={{ width: 12, height: 4, background: '#FFE500', borderRadius: 1 }} />
+                    <span style={{ fontSize: 10, fontWeight: 900, color: '#FFE500', letterSpacing: '0.1em' }}>JWA ENGENHARIA</span>
+                    <span style={{ fontSize: 10, color: '#4B5563' }}>•</span>
+                    <span style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700 }}>MÓDULO ESCOUT</span>
+                  </div>
+                  <h2 style={{ fontSize: 18, fontWeight: 900, color: C.ink, textTransform: 'uppercase', margin: 0, letterSpacing: '0.02em' }}>
+                    Novo Diário de Obra Digital
+                  </h2>
+                  <p style={{ fontSize: 11.5, color: C.inkSoft, margin: '3px 0 0' }}>
+                    Registro diário de conformidade técnica, condições de canteiro e avanço físico.
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsCreateOpen(false)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 6,
+                    padding: '6px',
+                    color: C.inkSoft,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    transition: 'all 0.15s ease'
+                  }}
+                  title="Fechar (Esc)"
+                >
+                  <X size={16} />
+                </button>
               </div>
 
-              <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}` }}>
-                {(['geral', 'recursos', 'atividades'] as const).map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setFormTab(tab)}
-                    style={{
-                      background: 'none', border: 'none',
-                      borderBottom: formTab === tab ? `2px solid ${C.amber}` : '2px solid transparent',
-                      color: formTab === tab ? C.amber : C.inkSoft,
-                      padding: '8px 16px', fontSize: 10, fontWeight: 800, cursor: 'pointer', textTransform: 'uppercase'
-                    }}
-                  >
-                    {tab}
-                  </button>
-                ))}
+              {/* Stepper / Tabs Bar */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, background: C.bgWhite, padding: 4, borderRadius: 6, border: `1px solid ${C.border}` }}>
+                {[
+                  { id: 'geral', label: '1. Geral & Clima', icon: <Sun size={13} /> },
+                  { id: 'recursos', label: '2. Efetivo & Equipamentos', icon: <Users size={13} /> },
+                  { id: 'atividades', label: '3. Metas, Avanço & Fotos', icon: <Camera size={13} /> },
+                ].map(tab => {
+                  const active = formTab === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => setFormTab(tab.id as any)}
+                      style={{
+                        background: active ? C.bgPanel : 'transparent',
+                        border: `1px solid ${active ? C.amber : 'transparent'}`,
+                        borderRadius: 4,
+                        color: active ? C.amber : C.inkSoft,
+                        padding: '8px 10px',
+                        fontSize: 11,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {tab.icon}
+                      <span>{tab.label}</span>
+                    </button>
+                  )
+                })}
               </div>
 
-              <form onSubmit={handleCreateRdo} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Form Content */}
+              <form onSubmit={handleCreateRdo} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {formTab === 'geral' && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div>
-                        <label style={labelStyle}>Obra *</label>
-                        <select value={newObraId} onChange={e => setNewObraId(e.target.value)} style={inputStyle}>
-                          {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
-                        </select>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {/* Card: Obra & Responsável */}
+                    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                        <Building size={14} color="#F59E0B" />
+                        <span style={labelStyle}>Identificação da Obra & Responsabilidade Técnica</span>
                       </div>
-                      <div>
-                        <label style={labelStyle}>Data *</label>
-                        <input type="date" value={newData} onChange={e => setNewData(e.target.value)} style={inputStyle} />
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 12, marginBottom: 12 }}>
+                        <div>
+                          <label style={labelStyle}>Obra *</label>
+                          <select
+                            value={newObraId}
+                            onChange={e => setNewObraId(e.target.value)}
+                            style={{ ...inputStyle, background: C.bgCard }}
+                          >
+                            {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Data da Emissão *</label>
+                          <input
+                            type="date"
+                            value={newData}
+                            onChange={e => setNewData(e.target.value)}
+                            style={{ ...inputStyle, background: C.bgCard }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr', gap: 10 }}>
+                        <div>
+                          <label style={labelStyle}>Responsável Técnico *</label>
+                          <input
+                            type="text"
+                            placeholder="Nome do engenheiro ou técnico"
+                            value={newResponsavel}
+                            onChange={e => setNewResponsavel(e.target.value)}
+                            style={{ ...inputStyle, background: C.bgCard }}
+                          />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Cargo / Função</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Engenheiro Residente"
+                            value={newCargo}
+                            onChange={e => setNewCargo(e.target.value)}
+                            style={{ ...inputStyle, background: C.bgCard }}
+                          />
+                        </div>
+                        <div>
+                          <label style={labelStyle}>CREA / Registro</label>
+                          <input
+                            type="text"
+                            placeholder="Ex: 506987452-SP"
+                            value={newCrea}
+                            onChange={e => setNewCrea(e.target.value)}
+                            style={{ ...inputStyle, background: C.bgCard }}
+                          />
+                        </div>
                       </div>
                     </div>
-                    <div><label style={labelStyle}>Relato livre do dia</label><textarea rows={3} value={newResumo} onChange={e => setNewResumo(e.target.value)} style={inputStyle} placeholder="Escreva livremente o que aconteceu no dia" /></div>
-                    <div><label style={labelStyle}>Ocorrências</label><textarea rows={2} value={newOcorrencias} onChange={e => setNewOcorrencias(e.target.value)} style={inputStyle} placeholder="Ocorrências, impactos e providências" /></div>
-                    <div>
-                      <label style={labelStyle}>Responsável Técnico *</label>
-                      <input type="text" value={newResponsavel} onChange={e => setNewResponsavel(e.target.value)} style={inputStyle} />
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                      <div>
-                        <label style={labelStyle}>Cargo</label>
-                        <input type="text" value={newCargo} onChange={e => setNewCargo(e.target.value)} style={inputStyle} />
+
+                    {/* Card: Clima & Solo */}
+                    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                        <Sun size={14} color="#FFE500" />
+                        <span style={labelStyle}>Condições Meteorológicas & Canteiro</span>
                       </div>
-                      <div>
-                        <label style={labelStyle}>CREA</label>
-                        <input type="text" value={newCrea} onChange={e => setNewCrea(e.target.value)} style={inputStyle} />
+
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                        <div>
+                          <label style={labelStyle}>Clima Manhã</label>
+                          <select value={newClimaManha} onChange={e => setNewClimaManha(e.target.value)} style={{ ...inputStyle, background: C.bgCard }}>
+                            <option value="Sol">☀️ Ensolarado / Sol</option>
+                            <option value="Nublado">☁️ Nublado</option>
+                            <option value="Chuva">🌧️ Chuvoso</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Clima Tarde</label>
+                          <select value={newClimaTarde} onChange={e => setNewClimaTarde(e.target.value)} style={{ ...inputStyle, background: C.bgCard }}>
+                            <option value="Sol">☀️ Ensolarado / Sol</option>
+                            <option value="Nublado">☁️ Nublado</option>
+                            <option value="Chuva">🌧️ Chuvoso</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label style={labelStyle}>Condição do Solo</label>
+                          <select value={newCondicaoSolo} onChange={e => setNewCondicaoSolo(e.target.value)} style={{ ...inputStyle, background: C.bgCard }}>
+                            <option value="Seco">Seco / Firme</option>
+                            <option value="Úmido">Úmido / Transitável</option>
+                            <option value="Lama">Lama / Intransitável</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
-                  </>
+
+                    {/* Card: Relato & Ocorrências */}
+                    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                      <div style={{ marginBottom: 12 }}>
+                        <label style={labelStyle}>Relato Operacional do Dia</label>
+                        <textarea
+                          rows={3}
+                          value={newResumo}
+                          onChange={e => setNewResumo(e.target.value)}
+                          style={{ ...inputStyle, background: C.bgCard, lineHeight: 1.5 }}
+                          placeholder="Descreva as principais frentes trabalhadas, avanços do dia e diretrizes técnicas..."
+                        />
+                      </div>
+
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <AlertTriangle size={12} color="#EF4444" />
+                          <label style={{ ...labelStyle, color: '#F87171', marginBottom: 0 }}>Ocorrências / Paralisações / Intercorrências</label>
+                        </div>
+                        <textarea
+                          rows={2}
+                          value={newOcorrencias}
+                          onChange={e => setNewOcorrencias(e.target.value)}
+                          style={{ ...inputStyle, background: C.bgCard, border: '1px solid rgba(239, 68, 68, 0.3)', color: '#EF4444' }}
+                          placeholder="Acidentes, atrasos de fornecedores, falta de energia/água ou impedimentos..."
+                        />
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {formTab === 'recursos' && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                      <div>
-                        <label style={labelStyle}>Clima Manhã</label>
-                        <select value={newClimaManha} onChange={e => setNewClimaManha(e.target.value)} style={inputStyle}>
-                          <option value="Sol">Sol</option>
-                          <option value="Nublado">Nublado</option>
-                          <option value="Chuva">Chuva</option>
-                        </select>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {/* Card: Efetivo */}
+                    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                        <Users size={14} color="#10B981" />
+                        <span style={labelStyle}>Controle de Mão de Obra e Efetivo</span>
                       </div>
-                      <div>
-                        <label style={labelStyle}>Clima Tarde</label>
-                        <select value={newClimaTarde} onChange={e => setNewClimaTarde(e.target.value)} style={inputStyle}>
-                          <option value="Sol">Sol</option>
-                          <option value="Nublado">Nublado</option>
-                          <option value="Chuva">Chuva</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Solo</label>
-                        <select value={newCondicaoSolo} onChange={e => setNewCondicaoSolo(e.target.value)} style={inputStyle}>
-                          <option value="Seco">Seco</option>
-                          <option value="Lama">Lama</option>
-                        </select>
-                      </div>
-                    </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: temTerceirizados ? '1fr 1fr' : '1fr', gap: 10 }}>
-                      <div>
-                        <label style={labelStyle}>Efetivo Próprio *</label>
-                        <input type="number" value={newEfetivoProprio} onChange={e => setNewEfetivoProprio(e.target.value)} style={inputStyle} />
-                      </div>
-                      {temTerceirizados && (
+                      <div style={{ display: 'grid', gridTemplateColumns: temTerceirizados ? '1fr 1fr' : '1fr', gap: 12, marginBottom: 12 }}>
                         <div>
-                          <label style={labelStyle}>Efetivo Terceirizado (Qtd total)</label>
-                          <input type="number" value={newEfetivoTerceiros} onChange={e => setNewEfetivoTerceiros(e.target.value)} style={inputStyle} />
+                          <label style={labelStyle}>Efetivo Próprio (Colaboradores JWA) *</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={newEfetivoProprio}
+                            onChange={e => setNewEfetivoProprio(e.target.value)}
+                            style={{ ...inputStyle, background: C.bgCard }}
+                          />
+                        </div>
+                        {temTerceirizados && (
+                          <div>
+                            <label style={labelStyle}>Total Efetivo Terceirizado</label>
+                            <input
+                              type="number"
+                              min="0"
+                              value={newEfetivoTerceiros}
+                              onChange={e => setNewEfetivoTerceiros(e.target.value)}
+                              style={{ ...inputStyle, background: C.bgCard }}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Toggle Terceirizados */}
+                      <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 14px' }}>
+                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+                          <input
+                            type="checkbox"
+                            checked={temTerceirizados}
+                            onChange={e => {
+                              setTemTerceirizados(e.target.checked)
+                              if (!e.target.checked) {
+                                setNewEfetivoTerceiros('0')
+                              } else if (newEfetivoTerceiros === '0') {
+                                setNewEfetivoTerceiros('1')
+                              }
+                            }}
+                            style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#F59E0B' }}
+                          />
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>Houve equipes ou subempreiteiros terceirizados hoje?</div>
+                            <div style={{ fontSize: 10, color: C.inkSoft }}>Habilita a discriminação por empresa e função para auditoria e controle financeiro.</div>
+                          </div>
+                        </label>
+                      </div>
+
+                      {temTerceirizados && (
+                        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 10.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>Subempreiteiros & Empresas</span>
+                            <button
+                              type="button"
+                              onClick={() => setNewTerceiros(items => [...items, { empresa_nome: '', funcao: '', quantidade: '1', observacoes: '' }])}
+                              style={{ background: 'none', border: 'none', color: '#F59E0B', fontSize: 10.5, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                            >
+                              <Plus size={12} /> Adicionar Empresa
+                            </button>
+                          </div>
+
+                          {newTerceiros.map((item, index) => (
+                            <div key={index} style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 5, padding: 10, display: 'grid', gridTemplateColumns: '1.4fr 1.2fr 80px auto', gap: 8, alignItems: 'end' }}>
+                              <div>
+                                <label style={labelStyle}>Empresa *</label>
+                                <input
+                                  style={{ ...inputStyle, background: C.bgCard }}
+                                  placeholder="Nome da empresa"
+                                  value={item.empresa_nome}
+                                  onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, empresa_nome: e.target.value } : x))}
+                                />
+                              </div>
+                              <div>
+                                <label style={labelStyle}>Função / Frente</label>
+                                <input
+                                  style={{ ...inputStyle, background: C.bgCard }}
+                                  placeholder="Ex: Armação / Instalações"
+                                  value={item.funcao}
+                                  onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, funcao: e.target.value } : x))}
+                                />
+                              </div>
+                              <div>
+                                <label style={labelStyle}>Qtd.</label>
+                                <input
+                                  type="number"
+                                  min="1"
+                                  style={{ ...inputStyle, background: C.bgCard }}
+                                  value={item.quantidade}
+                                  onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, quantidade: e.target.value } : x))}
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setNewTerceiros(items => items.filter((_, i) => i !== index))}
+                                disabled={newTerceiros.length === 1}
+                                style={{ background: 'none', border: 'none', color: newTerceiros.length === 1 ? '#333' : '#F87171', cursor: newTerceiros.length === 1 ? 'default' : 'pointer', padding: 8 }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
 
-                    {/* Toggle Terceirizados */}
-                    <div style={{ background: '#0F1115', border: `1px solid ${C.border}`, borderRadius: 5, padding: '10px 12px', marginTop: 12 }}>
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
-                        <input
-                          type="checkbox"
-                          checked={temTerceirizados}
-                          onChange={e => {
-                            setTemTerceirizados(e.target.checked)
-                            if (!e.target.checked) {
-                              setNewEfetivoTerceiros('0')
-                            } else if (newEfetivoTerceiros === '0') {
-                              setNewEfetivoTerceiros('1')
-                            }
-                          }}
-                          style={{ width: 16, height: 16, cursor: 'pointer', accentColor: C.amber }}
-                        />
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>Possui equipe ou empresa terceirizada nesta data?</div>
-                          <div style={{ fontSize: 10, color: C.inkSoft }}>Marque apenas se houver terceirizados atuando no canteiro.</div>
+                    {/* Card: Equipamentos */}
+                    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Wrench size={14} color="#F59E0B" />
+                          <span style={labelStyle}>Equipamentos e Maquinário em Canteiro</span>
                         </div>
-                      </label>
-                    </div>
-
-                    {temTerceirizados && (
-                      <div style={{ marginTop: 12, border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                          <label style={labelStyle}>Terceirizados por empresa — controle para conferência</label>
-                          <button type="button" onClick={() => setNewTerceiros(items => [...items, { empresa_nome: '', funcao: '', quantidade: '1', observacoes: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ EMPRESA</button>
-                        </div>
-                        <div style={{ display: 'grid', gap: 10 }}>
-                          {newTerceiros.map((item, index) => <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 80px', gap: 8, alignItems: 'end' }}>
-                            <div><label style={labelStyle}>Empresa terceirizada *</label><input style={inputStyle} placeholder="Nome da empresa" value={item.empresa_nome} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, empresa_nome: e.target.value } : x))} /></div>
-                            <div><label style={labelStyle}>Função/serviço</label><input style={inputStyle} placeholder="Ex.: elétrica" value={item.funcao} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, funcao: e.target.value } : x))} /></div>
-                            <div><label style={labelStyle}>Qtd.</label><input type="number" min="1" style={inputStyle} value={item.quantidade} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, quantidade: e.target.value } : x))} /></div>
-                            <div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações</label><textarea rows={2} style={inputStyle} placeholder="Medição, frente, período ou informação para conferência" value={item.observacoes} onChange={e => setNewTerceiros(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>
-                            {newTerceiros.length > 1 && <button type="button" onClick={() => setNewTerceiros(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover empresa</button>}
-                          </div>)}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setEquipForm(eq => [...eq, { nome: '', status: 'OPERANDO' }])}
+                          style={{ background: 'none', border: 'none', color: '#F59E0B', fontSize: 10.5, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                        >
+                          <Plus size={12} /> Adicionar Equipamento
+                        </button>
                       </div>
-                    )}
-                  </>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {equipForm.map((eq, idx) => (
+                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 160px auto', gap: 8, alignItems: 'center', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 5, padding: '8px 10px' }}>
+                            <div>
+                              <input
+                                style={{ ...inputStyle, background: C.bgCard }}
+                                placeholder="Ex: Retroescavadeira JCB 3CX, Betoneira 400L..."
+                                value={eq.nome}
+                                onChange={e => setEquipForm(prev => prev.map((x, i) => i === idx ? { ...x, nome: e.target.value } : x))}
+                              />
+                            </div>
+                            <div>
+                              <select
+                                style={{ ...inputStyle, background: C.bgCard }}
+                                value={eq.status}
+                                onChange={e => setEquipForm(prev => prev.map((x, i) => i === idx ? { ...x, status: e.target.value as any } : x))}
+                              >
+                                <option value="OPERANDO">🟢 OPERANDO</option>
+                                <option value="PARADO">🔴 PARADO</option>
+                                <option value="MANUTENÇÃO">🟡 MANUTENÇÃO</option>
+                              </select>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setEquipForm(prev => prev.filter((_, i) => i !== idx))}
+                              disabled={equipForm.length === 1}
+                              style={{ background: 'none', border: 'none', color: equipForm.length === 1 ? '#333' : '#F87171', cursor: equipForm.length === 1 ? 'default' : 'pointer', padding: 6 }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 )}
 
                 {formTab === 'atividades' && (
-                  <>
-                    <div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <label style={labelStyle}>Atividades Realizadas</label>
-                        <button type="button" onClick={() => setActForm(a => [...a, ''])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ ATIVIDADE</button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {/* Card: Planejado vs Executado */}
+                    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <CheckCircle2 size={14} color="#10B981" />
+                          <span style={labelStyle}>Metas Físicas: Planejado x Executado</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setNewPlanejadoExecutado(items => [...items, { servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])}
+                          style={{ background: 'none', border: 'none', color: '#F59E0B', fontSize: 10.5, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                        >
+                          <Plus size={12} /> Adicionar Serviço
+                        </button>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 180, overflowY: 'auto' }}>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {newPlanejadoExecutado.map((item, index) => {
+                          const planned = parseFloat(item.planejada) || 0
+                          const executed = parseFloat(item.executada) || 0
+                          const percentage = planned > 0 ? Math.min(100, (executed / planned) * 100) : 0
+
+                          return (
+                            <div key={index} style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12 }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '2fr 80px 100px 100px auto', gap: 8, alignItems: 'end', marginBottom: 8 }}>
+                                <div>
+                                  <label style={labelStyle}>Serviço / Frente *</label>
+                                  <input
+                                    style={{ ...inputStyle, background: C.bgCard }}
+                                    placeholder="Ex: Concretagem de Laje"
+                                    value={item.servico}
+                                    onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, servico: e.target.value } : x))}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={labelStyle}>Unidade</label>
+                                  <input
+                                    style={{ ...inputStyle, background: C.bgCard }}
+                                    placeholder="m², m³"
+                                    value={item.unidade}
+                                    onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, unidade: e.target.value } : x))}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={labelStyle}>Planejado</label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    style={{ ...inputStyle, background: C.bgCard }}
+                                    value={item.planejada}
+                                    onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, planejada: e.target.value } : x))}
+                                  />
+                                </div>
+                                <div>
+                                  <label style={labelStyle}>Executado</label>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    style={{ ...inputStyle, background: C.bgCard }}
+                                    value={item.executada}
+                                    onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, executada: e.target.value } : x))}
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setNewPlanejadoExecutado(items => items.filter((_, i) => i !== index))}
+                                  disabled={newPlanejadoExecutado.length === 1}
+                                  style={{ background: 'none', border: 'none', color: newPlanejadoExecutado.length === 1 ? '#333' : '#F87171', cursor: newPlanejadoExecutado.length === 1 ? 'default' : 'pointer', padding: 6 }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+
+                              {/* Progress bar preview */}
+                              {planned > 0 && (
+                                <div style={{ marginTop: 6 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.inkSoft, marginBottom: 4 }}>
+                                    <span>Avanço desta frente</span>
+                                    <strong style={{ color: percentage >= 100 ? '#10B981' : '#F59E0B' }}>{percentage.toFixed(1)}% concluído</strong>
+                                  </div>
+                                  <div style={{ height: 5, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
+                                    <div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? '#10B981' : '#F59E0B', transition: 'width 0.3s ease' }} />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Card: Atividades em Lista */}
+                    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                        <span style={labelStyle}>Atividades Realizadas (Lista de Ações)</span>
+                        <button
+                          type="button"
+                          onClick={() => setActForm(a => [...a, ''])}
+                          style={{ background: 'none', border: 'none', color: '#F59E0B', fontSize: 10.5, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                        >
+                          <Plus size={12} /> Adicionar Item
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         {actForm.map((a, idx) => (
                           <div key={idx} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#FFE500', flexShrink: 0 }} />
                             <input
-                              style={{ ...inputStyle, flex: 1 }} placeholder={`Atividade ${idx + 1}`}
-                              value={a} onChange={e => setActForm(prev => {
+                              style={{ ...inputStyle, background: C.bgCard, flex: 1 }}
+                              placeholder={`Ex: Conclusão do respaldo da alvenaria no bloco B (Item ${idx + 1})`}
+                              value={a}
+                              onChange={e => setActForm(prev => {
                                 const n = [...prev]
                                 n[idx] = e.target.value
                                 return n
                               })}
                             />
                             {actForm.length > 1 && (
-                              <button type="button" onClick={() => setActForm(prev => prev.filter((_, i) => i !== idx))} style={{ ...btnGhost, padding: '4px 6px' }}>
-                                <X size={11} />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Equipamentos em Canteiro */}
-                    <div style={{ border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                        <label style={labelStyle}>Equipamentos em Canteiro</label>
-                        <button type="button" onClick={() => setEquipForm(eq => [...eq, { nome: '', status: 'OPERANDO' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ EQUIPAMENTO</button>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {equipForm.map((eq, idx) => (
-                          <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 160px auto', gap: 8, alignItems: 'end' }}>
-                            <div>
-                              <label style={labelStyle}>Nome do Equipamento *</label>
-                              <input
-                                style={inputStyle}
-                                placeholder="Ex.: Retroescavadeira, Betoneira..."
-                                value={eq.nome}
-                                onChange={e => setEquipForm(prev => prev.map((x, i) => i === idx ? { ...x, nome: e.target.value } : x))}
-                              />
-                            </div>
-                            <div>
-                              <label style={labelStyle}>Status</label>
-                              <select
-                                style={inputStyle}
-                                value={eq.status}
-                                onChange={e => setEquipForm(prev => prev.map((x, i) => i === idx ? { ...x, status: e.target.value as any } : x))}
-                              >
-                                <option value="OPERANDO">OPERANDO</option>
-                                <option value="PARADO">PARADO</option>
-                                <option value="MANUTENÇÃO">MANUTENÇÃO</option>
-                              </select>
-                            </div>
-                            {equipForm.length > 1 && (
-                              <button type="button" onClick={() => setEquipForm(prev => prev.filter((_, i) => i !== idx))} style={{ ...btnGhost, padding: '6px 8px', alignSelf: 'flex-end' }}>
+                              <button type="button" onClick={() => setActForm(prev => prev.filter((_, i) => i !== idx))} style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 4 }}>
                                 <X size={12} />
                               </button>
                             )}
@@ -1389,35 +2111,165 @@ export default function RDO() {
                       </div>
                     </div>
 
-                    <div style={{ border: `1px solid ${C.border}`, borderRadius: 5, padding: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}><label style={labelStyle}>Planejado x executado</label><button type="button" onClick={() => setNewPlanejadoExecutado(items => [...items, { servico: '', unidade: '', planejada: '', executada: '', observacoes: '' }])} style={{ all: 'unset', cursor: 'pointer', color: C.amber, fontSize: 10, fontWeight: 800 }}>+ SERVIÇO</button></div>
-                      <div style={{ display: 'grid', gap: 9 }}>{newPlanejadoExecutado.map((item, index) => { const planned = parseFloat(item.planejada) || 0; const executed = parseFloat(item.executada) || 0; const percentage = planned > 0 ? Math.min(100, (executed / planned) * 100) : 0; return <div key={index} style={{ display: 'grid', gridTemplateColumns: '1.5fr 80px 110px 110px', gap: 8, alignItems: 'end' }}><div><label style={labelStyle}>Serviço *</label><input style={inputStyle} placeholder="Ex.: alvenaria" value={item.servico} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, servico: e.target.value } : x))} /></div><div><label style={labelStyle}>Unidade</label><input style={inputStyle} placeholder="m²" value={item.unidade} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, unidade: e.target.value } : x))} /></div><div><label style={labelStyle}>Planejado</label><input type="number" step="0.001" style={inputStyle} value={item.planejada} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, planejada: e.target.value } : x))} /></div><div><label style={labelStyle}>Executado</label><input type="number" step="0.001" style={inputStyle} value={item.executada} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, executada: e.target.value } : x))} /></div><div style={{ gridColumn: '1 / -1' }}><div style={{ height: 5, background: '#222530', borderRadius: 3, overflow: 'hidden' }}><div style={{ width: `${percentage}%`, height: '100%', background: percentage >= 100 ? C.green : C.amber }} /></div><small style={{ color: percentage >= 100 ? C.green : C.inkSoft, fontSize: 9 }}>{percentage.toFixed(1)}% executado</small></div><div style={{ gridColumn: '1 / -1' }}><label style={labelStyle}>Observações</label><input style={inputStyle} placeholder="Frente, motivo de diferença ou evidência" value={item.observacoes} onChange={e => setNewPlanejadoExecutado(items => items.map((x, i) => i === index ? { ...x, observacoes: e.target.value } : x))} /></div>{newPlanejadoExecutado.length > 1 && <button type="button" onClick={() => setNewPlanejadoExecutado(items => items.filter((_, i) => i !== index))} style={{ ...btnGhost, justifySelf: 'start' }}><X size={12} /> Remover</button>}</div> })}</div>
+                    {/* Card: Definições & Liberações */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12 }}>
+                        <label style={labelStyle}>Definição dos Serviços Próximos</label>
+                        <textarea
+                          rows={2}
+                          style={{ ...inputStyle, background: C.bgCard }}
+                          value={newDefinicaoServico}
+                          onChange={e => setNewDefinicaoServico(e.target.value)}
+                          placeholder="Frentes programadas para o próximo dia útil..."
+                        />
+                      </div>
+                      <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12 }}>
+                        <label style={labelStyle}>Liberações & Validações</label>
+                        <textarea
+                          rows={2}
+                          style={{ ...inputStyle, background: C.bgCard }}
+                          value={newLiberacoes}
+                          onChange={e => setNewLiberacoes(e.target.value)}
+                          placeholder="Projetos liberados, vistorias concluídas..."
+                        />
+                      </div>
                     </div>
-                    <div><label style={labelStyle}>Definição dos serviços</label><textarea rows={2} style={inputStyle} value={newDefinicaoServico} onChange={e => setNewDefinicaoServico(e.target.value)} /></div>
-                    <div><label style={labelStyle}>Liberações</label><textarea rows={2} style={inputStyle} value={newLiberacoes} onChange={e => setNewLiberacoes(e.target.value)} placeholder="Frentes, áreas, projetos ou serviços liberados" /></div>
-                    <div><label style={labelStyle}>Fotos e Documentos do RDO</label><input type="file" multiple accept="image/*,application/pdf" style={inputStyle} onChange={e => setNewFotos(Array.from(e.target.files || []))} />{newFotos.length > 0 && <small style={{ color: C.green }}>{newFotos.length} arquivo(s) selecionado(s)</small>}</div>
-                  </>
+
+                    {/* Card: Fotos & Anexos */}
+                    <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: 14 }}>
+                      <label style={labelStyle}>Registro Fotográfico & Documentos Técnicos</label>
+                      <label style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '16px',
+                        border: `2px dashed ${C.border}`,
+                        borderRadius: 6,
+                        background: C.bgCard,
+                        cursor: 'pointer',
+                        marginTop: 6,
+                        transition: 'all 0.15s ease'
+                      }}>
+                        <UploadCloud size={24} color="#F59E0B" />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: C.ink, marginTop: 6 }}>Clique para anexar fotos ou PDFs</span>
+                        <span style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>Imagens JPG, PNG ou Relatórios em PDF</span>
+                        <input
+                          type="file"
+                          multiple
+                          hidden
+                          accept="image/*,application/pdf"
+                          onChange={e => setNewFotos(Array.from(e.target.files || []))}
+                        />
+                      </label>
+
+                      {newFotos.length > 0 && (
+                        <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                          {newFotos.map((f, i) => (
+                            <span key={i} style={{ fontSize: 10, background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.3)', padding: '3px 8px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              📷 {f.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
 
-                <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
-                  <button type="button" onClick={() => setIsCreateOpen(false)} style={btnGhost} disabled={isCreatingRdo}>Cancelar</button>
+                {/* Modal Navigation Footer */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
                   <button
-                    type="submit"
-                    disabled={isCreatingRdo}
+                    type="button"
+                    onClick={() => setIsCreateOpen(false)}
                     style={{
-                      ...inputStyle,
-                      background: C.amber,
-                      color: '#0b0c0e',
-                      border: 'none',
-                      fontWeight: 900,
-                      width: 'auto',
-                      padding: '8px 18px',
-                      cursor: isCreatingRdo ? 'not-allowed' : 'pointer',
-                      opacity: isCreatingRdo ? 0.6 : 1
+                      background: 'none',
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 4,
+                      color: C.inkSoft,
+                      padding: '8px 16px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      cursor: 'pointer'
                     }}
+                    disabled={isCreatingRdo}
                   >
-                    {isCreatingRdo ? 'Criando Diário...' : 'Salvar Diário'}
+                    Cancelar
                   </button>
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {formTab !== 'geral' && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (formTab === 'atividades') setFormTab('recursos')
+                          else if (formTab === 'recursos') setFormTab('geral')
+                        }}
+                        style={{
+                          background: C.bgWhite,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 4,
+                          color: C.ink,
+                          padding: '8px 16px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        <ArrowLeft size={13} /> Voltar
+                      </button>
+                    )}
+
+                    {formTab !== 'atividades' ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (formTab === 'geral') setFormTab('recursos')
+                          else if (formTab === 'recursos') setFormTab('atividades')
+                        }}
+                        style={{
+                          background: C.bgWhite,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 4,
+                          color: C.ink,
+                          padding: '8px 18px',
+                          fontSize: 11,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6
+                        }}
+                      >
+                        Próximo Passo <ArrowRight size={13} />
+                      </button>
+                    ) : (
+                      <button
+                        type="submit"
+                        disabled={isCreatingRdo}
+                        style={{
+                          background: '#F59E0B',
+                          color: '#0A0A0A',
+                          border: 'none',
+                          borderRadius: 4,
+                          fontWeight: 900,
+                          padding: '8px 22px',
+                          fontSize: 12,
+                          cursor: isCreatingRdo ? 'not-allowed' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                          boxShadow: '0 4px 14px rgba(245, 158, 11, 0.3)',
+                          opacity: isCreatingRdo ? 0.6 : 1
+                        }}
+                      >
+                        <Check size={15} strokeWidth={3} />
+                        {isCreatingRdo ? 'Emitindo Diário...' : 'Finalizar e Emitir RDO'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </form>
             </motion.div>
@@ -1433,15 +2285,18 @@ export default function RDO() {
             className={`rdo-print-sheet ${index < rdosToPrint.length - 1 ? 'rdo-page-break' : ''}`}
           >
             {/* Header */}
-            <div className="print-header">
-              <div className="print-header-left">
-                <h1 className="print-company-title">JWA ENGENHARIA</h1>
-                <h2 className="print-obra-title">OBRA: {rdo.obra?.nome || 'OBRA NÃO INFORMADA'}</h2>
+            <div className="print-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #000', paddingBottom: '10px', marginBottom: '12px' }}>
+              <div className="print-header-left" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <img src="/logo-jwa.png" alt="JWA Engenharia" style={{ height: '36px', width: 'auto', filter: 'brightness(0)' }} />
+                <div>
+                  <h1 className="print-company-title" style={{ fontSize: '15px', fontWeight: 900, margin: 0, letterSpacing: '0.04em' }}>JWA ENGENHARIA</h1>
+                  <h2 className="print-obra-title" style={{ fontSize: '12px', fontWeight: 700, margin: '2px 0 0', color: '#333' }}>OBRA: {rdo.obra?.nome || 'OBRA NÃO INFORMADA'}</h2>
+                </div>
               </div>
-              <div className="print-header-right">
-                <div className="print-doc-badge">RELATÓRIO DIÁRIO DE OBRA</div>
-                <div className="print-doc-date">Data: <strong>{new Date(rdo.data + 'T00:00:00').toLocaleDateString('pt-BR')}</strong></div>
-                <div className="print-doc-status">Status: <strong>{rdo.status.toUpperCase()}</strong></div>
+              <div className="print-header-right" style={{ textAlign: 'right' }}>
+                <div className="print-doc-badge" style={{ fontSize: '11px', fontWeight: 900, background: '#000', color: '#FFF', padding: '2px 8px', borderRadius: '3px', display: 'inline-block' }}>RELATÓRIO DIÁRIO DE OBRA</div>
+                <div className="print-doc-date" style={{ fontSize: '10px', marginTop: '3px' }}>Data: <strong>{new Date(rdo.data + 'T00:00:00').toLocaleDateString('pt-BR')}</strong></div>
+                <div className="print-doc-status" style={{ fontSize: '10px' }}>Status: <strong>{rdo.status.toUpperCase()}</strong></div>
               </div>
             </div>
 
@@ -1671,7 +2526,7 @@ export default function RDO() {
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
-                background: '#12141C',
+                background: C.bgCard,
                 border: `1px solid ${C.border}`,
                 borderRadius: 8,
                 padding: 16,

@@ -9,14 +9,14 @@ import { C } from '@/lib/tokens'
 import type { HistoricoEdicao, Quadro, QuadroCartao, QuadroColuna } from '@/lib/types'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 
-const field: React.CSSProperties = { width: '100%', background: '#0B0C0E', color: C.ink, border: `1px solid ${C.border}`, borderRadius: 4, padding: '9px 11px', outline: 'none', fontSize: 12 }
+const field: React.CSSProperties = { width: '100%', background: C.bgCard, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 4, padding: '9px 11px', outline: 'none', fontSize: 12 }
 const button: React.CSSProperties = { border: 0, borderRadius: 4, background: C.amber, color: '#090A0C', padding: '9px 13px', fontSize: 11, fontWeight: 900, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }
 const ghost: React.CSSProperties = { ...button, background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}` }
 const panel: React.CSSProperties = { background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 5, padding: 14 }
-const tableHead: React.CSSProperties = { background: '#16181C', color: C.inkSoft, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', padding: '9px 8px', borderBottom: `1px solid ${C.border}` }
+const tableHead: React.CSSProperties = { background: C.bgWhite, color: C.inkSoft, fontSize: 9, fontWeight: 900, textTransform: 'uppercase', padding: '9px 8px', borderBottom: `1px solid ${C.border}` }
 const tableCell: React.CSSProperties = { padding: '9px 8px', color: C.ink, borderBottom: `1px solid ${C.border}` }
 const calendarCard: React.CSSProperties = { display: 'grid', gap: 5, textAlign: 'left', padding: 13, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}`, borderRadius: 5, cursor: 'pointer' }
-const priorityColor: Record<string, string> = { Baixa: '#9CA3AF', Média: '#3B82F6', Alta: '#F59E0B', Urgente: '#EF4444' }
+const priorityColor: Record<string, string> = { Baixa: '#9CA3AF', Média: '#F59E0B', Alta: '#F59E0B', Urgente: '#EF4444' }
 
 type CardDraft = { id?: string; coluna_id: string; titulo: string; descricao: string; responsavel: string; prioridade: string; prazo: string; etiquetas: string; anexos: Array<{ nome: string; url: string }> }
 const emptyCard = (coluna_id = ''): CardDraft => ({ coluna_id, titulo: '', descricao: '', responsavel: '', prioridade: 'Média', prazo: '', etiquetas: '', anexos: [] })

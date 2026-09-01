@@ -1,7 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
-const url  = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.e30.placeholder'
+let rawUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xqackyuxipcxvmliecow.supabase.co').trim()
+if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+  rawUrl = rawUrl.includes('.') ? `https://${rawUrl}` : `https://${rawUrl}.supabase.co`
+}
+const url = rawUrl
+const anon = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '').trim() || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxYWNreXV4aXBjeHZtbGllY293Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM4NzgwODMsImV4cCI6MjA5OTQ1NDA4M30.Xv316dO_8QrCpnIqTkcodq_wkuU93ESE8ZOJF5ajFSk'
 
 export const supabase = createClient(url, anon)
 

@@ -38,7 +38,7 @@ const colorMap = {
   success: C.green,
   warning: C.amber,
   error: '#EF4444',
-  info: '#3B82F6',
+  info: C.amber,
 }
 
 export function ToastContainer() {

@@ -274,14 +274,14 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
                   <div style={{ display: 'grid', gap: 7, marginTop: 13 }}>
                     {/* Campo Obrigatório: E-mail do Funcionário */}
-                    <div style={{ padding: 12, background: '#0B0C0E', border: `1px solid ${emailInput.trim() ? '#22C55E55' : C.border}`, borderRadius: 5 }}>
+                    <div style={{ padding: 12, background: C.bgWhite, border: `1px solid ${emailInput.trim() ? '#22C55E55' : C.border}`, borderRadius: 5 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                         <strong style={{ fontSize: 11 }}>E-mail do Funcionário *</strong>
                       </div>
                       <div style={{ display: 'flex', gap: 8 }}>
                         <input
                           type="email"
-                          style={{ flex: 1, background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                          style={{ flex: 1, background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
                           placeholder="Digite seu e-mail de contato (obrigatório)"
                           value={emailInput}
                           onChange={e => setEmailInput(e.target.value)}
@@ -297,7 +297,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                             } catch {}
                             setEnviando('')
                           }}
-                          style={{ padding: '7px 12px', background: C.amber, color: '#0B0C0E', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: emailInput.trim() ? 1 : 0.5 }}
+                          style={{ padding: '7px 12px', background: C.amber, color: '#0A0A0A', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: emailInput.trim() ? 1 : 0.5 }}
                         >
                           {enviando === 'email' ? 'Salvando...' : 'Salvar E-mail'}
                         </button>
@@ -314,26 +314,26 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                       // Última box: Campo de texto para digitar Chave PIX
                       if (isPix) {
                         return (
-                          <div key={item.id} style={{ padding: 12, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : C.border}`, borderRadius: 5 }}>
+                          <div key={item.id} style={{ padding: 12, background: C.bgWhite, border: `1px solid ${accepted ? '#22C55E55' : C.border}`, borderRadius: 5 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                               <CreditCard size={14} color={C.amber} />
                               <strong style={{ fontSize: 11 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
                             </div>
                             <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '1fr 1fr' }}>
                               <input
-                                style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                                style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
                                 placeholder="Chave PIX (obrigatório)"
                                 value={pixInput}
                                 onChange={e => setPixInput(e.target.value)}
                               />
                               <input
-                                style={{ background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                                style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
                                 placeholder="Banco (ex: Itaú, Nubank)"
                                 value={bancoInput}
                                 onChange={e => setBancoInput(e.target.value)}
                               />
                               <input
-                                style={{ gridColumn: '1 / -1', background: '#12141C', border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
+                                style={{ gridColumn: '1 / -1', background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 10px', color: C.ink, fontSize: 11 }}
                                 placeholder="Agência e Conta (obrigatório) ex: Ag 0000 / Cc 00000-0"
                                 value={agenciaContaInput}
                                 onChange={e => setAgenciaContaInput(e.target.value)}
@@ -341,7 +341,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                               <button
                                 disabled={enviando === id || (!pixInput.trim() && !bancoInput.trim() && !agenciaContaInput.trim())}
                                 onClick={() => void salvarChavePix(modelo, item)}
-                                style={{ gridColumn: '1 / -1', padding: '9px 14px', background: C.amber, color: '#0B0C0E', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: (pixInput.trim() || bancoInput.trim() || agenciaContaInput.trim()) ? 1 : 0.5 }}
+                                style={{ gridColumn: '1 / -1', padding: '9px 14px', background: C.amber, color: '#0A0A0A', border: 0, borderRadius: 4, fontSize: 10, fontWeight: 900, cursor: 'pointer', opacity: (pixInput.trim() || bancoInput.trim() || agenciaContaInput.trim()) ? 1 : 0.5 }}
                               >
                                 {enviando === id ? 'Salvando...' : accepted ? 'Atualizar Dados Bancários' : 'Salvar Dados Bancários'}
                               </button>
@@ -353,7 +353,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
                       if (isVem) {
                         return (
-                          <div key={item.id} style={{ padding: 10, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
+                          <div key={item.id} style={{ padding: 10, background: C.bgWhite, border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                               <div>
                                 <strong style={{ fontSize: 10 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
@@ -380,7 +380,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
                       // Demais boxes: Upload normal de arquivo
                       return (
-                        <div key={item.id} style={{ padding: 10, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
+                        <div key={item.id} style={{ padding: 10, background: C.bgWhite, border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                             <div>
                               <strong style={{ fontSize: 10 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
@@ -413,7 +413,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
                       <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA {modelo.ordem} DE 4</span>
-                      <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Modelo da Empresa · Assinatura do Funcionário]</span>
+                      <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: 'C.amber', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Modelo da Empresa · Assinatura do Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
                       {modelo.arquivo_url && (
@@ -426,7 +426,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                   </div>
 
                   {/* Única box de upload do modelo preenchido */}
-                  <div style={{ marginTop: 13, padding: 12, background: '#0B0C0E', border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
+                  <div style={{ marginTop: 13, padding: 12, background: C.bgWhite, border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                       <div>
                         <strong style={{ fontSize: 11 }}>Anexar {modelo.nome} Preenchida *</strong>
@@ -457,7 +457,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
                       <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 4 DE 4</span>
-                      <span style={{ fontSize: 8, background: '#3B82F620', color: '#60A5FA', border: '1px solid #3B82F644', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Guia do RH · Laudo do Funcionário]</span>
+                      <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: 'C.amber', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Guia do RH · Laudo do Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>
                         Baixe sua guia médica personalizada, realize os exames na clínica informada e anexe o laudo/resultado de retorno abaixo.
@@ -466,7 +466,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                     {laudoCandidato && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Laudo Enviado</span>}
                   </div>
 
-                  <div style={{ marginTop: 12, padding: 12, background: '#0B0C0E', borderRadius: 5, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ marginTop: 12, padding: 12, background: C.bgWhite, borderRadius: 5, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {/* Bloco 1: Download da Guia do RH */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <div>
@@ -480,7 +480,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                           href={`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/rh-documentos/${guiaRH.storage_path || guiaRH.nome}`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: C.amber, color: '#0B0C0E', fontWeight: 900, fontSize: 10, borderRadius: 4, textDecoration: 'none' }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: C.amber, color: '#0A0A0A', fontWeight: 900, fontSize: 10, borderRadius: 4, textDecoration: 'none' }}
                         >
                           <FileCheck2 size={13} /> Baixar Guia Médica ({guiaRH.nome})
                         </a>
@@ -535,4 +535,4 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
 const card: React.CSSProperties = { background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 7, padding: 17 }
 const uploadButton: React.CSSProperties = { border: `1px solid ${C.border}`, borderRadius: 4, padding: '7px 9px', color: C.ink, fontSize: 9, fontWeight: 800, cursor: 'pointer', display: 'inline-flex', gap: 5, alignItems: 'center', whiteSpace: 'nowrap' }
-const primaryButton: React.CSSProperties = { width: '100%', border: 0, borderRadius: 5, padding: 13, background: C.amber, color: '#0B0C0E', fontWeight: 900, cursor: 'pointer' }
+const primaryButton: React.CSSProperties = { width: '100%', border: 0, borderRadius: 5, padding: 13, background: C.amber, color: '#0A0A0A', fontWeight: 900, cursor: 'pointer' }

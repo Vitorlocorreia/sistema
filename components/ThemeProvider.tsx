@@ -11,7 +11,7 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: 'dark',
+  theme: 'light',
   setTheme: () => {},
   toggleTheme: () => {}
 })
@@ -19,7 +19,7 @@ const ThemeContext = createContext<ThemeContextType>({
 const THEME_KEY = 'portal_theme'
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>('dark')
+  const [theme, setThemeState] = useState<Theme>('light')
 
   useEffect(() => {
     try {
@@ -27,11 +27,18 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       if (saved === 'dark' || saved === 'light') {
         setThemeState(saved)
         document.documentElement.setAttribute('data-theme', saved)
+        if (saved === 'dark') {
+          document.documentElement.classList.add('dark')
+        } else {
+          document.documentElement.classList.remove('dark')
+        }
       } else {
-        document.documentElement.setAttribute('data-theme', 'dark')
+        document.documentElement.setAttribute('data-theme', 'light')
+        document.documentElement.classList.remove('dark')
       }
     } catch {
-      document.documentElement.setAttribute('data-theme', 'dark')
+      document.documentElement.setAttribute('data-theme', 'light')
+      document.documentElement.classList.remove('dark')
     }
   }, [])
 
@@ -41,6 +48,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(THEME_KEY, newTheme)
     } catch {}
     document.documentElement.setAttribute('data-theme', newTheme)
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
   }
 
   const toggleTheme = () => {
