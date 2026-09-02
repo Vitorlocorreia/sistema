@@ -18,6 +18,7 @@ import {
   FileUp,
   CreditCard,
   Building,
+  Building2,
   Mail,
   Calendar,
   Edit3,
@@ -42,6 +43,7 @@ type Funcionario = {
   cpf: string | null
   matricula: string | null
   cargo: string | null
+  obra?: string | null
   data_admissao: string | null
   status: string
   email: string | null
@@ -225,6 +227,40 @@ function ArchivePanel({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      {/* Resumo do Funcionário Ativo */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink, textTransform: 'uppercase' }}>
+              {person.nome}
+            </h3>
+            <span style={{ fontSize: 9.5, fontWeight: 900, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
+              ✓ COLABORADOR ATIVO
+            </span>
+          </div>
+          <div style={{ color: C.inkSoft, fontSize: 11, marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span>Cargo: <strong style={{ color: C.ink }}>{person.cargo || 'Não informado'}</strong></span>
+            <span>·</span>
+            <span>CPF: <strong style={{ color: C.ink }}>{person.cpf || 'Não informado'}</strong></span>
+            <span>·</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              Obra: <strong style={{ color: person.obra ? C.amber : C.ink, background: person.obra ? 'rgba(245, 158, 11, 0.1)' : 'transparent', padding: person.obra ? '1px 6px' : '0', borderRadius: 3, border: person.obra ? `1px solid rgba(245, 158, 11, 0.25)` : 'none' }}>
+                <Building2 size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+                {person.obra || 'Geral / Não vinculada'}
+              </strong>
+            </span>
+            {person.data_admissao && (
+              <>
+                <span>·</span>
+                <span style={{ color: C.inkSoft }}>
+                  Admitido em: {new Date(person.data_admissao + 'T00:00:00').toLocaleDateString('pt-BR')}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* Header do Baú Documental */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
         <div>
@@ -1141,7 +1177,8 @@ export default function RhPage() {
       arr = arr.filter(p =>
         p.nome.toLowerCase().includes(q) ||
         (p.cpf && p.cpf.includes(q)) ||
-        (p.cargo && p.cargo.toLowerCase().includes(q))
+        (p.cargo && p.cargo.toLowerCase().includes(q)) ||
+        (p.obra && p.obra.toLowerCase().includes(q))
       )
     }
     return arr
@@ -1528,7 +1565,7 @@ export default function RhPage() {
                 <Search size={14} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   style={{ ...inputStyle, paddingLeft: 32 }}
-                  placeholder={activeTab === 'admissao' ? 'Buscar por candidato, CPF, cargo, obra...' : 'Buscar funcionário por nome, CPF...'}
+                  placeholder={activeTab === 'admissao' ? 'Buscar por candidato, CPF, cargo, obra...' : 'Buscar funcionário por nome, CPF, cargo, obra...'}
                   value={activeTab === 'admissao' ? buscaConvite : buscaPessoas}
                   onChange={e => activeTab === 'admissao' ? setBuscaConvite(e.target.value) : setBuscaPessoas(e.target.value)}
                 />
@@ -1641,14 +1678,24 @@ export default function RhPage() {
                         transition: 'all 0.15s ease'
                       }}
                     >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                         <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>{person.nome}</strong>
                         <span style={{ fontSize: 9, fontWeight: 900, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.25)' }}>
                           ✓ ATIVO
                         </span>
                       </div>
-                      <div style={{ fontSize: 10.5, color: C.inkSoft }}>
-                        {person.cargo || 'Cargo não informado'} · CPF: {person.cpf || 'Não informado'}
+                      <div style={{ fontSize: 10.5, color: C.inkSoft, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 4 }}>
+                        <span style={{ fontWeight: 600 }}>{person.cargo || 'Cargo não informado'}</span>
+                        {person.obra ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.25)`, padding: '1px 6px', borderRadius: 3, fontWeight: 800, fontSize: 10 }}>
+                            <Building2 size={10} /> {person.obra}
+                          </span>
+                        ) : (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: C.bgWhite, color: C.inkSoft, border: `1px solid ${C.border}`, padding: '1px 6px', borderRadius: 3, fontSize: 10 }}>
+                            Geral / Sede
+                          </span>
+                        )}
+                        <span>· CPF: {person.cpf || 'Não informado'}</span>
                       </div>
                     </motion.div>
                   )

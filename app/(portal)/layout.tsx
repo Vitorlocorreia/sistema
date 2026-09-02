@@ -11,6 +11,7 @@ import {
   FileText,
   Truck,
   ChevronRight,
+  ChevronLeft,
   ChevronDown,
   X,
   Menu,
@@ -70,11 +71,39 @@ const systemNavigation: NavItem[] = [
     items: [
       { id: 'fin-historico', name: 'Histórico & Fluxo', path: '/financeiro?tab=historico', tabKey: 'historico', icon: FileText },
       { id: 'fin-contas', name: 'Lançar Conta', path: '/financeiro?tab=contas', tabKey: 'contas', icon: Plus },
-      { id: 'fin-obras', name: 'Obras & Métricas', path: '/financeiro?tab=obras', tabKey: 'obras', icon: Building2 },
-      { id: 'fin-fornecedores', name: 'Fornecedores', path: '/financeiro?tab=fornecedores', tabKey: 'fornecedores', icon: Users },
-      { id: 'fin-empresas', name: 'Empresas', path: '/financeiro?tab=empresas', tabKey: 'empresas', icon: Building2 },
-      { id: 'fin-permissoes', name: 'Usuários & Permissões', path: '/financeiro?tab=permissoes', tabKey: 'permissoes', icon: Shield },
     ]
+  },
+  {
+    id: 'obras',
+    name: 'Obras & Métricas',
+    icon: Building2,
+    path: '/financeiro?tab=obras',
+    tabKey: 'obras',
+    appId: 'obras'
+  },
+  {
+    id: 'fornecedores',
+    name: 'Fornecedores',
+    icon: Users,
+    path: '/financeiro?tab=fornecedores',
+    tabKey: 'fornecedores',
+    appId: 'fornecedores'
+  },
+  {
+    id: 'empresas',
+    name: 'Empresas',
+    icon: Building2,
+    path: '/financeiro?tab=empresas',
+    tabKey: 'empresas',
+    appId: 'empresas'
+  },
+  {
+    id: 'usuarios-permissoes',
+    name: 'Usuários & Permissões',
+    icon: Shield,
+    path: '/financeiro?tab=permissoes',
+    tabKey: 'permissoes',
+    appId: 'usuarios'
   },
   {
     id: 'rdo',
@@ -105,13 +134,15 @@ function NavMenuItem({
   level = 0,
   currentPath,
   currentTab,
-  onNavigate
+  onNavigate,
+  collapsed = false
 }: {
   item: NavItem
   level?: number
   currentPath: string
   currentTab: string | null
   onNavigate: (path: string) => void
+  collapsed?: boolean
 }) {
   const isFolder = Boolean(item.items && item.items.length > 0)
 
@@ -353,11 +384,27 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('sidebar_collapsed') === 'true'
+    }
+    return false
+  })
   const [searchFilter, setSearchFilter] = useState('')
   const [colaborador, setColaborador] = useState<Colaborador | null>(null)
   const [appsAutorizados, setAppsAutorizados] = useState<string[]>([])
   const [authChecked, setAuthChecked] = useState(false)
   const { theme, toggleTheme } = useTheme()
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed(prev => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('sidebar_collapsed', String(next))
+      }
+      return next
+    })
+  }
 
   // Safety timeout para nunca travar tela
   useEffect(() => {
@@ -473,14 +520,28 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
 
   // Filtra itens de acordo com as permissões do colaborador
   const authorizedNavItems = useMemo(() => {
+    const isAdmin = colaborador?.cargo === 'admin_geral'
     return systemNavigation.filter(item => {
+      if (isAdmin) return true
       if (!item.appId) return true
       if (item.appId === 'rh') {
         return appsAutorizados.includes('rh') || appsAutorizados.includes('ponto')
       }
+      if (item.appId === 'obras') {
+        return appsAutorizados.includes('obras') || appsAutorizados.includes('financeiro')
+      }
+      if (item.appId === 'fornecedores') {
+        return appsAutorizados.includes('fornecedores') || appsAutorizados.includes('financeiro') || appsAutorizados.includes('suprimentos')
+      }
+      if (item.appId === 'empresas') {
+        return appsAutorizados.includes('empresas') || appsAutorizados.includes('financeiro')
+      }
+      if (item.appId === 'usuarios') {
+        return appsAutorizados.includes('usuarios') || colaborador?.cargo === 'admin_geral'
+      }
       return appsAutorizados.includes(item.appId)
     })
-  }, [appsAutorizados])
+  }, [appsAutorizados, colaborador])
 
   // Filtro de busca na árvore
   const filteredNavItems = useMemo(() => {
@@ -587,31 +648,60 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         style={{ background: C.bgPanel, borderColor: C.border }}
         className={`
           fixed inset-y-0 left-0 z-50 md:static md:h-full flex flex-col flex-shrink-0
-          w-[270px] border-r select-none
-          transform transition-transform duration-250 ease-out md:translate-x-0
+          ${sidebarCollapsed ? 'w-[68px]' : 'w-[260px]'} border-r select-none
+          transition-all duration-200 ease-in-out
           ${mobileOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full md:translate-x-0'}
         `}
       >
-        {/* Top Header: Logo JWA Oficial */}
-        <div style={{ borderColor: C.border }} className="flex items-center justify-between px-4 py-4 border-b flex-shrink-0">
-          <div
-            onClick={() => {
-              router.push('/financeiro')
-              setMobileOpen(false)
-            }}
-            className="flex items-center gap-2.5 cursor-pointer"
-          >
-            <img
-              src="/logo-jwa.png"
-              alt="JWA Engenharia"
-              className="h-7 w-auto object-contain flex-shrink-0"
-              style={{ filter: theme === 'dark' ? 'none' : 'brightness(0)' }}
-            />
-            <div style={{ borderColor: C.border }} className="border-l pl-2.5">
-              <span style={{ color: C.ink }} className="font-bold text-xs uppercase tracking-wider block">Portal Construtora</span>
-              <span style={{ color: C.amber }} className="text-[9.5px] font-extrabold uppercase tracking-widest block">JWA Engenharia</span>
+        {/* Top Header: Logo JWA Oficial + Botão Minimizar/Maximizar */}
+        <div style={{ borderColor: C.border }} className="flex items-center justify-between px-3.5 py-3.5 border-b flex-shrink-0">
+          {!sidebarCollapsed ? (
+            <div
+              onClick={() => {
+                router.push('/financeiro')
+                setMobileOpen(false)
+              }}
+              className="flex items-center gap-2.5 cursor-pointer min-w-0"
+            >
+              <img
+                src="/logo-jwa.png"
+                alt="JWA Engenharia"
+                className="h-7 w-auto object-contain flex-shrink-0"
+                style={{ filter: theme === 'dark' ? 'none' : 'brightness(0)' }}
+              />
+              <div style={{ borderColor: C.border }} className="border-l pl-2.5 truncate">
+                <span style={{ color: C.ink }} className="font-bold text-xs uppercase tracking-wider block truncate">Portal Construtora</span>
+                <span style={{ color: C.amber }} className="text-[9.5px] font-extrabold uppercase tracking-widest block truncate">JWA Engenharia</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div
+              onClick={() => {
+                router.push('/financeiro')
+                setMobileOpen(false)
+              }}
+              className="mx-auto cursor-pointer"
+              title="Portal Construtora - JWA Engenharia"
+            >
+              <img
+                src="/logo-jwa.png"
+                alt="JWA"
+                className="h-7 w-auto object-contain"
+                style={{ filter: theme === 'dark' ? 'none' : 'brightness(0)' }}
+              />
+            </div>
+          )}
+
+          {/* Botão Minimizar/Maximizar Sidebar (Desktop) */}
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            title={sidebarCollapsed ? 'Expandir Menu Lateral' : 'Minimizar Menu Lateral'}
+            style={{ color: C.inkSoft, borderColor: C.border }}
+            className="hidden md:flex p-1.5 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-amber-500 transition-colors"
+          >
+            {sidebarCollapsed ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+          </button>
 
           {/* Botão fechar no mobile */}
           <button
@@ -623,39 +713,41 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* Campo de Busca Rápida */}
-        <div className="px-3.5 pt-3.5 pb-2 flex-shrink-0">
-          <div className="relative">
-            <Search size={12} color={C.inkSoft} className="absolute left-2.5 top-1/2 -translate-y-1/2" />
-            <input
-              style={{
-                background: C.bgWhite,
-                border: `1px solid ${C.border}`,
-                borderRadius: 5,
-                color: C.ink,
-                padding: '6px 8px 6px 26px',
-                fontSize: 11,
-                width: '100%',
-                outline: 'none'
-              }}
-              placeholder="Buscar no sistema..."
-              value={searchFilter}
-              onChange={e => setSearchFilter(e.target.value)}
-            />
-            {searchFilter && (
-              <button
-                onClick={() => setSearchFilter('')}
-                style={{ color: C.inkSoft }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-amber-500"
-              >
-                <X size={10} />
-              </button>
-            )}
+        {/* Campo de Busca Rápida (Apenas visível quando expandido) */}
+        {!sidebarCollapsed && (
+          <div className="px-3 pt-3 pb-1.5 flex-shrink-0">
+            <div className="relative">
+              <Search size={12} color={C.inkSoft} className="absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                style={{
+                  background: C.bgWhite,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 5,
+                  color: C.ink,
+                  padding: '6px 8px 6px 26px',
+                  fontSize: 11,
+                  width: '100%',
+                  outline: 'none'
+                }}
+                placeholder="Buscar no sistema..."
+                value={searchFilter}
+                onChange={e => setSearchFilter(e.target.value)}
+              />
+              {searchFilter && (
+                <button
+                  onClick={() => setSearchFilter('')}
+                  style={{ color: C.inkSoft }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 hover:text-amber-500"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Árvore de Menus Multi-Nível */}
-        <div className="flex-1 overflow-y-auto px-2.5 py-1 flex flex-col gap-0.5 pr-1.5">
+        <div className={`flex-1 overflow-y-auto ${sidebarCollapsed ? 'px-1.5' : 'px-2.5'} py-1.5 flex flex-col gap-0.5`}>
           {filteredNavItems.map(item => (
             <NavMenuItem
               key={item.id}
@@ -664,10 +756,11 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               currentPath={pathname}
               currentTab={currentTabParam}
               onNavigate={handleNavigation}
+              collapsed={sidebarCollapsed}
             />
           ))}
 
-          {filteredNavItems.length === 0 && (
+          {filteredNavItems.length === 0 && !sidebarCollapsed && (
             <div style={{ color: C.inkSoft }} className="py-8 text-center text-xs">
               Nenhuma seção encontrada.
             </div>
@@ -675,54 +768,96 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Rodapé: Usuário + Tema + Sair */}
-        <div style={{ background: C.bgPanel, borderTop: `1px solid ${C.border}` }} className="p-3 flex-shrink-0">
-          <div style={{ background: C.bgWhite, border: `1px solid ${C.border}` }} className="flex items-center gap-2.5 p-2 rounded-md">
-            <div
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: 4,
-                background: 'rgba(245, 158, 11, 0.15)',
-                border: `1px solid ${C.amber}88`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 11,
-                fontWeight: 900,
-                color: C.amber,
-                flexShrink: 0
-              }}
-            >
-              {colaborador ? getInitials(colaborador.nome) : '?'}
-            </div>
-
-            <div className="flex-1 min-w-0">
-              <div style={{ color: C.ink }} className="text-xs font-bold truncate">
-                {colaborador?.nome || 'Usuário'}
+        <div style={{ background: C.bgPanel, borderTop: `1px solid ${C.border}` }} className={`${sidebarCollapsed ? 'p-2' : 'p-3'} flex-shrink-0`}>
+          {!sidebarCollapsed ? (
+            <div style={{ background: C.bgWhite, border: `1px solid ${C.border}` }} className="flex items-center gap-2 p-2 rounded-md">
+              <div
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 4,
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: `1px solid ${C.amber}88`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10.5,
+                  fontWeight: 900,
+                  color: C.amber,
+                  flexShrink: 0
+                }}
+              >
+                {colaborador ? getInitials(colaborador.nome) : '?'}
               </div>
-              <div style={{ color: C.inkSoft }} className="text-[9.5px] uppercase font-semibold tracking-wider truncate">
-                {cargoLabel(colaborador?.cargo || '')}
+
+              <div className="flex-1 min-w-0">
+                <div style={{ color: C.ink }} className="text-xs font-bold truncate">
+                  {colaborador?.nome || 'Usuário'}
+                </div>
+                <div style={{ color: C.inkSoft }} className="text-[9px] uppercase font-semibold tracking-wider truncate">
+                  {cargoLabel(colaborador?.cargo || '')}
+                </div>
               </div>
+
+              <button
+                onClick={toggleTheme}
+                title={theme === 'dark' ? 'Tema Escuro Ativo 🌙 (Clique para Modo Claro)' : 'Tema Claro Ativo ☀️ (Clique para Modo Escuro)'}
+                style={{ color: C.amber, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                className="p-1 rounded hover:bg-zinc-200 dark:hover:bg-[#2E2E2E] transition-colors flex items-center justify-center"
+              >
+                {theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
+              </button>
+
+              <button
+                onClick={handleLogout}
+                title="Sair do Sistema"
+                style={{ color: C.inkSoft, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                className="p-1 rounded hover:bg-red-500/10 hover:text-red-500 transition-colors flex items-center justify-center"
+              >
+                <LogOut size={13} />
+              </button>
             </div>
+          ) : (
+            <div className="flex flex-col items-center gap-2">
+              <div
+                title={(colaborador ? colaborador.nome : 'Usuário') + ' (' + cargoLabel(colaborador ? colaborador.cargo : '') + ')'}
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 4,
+                  background: 'rgba(245, 158, 11, 0.15)',
+                  border: `1px solid ${C.amber}88`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 11,
+                  fontWeight: 900,
+                  color: C.amber,
+                  cursor: 'default'
+                }}
+              >
+                {colaborador ? getInitials(colaborador.nome) : '?'}
+              </div>
 
-            <button
-              onClick={toggleTheme}
-              title={theme === 'dark' ? 'Tema Escuro Ativo 🌙 (Clique para Modo Claro)' : 'Tema Claro Ativo ☀️ (Clique para Modo Escuro)'}
-              style={{ color: C.amber, background: 'transparent', border: 'none', cursor: 'pointer' }}
-              className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-[#2E2E2E] transition-colors flex items-center justify-center"
-            >
-              {theme === 'dark' ? <Moon size={16} /> : <Sun size={16} />}
-            </button>
+              <button
+                onClick={toggleTheme}
+                title={theme === 'dark' ? 'Mudar para Modo Claro ☀️' : 'Mudar para Modo Escuro 🌙'}
+                style={{ color: C.amber, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-[#2E2E2E] transition-colors"
+              >
+                {theme === 'dark' ? <Moon size={15} /> : <Sun size={15} />}
+              </button>
 
-            <button
-              onClick={handleLogout}
-              title="Sair do Sistema"
-              style={{ color: C.inkSoft, background: 'transparent', border: 'none', cursor: 'pointer' }}
-              className="p-1.5 rounded hover:bg-red-500/10 hover:text-red-500 transition-colors flex items-center justify-center"
-            >
-              <LogOut size={14} />
-            </button>
-          </div>
+              <button
+                onClick={handleLogout}
+                title="Sair do Sistema"
+                style={{ color: C.inkSoft, background: 'transparent', border: 'none', cursor: 'pointer' }}
+                className="p-1.5 rounded hover:bg-red-500/10 hover:text-red-500 transition-colors"
+              >
+                <LogOut size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 

@@ -141,14 +141,12 @@ function ObservacaoExpandivel({ text, maxLength = 60, showTitleLabel = true }: {
 
 // ─── NAV TABS ────────────────────────────────────────────────────────────────
 const TABS = [
-  { id: 'obras',        label: 'Obras & Métricas',     icon: Building2 },
-  { id: 'empresas',     label: 'Empresas',            icon: Building2 },
-  { id: 'fornecedores', label: 'Fornecedores',        icon: Users     },
-  { id: 'contas',       label: 'Lançar Conta',        icon: Plus      },
   { id: 'historico',    label: 'Histórico & Fluxo',    icon: FileText  },
-  { id: 'permissoes',   label: 'Usuários & Acessos',  icon: Shield    },
+  { id: 'contas',       label: 'Lançar Conta',        icon: Plus      },
 ] as const
-type Tab = typeof TABS[number]['id']
+
+const ALL_TABS = ['historico', 'contas', 'obras', 'empresas', 'fornecedores', 'permissoes'] as const
+type Tab = typeof ALL_TABS[number]
 
 // Nomes legíveis para os perfis/cargos
 const NOMES_CARGOS: Record<string, string> = {
@@ -221,20 +219,29 @@ const btnGhost: React.CSSProperties = {
 import { useConfirm } from '@/hooks/useConfirm'
 import { usePrompt } from '@/hooks/usePrompt'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 function FinanceiroContent() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const tabParam = (searchParams.get('tab') as Tab | null)
   const { confirm, ConfirmDialog } = useConfirm()
   const { prompt, PromptDialog } = usePrompt()
-  const [tab, setTab] = useState<Tab>(tabParam && TABS.some(t => t.id === tabParam) ? tabParam : 'historico')
+  const [tab, setTab] = useState<Tab>(tabParam && ALL_TABS.includes(tabParam as any) ? tabParam : 'historico')
 
   useEffect(() => {
-    if (tabParam && TABS.some(t => t.id === tabParam)) {
+    if (tabParam && ALL_TABS.includes(tabParam as any)) {
       setTab(tabParam)
     }
   }, [tabParam])
+
+  const handleTabChange = useCallback((newTab: Tab) => {
+    setTab(newTab)
+    const current = searchParams.get('tab')
+    if (current !== newTab) {
+      router.push(`/financeiro?tab=${newTab}`, { scroll: false })
+    }
+  }, [router, searchParams])
 
   const [activeFornecedorId, setActiveFornecedorId] = useState<string>('')
   
@@ -366,7 +373,7 @@ function FinanceiroContent() {
     if (colaboradorAtivo) {
       const permitidas = getAbasPermitidas()
       if (!permitidas.includes(tab)) {
-        setTab((permitidas[0] as Tab) || 'historico')
+        handleTabChange((permitidas[0] as Tab) || 'historico')
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -391,7 +398,7 @@ function FinanceiroContent() {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setTab('contas')}
+              onClick={() => handleTabChange('contas')}
               style={{
                 ...btn(C.amber),
                 fontSize: 11.5,
@@ -414,7 +421,7 @@ function FinanceiroContent() {
           return (
             <button
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => handleTabChange(t.id)}
               style={{
                 background: active ? C.bgPanel : 'transparent',
                 border: `1px solid ${active ? C.border : 'transparent'}`,
@@ -5328,11 +5335,31 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     return statusStatsMap[st] || { count: 0, total: 0 }
   }
 
-  const totalValorFiltrado = filtered.reduce((s, c) => s + (c.valor || 0), 0)
-  const totalAPagarFiltrado = filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
-  const totalReceberFiltrado = filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0)
-  const totalPagoFiltrado   = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0)
-  const totalRecebidoFiltrado = filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0)
+  // Data de hoje no fuso horário local (YYYY-MM-DD)
+  const hojeLocalStr = useMemo(() => {
+    const d = new Date()
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }, [])
+
+  // Somatória A Pagar do Dia (Hoje) - Pendente
+  const totalAPagarHoje = useMemo(() => {
+    return contasDaEmpresa.filter(c => {
+      const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado'
+      if (isLiquidado || c.tipo !== 'pagar') return false
+      const dataRef = (c.data_vencimento || c.data_previsao || '').slice(0, 10)
+      return dataRef === hojeLocalStr
+    }).reduce((s, c) => s + (c.valor || 0), 0)
+  }, [contasDaEmpresa, hojeLocalStr])
+
+  // Somatórias do resultado filtrado
+  const totalValorFiltrado = useMemo(() => filtered.reduce((s, c) => s + (c.valor || 0), 0), [filtered])
+  const totalAPagarFiltrado = useMemo(() => filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
+  const totalReceberFiltrado = useMemo(() => filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
+  const totalPagoFiltrado   = useMemo(() => filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
+  const totalRecebidoFiltrado = useMemo(() => filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
   const saldoLiquidoFiltrado = (totalReceberFiltrado + totalRecebidoFiltrado) - (totalAPagarFiltrado + totalPagoFiltrado)
 
   const listaStatusOpcoes = [
@@ -5936,6 +5963,50 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
             </button>
           </div>
         )}
+
+      {/* ── BARRA EXECUTIVA DE RESUMO & SOMATÓRIAS DO FLUXO (GRID RESPONSIVO) ── */}
+      <div style={{
+        background: C.bgPanel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 8,
+        padding: '10px 14px',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: 8,
+        boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
+      }}>
+        {/* A Pagar do Dia (Hoje) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, background: C.bgWhite, padding: '6px 10px', borderRadius: 6, border: `1px solid ${totalAPagarHoje > 0 ? '#EF444455' : C.border}` }}>
+          <span style={{ color: C.inkSoft, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>A Pagar Hoje</span>
+          <strong style={{ color: totalAPagarHoje > 0 ? '#EF4444' : C.inkSoft, fontWeight: 900, fontSize: 12.5 }}>
+            {fmt(totalAPagarHoje)}
+          </strong>
+        </div>
+
+        {/* Pendente / A Pagar Filtrado */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, background: C.bgWhite, padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}` }}>
+          <span style={{ color: C.inkSoft, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>A Pagar (Filtro)</span>
+          <strong style={{ color: '#F87171', fontWeight: 900, fontSize: 12.5 }}>
+            {fmt(totalAPagarFiltrado)}
+          </strong>
+        </div>
+
+        {/* Total Pago Filtrado */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, background: C.bgWhite, padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}` }}>
+          <span style={{ color: C.inkSoft, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Já Pago</span>
+          <strong style={{ color: '#10B981', fontWeight: 900, fontSize: 12.5 }}>
+            {fmt(totalPagoFiltrado)}
+          </strong>
+        </div>
+
+        {/* Volume e Soma Total */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, background: C.bgWhite, padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}` }}>
+          <span style={{ color: C.inkSoft, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Volume ({filtered.length})</span>
+          <strong style={{ color: C.ink, fontWeight: 900, fontSize: 12.5 }}>
+            {fmt(totalValorFiltrado)}
+          </strong>
+        </div>
+      </div>
       </div>
 
       {/* ── BARRA FLUTUANTE DE SELEÇÃO EM LOTE ── */}
@@ -6104,13 +6175,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       />
                     </th>
                   )}
-                  {['Código', 'Tipo', 'Descrição & Vínculo', 'Empresa / Obra', 'Fornecedor & Domicílio', 'Vencimento', 'Valor', 'Status', 'Ações'].map(h => {
+                  {['Código / Tipo', 'Descrição & Vínculo', 'Empresa / Obra', 'Fornecedor', 'Vencimento', 'Valor', 'Status', 'Ações'].map(h => {
                     const isAcoes = h === 'Ações'
                     return (
                       <th
                         key={h}
                         style={{
-                          padding: '11px 14px',
+                          padding: '9px 8px',
                           textAlign: 'left',
                           fontSize: 10,
                           fontWeight: 800,
@@ -6189,20 +6260,19 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                             />
                           </td>
                         )}
-                        {/* Código */}
-                        <td style={{ padding: '12px 14px' }}>
-                          <span style={{ fontSize: 10, fontWeight: 800, background: 'rgba(245, 158, 11, 0.1)', color: c.tipo === 'receber' ? '#10B981' : C.amber, border: `1px solid rgba(245, 158, 11, 0.3)`, padding: '3px 7px', borderRadius: 4, letterSpacing: 0.5, fontFamily: 'monospace' }}>
-                            {fmtCodigo(c) || `#${c.id.slice(0, 5)}`}
-                          </span>
-                        </td>
-                        {/* Tipo */}
-                        <td style={{ padding: '12px 14px' }}>
-                          <div style={{ width: 28, height: 28, borderRadius: 6, background: c.tipo === 'receber' ? '#34D39918' : '#F8717118', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            {c.tipo === 'receber' ? <ArrowUpRight size={13} color="#34D399" /> : <ArrowDownRight size={13} color="#F87171" />}
+                        {/* Código & Tipo Unificados */}
+                        <td style={{ padding: '7px 8px', whiteSpace: 'nowrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            <div style={{ width: 22, height: 22, borderRadius: 4, background: c.tipo === 'receber' ? '#34D39918' : '#F8717118', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }} title={c.tipo === 'receber' ? 'Recebimento' : 'Pagamento'}>
+                              {c.tipo === 'receber' ? <ArrowUpRight size={12} color="#34D399" /> : <ArrowDownRight size={12} color="#F87171" />}
+                            </div>
+                            <span style={{ fontSize: 9.5, fontWeight: 800, background: 'rgba(245, 158, 11, 0.1)', color: c.tipo === 'receber' ? '#10B981' : C.amber, border: `1px solid rgba(245, 158, 11, 0.3)`, padding: '2px 5px', borderRadius: 4, letterSpacing: 0.3, fontFamily: 'monospace' }}>
+                              {fmtCodigo(c) || `#${c.id.slice(0, 5)}`}
+                            </span>
                           </div>
                         </td>
                         {/* Descrição & Vínculo */}
-                        <td style={{ padding: '12px 14px', color: C.ink, fontWeight: 600, maxWidth: 260 }}>
+                        <td style={{ padding: '8px 8px', color: C.ink, fontWeight: 600, maxWidth: 200, fontSize: 11.5 }}>
                           <div style={{ whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                             <span>{c.descricao}</span>
                             {(() => {
@@ -6242,7 +6312,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           )}
                         </td>
                         {/* Empresa / Obra */}
-                        <td style={{ padding: '12px 14px', color: C.inkSoft }}>
+                        <td style={{ padding: '8px 8px', color: C.inkSoft }}>
                           <div style={{ borderLeft: `2px solid ${c.empresa?.cor ?? '#fff'}`, paddingLeft: 6, fontWeight: 600, color: C.ink }}>
                             {c.empresa?.nome_fantasia ?? c.empresa?.razao_social ?? '—'}
                           </div>
@@ -6253,7 +6323,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           )}
                         </td>
                         {/* Fornecedor & Domicílio Bancário */}
-                        <td style={{ padding: '12px 14px', color: C.inkSoft, maxWidth: 220, wordBreak: 'break-word' }}>
+                        <td style={{ padding: '8px 8px', color: C.inkSoft, maxWidth: 150, fontSize: 11, wordBreak: 'break-word' }}>
                           <div style={{ fontWeight: 600, color: C.ink }}>{c.fornecedor?.razao_social ?? c.fornecedor?.nome_fantasia ?? 'Geral'}</div>
                           {c.fornecedor?.pix && <div style={{ fontSize: 10, color: '#34D399', marginTop: 2 }}>PIX: {c.fornecedor.pix}</div>}
                           {(c.fornecedor?.banco) && <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 2 }}>
@@ -6261,12 +6331,12 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           </div>}
                         </td>
                         {/* Vencimento */}
-                        <td style={{ padding: '12px 14px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '8px 8px', color: venc ? '#F87171' : C.inkSoft, whiteSpace: 'nowrap' }}>
                           <div style={{ fontWeight: 600, color: venc ? '#EF4444' : C.ink }}>{fmtDate(dataPrevisao)}</div>
                           {venc && <div style={{ fontSize: 8.5, fontWeight: 900, color: '#EF4444' }}>ATRASADO</div>}
                         </td>
                         {/* Valor */}
-                        <td style={{ padding: '12px 14px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+                        <td style={{ padding: '8px 8px', fontWeight: 900, whiteSpace: 'nowrap' }}>
                           <div style={{ color: c.tipo === 'receber' ? '#34D399' : '#F87171', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'monospace' }}>
                             <span>{fmt((pagoParcial || totalPagoHistorico > 0) ? valorCheioAbatido : valorBase)}</span>
                             {ultimoDesconto?.valor_novo !== undefined && (
@@ -6284,7 +6354,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           )}
                         </td>
                         {/* Status */}
-                        <td style={{ padding: '12px 14px' }}>
+                        <td style={{ padding: '8px 8px' }}>
                           <span style={{
                             fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
                             letterSpacing: 0.4,
@@ -6316,7 +6386,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         >
                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                             {podeAlterarStatus && (
-                              <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 125, padding: '4px 6px', fontSize: 10 }}>
+                              <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 100, padding: '3px 4px', fontSize: 9.5 }}>
                                 <option value="Lançado">Lançado</option>
                                 <option value="Bloqueado">Bloqueado</option>
                                 <option value="Aguardando aprovação">Aguardando aprovação</option>
@@ -6354,7 +6424,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                       <AnimatePresence>
                         {isExpanded && (
                           <tr style={{ borderBottom: `1px solid ${C.border}`, background: C.bgWhite }}>
-                            <td colSpan={9} style={{ padding: 0 }}>
+                            <td colSpan={(modoExportacao || modoSelecao) ? 9 : 8} style={{ padding: 0 }}>
                               <motion.div
                                 initial={{ height: 0, opacity: 0 }}
                                 animate={{ height: 'auto', opacity: 1 }}
