@@ -5966,48 +5966,30 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
           </div>
         )}
 
-      {/* ── BARRA EXECUTIVA DE RESUMO & SOMATÓRIAS DO FLUXO (GRID RESPONSIVO) ── */}
+      {/* ── CARD EXECUTIVO: A PAGAR HOJE (DIA) ── */}
       <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
         background: C.bgPanel,
         border: `1px solid ${C.border}`,
         borderRadius: 8,
-        padding: '10px 14px',
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-        gap: 8,
+        padding: '8px 14px',
         boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
       }}>
-        {/* A Pagar do Dia (Hoje) */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, background: C.bgWhite, padding: '6px 10px', borderRadius: 6, border: `1px solid ${totalAPagarHoje > 0 ? '#EF444455' : C.border}` }}>
-          <span style={{ color: C.inkSoft, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>A Pagar Hoje</span>
-          <strong style={{ color: totalAPagarHoje > 0 ? '#EF4444' : C.inkSoft, fontWeight: 900, fontSize: 12.5 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 8, height: 8, borderRadius: '50%', background: totalAPagarHoje > 0 ? '#EF4444' : '#10B981' }} />
+          <span style={{ color: C.inkSoft, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+            📌 A Pagar do Dia (Hoje):
+          </span>
+          <strong style={{ color: totalAPagarHoje > 0 ? '#EF4444' : '#10B981', fontWeight: 900, fontSize: 13.5, fontFamily: 'monospace' }}>
             {fmt(totalAPagarHoje)}
           </strong>
         </div>
 
-        {/* Pendente / A Pagar Filtrado */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, background: C.bgWhite, padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}` }}>
-          <span style={{ color: C.inkSoft, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>A Pagar (Filtro)</span>
-          <strong style={{ color: '#F87171', fontWeight: 900, fontSize: 12.5 }}>
-            {fmt(totalAPagarFiltrado)}
-          </strong>
-        </div>
-
-        {/* Total Pago Filtrado */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, background: C.bgWhite, padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}` }}>
-          <span style={{ color: C.inkSoft, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Já Pago</span>
-          <strong style={{ color: '#10B981', fontWeight: 900, fontSize: 12.5 }}>
-            {fmt(totalPagoFiltrado)}
-          </strong>
-        </div>
-
-        {/* Volume e Soma Total */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, background: C.bgWhite, padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.border}` }}>
-          <span style={{ color: C.inkSoft, fontSize: 9.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Volume ({filtered.length})</span>
-          <strong style={{ color: C.ink, fontWeight: 900, fontSize: 12.5 }}>
-            {fmt(totalValorFiltrado)}
-          </strong>
-        </div>
+        <span style={{ color: C.inkSoft, fontSize: 11, fontWeight: 600 }}>
+          {filtered.length} lançamento(s) exibido(s)
+        </span>
       </div>
       </div>
 
