@@ -4501,7 +4501,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtTipoData, setFiltTipoData] = useState<'previsao_vencimento' | 'vencimento' | 'previsao' | 'pago_em' | 'created_at'>('previsao_vencimento')
   const [filtValorMin, setFiltValorMin] = useState('')
   const [filtValorMax, setFiltValorMax] = useState('')
-  const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'venc_prox' | 'venc_dist' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
+  const [filtOrdem, setFiltOrdem] = useState<'novo' | 'antigo' | 'pago_recente' | 'pago_antigo' | 'venc_prox' | 'venc_dist' | 'maior_valor' | 'menor_valor' | 'az' | 'za'>('novo')
   const [search, setSearch]           = useState('')
   const [showFiltros, setShowFiltros] = useState(false)
   const [modoExportacao, setModoExportacao] = useState(false)
@@ -5704,8 +5704,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 <div style={{ display: 'grid', gap: 5 }}>
                   <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Ordenação</label>
                   <select style={{ ...input, background: C.bgPanel }} value={filtOrdem} onChange={e => setFiltOrdem(e.target.value as any)}>
-                    <option value="novo">↓ Lançamento mais recente</option>
-                    <option value="antigo">↑ Lançamento mais antigo</option>
+                    <option value="novo">↓ Lançamento mais recente (Cadastro)</option>
+                    <option value="antigo">↑ Lançamento mais antigo (Cadastro)</option>
+                    <option value="pago_recente">✅ ↓ Pagamento efetivo mais recente (mais novo → mais velho)</option>
+                    <option value="pago_antigo">✅ ↑ Pagamento efetivo mais antigo (mais velho → mais novo)</option>
                     <option value="venc_prox">↓ Vencimento mais próximo</option>
                     <option value="venc_dist">↑ Vencimento mais distante</option>
                     <option value="maior_valor">↓ Maior valor primeiro</option>
