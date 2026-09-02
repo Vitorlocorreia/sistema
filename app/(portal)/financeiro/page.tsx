@@ -5351,17 +5351,40 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     }
   }, [])
 
-  // Somatória A Pagar do Dia (Hoje) - Pendente
-  const totalAPagarHoje = useMemo(() => {
+  // Contas filtradas pelo contexto ativo (Empresa, Fornecedor, Busca, Tipo, Faixa de Valor),
+  // sem aplicar o filtro estrito de data para permitir o cálculo correto da régua dos 5 dias
+  const contasFiltradasContexto = useMemo(() => {
     return contasDaEmpresa.filter(c => {
+      const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
+      const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
+      const matchTipo = filtTipo === 'todos' || c.tipo === filtTipo
+      const numValorMin = filtValorMin !== '' ? parseFloat(filtValorMin) : null
+      const numValorMax = filtValorMax !== '' ? parseFloat(filtValorMax) : null
+      const matchValorMin = numValorMin === null || isNaN(numValorMin) || Number(c.valor || 0) >= numValorMin
+      const matchValorMax = numValorMax === null || isNaN(numValorMax) || Number(c.valor || 0) <= numValorMax
+      const codFormatted = fmtCodigo(c)
+      const matchSearch = !deferredSearch ||
+        c.descricao.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.obra?.nome ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.fornecedor?.razao_social ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        codFormatted.toLowerCase().includes(deferredSearch.toLowerCase()) ||
+        String(c.codigo_sequencial || '').includes(deferredSearch.trim())
+      return matchEmpresa && matchFornecedor && matchTipo && matchSearch && matchValorMin && matchValorMax
+    })
+  }, [contasDaEmpresa, filtEmpresa, filtFornecedor, filtTipo, filtValorMin, filtValorMax, deferredSearch])
+
+  // Somatória A Pagar do Dia (Hoje) - Pendente respeitando o filtro contextual ativo
+  const totalAPagarHoje = useMemo(() => {
+    return contasFiltradasContexto.filter(c => {
       const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado'
       if (isLiquidado || c.tipo !== 'pagar') return false
       const dataRef = (c.data_vencimento || c.data_previsao || '').slice(0, 10)
       return dataRef === hojeLocalStr
     }).reduce((s, c) => s + (c.valor || 0), 0)
-  }, [contasDaEmpresa, hojeLocalStr])
+  }, [contasFiltradasContexto, hojeLocalStr])
 
-  // Régua Sequencial de Pagamentos dos Próximos 5 Dias (Fuso de Brasília)
+  // Régua Sequencial de Pagamentos dos Próximos 5 Dias (Fuso de Brasília com Filtros Ativos)
   const reguaProximosDias = useMemo(() => {
     const hojeStr = hojeLocalStr
     const [ano, mes, dia] = hojeStr.split('-').map(Number)
@@ -5382,7 +5405,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       else if (offset === 1) label = 'Amanhã'
       else label = `Em +${offset} dias`
 
-      const contasDoDia = contasDaEmpresa.filter(c => {
+      const contasDoDia = contasFiltradasContexto.filter(c => {
         const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado'
         if (isLiquidado || c.tipo !== 'pagar') return false
         const dataRef = (c.data_vencimento || c.data_previsao || '').slice(0, 10)
@@ -5403,7 +5426,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       })
     }
     return lista
-  }, [contasDaEmpresa, hojeLocalStr])
+  }, [contasFiltradasContexto, hojeLocalStr])
 
   // Somatórias do resultado filtrado
   const totalValorFiltrado = useMemo(() => filtered.reduce((s, c) => s + (c.valor || 0), 0), [filtered])
