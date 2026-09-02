@@ -5335,13 +5335,20 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     return statusStatsMap[st] || { count: 0, total: 0 }
   }
 
-  // Data de hoje no fuso horário local (YYYY-MM-DD)
+  // Data de hoje no fuso horário oficial de Brasília (YYYY-MM-DD)
   const hojeLocalStr = useMemo(() => {
-    const d = new Date()
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, '0')
-    const day = String(d.getDate()).padStart(2, '0')
-    return `${year}-${month}-${day}`
+    try {
+      const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      })
+      return formatter.format(new Date())
+    } catch {
+      const d = new Date()
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    }
   }, [])
 
   // Somatória A Pagar do Dia (Hoje) - Pendente
@@ -5352,6 +5359,50 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       const dataRef = (c.data_vencimento || c.data_previsao || '').slice(0, 10)
       return dataRef === hojeLocalStr
     }).reduce((s, c) => s + (c.valor || 0), 0)
+  }, [contasDaEmpresa, hojeLocalStr])
+
+  // Régua Sequencial de Pagamentos dos Próximos 5 Dias (Fuso de Brasília)
+  const reguaProximosDias = useMemo(() => {
+    const hojeStr = hojeLocalStr
+    const [ano, mes, dia] = hojeStr.split('-').map(Number)
+    const lista = []
+
+    for (let offset = 0; offset < 5; offset++) {
+      const dObj = new Date(Date.UTC(ano, mes - 1, dia + offset, 12, 0, 0))
+      const yyyy = dObj.getUTCFullYear()
+      const mm = String(dObj.getUTCMonth() + 1).padStart(2, '0')
+      const dd = String(dObj.getUTCDate()).padStart(2, '0')
+      const dataStr = `${yyyy}-${mm}-${dd}`
+      
+      const diaSemana = dObj.toLocaleDateString('pt-BR', { timeZone: 'UTC', weekday: 'short' }).replace('.', '').toUpperCase()
+      const diaMes = `${dd}/${mm}`
+
+      let label = ''
+      if (offset === 0) label = 'Hoje'
+      else if (offset === 1) label = 'Amanhã'
+      else label = `Em +${offset} dias`
+
+      const contasDoDia = contasDaEmpresa.filter(c => {
+        const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado'
+        if (isLiquidado || c.tipo !== 'pagar') return false
+        const dataRef = (c.data_vencimento || c.data_previsao || '').slice(0, 10)
+        return dataRef === dataStr
+      })
+
+      const totalValor = contasDoDia.reduce((s, c) => s + (c.valor || 0), 0)
+      const totalContas = contasDoDia.length
+
+      lista.push({
+        offset,
+        label,
+        diaSemana,
+        diaMes,
+        dataStr,
+        totalValor,
+        totalContas
+      })
+    }
+    return lista
   }, [contasDaEmpresa, hojeLocalStr])
 
   // Somatórias do resultado filtrado
@@ -5966,30 +6017,108 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
           </div>
         )}
 
-      {/* ── CARD EXECUTIVO: A PAGAR HOJE (DIA) ── */}
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        background: C.bgPanel,
-        border: `1px solid ${C.border}`,
-        borderRadius: 8,
-        padding: '8px 14px',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.02)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: totalAPagarHoje > 0 ? '#EF4444' : '#10B981' }} />
-          <span style={{ color: C.inkSoft, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            📌 A Pagar do Dia (Hoje):
+      {/* ── RÉGUA EXECUTIVA DE PAGAMENTOS: PRÓXIMOS 5 DIAS (FUSO DE BRASÍLIA) ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px' }}>
+          <span style={{ fontSize: 10.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span>⏱️ Régua de Pagamentos (Próximos 5 Dias)</span>
+            <span style={{ fontSize: 9, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, padding: '1px 6px', borderRadius: 4, fontWeight: 800 }}>
+              Horário de Brasília (GMT-3)
+            </span>
           </span>
-          <strong style={{ color: totalAPagarHoje > 0 ? '#EF4444' : '#10B981', fontWeight: 900, fontSize: 13.5, fontFamily: 'monospace' }}>
-            {fmt(totalAPagarHoje)}
-          </strong>
+          <span style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 600 }}>
+            {filtered.length} lançamento(s) filtrado(s)
+          </span>
         </div>
 
-        <span style={{ color: C.inkSoft, fontSize: 11, fontWeight: 600 }}>
-          {filtered.length} lançamento(s) exibido(s)
-        </span>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+          gap: 8
+        }}>
+          {reguaProximosDias.map((diaItem) => {
+            const isAtivoFiltro = filtDataInicio === diaItem.dataStr && filtDataFim === diaItem.dataStr
+            const temPendencia = diaItem.totalValor > 0
+            const isHoje = diaItem.offset === 0
+            const isAmanha = diaItem.offset === 1
+
+            return (
+              <div
+                key={diaItem.dataStr}
+                onClick={() => {
+                  if (isAtivoFiltro) {
+                    setFiltDataInicio('')
+                    setFiltDataFim('')
+                  } else {
+                    setFiltTipoData('previsao_vencimento')
+                    setFiltDataInicio(diaItem.dataStr)
+                    setFiltDataFim(diaItem.dataStr)
+                  }
+                }}
+                title={`Clique para ${isAtivoFiltro ? 'limpar filtro de' : 'filtrar contas de'} ${diaItem.label} (${diaItem.diaSemana}, ${diaItem.diaMes})`}
+                style={{
+                  background: isAtivoFiltro ? 'rgba(245, 158, 11, 0.1)' : C.bgWhite,
+                  border: isAtivoFiltro ? `1.5px solid ${C.amber}` : (isHoje && temPendencia ? `1px solid #EF444488` : `1px solid ${C.border}`),
+                  borderRadius: 7,
+                  padding: '8px 10px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 3,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  boxShadow: isAtivoFiltro ? '0 0 8px rgba(245, 158, 11, 0.25)' : '0 1px 3px rgba(0,0,0,0.02)'
+                }}
+              >
+                {/* Cabeçalho do Card */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{
+                    fontSize: 10,
+                    fontWeight: 900,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.4,
+                    color: isHoje ? (temPendencia ? '#EF4444' : C.amber) : (isAmanha ? '#F59E0B' : C.inkSoft)
+                  }}>
+                    {diaItem.label}
+                  </span>
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 800,
+                    color: C.inkSoft,
+                    background: 'rgba(0,0,0,0.04)',
+                    padding: '1px 5px',
+                    borderRadius: 3,
+                    fontFamily: 'monospace'
+                  }}>
+                    {diaItem.diaSemana} · {diaItem.diaMes}
+                  </span>
+                </div>
+
+                {/* Valor a Pagar */}
+                <strong style={{
+                  fontSize: 13,
+                  fontWeight: 900,
+                  fontFamily: 'monospace',
+                  color: temPendencia ? (isHoje ? '#EF4444' : C.ink) : '#10B981',
+                  marginTop: 2
+                }}>
+                  {fmt(diaItem.totalValor)}
+                </strong>
+
+                {/* Quantidade de Contas */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 1 }}>
+                  <span style={{ fontSize: 9.5, color: temPendencia ? C.inkSoft : '#10B981', fontWeight: 600 }}>
+                    {diaItem.totalContas > 0 ? `${diaItem.totalContas} conta(s)` : 'Sem pendências'}
+                  </span>
+                  {isAtivoFiltro && (
+                    <span style={{ fontSize: 8.5, color: C.amber, fontWeight: 900, textTransform: 'uppercase' }}>
+                      Ativo ✓
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
       </div>
       </div>
 

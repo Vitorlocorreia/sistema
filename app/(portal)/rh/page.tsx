@@ -210,12 +210,14 @@ function parseDadosBancarios(nome?: string | null) {
 function ArchivePanel({
   person,
   details,
+  dadosBanco,
   onDelete,
   onOpen,
   onUpload
 }: {
   person: Funcionario
   details: Details
+  dadosBanco?: { pix: string; banco: string; agenciaConta: string } | null
   onDelete: () => void
   onOpen: (documento: Record<string, string | null>) => void
   onUpload?: (order: number, files: FileList) => void
@@ -258,6 +260,41 @@ function ArchivePanel({
               </>
             )}
           </div>
+
+          {dadosBanco && (dadosBanco.pix || dadosBanco.banco || dadosBanco.agenciaConta) && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: 10,
+              background: 'rgba(16, 185, 129, 0.08)',
+              border: '1px solid rgba(16, 185, 129, 0.25)',
+              borderRadius: 6,
+              padding: '6px 10px',
+              fontSize: 11,
+              color: '#059669',
+              marginTop: 8
+            }}>
+              <span style={{ fontWeight: 800, textTransform: 'uppercase', fontSize: 9.5, letterSpacing: 0.5, color: '#059669', display: 'flex', alignItems: 'center', gap: 4 }}>
+                💳 Dados Bancários:
+              </span>
+              {dadosBanco.pix && (
+                <span>
+                  <strong>Chave PIX:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#047857' }}>{dadosBanco.pix}</span>
+                </span>
+              )}
+              {dadosBanco.banco && (
+                <span>
+                  · <strong>Banco:</strong> <span style={{ fontWeight: 700, color: '#047857' }}>{dadosBanco.banco}</span>
+                </span>
+              )}
+              {dadosBanco.agenciaConta && (
+                <span>
+                  · <strong>Ag/Cc:</strong> <span style={{ fontWeight: 700, color: '#047857' }}>{dadosBanco.agenciaConta}</span>
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1014,9 +1051,27 @@ export default function RhPage() {
   const [pessoas, setPessoas] = useState<Funcionario[]>([])
   const [modelos, setModelos] = useState<ModeloAdmissao[]>([])
   const [convites, setConvites] = useState<Convite[]>([])
+  const [todosConvites, setTodosConvites] = useState<Convite[]>([])
   const [selectedInvite, setSelectedInvite] = useState<Convite | null>(null)
   const [selected, setSelected] = useState<Funcionario | null>(null)
   const [details, setDetails] = useState<Details>(emptyDetails)
+
+  // Mapeamento global de dados bancários (PIX, Banco, Agência/Conta) por funcionário
+  const dadosBancariosMap = useMemo(() => {
+    const map: Record<string, { pix: string; banco: string; agenciaConta: string }> = {}
+    for (const conv of todosConvites) {
+      const docPix = conv.documentos?.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || (d.nome || '').includes('PIX') || (d.nome || '').includes('Dados Bancários'))
+      if (docPix?.nome) {
+        const parsed = parseDadosBancarios(docPix.nome)
+        if (parsed.pix || parsed.banco || parsed.agenciaConta) {
+          if (conv.funcionario_id) map[conv.funcionario_id] = parsed
+          if (conv.cpf) map[conv.cpf.replace(/\D/g, '')] = parsed
+          if (conv.nome_destinatario) map[conv.nome_destinatario.toLowerCase().trim()] = parsed
+        }
+      }
+    }
+    return map
+  }, [todosConvites])
 
   // Modais de Criação
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -1053,7 +1108,7 @@ export default function RhPage() {
     ] = await Promise.all([
       supabase.from('funcionarios').select('*').order('nome').limit(5000),
       supabase.from('rh_modelos_admissao').select('*').eq('ativo', true).order('ordem'),
-      supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*, modelo:rh_modelos_admissao(id,ordem,nome))').neq('status', 'aprovado').order('created_at', { ascending: false }).limit(5000),
+      supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*, modelo:rh_modelos_admissao(id,ordem,nome))').order('created_at', { ascending: false }).limit(5000),
       supabase.from('colaboradores').select('*'),
     ])
 
@@ -1062,10 +1117,12 @@ export default function RhPage() {
     if (colabsData) setColaboradores(colabsData as any[])
     if (inviteData) {
       const inviteList = inviteData as Convite[]
-      setConvites(inviteList)
+      setTodosConvites(inviteList)
+      const pendingInvites = inviteList.filter(i => i.status !== 'aprovado')
+      setConvites(pendingInvites)
       setSelectedInvite(prev => {
-        if (!prev) return inviteList[0] || null
-        return inviteList.find(i => i.id === prev.id) || inviteList[0] || null
+        if (!prev) return pendingInvites[0] || null
+        return pendingInvites.find(i => i.id === prev.id) || pendingInvites[0] || null
       })
     }
     if (peopleData && peopleData.length > 0 && !selected) {
@@ -1645,6 +1702,43 @@ export default function RhPage() {
                         {invite.obra && <span>· Obra: <strong style={{ color: C.ink }}>{invite.obra}</strong></span>}
                       </div>
 
+                      {(() => {
+                        const docPix = invite.documentos?.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || (d.nome || '').includes('PIX') || (d.nome || '').includes('Dados Bancários'))
+                        const dadosBanco = parseDadosBancarios(docPix?.nome)
+                        if (!dadosBanco.pix && !dadosBanco.banco) return null
+                        return (
+                          <div style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: 10,
+                            color: '#059669',
+                            background: 'rgba(16, 185, 129, 0.08)',
+                            border: '1px solid rgba(16, 185, 129, 0.22)',
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            marginTop: 1
+                          }}>
+                            {dadosBanco.pix && (
+                              <span>
+                                <strong>PIX:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{dadosBanco.pix}</span>
+                              </span>
+                            )}
+                            {dadosBanco.banco && (
+                              <span>
+                                {dadosBanco.pix ? '· ' : ''}<strong>Banco:</strong> {dadosBanco.banco}
+                              </span>
+                            )}
+                            {dadosBanco.agenciaConta && (
+                              <span>
+                                · <strong>Ag/Cc:</strong> {dadosBanco.agenciaConta}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
+
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
                         <span>👤 Por: {resolveNomeCriador(invite.criado_por, colaboradores)}</span>
                         {invite.inicio_efetivo && (
@@ -1697,6 +1791,43 @@ export default function RhPage() {
                         )}
                         <span>· CPF: {person.cpf || 'Não informado'}</span>
                       </div>
+
+                      {(() => {
+                        const cpfClean = (person.cpf || '').replace(/\D/g, '')
+                        const dadosBanco = dadosBancariosMap[person.id] || (cpfClean ? dadosBancariosMap[cpfClean] : null) || dadosBancariosMap[person.nome.toLowerCase().trim()]
+                        if (!dadosBanco || (!dadosBanco.pix && !dadosBanco.banco)) return null
+                        return (
+                          <div style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: 10,
+                            color: '#059669',
+                            background: 'rgba(16, 185, 129, 0.08)',
+                            border: '1px solid rgba(16, 185, 129, 0.22)',
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            marginTop: 1
+                          }}>
+                            {dadosBanco.pix && (
+                              <span>
+                                <strong>PIX:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{dadosBanco.pix}</span>
+                              </span>
+                            )}
+                            {dadosBanco.banco && (
+                              <span>
+                                {dadosBanco.pix ? '· ' : ''}<strong>Banco:</strong> {dadosBanco.banco}
+                              </span>
+                            )}
+                            {dadosBanco.agenciaConta && (
+                              <span>
+                                · <strong>Ag/Cc:</strong> {dadosBanco.agenciaConta}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </motion.div>
                   )
                 })
@@ -1747,6 +1878,10 @@ export default function RhPage() {
                 <ArchivePanel
                   person={selected}
                   details={details}
+                  dadosBanco={(() => {
+                    const cpfClean = (selected.cpf || '').replace(/\D/g, '')
+                    return dadosBancariosMap[selected.id] || (cpfClean ? dadosBancariosMap[cpfClean] : null) || dadosBancariosMap[selected.nome.toLowerCase().trim()] || null
+                  })()}
                   onDelete={() => {}}
                   onOpen={openCadastroDocument}
                   onUpload={uploadToArchiveFolder}
