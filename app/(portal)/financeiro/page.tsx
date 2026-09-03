@@ -4493,6 +4493,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [fornecedores, setFornecedores] = useState<any[]>([])
   const [loading, setLoading]   = useState(true)
   const [filtEmpresa, setFiltEmpresa] = useState('')
+  const [filtObra, setFiltObra] = useState('')
   const [filtFornecedor, setFiltFornecedor] = useState(initialFornecedorId || '')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
   const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Pago sem Nota Fiscal'|'Negado'>('todos')
@@ -5210,6 +5211,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const filtered = useMemo(() => {
     return contasDaEmpresa.filter(c => {
       const matchEmpresa = !filtEmpresa || c.empresa_id === filtEmpresa
+      const matchObra = !filtObra || (filtObra === 'geral' ? (!c.obra_id || c.obra_id === 'geral') : c.obra_id === filtObra)
       const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
       const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
       const matchStatus  = filtStatus === 'todos' || c.status === filtStatus
@@ -5247,7 +5249,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         (c.fornecedor?.nome_fantasia ?? '').toLowerCase().includes(deferredSearch.toLowerCase()) ||
         codFormatted.toLowerCase().includes(deferredSearch.toLowerCase()) ||
         String(c.codigo_sequencial || '').includes(deferredSearch.trim())
-      return matchEmpresa && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim && matchValorMin && matchValorMax
+      return matchEmpresa && matchObra && matchFornecedor && matchTipo && matchStatus && matchSearch && matchInicio && matchFim && matchValorMin && matchValorMax
     }).sort((a, b) => {
       const da = new Date(a.created_at || a.data_previsao || '').getTime()
       const db = new Date(b.created_at || b.data_previsao || '').getTime()
@@ -5262,7 +5264,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       }
       return filtOrdem === 'novo' ? db - da : da - db
     })
-  }, [contasDaEmpresa, filtEmpresa, filtFornecedor, filtTipo, filtStatus, filtTipoData, filtDataInicio, filtDataFim, filtValorMin, filtValorMax, deferredSearch, filtOrdem])
+  }, [contasDaEmpresa, filtEmpresa, filtObra, filtFornecedor, filtTipo, filtStatus, filtTipoData, filtDataInicio, filtDataFim, filtValorMin, filtValorMax, deferredSearch, filtOrdem])
 
   // Controles de Paginação de Alta Performance
   const [paginaAtual, setPaginaAtual] = useState(1)
