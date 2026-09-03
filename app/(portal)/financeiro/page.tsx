@@ -6042,16 +6042,36 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
       {/* ── RÉGUA EXECUTIVA DE PAGAMENTOS: PRÓXIMOS 5 DIAS (FUSO DE BRASÍLIA) ── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px', flexWrap: 'wrap', gap: 8 }}>
           <span style={{ fontSize: 10.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span>⏱️ Régua de Pagamentos (Próximos 5 Dias)</span>
             <span style={{ fontSize: 9, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, padding: '1px 6px', borderRadius: 4, fontWeight: 800 }}>
               Horário de Brasília (GMT-3)
             </span>
           </span>
-          <span style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 600 }}>
-            {filtered.length} lançamento(s) filtrado(s)
-          </span>
+
+          {/* Badge Executivo de Total Filtrado */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'rgba(245, 158, 11, 0.12)',
+              border: `1px solid rgba(245, 158, 11, 0.35)`,
+              padding: '3px 10px',
+              borderRadius: 6
+            }}>
+              <span style={{ fontSize: 10, fontWeight: 800, color: C.amber, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                Total Filtrado:
+              </span>
+              <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink, fontFamily: 'monospace' }}>
+                {fmt(totalValorFiltrado)}
+              </strong>
+              <span style={{ fontSize: 10, color: C.inkSoft, fontWeight: 700 }}>
+                ({filtered.length} {filtered.length === 1 ? 'item' : 'itens'})
+              </span>
+            </div>
+          </div>
         </div>
 
         <div style={{
