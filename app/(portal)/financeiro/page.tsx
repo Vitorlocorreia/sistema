@@ -3865,17 +3865,22 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
 
   useEffect(() => { load() }, [load])
 
-  useEffect(() => {
+  const userEmpresaPadrao = useMemo(() => {
     const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
-    if (ids.length === 1) {
-      setForm(f => ({ ...f, empresa_id: ids[0] }))
-    }
+    return ids.length === 1 ? ids[0] : (colaboradorAtivo.empresa_id || '')
   }, [colaboradorAtivo])
+
+  useEffect(() => {
+    if (userEmpresaPadrao && !form.empresa_id) {
+      setForm(f => ({ ...f, empresa_id: userEmpresaPadrao }))
+    }
+  }, [userEmpresaPadrao, form.empresa_id])
 
   const save = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
+    const targetEmpresaId = form.empresa_id || userEmpresaPadrao
     const dataBase = form.tipo === 'pagar' ? form.data_vencimento : form.data_previsao
-    if (!form.empresa_id || !form.descricao || !form.valor || !dataBase) {
+    if (!targetEmpresaId || !form.descricao || !form.valor || !dataBase) {
       toast('Preencha todos os campos obrigatórios (*)', 'error')
       return
     }
@@ -3927,7 +3932,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
       const isoDateString = dataParcela.toISOString().split('T')[0]
 
       parcelas.push({
-        empresa_id: form.empresa_id,
+        empresa_id: targetEmpresaId,
         tipo: form.tipo,
         descricao: form.recorrencia !== 'unico' ? `${form.descricao} (${i + 1}/${totalParcelas})` : form.descricao,
         valor: valorNum,
@@ -3972,7 +3977,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
     
     setForm({
       tipo: form.tipo,
-      empresa_id: colaboradorAtivo.cargo === 'admin_empresa' ? colaboradorAtivo.empresa_id! : '',
+      empresa_id: userEmpresaPadrao,
       fornecedor_id: '',
       obra_id: '',
       categoria: '',
@@ -4111,7 +4116,7 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
                       const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
                       return ids.length === 1
                     })()}
-                    value={form.empresa_id}
+                    value={form.empresa_id || userEmpresaPadrao}
                     onChange={e => setForm(f => ({ ...f, empresa_id: e.target.value }))}
                     required
                   >
