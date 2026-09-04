@@ -5793,7 +5793,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   </select>
                 </div>
 
-                {/* Empresa & Fornecedor */}
+                {/* Empresa & Obra */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div style={{ display: 'grid', gap: 5 }}>
                     <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Empresa</label>
@@ -5816,12 +5816,24 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   </div>
 
                   <div style={{ display: 'grid', gap: 5 }}>
-                    <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fornecedor</label>
-                    <select style={{ ...input, background: C.bgPanel }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
-                      <option value="">Todos fornecedores</option>
-                      {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social ?? f.nome_fantasia}</option>)}
+                    <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Obra / Unidade</label>
+                    <select style={{ ...input, background: C.bgPanel }} value={filtObra} onChange={e => setFiltObra(e.target.value)}>
+                      <option value="">Todas as obras</option>
+                      <option value="geral">Geral / Sede</option>
+                      {obras.filter(o => o.id !== 'geral').map(o => (
+                        <option key={o.id} value={o.id}>{o.nome}</option>
+                      ))}
                     </select>
                   </div>
+                </div>
+
+                {/* Fornecedor */}
+                <div style={{ display: 'grid', gap: 5 }}>
+                  <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>Fornecedor</label>
+                  <select style={{ ...input, background: C.bgPanel }} value={filtFornecedor} onChange={e => setFiltFornecedor(e.target.value)}>
+                    <option value="">Todos fornecedores</option>
+                    {fornecedores.map(f => <option key={f.id} value={f.id}>{f.razao_social ?? f.nome_fantasia}</option>)}
+                  </select>
                 </div>
 
                 {/* Filtrar por data + Presets Rápidos */}
@@ -6009,6 +6021,13 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.ink, fontWeight: 600 }}>
                 Empresa: {empresas.find(e => e.id === filtEmpresa)?.nome_fantasia || 'Selecionada'}
                 <button onClick={() => setFiltEmpresa('')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+              </span>
+            )}
+
+            {filtObra && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.ink, fontWeight: 600 }}>
+                Obra: {filtObra === 'geral' ? 'Geral / Sede' : (obras.find(o => o.id === filtObra)?.nome || 'Selecionada')}
+                <button onClick={() => setFiltObra('')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
               </span>
             )}
 
