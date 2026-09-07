@@ -15,22 +15,18 @@ export function useRealtimeSync(
   tables?: string[],
 ) {
   useEffect(() => {
-    // Debounce: coalesce bursts of events into a single fetch
+    // Debounce alargado (800ms): agrupa rajadas e evita múltiplos downloads pesados
     let timer: ReturnType<typeof setTimeout> | null = null
     const trigger = () => {
       if (timer) clearTimeout(timer)
       timer = setTimeout(() => {
+        // Se a aba estiver em segundo plano/oculta, não gasta tráfego à toa
+        if (typeof document !== 'undefined' && document.hidden) return
         startTransition(() => { void load(true) })
-      }, 120)
+      }, 800)
     }
 
-    // 1. Re-fetch silently when the tab comes back into focus
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') trigger()
-    }
-    window.addEventListener('visibilitychange', handleVisibilityChange)
-
-    // 2. Subscribe to Supabase Realtime WebSocket events
+    // 2. Subscribe to Supabase Realtime WebSocket events SOMENTE nas tabelas solicitadas
     let channel = supabase.channel(channelName)
 
     if (tables && tables.length > 0) {
@@ -41,20 +37,14 @@ export function useRealtimeSync(
           trigger,
         )
       })
-    } else {
-      channel = channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public' },
-        trigger,
-      )
+      channel.subscribe()
     }
-
-    channel.subscribe()
 
     return () => {
       if (timer) clearTimeout(timer)
-      window.removeEventListener('visibilitychange', handleVisibilityChange)
-      supabase.removeChannel(channel)
+      if (tables && tables.length > 0) {
+        supabase.removeChannel(channel)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [load, channelName, JSON.stringify(tables)])

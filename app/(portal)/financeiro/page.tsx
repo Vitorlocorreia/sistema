@@ -644,7 +644,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
     setObras(obrasList); setFotos(f || []);
   }, [colaboradorAtivo])
   
-  useRealtimeSync(load, 'financeiro-obras')
+  useRealtimeSync(load, 'financeiro-obras', ['obras'])
   useEffect(() => { void load() }, [load])
   
   async function criarObra(e: React.FormEvent) {
@@ -2053,7 +2053,7 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
     setLoading(false)
   }, [colaboradorAtivo])
 
-  useRealtimeSync(load, 'financeiro-dashboard')
+  useRealtimeSync(load, 'financeiro-dashboard', ['contas'])
   useEffect(() => { load() }, [load])
 
   const filtered = useMemo(() => {
@@ -2299,7 +2299,7 @@ function EmpresasTab({ colaboradorAtivo, permissaoAtiva, confirm }: TabProps) {
     setLoading(false)
   }, [])
 
-  useRealtimeSync(load, 'financeiro-empresas')
+  useRealtimeSync(load, 'financeiro-empresas', ['empresas', 'colaboradores'])
   useEffect(() => { void load() }, [load])
 
   const save = async (e: React.FormEvent) => {
@@ -3071,7 +3071,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     setLoading(false)
   }, [colaboradorAtivo])
 
-  useRealtimeSync(load, 'financeiro-fornecedores')
+  useRealtimeSync(load, 'financeiro-fornecedores', ['fornecedores'])
   useEffect(() => { void load() }, [load])
 
   const abrirNovoForm = () => {
@@ -4841,7 +4841,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
   const podeLancar = permissaoAtiva?.pode_lancar;
 
-  useRealtimeSync(load, 'financeiro-historico')
+  useRealtimeSync(load, 'financeiro-historico', ['contas'])
   useEffect(() => { load() }, [load])
 
   useEffect(() => {
