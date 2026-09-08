@@ -213,7 +213,8 @@ function ArchivePanel({
   dadosBanco,
   onDelete,
   onOpen,
-  onUpload
+  onUpload,
+  onEditObra
 }: {
   person: Funcionario
   details: Details
@@ -221,6 +222,7 @@ function ArchivePanel({
   onDelete: () => void
   onOpen: (documento: Record<string, string | null>) => void
   onUpload?: (order: number, files: FileList) => void
+  onEditObra?: () => void
 }) {
   const [filter, setFilter] = useState('')
   const documents = details.documentos.filter(doc =>
@@ -245,11 +247,53 @@ function ArchivePanel({
             <span>·</span>
             <span>CPF: <strong style={{ color: C.ink }}>{person.cpf || 'Não informado'}</strong></span>
             <span>·</span>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-              Obra: <strong style={{ color: person.obra ? C.amber : C.ink, background: person.obra ? 'rgba(245, 158, 11, 0.1)' : 'transparent', padding: person.obra ? '1px 6px' : '0', borderRadius: 3, border: person.obra ? `1px solid rgba(245, 158, 11, 0.25)` : 'none' }}>
-                <Building2 size={11} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span>Obra:</span>
+              <strong style={{
+                color: person.obra ? C.amber : C.ink,
+                background: person.obra ? 'rgba(245, 158, 11, 0.1)' : 'transparent',
+                padding: person.obra ? '1px 6px' : '0',
+                borderRadius: 3,
+                border: person.obra ? `1px solid rgba(245, 158, 11, 0.25)` : 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}>
+                <Building2 size={11} />
                 {person.obra || 'Geral / Não vinculada'}
               </strong>
+              {onEditObra && (
+                <button
+                  type="button"
+                  onClick={onEditObra}
+                  title="Alterar obra do colaborador"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    padding: '2px 7px',
+                    borderRadius: 4,
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    color: C.amber,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = C.amber
+                    e.currentTarget.style.color = '#0A0A0A'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(245, 158, 11, 0.12)'
+                    e.currentTarget.style.color = C.amber
+                  }}
+                >
+                  <Edit3 size={10} />
+                  Alterar Obra
+                </button>
+              )}
             </span>
             {person.data_admissao && (
               <>
@@ -1120,6 +1164,22 @@ export default function RhPage() {
 
   const [colaboradorAtivo, setColaboradorAtivo] = useState<any>(null)
   const [colaboradores, setColaboradores] = useState<Array<{ id: string; nome: string; email?: string }>>([])
+  const [obrasCadastradas, setObrasCadastradas] = useState<Array<{ id: string; nome: string }>>([])
+  const [editObraModal, setEditObraModal] = useState<{
+    open: boolean
+    person: Funcionario | null
+    obraSelecionada: string
+    customObra: string
+    isCustom: boolean
+    salvando: boolean
+  }>({
+    open: false,
+    person: null,
+    obraSelecionada: '',
+    customObra: '',
+    isCustom: false,
+    salvando: false
+  })
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1135,17 +1195,20 @@ export default function RhPage() {
       { data: peopleData },
       { data: modelData },
       { data: inviteData },
-      { data: colabsData }
+      { data: colabsData },
+      { data: obrasData }
     ] = await Promise.all([
       supabase.from('funcionarios').select('*').order('nome').limit(5000),
       supabase.from('rh_modelos_admissao').select('*').eq('ativo', true).order('ordem'),
       supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*, modelo:rh_modelos_admissao(id,ordem,nome))').order('created_at', { ascending: false }).limit(5000),
       supabase.from('colaboradores').select('*'),
+      supabase.from('obras').select('id, nome').order('nome'),
     ])
 
     if (peopleData) setPessoas(peopleData as Funcionario[])
     if (modelData) setModelos(modelData as ModeloAdmissao[])
     if (colabsData) setColaboradores(colabsData as any[])
+    if (obrasData) setObrasCadastradas(obrasData as Array<{ id: string; nome: string }>)
     if (inviteData) {
       const inviteList = inviteData as Convite[]
       setTodosConvites(inviteList)
@@ -1161,7 +1224,7 @@ export default function RhPage() {
     }
   }, [selected])
 
-  useRealtimeSync(load, 'rh-sync', ['funcionarios', 'rh_modelos_admissao', 'rh_admissao_convites', 'funcionario_historico', 'exames_ocupacionais'])
+  useRealtimeSync(load, 'rh-sync', ['funcionarios', 'rh_modelos_admissao', 'rh_admissao_convites', 'funcionario_historico', 'exames_ocupacionais', 'obras'])
   useEffect(() => { load() }, [load])
 
   // Carrega Baú Documental do Funcionário
@@ -1458,6 +1521,58 @@ export default function RhPage() {
     } catch (err: any) {
       toast('Erro ao processar exclusão: ' + (err?.message || 'Erro inesperado'), 'error')
     }
+  }
+
+  function abrirModalEditarObra(person: Funcionario) {
+    const currentObra = (person.obra || '').trim()
+    const matchesRegistered = obrasCadastradas.some(o => o.nome.toLowerCase() === currentObra.toLowerCase())
+
+    setEditObraModal({
+      open: true,
+      person,
+      obraSelecionada: matchesRegistered
+        ? (obrasCadastradas.find(o => o.nome.toLowerCase() === currentObra.toLowerCase())?.nome || '')
+        : (currentObra ? '__custom__' : ''),
+      customObra: matchesRegistered ? '' : currentObra,
+      isCustom: !matchesRegistered && !!currentObra,
+      salvando: false
+    })
+  }
+
+  async function salvarEdicaoObra() {
+    if (!editObraModal.person) return
+
+    const person = editObraModal.person
+    let finalObra: string | null = null
+
+    if (editObraModal.obraSelecionada === '__custom__') {
+      finalObra = editObraModal.customObra.trim() || null
+    } else if (editObraModal.obraSelecionada) {
+      finalObra = editObraModal.obraSelecionada.trim() || null
+    }
+
+    setEditObraModal(prev => ({ ...prev, salvando: true }))
+
+    const { error } = await supabase
+      .from('funcionarios')
+      .update({
+        obra: finalObra,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', person.id)
+
+    if (error) {
+      setEditObraModal(prev => ({ ...prev, salvando: false }))
+      return toast('Erro ao atualizar obra: ' + error.message, 'error')
+    }
+
+    setPessoas(prev => prev.map(p => p.id === person.id ? { ...p, obra: finalObra } : p))
+    if (selected?.id === person.id) {
+      setSelected(prev => prev ? { ...prev, obra: finalObra } : null)
+    }
+
+    setEditObraModal({ open: false, person: null, obraSelecionada: '', customObra: '', isCustom: false, salvando: false })
+    toast(`Obra de "${person.nome}" atualizada com sucesso!`, 'success')
   }
 
   async function uploadToArchiveFolder(order: number, files: FileList) {
@@ -1889,12 +2004,26 @@ export default function RhPage() {
                       <div style={{ fontSize: 10.5, color: C.inkSoft, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 4 }}>
                         <span style={{ fontWeight: 600 }}>{person.cargo || 'Cargo não informado'}</span>
                         {person.obra ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.25)`, padding: '1px 6px', borderRadius: 3, fontWeight: 800, fontSize: 10 }}>
-                            <Building2 size={10} /> {person.obra}
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirModalEditarObra(person)
+                            }}
+                            title="Clique para alterar a obra do colaborador"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.25)`, padding: '1px 6px', borderRadius: 3, fontWeight: 800, fontSize: 10, cursor: 'pointer' }}
+                          >
+                            <Building2 size={10} /> {person.obra} <Edit3 size={9} style={{ opacity: 0.7 }} />
                           </span>
                         ) : (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: C.bgWhite, color: C.inkSoft, border: `1px solid ${C.border}`, padding: '1px 6px', borderRadius: 3, fontSize: 10 }}>
-                            Geral / Sede
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirModalEditarObra(person)
+                            }}
+                            title="Clique para vincular a uma obra"
+                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, color: C.inkSoft, border: `1px solid ${C.border}`, padding: '1px 6px', borderRadius: 3, fontSize: 10, cursor: 'pointer' }}
+                          >
+                            Geral / Sede <Edit3 size={9} style={{ opacity: 0.7 }} />
                           </span>
                         )}
                         <span>· CPF: {person.cpf || 'Não informado'}</span>
@@ -1993,6 +2122,7 @@ export default function RhPage() {
                   onDelete={() => void handleDeleteFuncionario(selected)}
                   onOpen={openCadastroDocument}
                   onUpload={uploadToArchiveFolder}
+                  onEditObra={() => abrirModalEditarObra(selected)}
                 />
               </Panel>
             ) : (
@@ -2005,6 +2135,91 @@ export default function RhPage() {
           )}
         </div>
       </div>
+
+      {/* MODAL: EDITAR OBRA / ALOCAÇÃO DO COLABORADOR */}
+      {editObraModal.open && editObraModal.person && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 22, maxWidth: 480, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Building2 size={16} color={C.amber} />
+                  Alterar Obra / Alocação
+                </h3>
+                <p style={{ fontSize: 11, color: C.inkSoft, margin: '2px 0 0' }}>
+                  Colaborador: <strong style={{ color: C.ink }}>{editObraModal.person.nome}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setEditObraModal(prev => ({ ...prev, open: false }))}
+                style={{ border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <span style={labelStyle}>Selecione a Obra Cadastrada *</span>
+                <select
+                  style={inputStyle}
+                  value={editObraModal.obraSelecionada}
+                  onChange={e => {
+                    const val = e.target.value
+                    setEditObraModal(prev => ({
+                      ...prev,
+                      obraSelecionada: val,
+                      isCustom: val === '__custom__'
+                    }))
+                  }}
+                >
+                  <option value="">🏢 Geral / Sede (Sem obra vinculada)</option>
+                  {obrasCadastradas.map(o => (
+                    <option key={o.id} value={o.nome}>
+                      🏗️ {o.nome}
+                    </option>
+                  ))}
+                  <option value="__custom__">✏️ Outra Obra / Digitação Manual...</option>
+                </select>
+              </div>
+
+              {(editObraModal.obraSelecionada === '__custom__' || editObraModal.isCustom) && (
+                <div>
+                  <span style={labelStyle}>Nome da Obra Personalizada *</span>
+                  <input
+                    style={inputStyle}
+                    placeholder="Ex: Obra Galpão Logístico"
+                    value={editObraModal.customObra}
+                    onChange={e => setEditObraModal(prev => ({ ...prev, customObra: e.target.value }))}
+                    autoFocus
+                  />
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+              <button
+                onClick={() => setEditObraModal(prev => ({ ...prev, open: false }))}
+                style={{ ...btnBase, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => void salvarEdicaoObra()}
+                disabled={editObraModal.salvando}
+                style={{
+                  ...btnBase,
+                  background: C.amber,
+                  color: '#0A0A0A',
+                  fontWeight: 900
+                }}
+              >
+                {editObraModal.salvando ? 'Salvando...' : 'Salvar Obra'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {ConfirmDialog}
       {PromptDialog}
