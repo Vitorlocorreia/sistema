@@ -296,6 +296,37 @@ function ArchivePanel({
             </div>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={onDelete}
+          title="Excluir Colaborador"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            padding: '7px 14px',
+            borderRadius: 6,
+            background: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            color: '#EF4444',
+            fontSize: 11,
+            fontWeight: 800,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = '#EF4444'
+            e.currentTarget.style.color = '#FFFFFF'
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'
+            e.currentTarget.style.color = '#EF4444'
+          }}
+        >
+          <Trash2 size={13} />
+          Excluir Colaborador
+        </button>
       </div>
 
       {/* Header do Baú Documental */}
@@ -1384,6 +1415,51 @@ export default function RhPage() {
     toast(`Funcionário ${invite.nome_destinatario} aprovado com sucesso!`, 'success')
   }
 
+  async function handleDeleteFuncionario(person: Funcionario) {
+    if (!(await confirm(
+      'Excluir Colaborador',
+      `Tem certeza que deseja excluir definitivamente o colaborador "${person.nome}"? Esta ação removerá seus documentos, histórico e ficha do sistema.`,
+      { confirmLabel: 'Sim, Excluir Colaborador', confirmColor: '#EF4444' }
+    ))) return
+
+    try {
+      // 1. Desvincular convite de admissão caso exista
+      await supabase
+        .from('rh_admissao_convites')
+        .update({ funcionario_id: null })
+        .eq('funcionario_id', person.id)
+
+      // 2. Limpar tabelas dependentes
+      await Promise.allSettled([
+        supabase.from('funcionario_historico').delete().eq('funcionario_id', person.id),
+        supabase.from('funcionario_documentos').delete().eq('funcionario_id', person.id),
+        supabase.from('exames_ocupacionais').delete().eq('funcionario_id', person.id),
+        supabase.from('funcionario_admissao_etapas').delete().eq('funcionario_id', person.id),
+      ])
+
+      // 3. Excluir funcionário
+      const { error } = await supabase
+        .from('funcionarios')
+        .delete()
+        .eq('id', person.id)
+
+      if (error) {
+        toast('Erro ao excluir colaborador: ' + error.message, 'error')
+        return
+      }
+
+      toast(`Colaborador "${person.nome}" excluído com sucesso!`, 'success')
+
+      if (selected?.id === person.id) {
+        setSelected(null)
+      }
+
+      await load()
+    } catch (err: any) {
+      toast('Erro ao processar exclusão: ' + (err?.message || 'Erro inesperado'), 'error')
+    }
+  }
+
   async function uploadToArchiveFolder(order: number, files: FileList) {
     if (!selected || !files.length) return
     let uploaded = 0
@@ -1774,9 +1850,41 @@ export default function RhPage() {
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                         <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>{person.nome}</strong>
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                          ✓ ATIVO
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                            ✓ ATIVO
+                          </span>
+                          <button
+                            type="button"
+                            title="Excluir Colaborador"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void handleDeleteFuncionario(person)
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              color: C.inkSoft,
+                              cursor: 'pointer',
+                              padding: 3,
+                              borderRadius: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'color 0.15s, background 0.15s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.color = '#EF4444'
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.color = C.inkSoft
+                              e.currentTarget.style.background = 'transparent'
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
                       <div style={{ fontSize: 10.5, color: C.inkSoft, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginTop: 4 }}>
                         <span style={{ fontWeight: 600 }}>{person.cargo || 'Cargo não informado'}</span>
@@ -1882,7 +1990,7 @@ export default function RhPage() {
                     const cpfClean = (selected.cpf || '').replace(/\D/g, '')
                     return dadosBancariosMap[selected.id] || (cpfClean ? dadosBancariosMap[cpfClean] : null) || dadosBancariosMap[selected.nome.toLowerCase().trim()] || null
                   })()}
-                  onDelete={() => {}}
+                  onDelete={() => void handleDeleteFuncionario(selected)}
                   onOpen={openCadastroDocument}
                   onUpload={uploadToArchiveFolder}
                 />
