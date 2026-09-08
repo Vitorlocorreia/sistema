@@ -5,7 +5,7 @@ import {
   DollarSign, TrendingUp, TrendingDown, AlertCircle, Plus,
   Building2, Users, FileText, CheckCircle, Clock, X,
   Search, RefreshCw, ArrowUpRight, ArrowDownRight, Calendar,
-  Shield, Check, AlertTriangle, Paperclip, Eye, UserPlus, ToggleLeft, ToggleRight,
+  Shield, Check, AlertTriangle, Paperclip, Eye, EyeOff, Key, Copy, UserPlus, ToggleLeft, ToggleRight,
   Edit3, Sliders, Camera, Trash2, FileSpreadsheet, Upload, Download, CheckCircle2,
   ChevronDown, ChevronUp, Ruler, BarChart3, Activity, MapPin, Receipt, ShieldCheck, User, Image as ImageIcon, Layers,
   Briefcase, ArrowLeft, Phone, Mail, Landmark, Filter, RotateCcw
@@ -328,9 +328,9 @@ function FinanceiroContent() {
     // Carrega lista de colaboradores para a aba de permissões
     const { data: cols } = await supabase
       .from('colaboradores')
-      .select('id, nome, email, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento, obras_ids')
+      .select('id, nome, email, senha, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento, obras_ids')
       .order('nome')
-    setColaboradores(cols ?? [])
+    setColaboradores((cols as Colaborador[]) ?? [])
 
     setLoadingAcesso(false)
   }, [])
@@ -7531,6 +7531,7 @@ function SeletorMultiObras({
 }
 
 function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: PermissoesTabProps) {
+  const isGeral = colaboradorAtivo.cargo === 'admin_geral'
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [obras, setObras] = useState<Obra[]>([])
   const [configPermissoes, setConfigPermissoes] = useState<ConfigPermissao[]>([])
@@ -7566,6 +7567,14 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   // State para Edição de Colaborador Individual
   const [editColForm, setEditColForm] = useState<Colaborador | null>(null)
   const [savingEditCol, setSavingEditCol] = useState(false)
+
+  // States para Gestão e Visualização de Senhas (Admin Geral)
+  const [visivelSenhas, setVisivelSenhas] = useState<Record<string, boolean>>({})
+  const [editSenhaColab, setEditSenhaColab] = useState<Colaborador | null>(null)
+  const [novaSenhaValor, setNovaSenhaValor] = useState('')
+  const [showSenhaNoModal, setShowSenhaNoModal] = useState(false)
+  const [salvandoNovaSenha, setSalvandoNovaSenha] = useState(false)
+  const [showSenhaEdit, setShowSenhaEdit] = useState(false)
 
   // State para overrides de cargo e empresas nas solicitações pendentes
   const [solOverrides, setSolOverrides] = useState<Record<string, { cargo: string; empresas_ids: string[] }>>({})
@@ -7819,6 +7828,57 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     setSavingCol(false)
   }
 
+  const salvarSenhaColaborador = async (colabId: string, novaSenha: string, colabNome?: string, colabEmail?: string) => {
+    const s = novaSenha.trim()
+    if (!s) {
+      toast('A senha não pode ser vazia.', 'error')
+      return false
+    }
+    if (s.length < 6) {
+      toast('A senha deve ter no mínimo 6 caracteres.', 'error')
+      return false
+    }
+    setSalvandoNovaSenha(true)
+    try {
+      // 1. Atualiza diretamente na tabela colaboradores
+      const { error: dbError } = await supabase
+        .from('colaboradores')
+        .update({ senha: s })
+        .eq('id', colabId)
+
+      if (dbError) throw dbError
+
+      // 2. Sincroniza com o Supabase Auth se houver e-mail
+      if (colabEmail) {
+        try {
+          await supabase.functions.invoke('admin-users', {
+            body: {
+              action: 'create_user',
+              admin_id: colaboradorAtivo.id,
+              nome: colabNome || '',
+              email: colabEmail.trim().toLowerCase(),
+              senha: s,
+            }
+          })
+        } catch (fnErr) {
+          console.warn('Sincronização de auth:', fnErr)
+        }
+      }
+
+      toast(`Senha de ${colabNome || 'colaborador'} atualizada com sucesso!`, 'success')
+      setEditSenhaColab(null)
+      setNovaSenhaValor('')
+      await onRefresh()
+      await loadData()
+      return true
+    } catch (err: any) {
+      toast('Erro ao atualizar senha: ' + (err.message || err), 'error')
+      return false
+    } finally {
+      setSalvandoNovaSenha(false)
+    }
+  }
+
   const handleSaveColaboradorPerms = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editColForm) return
@@ -7828,28 +7888,54 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       const selectedEmpresasIds = editColForm.empresas_ids || (editColForm.empresa_id ? [editColForm.empresa_id] : [])
       const mainEmpresaId = editColForm.cargo === 'admin_geral' ? null : (selectedEmpresasIds[0] || editColForm.empresa_id || null)
 
+      const updatePayload: any = {
+        cargo: editColForm.cargo,
+        empresa_id: mainEmpresaId,
+        empresas_ids: editColForm.cargo === 'admin_geral' ? null : selectedEmpresasIds,
+        override_permissoes: editColForm.override_permissoes,
+        pode_empresas: editColForm.pode_empresas,
+        pode_fornecedores: editColForm.pode_fornecedores,
+        pode_lancar: editColForm.pode_lancar,
+        pode_pagar: editColForm.pode_pagar,
+        pode_aprovar: editColForm.pode_aprovar,
+        limite_valor: Number(editColForm.limite_valor || 0),
+        apps: editColForm.apps,
+        abas_financeiro: editColForm.abas_financeiro || null,
+        pode_alterar_status: editColForm.pode_alterar_status ?? true,
+        pode_excluir_lancamento: editColForm.pode_excluir_lancamento ?? false,
+        obras_ids: editColForm.cargo === 'admin_geral' ? null : (editColForm.obras_ids || []),
+      }
+
+      if (isGeral && editColForm.senha !== undefined) {
+        updatePayload.senha = editColForm.senha ? editColForm.senha.trim() : null
+      }
+
       const { error } = await supabase
         .from('colaboradores')
-        .update({
-          cargo: editColForm.cargo,
-          empresa_id: mainEmpresaId,
-          empresas_ids: editColForm.cargo === 'admin_geral' ? null : selectedEmpresasIds,
-          override_permissoes: editColForm.override_permissoes,
-          pode_empresas: editColForm.pode_empresas,
-          pode_fornecedores: editColForm.pode_fornecedores,
-          pode_lancar: editColForm.pode_lancar,
-          pode_pagar: editColForm.pode_pagar,
-          pode_aprovar: editColForm.pode_aprovar,
-          limite_valor: Number(editColForm.limite_valor || 0),
-          apps: editColForm.apps,
-          abas_financeiro: editColForm.abas_financeiro || null,
-          pode_alterar_status: editColForm.pode_alterar_status ?? true,
-          pode_excluir_lancamento: editColForm.pode_excluir_lancamento ?? false,
-          obras_ids: editColForm.cargo === 'admin_geral' ? null : (editColForm.obras_ids || []),
-        })
+        .update(updatePayload)
         .eq('id', editColForm.id)
 
       if (error) throw error
+
+      if (isGeral && editColForm.senha && editColForm.email) {
+        try {
+          await supabase.functions.invoke('admin-users', {
+            body: {
+              action: 'create_user',
+              admin_id: colaboradorAtivo.id,
+              nome: editColForm.nome,
+              email: editColForm.email.trim().toLowerCase(),
+              senha: editColForm.senha.trim(),
+              cargo: editColForm.cargo,
+              empresa_id: mainEmpresaId,
+              empresas_ids: selectedEmpresasIds
+            }
+          })
+        } catch (fnErr) {
+          console.warn('Sync auth warning:', fnErr)
+        }
+      }
+
       toast('Acessos atualizados para ' + editColForm.nome, 'success')
       setEditColForm(null)
       onRefresh()
@@ -8076,8 +8162,6 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       return true
     })
   }, [colaboradores, colaboradorAtivo, filterCargo, searchColab, listaCargosDisponiveis])
-
-  const isGeral = colaboradorAtivo.cargo === 'admin_geral'
 
   // Estatísticas de Gestão de Acessos
   const totalColabs = colaboradores.length
@@ -8470,6 +8554,65 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                           </span>
                         )}
                       </div>
+
+                      {/* Linha de Senha Exposta para o Admin Geral */}
+                      {isGeral && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F59E0B08', padding: '6px 10px', borderRadius: 6, border: `1px solid ${C.amber}33`, flexWrap: 'wrap', gap: 6 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                            <Key size={13} color={C.amber} />
+                            <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Senha:</span>
+                            <span style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: 12, color: c.senha ? C.ink : C.inkSoft, letterSpacing: visivelSenhas[c.id] ? 0 : 2 }}>
+                              {c.senha ? (visivelSenhas[c.id] ? c.senha : '••••••••') : '(Sem senha definida)'}
+                            </span>
+                            {c.senha && (
+                              <button
+                                type="button"
+                                onClick={() => setVisivelSenhas(v => ({ ...v, [c.id]: !v[c.id] }))}
+                                title={visivelSenhas[c.id] ? "Ocultar senha" : "Ver senha"}
+                                style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: '2px 4px', display: 'flex', alignItems: 'center' }}
+                              >
+                                {visivelSenhas[c.id] ? <EyeOff size={13} /> : <Eye size={13} />}
+                              </button>
+                            )}
+                            {c.senha && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(c.senha || '')
+                                  toast('Senha copiada para a área de transferência!', 'success')
+                                }}
+                                title="Copiar senha"
+                                style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: '2px 4px', display: 'flex', alignItems: 'center' }}
+                              >
+                                <Copy size={13} />
+                              </button>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditSenhaColab(c)
+                              setNovaSenhaValor(c.senha || '')
+                              setShowSenhaNoModal(false)
+                            }}
+                            style={{
+                              border: `1px solid ${C.amber}66`,
+                              background: '#F59E0B18',
+                              color: C.amber,
+                              fontSize: 10,
+                              fontWeight: 800,
+                              borderRadius: 4,
+                              padding: '3px 8px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}
+                          >
+                            <Key size={11} /> Trocar Senha
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )
                 })
@@ -8756,6 +8899,45 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                   </select>
                 </div>
 
+                {/* Senha do Colaborador (Exclusivo Admin Geral) */}
+                {isGeral && (
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <label style={label}>Senha de Acesso do Colaborador</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const rand = Math.floor(1000 + Math.random() * 9000)
+                          setEditColForm({ ...editColForm, senha: `Jwa@${rand}` })
+                          setShowSenhaEdit(true)
+                        }}
+                        style={{ background: 'none', border: 0, color: C.amber, fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}
+                      >
+                        ⚡ Gerar Senha
+                      </button>
+                    </div>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type={showSenhaEdit ? 'text' : 'password'}
+                        style={{ ...input, background: C.bgWhite, color: C.ink, fontWeight: 700, paddingRight: 38 }}
+                        value={editColForm.senha || ''}
+                        onChange={e => setEditColForm({ ...editColForm, senha: e.target.value })}
+                        placeholder="Digite a senha de acesso..."
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSenhaEdit(v => !v)}
+                        style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft }}
+                      >
+                        {showSenhaEdit ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <span style={{ fontSize: 10, color: C.inkSoft, marginTop: 4, display: 'block' }}>
+                      Visível e editável exclusivamente pelo Administrador Geral.
+                    </span>
+                  </div>
+                )}
+
                 {/* Empresas Vinculadas */}
                 {editColForm.cargo !== 'admin_geral' && (
                   <div>
@@ -8874,6 +9056,88 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                   <button type="submit" disabled={savingEditCol} style={btn(C.amber)}>{savingEditCol ? 'Salvando...' : 'Salvar Alterações'}</button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ══ MODAL RÁPIDO: ALTERAÇÃO DE SENHA (ADM GERAL) ══ */}
+      <AnimatePresence>
+        {isGeral && editSenhaColab && (
+          <div style={{ position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setEditSenhaColab(null)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
+              style={{ ...card, background: C.bgPanel, width: '100%', maxWidth: 420, padding: 22, display: 'flex', flexDirection: 'column', gap: 16, boxShadow: '0 20px 40px rgba(0,0,0,0.25)' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Key size={18} color={C.amber} />
+                  <div>
+                    <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, textTransform: 'uppercase' }}>Gestão de Credenciais</span>
+                    <h3 style={{ fontSize: 15, fontWeight: 900, color: C.ink, margin: 0 }}>Alterar Senha de Acesso</h3>
+                  </div>
+                </div>
+                <button onClick={() => setEditSenhaColab(null)} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft }}><X size={18} /></button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: C.bgWhite, padding: '10px 12px', borderRadius: 8, border: `1px solid ${C.border}` }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: C.ink }}>{editSenhaColab.nome}</div>
+                <div style={{ fontSize: 11, color: C.inkSoft }}>{editSenhaColab.email || 'Sem e-mail cadastrado'}</div>
+                {editSenhaColab.senha && (
+                  <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 4 }}>
+                    Senha atual registrada: <strong style={{ color: C.ink, fontFamily: 'monospace' }}>{editSenhaColab.senha}</strong>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <label style={label}>Nova Senha (mín. 6 caracteres)</label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const rand = Math.floor(1000 + Math.random() * 9000)
+                      setNovaSenhaValor(`Jwa@${rand}`)
+                      setShowSenhaNoModal(true)
+                    }}
+                    style={{ background: 'none', border: 0, color: C.amber, fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    ⚡ Gerar Senha
+                  </button>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type={showSenhaNoModal ? 'text' : 'password'}
+                    style={{ ...input, background: C.bgWhite, color: C.ink, fontWeight: 700, paddingRight: 38 }}
+                    value={novaSenhaValor}
+                    onChange={e => setNovaSenhaValor(e.target.value)}
+                    placeholder="Digite a nova senha..."
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSenhaNoModal(s => !s)}
+                    style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft }}
+                  >
+                    {showSenhaNoModal ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+                <p style={{ fontSize: 10, color: C.inkSoft, margin: '6px 0 0' }}>
+                  Esta alteração atualiza o acesso imediatamente e sincroniza o login do colaborador.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                <button type="button" style={btnGhost} onClick={() => setEditSenhaColab(null)}>Cancelar</button>
+                <button
+                  type="button"
+                  style={{ ...btn(C.amber), fontWeight: 900 }}
+                  disabled={salvandoNovaSenha || !novaSenhaValor.trim()}
+                  onClick={() => salvarSenhaColaborador(editSenhaColab.id, novaSenhaValor, editSenhaColab.nome, editSenhaColab.email || undefined)}
+                >
+                  {salvandoNovaSenha ? 'Salvando...' : 'Salvar Senha'}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
