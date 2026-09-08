@@ -6,7 +6,7 @@ import {
   UserCheck, AlertTriangle, Hammer, CheckCircle2, FileUp,
   Search, X, Check, Eye, Printer, Award, Clock, Trash2, Edit3, History, Save,
   ChevronDown, ChevronUp, Users, Wrench, Camera, ShieldCheck,
-  ArrowRight, ArrowLeft, UploadCloud
+  ArrowRight, ArrowLeft, UploadCloud, Loader2
 } from 'lucide-react'
 import { Panel } from '@/components/Panel'
 import { PageTitle } from '@/components/PageTitle'
@@ -130,6 +130,7 @@ export default function RDO() {
   const [selectedRdoIds, setSelectedRdoIds] = useState<string[]>([])
   const [overridePrintRdos, setOverridePrintRdos] = useState<RdoCompleto[] | null>(null)
   const [fotoExpandida, setFotoExpandida] = useState<{ url: string; legenda: string } | null>(null)
+  const [isUploadingFotos, setIsUploadingFotos] = useState(false)
 
   // Form states
   const [newObraId, setNewObraId] = useState('')
@@ -385,6 +386,82 @@ export default function RDO() {
     }
   }
 
+  async function uploadRdoFotoFile(
+    obraId: string | null | undefined,
+    rdoId: string,
+    file: File,
+    dataIso?: string | null
+  ) {
+    if (file.size > 30 * 1024 * 1024) {
+      throw new Error(`O anexo "${file.name}" excede o limite de 30MB.`)
+    }
+
+    // Normaliza o nome do arquivo para evitar caracteres especiais e espaços no path do storage
+    const safeName = file.name
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .toLowerCase()
+
+    const uuid = crypto.randomUUID()
+    const obraFolder = obraId || 'geral'
+    const relativePath = `${obraFolder}/${rdoId}/${uuid}-${safeName}`
+    const contentType = file.type || (file.name.toLowerCase().endsWith('.pdf') ? 'application/pdf' : 'image/jpeg')
+
+    let finalImageUrl = relativePath
+    let uploadSuccess = false
+
+    // 1. Tentar upload no bucket 'rdo-fotos'
+    try {
+      const { error: primaryError } = await supabase.storage
+        .from('rdo-fotos')
+        .upload(relativePath, file, { contentType, upsert: true })
+
+      if (!primaryError) {
+        uploadSuccess = true
+        finalImageUrl = relativePath
+      } else {
+        console.warn('Upload rdo-fotos retornou erro, acionando fallback comprovantes:', primaryError.message)
+      }
+    } catch (err) {
+      console.warn('Exceção no bucket rdo-fotos, usando fallback comprovantes:', err)
+    }
+
+    // 2. Se rdo-fotos falhou (ex: 415 InvalidMimeType para PDF/HEIC ou 403 RLS), usa o bucket comprovantes (100% público e compatível)
+    if (!uploadSuccess) {
+      const fallbackPath = `rdo/${obraFolder}/${rdoId}/${uuid}-${safeName}`
+      const { error: fallbackError } = await supabase.storage
+        .from('comprovantes')
+        .upload(fallbackPath, file, { contentType, upsert: true })
+
+      if (fallbackError) {
+        throw new Error(`Falha no upload de "${file.name}": ${fallbackError.message}`)
+      }
+
+      const { data: publicData } = supabase.storage
+        .from('comprovantes')
+        .getPublicUrl(fallbackPath)
+
+      finalImageUrl = publicData?.publicUrl || fallbackPath
+      uploadSuccess = true
+    }
+
+    // 3. Registrar anexo no banco de dados na tabela fotos
+    const { error: insertError } = await supabase.from('fotos').insert({
+      obra_id: obraId || null,
+      rdo_id: rdoId,
+      legenda: file.name,
+      imagem_url: finalImageUrl,
+      data_iso: dataIso || new Date().toISOString().split('T')[0]
+    })
+
+    if (insertError) {
+      throw new Error(`Erro ao salvar anexo "${file.name}" no banco: ${insertError.message}`)
+    }
+
+    return true
+  }
+
   const handleCreateRdo = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newObraId || !newResponsavel) return
@@ -471,14 +548,21 @@ export default function RDO() {
         })))
       }
 
+      const uploadErrors: string[] = []
       for (const foto of newFotos) {
-        const path = `${newObraId}/${rdoData.id}/${crypto.randomUUID()}-${foto.name}`
-        const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, foto)
-        if (!uploadError) await supabase.from('fotos').insert({ obra_id: newObraId, rdo_id: rdoData.id, legenda: `Foto do RDO ${newData}`, imagem_url: path, data_iso: newData })
+        try {
+          await uploadRdoFotoFile(newObraId, rdoData.id, foto, newData)
+        } catch (fotoErr: any) {
+          uploadErrors.push(fotoErr?.message || `Falha em ${foto.name}`)
+        }
       }
 
       setIsCreateOpen(false)
-      toast('Diário de Obra criado com sucesso!', 'success')
+      if (uploadErrors.length > 0) {
+        toast(`Diário criado, mas houve aviso em alguns anexos: ${uploadErrors.join('; ')}`, 'warning')
+      } else {
+        toast('Diário de Obra criado com sucesso!', 'success')
+      }
 
       // Reset form
       setActForm([''])
@@ -1373,38 +1457,64 @@ export default function RDO() {
                   <div style={cardIndustrial}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <span style={labelStyle}>📷 Registro Fotográfico de Campo ({selectedRdo.fotos?.length || 0})</span>
-                      <label style={{ fontSize: 10, color: '#F59E0B', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 4, padding: '4px 10px', cursor: 'pointer', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <Plus size={12} /> Anexar Fotos
+                      <label style={{
+                        fontSize: 10,
+                        color: '#F59E0B',
+                        background: 'rgba(245, 158, 11, 0.1)',
+                        border: '1px solid rgba(245, 158, 11, 0.3)',
+                        borderRadius: 4,
+                        padding: '4px 10px',
+                        cursor: isUploadingFotos ? 'not-allowed' : 'pointer',
+                        opacity: isUploadingFotos ? 0.7 : 1,
+                        fontWeight: 800,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4
+                      }}>
+                        {isUploadingFotos ? (
+                          <>
+                            <Loader2 size={12} className="animate-spin" /> Anexando...
+                          </>
+                        ) : (
+                          <>
+                            <Plus size={12} /> Anexar Fotos / Documentos
+                          </>
+                        )}
                         <input
                           hidden
+                          disabled={isUploadingFotos}
                           type="file"
                           multiple
                           accept="image/*,application/pdf"
                           onChange={e => {
                             if (e.target.files && e.target.files.length > 0) {
+                              const filesArray = Array.from(e.target.files)
+                              e.currentTarget.value = ''
                               void (async () => {
-                                const filesArray = Array.from(e.target.files || [])
+                                setIsUploadingFotos(true)
                                 let count = 0
+                                const errors: string[] = []
+
                                 for (const file of filesArray) {
-                                  const path = `${selectedRdo.obra_id}/${selectedRdo.id}/${crypto.randomUUID()}-${file.name}`
-                                  const { error: uploadError } = await supabase.storage.from('rdo-fotos').upload(path, file)
-                                  if (!uploadError) {
-                                    await supabase.from('fotos').insert({
-                                      obra_id: selectedRdo.obra_id,
-                                      rdo_id: selectedRdo.id,
-                                      legenda: file.name,
-                                      imagem_url: path,
-                                      data_iso: selectedRdo.data
-                                    })
+                                  try {
+                                    await uploadRdoFotoFile(selectedRdo.obra_id, selectedRdo.id, file, selectedRdo.data)
                                     count++
+                                  } catch (err: any) {
+                                    errors.push(err.message || `Erro em ${file.name}`)
                                   }
                                 }
+
+                                setIsUploadingFotos(false)
+
                                 if (count > 0) {
-                                  toast(`${count} anexo(s) adicionado(s)!`, 'success')
-                                  void loadData()
+                                  toast(`${count} anexo(s) adicionado(s) com sucesso!`, 'success')
+                                  void loadData(true)
+                                }
+
+                                if (errors.length > 0) {
+                                  toast(errors.join(' | '), 'error')
                                 }
                               })()
-                              e.currentTarget.value = ''
                             }
                           }}
                         />
@@ -1432,10 +1542,13 @@ export default function RDO() {
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   void (async () => {
+                                    if (!(await confirm('Remover Anexo', 'Deseja realmente remover esta foto/anexo do RDO?', { confirmLabel: 'Sim, Remover', confirmColor: '#EF4444' }))) return
                                     const { error } = await supabase.from('fotos').delete().eq('id', foto.id)
                                     if (!error) {
                                       toast('Anexo removido do RDO.', 'success')
-                                      void loadData()
+                                      void loadData(true)
+                                    } else {
+                                      toast('Erro ao remover anexo: ' + error.message, 'error')
                                     }
                                   })()
                                 }}
