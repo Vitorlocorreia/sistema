@@ -23,7 +23,7 @@ import {
 
 export default function LoginPage() {
   const router = useRouter()
-  const [tab, setTab] = useState<'login' | 'solicitar' | 'recuperar'>('login')
+  const [tab, setTab] = useState<'login' | 'solicitar'>('login')
 
   // Login States
   const [email, setEmail] = useState('')
@@ -39,10 +39,6 @@ export default function LoginPage() {
   const [showSenhaSol, setShowSenhaSol] = useState(false)
   const [mensagemSol, setMensagemSol] = useState('')
   const [sucessoSol, setSucessoSol] = useState(false)
-
-  // Recuperar Senha States
-  const [emailRecuperar, setEmailRecuperar] = useState('')
-  const [sucessoRecuperar, setSucessoRecuperar] = useState(false)
 
   // Detecção de link de recuperação caso o Supabase redirecione para /login
   useEffect(() => {
@@ -171,37 +167,6 @@ export default function LoginPage() {
     }
   }
 
-  async function handleRecuperarSenha(e: React.FormEvent) {
-    e.preventDefault()
-    setErro(null)
-
-    if (!emailRecuperar.trim()) {
-      setErro('Informe o seu e-mail cadastrado.')
-      return
-    }
-
-    setLoading(true)
-
-    try {
-      const redirectUrl = `${window.location.origin}/redefinir-senha`
-      const { error } = await supabase.auth.resetPasswordForEmail(emailRecuperar.trim().toLowerCase(), {
-        redirectTo: redirectUrl,
-      })
-
-      if (error) {
-        setErro('Erro ao solicitar redefinição: ' + error.message)
-        setLoading(false)
-        return
-      }
-
-      setSucessoRecuperar(true)
-      setLoading(false)
-    } catch {
-      setErro('Erro ao conectar com o serviço de autenticação.')
-      setLoading(false)
-    }
-  }
-
   return (
     <main data-theme="dark" className="h-screen w-screen overflow-hidden flex flex-col lg:flex-row bg-[#1E1E1E] text-white selection:bg-[#FFE500] selection:text-[#0A0A0A] font-sans">
       
@@ -279,20 +244,18 @@ export default function LoginPage() {
             <h1 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white font-display">
               {tab === 'login' && 'Acessar o Sistema'}
               {tab === 'solicitar' && 'Solicitar Acesso'}
-              {tab === 'recuperar' && 'Recuperar Senha'}
             </h1>
             <p className="text-xs sm:text-sm text-zinc-400 mt-2">
               {tab === 'login' && 'Informe suas credenciais corporativas para gerenciar obras e finanças.'}
               {tab === 'solicitar' && 'Preencha seus dados para solicitação de cadastro junto à diretoria.'}
-              {tab === 'recuperar' && 'Enviaremos um link de redefinição direto para o seu e-mail.'}
             </p>
           </div>
 
           {/* Segmented Tab Switcher */}
-          <div className="grid grid-cols-3 p-1 bg-[#252525] border border-[#333333] rounded-xl mb-7">
+          <div className="grid grid-cols-2 p-1 bg-[#252525] border border-[#333333] rounded-xl mb-7">
             <button
               type="button"
-              onClick={() => { setTab('login'); setErro(null); setSucessoRecuperar(false) }}
+              onClick={() => { setTab('login'); setErro(null) }}
               className={`py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 tab === 'login'
                   ? 'bg-[#FFE500] text-[#0A0A0A] font-black shadow-sm'
@@ -303,7 +266,7 @@ export default function LoginPage() {
             </button>
             <button
               type="button"
-              onClick={() => { setTab('solicitar'); setErro(null); setSucessoRecuperar(false) }}
+              onClick={() => { setTab('solicitar'); setErro(null) }}
               className={`py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                 tab === 'solicitar'
                   ? 'bg-[#FFE500] text-[#0A0A0A] font-black shadow-sm'
@@ -311,17 +274,6 @@ export default function LoginPage() {
               }`}
             >
               Criar Conta
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTab('recuperar'); setErro(null); setSucessoRecuperar(false) }}
-              className={`py-2.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                tab === 'recuperar'
-                  ? 'bg-[#FFE500] text-[#0A0A0A] font-black shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              Recuperar
             </button>
           </div>
 
@@ -346,23 +298,9 @@ export default function LoginPage() {
               </div>
 
               <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
-                    Senha
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEmailRecuperar(email)
-                      setTab('recuperar')
-                      setErro(null)
-                      setSucessoRecuperar(false)
-                    }}
-                    className="text-[11px] text-[#F59E0B] hover:text-[#FFE500] transition-colors cursor-pointer font-bold"
-                  >
-                    Esqueceu a senha?
-                  </button>
-                </div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
+                  Senha
+                </label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                   <input
@@ -410,93 +348,7 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* ── TAB 2: RECUPERAR SENHA ───────────────────────────────── */}
-          {tab === 'recuperar' && (
-            <div>
-              {sucessoRecuperar ? (
-                <div className="text-center py-6 space-y-4 bg-[#252525] border border-[#383838] rounded-xl p-6">
-                  <div className="w-12 h-12 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-white">E-mail Enviado!</h3>
-                    <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed">
-                      Enviamos as instruções para <strong className="text-[#FFE500]">{emailRecuperar}</strong>. Acesse o link no seu e-mail para cadastrar sua nova senha.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTab('login')
-                      setSucessoRecuperar(false)
-                      setErro(null)
-                    }}
-                    className="mt-2 w-full py-3 rounded-xl bg-[#2E2E2E] hover:bg-[#383838] text-white font-bold text-xs cursor-pointer transition-colors"
-                  >
-                    Voltar ao Login
-                  </button>
-                </div>
-              ) : (
-                <form onSubmit={handleRecuperarSenha} className="space-y-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-300">
-                      E-mail Cadastrado *
-                    </label>
-                    <div className="relative">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                      <input
-                        type="email"
-                        value={emailRecuperar}
-                        onChange={(e) => setEmailRecuperar(e.target.value)}
-                        required
-                        placeholder="seu.nome@jwasa.com.br"
-                        className="w-full pl-10 pr-3.5 py-3.5 bg-[#252525] border border-[#383838] rounded-xl text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:border-[#FFE500] focus:ring-1 focus:ring-[#FFE500]/50 transition-colors"
-                      />
-                    </div>
-                  </div>
-
-                  {erro && (
-                    <div className="flex items-start gap-2.5 p-3.5 bg-red-500/10 border border-red-500/30 rounded-xl text-xs font-semibold text-red-400">
-                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                      <span>{erro}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full mt-3 py-3.5 rounded-xl bg-[#FFE500] hover:bg-[#F59E0B] text-[#0A0A0A] font-black text-sm uppercase tracking-wider shadow-lg shadow-amber-500/20 transition-all flex items-center justify-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed cursor-pointer"
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin text-[#0A0A0A]" />
-                        <span>Enviando Link...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Enviar Link de Recuperação</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </>
-                    )}
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTab('login')
-                      setErro(null)
-                    }}
-                    className="w-full py-2.5 text-xs text-zinc-400 hover:text-white transition-colors flex items-center justify-center gap-1.5 cursor-pointer font-semibold"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>Voltar para o Login</span>
-                  </button>
-                </form>
-              )}
-            </div>
-          )}
-
-          {/* ── TAB 3: SOLICITAR CONTA ───────────────────────────────── */}
+          {/* ── TAB 2: SOLICITAR CONTA ───────────────────────────────── */}
           {tab === 'solicitar' && (
             <div>
               {sucessoSol ? (
