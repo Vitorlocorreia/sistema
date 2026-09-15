@@ -42,8 +42,8 @@ export function ConfirmModal({
             transition={{ duration: 0.18 }}
             onClick={e => e.stopPropagation()}
             style={{
-              background: '#1A1D26', border: `1px solid ${C.border}`,
-              borderRadius: 2, padding: 24, maxWidth: 420, width: '100%',
+              background: C.bgPanel, border: `1px solid ${C.border}`,
+              borderRadius: 6, padding: 24, maxWidth: 440, width: '100%',
               boxShadow: '0 24px 60px rgba(0,0,0,0.7)',
             }}
           >
@@ -51,7 +51,7 @@ export function ConfirmModal({
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{
-                  width: 36, height: 36, borderRadius: 2,
+                  width: 38, height: 38, borderRadius: 6,
                   background: `${confirmColor}18`, border: `1px solid ${confirmColor}44`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
@@ -62,6 +62,7 @@ export function ConfirmModal({
                 </span>
               </div>
               <button
+                type="button"
                 onClick={onCancel}
                 style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4 }}
               >
@@ -82,23 +83,33 @@ export function ConfirmModal({
             {/* Actions */}
             <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
               <button
+                type="button"
                 onClick={onCancel}
                 style={{
-                  all: 'unset', cursor: 'pointer',
-                  padding: '9px 18px', borderRadius: 2,
+                  cursor: 'pointer',
+                  padding: '9px 18px', borderRadius: 4,
                   border: `1px solid ${C.border}`, fontSize: 12, fontWeight: 800,
                   color: C.inkSoft, background: C.bgCard,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 Cancelar
               </button>
               <button
+                type="button"
                 onClick={onConfirm}
                 style={{
-                  all: 'unset', cursor: 'pointer',
-                  padding: '9px 18px', borderRadius: 2, fontSize: 12, fontWeight: 900,
-                  background: confirmColor, color: '#0B0C0E', letterSpacing: 0.3,
+                  cursor: 'pointer',
+                  padding: '9px 18px', borderRadius: 4, fontSize: 12, fontWeight: 900,
+                  border: 'none',
+                  background: confirmColor,
+                  color: (confirmColor === '#EF4444' || confirmColor.toLowerCase().includes('ef4444') || confirmColor.toLowerCase().includes('red')) ? '#FFFFFF' : '#0B0C0E',
+                  letterSpacing: 0.3,
                   textTransform: 'uppercase',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                  transition: 'all 0.15s ease'
                 }}
               >
                 {confirmLabel}

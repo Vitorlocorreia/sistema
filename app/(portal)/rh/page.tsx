@@ -1486,13 +1486,22 @@ export default function RhPage() {
     ))) return
 
     try {
-      // 1. Desvincular convite de admissão caso exista
+      // 1. Remover arquivos do Storage caso existam
+      try {
+        const { data: docs } = await supabase.from('funcionario_documentos').select('storage_path').eq('funcionario_id', person.id)
+        const paths = (docs || []).map(d => d.storage_path).filter(Boolean) as string[]
+        if (paths.length > 0) {
+          await supabase.storage.from('rh-documentos').remove(paths)
+        }
+      } catch {}
+
+      // 2. Desvincular convite de admissão caso exista
       await supabase
         .from('rh_admissao_convites')
         .update({ funcionario_id: null })
         .eq('funcionario_id', person.id)
 
-      // 2. Limpar tabelas dependentes
+      // 3. Limpar tabelas dependentes
       await Promise.allSettled([
         supabase.from('funcionario_historico').delete().eq('funcionario_id', person.id),
         supabase.from('funcionario_documentos').delete().eq('funcionario_id', person.id),
@@ -1500,7 +1509,7 @@ export default function RhPage() {
         supabase.from('funcionario_admissao_etapas').delete().eq('funcionario_id', person.id),
       ])
 
-      // 3. Excluir funcionário
+      // 4. Excluir funcionário
       const { error } = await supabase
         .from('funcionarios')
         .delete()
@@ -1520,6 +1529,108 @@ export default function RhPage() {
       await load()
     } catch (err: any) {
       toast('Erro ao processar exclusão: ' + (err?.message || 'Erro inesperado'), 'error')
+    }
+  }
+
+  async function handleDeleteInvite(invite: Convite) {
+    if (!(await confirm(
+      'Excluir Cadastro',
+      `Tem certeza que deseja excluir definitivamente o pré-cadastro de "${invite.nome_destinatario}"? Todos os documentos e dados enviados serão removidos do sistema.`,
+      { confirmLabel: 'Sim, Excluir Cadastro', confirmColor: '#EF4444' }
+    ))) return
+
+    try {
+      // 1. Remover arquivos do Storage caso existam
+      const paths = (invite.documentos || []).map(d => d.storage_path).filter(Boolean) as string[]
+      if (paths.length > 0) {
+        try {
+          await supabase.storage.from('rh-documentos').remove(paths)
+        } catch {}
+      }
+
+      // 2. Limpar documentos da tabela rh_admissao_documentos
+      await supabase.from('rh_admissao_documentos').delete().eq('convite_id', invite.id)
+
+      // 3. Excluir convite
+      const { error } = await supabase.from('rh_admissao_convites').delete().eq('id', invite.id)
+      if (error) {
+        toast('Erro ao excluir pré-cadastro: ' + error.message, 'error')
+        return
+      }
+
+      toast(`Pré-cadastro de "${invite.nome_destinatario}" excluído com sucesso!`, 'success')
+
+      if (selectedInvite?.id === invite.id) {
+        setSelectedInvite(null)
+      }
+
+      await load()
+    } catch (err: any) {
+      toast('Erro ao excluir: ' + (err?.message || 'Erro inesperado'), 'error')
+    }
+  }
+
+  async function handleRevokeInvite(invite: Convite) {
+    if (!(await confirm(
+      'Revogar Convite',
+      `Deseja revogar o link de admissão de "${invite.nome_destinatario}"? O candidato não poderá mais preencher dados por este link.`,
+      { confirmLabel: 'Revogar Link', confirmColor: '#F59E0B' }
+    ))) return
+
+    try {
+      const { error } = await supabase.from('rh_admissao_convites').update({
+        status: 'revogado',
+        revogado_em: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }).eq('id', invite.id)
+
+      if (error) {
+        toast('Erro ao revogar convite: ' + error.message, 'error')
+        return
+      }
+
+      toast('Convite revogado com sucesso!', 'success')
+      await load()
+    } catch (err: any) {
+      toast('Erro ao revogar: ' + (err?.message || 'Erro inesperado'), 'error')
+    }
+  }
+
+  async function handleRegenerateInvite(invite: Convite) {
+    const hoursStr = await prompt('Novo Prazo do Link', {
+      description: `Defina o prazo de validade (em horas) para o novo link de admissão de "${invite.nome_destinatario}":`,
+      defaultValue: '72'
+    })
+    if (hoursStr === null) return
+
+    const hours = Number(hoursStr) || 72
+    try {
+      const bytes = new Uint8Array(32)
+      crypto.getRandomValues(bytes)
+      const token = Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('')
+      const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+      const tokenHash = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('')
+      const expiresAt = new Date(Date.now() + Math.min(168, Math.max(1, hours)) * 3600000).toISOString()
+
+      const { error } = await supabase.from('rh_admissao_convites').update({
+        token_hash: tokenHash,
+        token_code: token,
+        expires_at: expiresAt,
+        status: 'ativo',
+        revogado_em: null,
+        updated_at: new Date().toISOString()
+      }).eq('id', invite.id)
+
+      if (error) {
+        toast('Erro ao prorrogar link: ' + error.message, 'error')
+        return
+      }
+
+      await navigator.clipboard.writeText(`${window.location.origin}/admissao/${token}`)
+      toast('Novo link gerado e copiado para a área de transferência!', 'success')
+      await load()
+    } catch (err: any) {
+      toast('Erro ao gerar novo link: ' + (err?.message || 'Erro inesperado'), 'error')
     }
   }
 
@@ -1875,17 +1986,49 @@ export default function RhPage() {
                         <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>
                           {invite.nome_destinatario}
                         </strong>
-                        <span style={{
-                          fontSize: 9.5,
-                          fontWeight: 900,
-                          padding: '2px 7px',
-                          borderRadius: 4,
-                          background: invite.status === 'aguardando_aprovacao' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                          color: invite.status === 'aguardando_aprovacao' ? '#10B981' : C.amber,
-                          border: `1px solid ${invite.status === 'aguardando_aprovacao' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
-                        }}>
-                          {label}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{
+                            fontSize: 9.5,
+                            fontWeight: 900,
+                            padding: '2px 7px',
+                            borderRadius: 4,
+                            background: invite.status === 'aguardando_aprovacao' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                            color: invite.status === 'aguardando_aprovacao' ? '#10B981' : C.amber,
+                            border: `1px solid ${invite.status === 'aguardando_aprovacao' ? 'rgba(16, 185, 129, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`
+                          }}>
+                            {label}
+                          </span>
+                          <button
+                            type="button"
+                            title="Excluir Pré-Cadastro"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void handleDeleteInvite(invite)
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              color: C.inkSoft,
+                              cursor: 'pointer',
+                              padding: 3,
+                              borderRadius: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'color 0.15s, background 0.15s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.color = '#EF4444'
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.color = C.inkSoft
+                              e.currentTarget.style.background = 'transparent'
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
                       </div>
 
                       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 10.5, color: C.inkSoft }}>
@@ -2090,13 +2233,13 @@ export default function RhPage() {
                   onOpen={openCadastroDocument}
                   onReview={(doc, st) => void reviewCadastroDocument(selectedInvite, doc, st)}
                   onApprove={() => void approveInvite(selectedInvite)}
-                  onRevoke={() => {}}
-                  onRegenerate={() => {}}
+                  onRevoke={() => void handleRevokeInvite(selectedInvite)}
+                  onRegenerate={() => void handleRegenerateInvite(selectedInvite)}
                   onCopy={() => {
                     navigator.clipboard.writeText(`${window.location.origin}/admissao/${selectedInvite.token_code}`)
                     toast('Link copiado com sucesso!', 'success')
                   }}
-                  onDelete={() => {}}
+                  onDelete={() => void handleDeleteInvite(selectedInvite)}
                   onRefresh={() => load()}
                   colaboradorAtivo={colaboradorAtivo}
                   colaboradores={colaboradores}
