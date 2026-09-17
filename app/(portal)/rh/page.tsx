@@ -1819,6 +1819,10 @@ export default function RhPage() {
     salvando: false
   })
 
+  // Seleção Múltipla e Ações em Lote
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [batchProcessing, setBatchProcessing] = useState(false)
+
   // Permissão de Visualização / Edição de Salário
   const podeVerSalario = useMemo(() => {
     if (!colaboradorAtivo) return false
@@ -2026,6 +2030,406 @@ export default function RhPage() {
     }
     return arr
   }, [pessoas, buscaPessoas])
+
+  // IDs da lista atual filtrada na aba ativa
+  const listaAtualIds = useMemo(() => {
+    if (activeTab === 'admissao') return convitesFiltrados.map(c => c.id)
+    if (activeTab === 'aptos') return aptosFiltrados.map(c => c.id)
+    return pessoasFiltradas.map(p => p.id)
+  }, [activeTab, convitesFiltrados, aptosFiltrados, pessoasFiltradas])
+
+  const isAllSelected = listaAtualIds.length > 0 && listaAtualIds.every(id => selectedIds.has(id))
+  const isSomeSelected = selectedIds.size > 0
+
+  const toggleSelect = useCallback((id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation()
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const selectAll = useCallback(() => {
+    if (isAllSelected) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(listaAtualIds))
+    }
+  }, [isAllSelected, listaAtualIds])
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(new Set())
+  }, [])
+
+  // Ações em Lote: Aba 1 (Admissão)
+  async function handleBatchDeclararAptos() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!(await confirm(
+      'Declarar Aptos em Lote',
+      `Deseja declarar aptos para registro os ${ids.length} candidatos selecionados? Eles serão transferidos para a etapa de Aptos p/ Registro.`,
+      { confirmLabel: `Sim, Declarar ${ids.length} Aptos`, confirmColor: '#10B981' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      const now = new Date().toISOString()
+      const { error } = await supabase
+        .from('rh_admissao_convites')
+        .update({ status: 'apto', updated_at: now })
+        .in('id', ids)
+
+      if (error) throw error
+
+      toast(`${ids.length} candidato(s) declarado(s) apto(s) para registro!`, 'success')
+      setSelectedIds(new Set())
+      await load()
+      setActiveTab('aptos')
+    } catch (err: any) {
+      toast('Erro ao processar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  async function handleBatchRevogarConvites() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!(await confirm(
+      'Revogar Links em Lote',
+      `Deseja revogar o link de admissão dos ${ids.length} candidatos selecionados? Os links deixarão de funcionar.`,
+      { confirmLabel: `Revogar ${ids.length} Links`, confirmColor: '#F59E0B' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      const now = new Date().toISOString()
+      const { error } = await supabase
+        .from('rh_admissao_convites')
+        .update({ status: 'revogado', revogado_em: now, updated_at: now })
+        .in('id', ids)
+
+      if (error) throw error
+
+      toast(`${ids.length} link(s) revogado(s) com sucesso!`, 'success')
+      setSelectedIds(new Set())
+      await load()
+    } catch (err: any) {
+      toast('Erro ao revogar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  async function handleBatchDeleteConvites() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!(await confirm(
+      'Excluir Cadastros em Lote',
+      `ATENÇÃO: Deseja excluir definitivamente os ${ids.length} pré-cadastros selecionados? Todos os documentos e dados associados serão removidos permanentemente.`,
+      { confirmLabel: `Sim, Excluir ${ids.length} Cadastros`, confirmColor: '#EF4444' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      const convs = todosConvites.filter(c => ids.includes(c.id))
+      const paths = convs.flatMap(c => (c.documentos || []).map(d => d.storage_path)).filter(Boolean) as string[]
+      if (paths.length > 0) {
+        try { await supabase.storage.from('rh-documentos').remove(paths) } catch {}
+      }
+
+      await supabase.from('rh_admissao_documentos').delete().in('convite_id', ids)
+      const { error } = await supabase.from('rh_admissao_convites').delete().in('id', ids)
+      if (error) throw error
+
+      toast(`${ids.length} pré-cadastro(s) excluído(s) com sucesso!`, 'success')
+      if (selectedInvite && ids.includes(selectedInvite.id)) setSelectedInvite(null)
+      setSelectedIds(new Set())
+      await load()
+    } catch (err: any) {
+      toast('Erro ao excluir em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  // Ações em Lote: Aba 2 (Aptos p/ Registro)
+  async function handleBatchApprove() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    const aptosToApprove = convitesAptos.filter(c => ids.includes(c.id))
+    if (aptosToApprove.length === 0) return
+
+    if (!(await confirm(
+      'Concluir Registros em Lote',
+      `Deseja concluir o registro formal e transferir os ${aptosToApprove.length} profissionais selecionados para a lista permanente de Registrados?`,
+      { confirmLabel: `Concluir & Efetivar ${aptosToApprove.length}`, confirmColor: '#10B981' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      let count = 0
+      for (const invite of aptosToApprove) {
+        const docSalario = invite.documentos?.find(d => d.item_id === 'salario_registro')
+        const docFichaResumo = invite.documentos?.find(d => d.item_id === 'ficha_resumo')
+        const dadosRegistro = {
+          salario: docSalario?.observacao_rh || docSalario?.nome || null,
+          ficha_resumo_path: docFichaResumo?.storage_path || null,
+          ficha_resumo_nome: docFichaResumo?.nome || null,
+          registrado_em: new Date().toISOString(),
+          registrado_por: colaboradorAtivo?.nome || 'RH'
+        }
+
+        const { data: newFunc, error: funcErr } = await supabase.from('funcionarios').insert({
+          nome: invite.nome_destinatario,
+          cpf: invite.cpf,
+          matricula: invite.matricula,
+          cargo: invite.cargo,
+          email: invite.email_destinatario,
+          telefone: invite.telefone_destinatario,
+          endereco: invite.endereco,
+          obra: invite.obra,
+          data_admissao: invite.data_inicio_efetivo || new Date().toISOString().split('T')[0],
+          dados_registro: dadosRegistro
+        }).select('id').single()
+
+        let createdId = newFunc?.id
+        if (funcErr || !createdId) {
+          const { data: fbFunc } = await supabase.from('funcionarios').insert({
+            nome: invite.nome_destinatario,
+            cpf: invite.cpf,
+            matricula: invite.matricula,
+            cargo: invite.cargo,
+            email: invite.email_destinatario,
+            telefone: invite.telefone_destinatario,
+            endereco: invite.endereco,
+            obra: invite.obra,
+            data_admissao: invite.data_inicio_efetivo || new Date().toISOString().split('T')[0]
+          }).select('id').single()
+          createdId = fbFunc?.id
+        }
+
+        if (createdId) {
+          await supabase.from('rh_admissao_documentos').delete().eq('convite_id', invite.id).eq('item_id', 'status_apto')
+          await supabase.from('rh_admissao_convites').update({
+            status: 'aprovado',
+            aprovado_em: new Date().toISOString(),
+            funcionario_id: createdId,
+            updated_at: new Date().toISOString()
+          }).eq('id', invite.id)
+          count++
+        }
+      }
+
+      toast(`${count} profissional(is) registrado(s) e efetivado(s) com sucesso!`, 'success')
+      setSelectedIds(new Set())
+      await load()
+      setActiveTab('ativos')
+    } catch (err: any) {
+      toast('Erro ao aprovar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  async function handleBatchVoltarAdmissao() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!(await confirm(
+      'Retornar para Em Admissão em Lote',
+      `Deseja retornar os ${ids.length} candidatos selecionados para a 1ª fase (Em Admissão)?`,
+      { confirmLabel: `Retornar ${ids.length} Candidatos`, confirmColor: '#F59E0B' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      await supabase.from('rh_admissao_documentos').delete().in('convite_id', ids).eq('item_id', 'status_apto')
+      const { error } = await supabase
+        .from('rh_admissao_convites')
+        .update({ status: 'aguardando_aprovacao', updated_at: new Date().toISOString() })
+        .in('id', ids)
+
+      if (error) throw error
+
+      toast(`${ids.length} candidato(s) retornado(s) para Em Admissão!`, 'success')
+      setSelectedIds(new Set())
+      await load()
+      setActiveTab('admissao')
+    } catch (err: any) {
+      toast('Erro ao retornar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  // Ações em Lote: Aba 3 (Registrados)
+  async function handleBatchDeslocarAptos() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    const pessoasToDeslocar = pessoas.filter(p => ids.includes(p.id))
+    if (pessoasToDeslocar.length === 0) return
+
+    if (!(await confirm(
+      'Deslocar em Lote para Aptos',
+      `Deseja retornar os ${pessoasToDeslocar.length} colaboradores selecionados para a lista de Aptos p/ Registro? O registro atual em funcionários será desfeito para conferência.`,
+      { confirmLabel: `Deslocar ${pessoasToDeslocar.length} para Aptos`, confirmColor: C.amber }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      let count = 0
+      for (const person of pessoasToDeslocar) {
+        const { data: convByFunc } = await supabase
+          .from('rh_admissao_convites')
+          .select('*')
+          .eq('funcionario_id', person.id)
+          .maybeSingle()
+        let conviteEncontrado = convByFunc
+
+        if (!conviteEncontrado && person.cpf) {
+          const cpfClean = person.cpf.replace(/\D/g, '')
+          const { data: convByCpf } = await supabase
+            .from('rh_admissao_convites')
+            .select('*')
+            .or(`cpf.eq.${person.cpf},cpf.eq.${cpfClean}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+          if (convByCpf && convByCpf.length > 0) conviteEncontrado = convByCpf[0]
+        }
+
+        if (conviteEncontrado) {
+          await supabase
+            .from('rh_admissao_convites')
+            .update({
+              status: 'apto',
+              funcionario_id: null,
+              aprovado_em: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', conviteEncontrado.id)
+        } else {
+          const bytes = new Uint8Array(16)
+          crypto.getRandomValues(bytes)
+          const token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+          const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+          const tokenHash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+
+          await supabase.from('rh_admissao_convites').insert({
+            nome_destinatario: person.nome,
+            cpf: person.cpf,
+            matricula: person.matricula,
+            cargo: person.cargo,
+            obra: person.obra,
+            email_destinatario: person.email || `${person.nome.toLowerCase().replace(/[^a-z0-9]/g, '.')}@sistema.com`,
+            status: 'apto',
+            token_code: token,
+            token_hash: tokenHash,
+            expires_at: new Date(Date.now() + 365 * 86400000).toISOString(),
+            data_inicio_efetivo: person.data_admissao,
+            inicio_efetivo: !!person.data_admissao
+          })
+        }
+
+        await supabase.from('funcionario_documentos').delete().eq('funcionario_id', person.id)
+        await supabase.from('funcionarios').delete().eq('id', person.id)
+        count++
+      }
+
+      toast(`${count} colaborador(es) deslocado(s) para Aptos p/ Registro!`, 'success')
+      setSelectedIds(new Set())
+      await load()
+      setActiveTab('aptos')
+    } catch (err: any) {
+      toast('Erro ao deslocar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  async function handleBatchDeslocarAdmissao() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    const pessoasToDeslocar = pessoas.filter(p => ids.includes(p.id))
+    if (pessoasToDeslocar.length === 0) return
+
+    if (!(await confirm(
+      'Deslocar em Lote para Admissão',
+      `Deseja retornar os ${pessoasToDeslocar.length} colaboradores selecionados para a 1ª fase (Em Admissão)?`,
+      { confirmLabel: `Deslocar ${pessoasToDeslocar.length} para Admissão`, confirmColor: C.amber }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      let count = 0
+      for (const person of pessoasToDeslocar) {
+        const { data: convByFunc } = await supabase
+          .from('rh_admissao_convites')
+          .select('*')
+          .eq('funcionario_id', person.id)
+          .maybeSingle()
+        let conviteEncontrado = convByFunc
+
+        if (conviteEncontrado) {
+          await supabase
+            .from('rh_admissao_convites')
+            .update({
+              status: 'aguardando_aprovacao',
+              funcionario_id: null,
+              aprovado_em: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', conviteEncontrado.id)
+        }
+
+        await supabase.from('funcionario_documentos').delete().eq('funcionario_id', person.id)
+        await supabase.from('funcionarios').delete().eq('id', person.id)
+        count++
+      }
+
+      toast(`${count} colaborador(es) retornado(s) para Em Admissão!`, 'success')
+      setSelectedIds(new Set())
+      await load()
+      setActiveTab('admissao')
+    } catch (err: any) {
+      toast('Erro ao deslocar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  async function handleBatchDeleteFuncionarios() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!(await confirm(
+      'Excluir Colaboradores em Lote',
+      `ATENÇÃO: Tem certeza que deseja excluir definitivamente os ${ids.length} colaboradores selecionados? Históricos, fichas e documentos serão apagados.`,
+      { confirmLabel: `Sim, Excluir ${ids.length} Colaboradores`, confirmColor: '#EF4444' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      await supabase.from('rh_admissao_convites').update({ funcionario_id: null }).in('funcionario_id', ids)
+      await Promise.allSettled([
+        supabase.from('funcionario_historico').delete().in('funcionario_id', ids),
+        supabase.from('funcionario_documentos').delete().in('funcionario_id', ids),
+        supabase.from('exames_ocupacionais').delete().in('funcionario_id', ids),
+        supabase.from('funcionario_admissao_etapas').delete().in('funcionario_id', ids),
+      ])
+      const { error } = await supabase.from('funcionarios').delete().in('id', ids)
+      if (error) throw error
+
+      toast(`${ids.length} colaborador(es) excluído(s) com sucesso!`, 'success')
+      if (selected && ids.includes(selected.id)) setSelected(null)
+      setSelectedIds(new Set())
+      await load()
+    } catch (err: any) {
+      toast('Erro ao excluir em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
 
   // Ações Principais
   async function createInvite() {
@@ -2997,6 +3401,7 @@ export default function RhPage() {
                 <button
                   onClick={() => {
                     setActiveTab('admissao')
+                    setSelectedIds(new Set())
                     if (!convites.some(c => c.id === selectedInvite?.id)) {
                       setSelectedInvite(convites[0] || null)
                     }
@@ -3018,6 +3423,7 @@ export default function RhPage() {
                 <button
                   onClick={() => {
                     setActiveTab('aptos')
+                    setSelectedIds(new Set())
                     if (!convitesAptos.some(c => c.id === selectedInvite?.id)) {
                       setSelectedInvite(convitesAptos[0] || null)
                     }
@@ -3039,6 +3445,7 @@ export default function RhPage() {
                 <button
                   onClick={() => {
                     setActiveTab('ativos')
+                    setSelectedIds(new Set())
                     if (!selected && pessoas.length > 0) {
                       setSelected(pessoas[0])
                     }
@@ -3110,11 +3517,233 @@ export default function RhPage() {
               )}
             </div>
 
+            {/* Barra de Controle de Seleção e Ações em Lote */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 8,
+              marginBottom: 10,
+              padding: '8px 12px',
+              borderRadius: 6,
+              background: isSomeSelected ? 'rgba(245, 158, 11, 0.08)' : C.bgPanel,
+              border: `1px solid ${isSomeSelected ? 'rgba(245, 158, 11, 0.35)' : C.border}`,
+              transition: 'all 0.2s ease'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 11, fontWeight: 800, color: C.ink }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={selectAll}
+                    style={{ width: 15, height: 15, cursor: 'pointer', accentColor: C.amber }}
+                  />
+                  <span>
+                    {isAllSelected ? 'Desmarcar todos' : `Selecionar todos (${listaAtualIds.length})`}
+                  </span>
+                </label>
+
+                {isSomeSelected && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 10.5, fontWeight: 900, color: C.amber, background: 'rgba(245, 158, 11, 0.15)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                      ✓ {selectedIds.size} selecionado{selectedIds.size > 1 ? 's' : ''}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearSelection}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: C.inkSoft,
+                        fontSize: 10,
+                        cursor: 'pointer',
+                        textDecoration: 'underline',
+                        padding: 0
+                      }}
+                    >
+                      Limpar
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Ações em Lote Ativas */}
+              {isSomeSelected && (
+                <div style={{
+                  display: 'flex',
+                  flexWrap: 'wrap',
+                  gap: 6,
+                  alignItems: 'center',
+                  paddingTop: 8,
+                  borderTop: `1px solid rgba(245, 158, 11, 0.2)`
+                }}>
+                  {activeTab === 'admissao' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDeclararAptos()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 900,
+                          background: '#10B981',
+                          color: '#0A0A0A',
+                          boxShadow: '0 2px 6px rgba(16, 185, 129, 0.2)'
+                        }}
+                      >
+                        <CheckCircle2 size={12} /> Declarar Aptos ({selectedIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchRevogarConvites()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: 'rgba(245, 158, 11, 0.15)',
+                          color: C.amber,
+                          border: `1px solid rgba(245, 158, 11, 0.35)`
+                        }}
+                      >
+                        <X size={12} /> Revogar ({selectedIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDeleteConvites()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#EF4444',
+                          border: '1px solid rgba(239, 68, 68, 0.35)'
+                        }}
+                      >
+                        <Trash2 size={12} /> Excluir ({selectedIds.size})
+                      </button>
+                    </>
+                  )}
+
+                  {activeTab === 'aptos' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchApprove()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 900,
+                          background: '#10B981',
+                          color: '#0A0A0A',
+                          boxShadow: '0 2px 6px rgba(16, 185, 129, 0.2)'
+                        }}
+                      >
+                        <Rocket size={12} /> Concluir & Efetivar ({selectedIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchVoltarAdmissao()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: 'rgba(245, 158, 11, 0.15)',
+                          color: C.amber,
+                          border: `1px solid rgba(245, 158, 11, 0.35)`
+                        }}
+                      >
+                        <RotateCcw size={12} /> Voltar p/ Admissão ({selectedIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDeleteConvites()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#EF4444',
+                          border: '1px solid rgba(239, 68, 68, 0.35)'
+                        }}
+                      >
+                        <Trash2 size={12} /> Excluir ({selectedIds.size})
+                      </button>
+                    </>
+                  )}
+
+                  {activeTab === 'ativos' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDeslocarAptos()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 900,
+                          background: C.amber,
+                          color: '#0A0A0A',
+                          boxShadow: '0 2px 6px rgba(245, 158, 11, 0.2)'
+                        }}
+                      >
+                        <RotateCcw size={12} /> Deslocar p/ Aptos ({selectedIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDeslocarAdmissao()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: 'rgba(245, 158, 11, 0.15)',
+                          color: C.amber,
+                          border: `1px solid rgba(245, 158, 11, 0.35)`
+                        }}
+                      >
+                        <RotateCcw size={12} /> Deslocar p/ Admissão ({selectedIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDeleteFuncionarios()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#EF4444',
+                          border: '1px solid rgba(239, 68, 68, 0.35)'
+                        }}
+                      >
+                        <Trash2 size={12} /> Excluir ({selectedIds.size})
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+
             {/* Listagem de Cards */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 'calc(100vh - 280px)', minHeight: 480, overflowY: 'auto', paddingRight: 4 }}>
               {activeTab === 'admissao' ? (
                 convitesFiltrados.map(invite => {
                   const active = selectedInvite?.id === invite.id
+                  const isCardSelected = selectedIds.has(invite.id)
                   const expired = new Date(invite.expires_at).getTime() <= Date.now() && ['ativo', 'em_preenchimento'].includes(invite.status)
                   const label = invite.status === 'devolvido' ? 'Devolvido' : invite.status === 'revogado' ? 'Revogado' : expired ? 'Expirado' : invite.status === 'aguardando_aprovacao' ? 'Aguardando Aprovação' : invite.status === 'em_preenchimento' ? `Etapa ${invite.etapa_atual}/4` : 'Link Gerado'
 
@@ -3129,19 +3758,35 @@ export default function RhPage() {
                         flexDirection: 'column',
                         gap: 7,
                         borderRadius: 6,
-                        background: active ? 'rgba(245, 158, 11, 0.08)' : C.bgCard,
-                        border: `1px solid ${active ? C.amber : C.border}`,
-                        borderLeft: `4px solid ${active ? C.amber : invite.status === 'aguardando_aprovacao' ? '#10B981' : invite.status === 'devolvido' || expired ? '#EF4444' : C.amber}`,
+                        background: isCardSelected ? 'rgba(245, 158, 11, 0.12)' : active ? 'rgba(245, 158, 11, 0.08)' : C.bgCard,
+                        border: `1px solid ${isCardSelected ? C.amber : active ? C.amber : C.border}`,
+                        borderLeft: `4px solid ${isCardSelected ? C.amber : active ? C.amber : invite.status === 'aguardando_aprovacao' ? '#10B981' : invite.status === 'devolvido' || expired ? '#EF4444' : C.amber}`,
                         padding: '12px 14px',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
-                        boxShadow: active ? '0 0 0 1px rgba(245, 158, 11, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06)' : '0 1px 3px rgba(0, 0, 0, 0.03)'
+                        boxShadow: isCardSelected ? '0 0 0 1px rgba(245, 158, 11, 0.3), 0 4px 16px rgba(0, 0, 0, 0.08)' : active ? '0 0 0 1px rgba(245, 158, 11, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06)' : '0 1px 3px rgba(0, 0, 0, 0.03)'
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>
-                          {invite.nome_destinatario}
-                        </strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            title="Selecionar para ações em lote"
+                            checked={isCardSelected}
+                            onChange={(e) => toggleSelect(invite.id, e as any)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              width: 15,
+                              height: 15,
+                              cursor: 'pointer',
+                              accentColor: C.amber,
+                              flexShrink: 0
+                            }}
+                          />
+                          <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>
+                            {invite.nome_destinatario}
+                          </strong>
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{
                             fontSize: 9.5,
@@ -3243,6 +3888,7 @@ export default function RhPage() {
               ) : activeTab === 'aptos' ? (
                 aptosFiltrados.map(invite => {
                   const active = selectedInvite?.id === invite.id
+                  const isCardSelected = selectedIds.has(invite.id)
                   const docSal = invite.documentos?.find(d => d.item_id === 'salario_registro')
                   const docRes = invite.documentos?.find(d => d.item_id === 'ficha_resumo')
                   return (
@@ -3256,19 +3902,35 @@ export default function RhPage() {
                         flexDirection: 'column',
                         gap: 7,
                         borderRadius: 6,
-                        background: active ? 'rgba(16, 185, 129, 0.08)' : C.bgCard,
-                        border: `1px solid ${active ? '#10B981' : C.border}`,
+                        background: isCardSelected ? 'rgba(16, 185, 129, 0.12)' : active ? 'rgba(16, 185, 129, 0.08)' : C.bgCard,
+                        border: `1px solid ${isCardSelected ? '#10B981' : active ? '#10B981' : C.border}`,
                         borderLeft: `4px solid #10B981`,
                         padding: '12px 14px',
                         cursor: 'pointer',
                         transition: 'all 0.15s ease',
-                        boxShadow: active ? '0 0 0 1px rgba(16, 185, 129, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06)' : '0 1px 3px rgba(0, 0, 0, 0.03)'
+                        boxShadow: isCardSelected ? '0 0 0 1px rgba(16, 185, 129, 0.3), 0 4px 16px rgba(0, 0, 0, 0.08)' : active ? '0 0 0 1px rgba(16, 185, 129, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06)' : '0 1px 3px rgba(0, 0, 0, 0.03)'
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>
-                          {invite.nome_destinatario}
-                        </strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            title="Selecionar para ações em lote"
+                            checked={isCardSelected}
+                            onChange={(e) => toggleSelect(invite.id, e as any)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              width: 15,
+                              height: 15,
+                              cursor: 'pointer',
+                              accentColor: '#10B981',
+                              flexShrink: 0
+                            }}
+                          />
+                          <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>
+                            {invite.nome_destinatario}
+                          </strong>
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{
                             fontSize: 9.5,
@@ -3434,6 +4096,7 @@ export default function RhPage() {
               ) : (
                 pessoasFiltradas.map(person => {
                   const active = selected?.id === person.id
+                  const isCardSelected = selectedIds.has(person.id)
                   return (
                     <motion.div
                       key={person.id}
@@ -3445,16 +4108,33 @@ export default function RhPage() {
                         flexDirection: 'column',
                         gap: 7,
                         borderRadius: 6,
-                        background: active ? 'rgba(245, 158, 11, 0.08)' : C.bgCard,
-                        border: `1px solid ${active ? C.amber : C.border}`,
-                        borderLeft: `4px solid ${active ? C.amber : '#10B981'}`,
+                        background: isCardSelected ? 'rgba(245, 158, 11, 0.12)' : active ? 'rgba(245, 158, 11, 0.08)' : C.bgCard,
+                        border: `1px solid ${isCardSelected ? C.amber : active ? C.amber : C.border}`,
+                        borderLeft: `4px solid ${isCardSelected ? C.amber : active ? C.amber : '#10B981'}`,
                         padding: '12px 14px',
                         cursor: 'pointer',
-                        transition: 'all 0.15s ease'
+                        transition: 'all 0.15s ease',
+                        boxShadow: isCardSelected ? '0 0 0 1px rgba(245, 158, 11, 0.3), 0 4px 16px rgba(0, 0, 0, 0.08)' : active ? '0 0 0 1px rgba(245, 158, 11, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06)' : 'none'
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                        <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>{person.nome}</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            title="Selecionar para ações em lote"
+                            checked={isCardSelected}
+                            onChange={(e) => toggleSelect(person.id, e as any)}
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              width: 15,
+                              height: 15,
+                              cursor: 'pointer',
+                              accentColor: C.amber,
+                              flexShrink: 0
+                            }}
+                          />
+                          <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>{person.nome}</strong>
+                        </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 9, fontWeight: 900, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.25)' }}>
                             ✓ ATIVO

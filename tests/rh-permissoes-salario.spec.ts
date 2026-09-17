@@ -348,4 +348,57 @@ test.describe('RH - Controle de Permissão de Visualização e Edição de Salá
     await expect(page.getByRole('heading', { name: /Editar Salário Registrado/i })).toBeVisible();
   });
 
+  test('Cenário 5: Seleção Múltipla de Cards e Ações em Lote (Bulk Actions)', async ({ page }) => {
+    await loginAs(page, usuarioComPermissaoSalario);
+    await page.goto('/rh');
+
+    // 1. Na Aba 1 (Admissões), a barra de controle deve estar visível
+    await expect(page.getByText(/Selecionar todos/i)).toBeVisible({ timeout: 15000 });
+
+    // 2. Localiza os checkboxes de lote
+    const checkboxes = page.locator('input[type="checkbox"][title="Selecionar para ações em lote"]');
+    await expect(checkboxes.first()).toBeVisible();
+
+    // 3. Marca o primeiro candidato
+    await checkboxes.first().click();
+
+    // 4. A barra de ações em lote deve surgir com os botões específicos da Aba 1
+    await expect(page.getByText(/✓ 1 selecionado/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Declarar Aptos \(1\)/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Revogar \(1\)/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Excluir \(1\)/i })).toBeVisible();
+
+    // 5. Clica no botão "Limpar"
+    await page.getByRole('button', { name: /Limpar/i }).click();
+    await expect(page.getByText(/✓ 1 selecionado/i)).not.toBeVisible();
+
+    // 6. Muda para a Aba 2 (Aptos p/ Registro)
+    const tabAptos = page.getByRole('button', { name: /2\. Aptos p\/ Registro/i });
+    await tabAptos.click();
+
+    // Marca o candidato em Aptos
+    const checkApto = page.locator('input[type="checkbox"][title="Selecionar para ações em lote"]').first();
+    await checkApto.click();
+
+    // Na Aba 2, deve exibir ações de Efetivar, Voltar p/ Admissão e Excluir
+    await expect(page.getByText(/✓ 1 selecionado/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Concluir & Efetivar \(1\)/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Voltar p\/ Admissão \(1\)/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Excluir \(1\)/i })).toBeVisible();
+
+    // 7. Muda para a Aba 3 (Registrados)
+    const tabRegistrados = page.getByRole('button', { name: /3\. Registrados/i });
+    await tabRegistrados.click();
+
+    // Marca o colaborador registrado
+    const checkRegistrado = page.locator('input[type="checkbox"][title="Selecionar para ações em lote"]').first();
+    await checkRegistrado.click();
+
+    // Na Aba 3, deve exibir ações de Deslocar p/ Aptos, Deslocar p/ Admissão e Excluir
+    await expect(page.getByText(/✓ 1 selecionado/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Deslocar p\/ Aptos \(1\)/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Deslocar p\/ Admissão \(1\)/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Excluir \(1\)/i })).toBeVisible();
+  });
+
 });
