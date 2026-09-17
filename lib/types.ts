@@ -353,6 +353,7 @@ export interface Colaborador {
   abas_financeiro?: string | null
   pode_alterar_status?: boolean | null
   pode_excluir_lancamento?: boolean | null
+  pode_ver_salario?: boolean | null
 }
 
 export interface ConfigPermissao {
@@ -367,6 +368,7 @@ export interface ConfigPermissao {
   abas_financeiro?: string | null
   pode_alterar_status?: boolean | null
   pode_excluir_lancamento?: boolean | null
+  pode_ver_salario?: boolean | null
 }
 
 export interface CargoSistema {

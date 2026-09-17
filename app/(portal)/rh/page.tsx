@@ -23,7 +23,14 @@ import {
   Calendar,
   Edit3,
   RefreshCw,
-  Folder
+  Folder,
+  DollarSign,
+  Lock,
+  RotateCcw,
+  ShieldCheck,
+  FileCheck,
+  FileText,
+  Check
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { PageTitle } from '@/components/PageTitle'
@@ -543,17 +550,25 @@ function CadastroTable({
   onOpen,
   onReview,
   onApprove,
+  onDeclararApto,
+  onVoltarAdmissao,
   onRevoke,
   onRegenerate,
   onCopy,
   onDelete,
   onRefresh,
+  colaboradorAtivo,
+  colaboradores,
+  podeVerSalario = false,
+  defaultFolder = 1,
 }: {
   invite: Convite
   modelos: ModeloAdmissao[]
   onOpen: (documento: DocumentoCadastro) => void
   onReview: (documento: DocumentoCadastro, status: 'aprovado' | 'devolvido') => void
   onApprove: () => void
+  onDeclararApto?: () => void
+  onVoltarAdmissao?: () => void
   onRevoke: () => void
   onRegenerate: () => void
   onCopy: () => void
@@ -561,14 +576,22 @@ function CadastroTable({
   onRefresh?: () => Promise<void> | void
   colaboradorAtivo?: any
   colaboradores?: Array<{ id: string; nome: string; email?: string }>
+  podeVerSalario?: boolean
+  defaultFolder?: number
 }) {
-  const [activeFolder, setActiveFolder] = useState(1)
+  const [activeFolder, setActiveFolder] = useState(defaultFolder || 1)
   const [uploadingGuia, setUploadingGuia] = useState(false)
+
+  useEffect(() => {
+    if (defaultFolder) setActiveFolder(defaultFolder)
+  }, [defaultFolder, invite.id])
 
   const modeloEtapa4 = modelos.find(m => m.ordem === 4)
   const guiaRH = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && (d.item_id === GUIA_ITEM_ID || d.item_id === '__guia_rh__')) : null
   const laudoCandidato = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && (d.item_id === LAUDO_ITEM_ID || d.item_id === '__laudo_candidato__')) : null
   const docPix = invite.documentos.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
+  const docSalario = invite.documentos.find(d => d.item_id === 'salario_registro')
+  const docFichaResumo = invite.documentos.find(d => d.item_id === 'ficha_resumo')
 
   // Modais de Edição
   const [editPixOpen, setEditPixOpen] = useState(false)
@@ -576,6 +599,11 @@ function CadastroTable({
   const [inputBanco, setInputBanco] = useState('')
   const [inputAgenciaConta, setInputAgenciaConta] = useState('')
   const [savingPix, setSavingPix] = useState(false)
+
+  const [editSalarioOpen, setEditSalarioOpen] = useState(false)
+  const [inputSalario, setInputSalario] = useState('')
+  const [savingSalario, setSavingSalario] = useState(false)
+  const [uploadingFicha, setUploadingFicha] = useState(false)
 
   const [editEmailOpen, setEditEmailOpen] = useState(false)
   const [inputEmail, setInputEmail] = useState('')
@@ -724,6 +752,91 @@ function CadastroTable({
     }
   }
 
+  function openModalSalario() {
+    const rawVal = docSalario?.observacao_rh || ''
+    setInputSalario(rawVal)
+    setEditSalarioOpen(true)
+  }
+
+  async function handleSaveSalario() {
+    if (!inputSalario.trim()) {
+      return toast('Informe o valor do salário.', 'error')
+    }
+    setSavingSalario(true)
+    try {
+      const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+      const formattedNome = `Salário Contratual: R$ ${inputSalario.trim()}`
+
+      if (docSalario) {
+        const { error } = await supabase
+          .from('rh_admissao_documentos')
+          .update({
+            nome: formattedNome,
+            observacao_rh: inputSalario.trim(),
+            revisado_em: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', docSalario.id)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('rh_admissao_documentos').insert({
+          convite_id: invite.id,
+          modelo_id: modeloEtapa1?.id || null,
+          item_id: 'salario_registro',
+          nome: formattedNome,
+          storage_path: 'salario-registro-confidencial',
+          mime_type: 'text/plain',
+          tamanho_bytes: 10,
+          status: 'aprovado',
+          observacao_rh: inputSalario.trim()
+        })
+        if (error) throw error
+      }
+      toast('Salário contratual registrado com sucesso!', 'success')
+      setEditSalarioOpen(false)
+      await onRefresh?.()
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Erro ao salvar salário', 'error')
+    } finally {
+      setSavingSalario(false)
+    }
+  }
+
+  async function uploadFichaResumo(file: File | undefined) {
+    if (!file) return
+    setUploadingFicha(true)
+    try {
+      const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
+      const path = `fichas-resumo/${invite.id}-${Date.now()}-${safeName}`
+      const { error: uploadError } = await supabase.storage.from('rh-documentos').upload(path, file, { contentType: file.type || 'application/pdf', upsert: true })
+      if (uploadError) throw uploadError
+
+      const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+      if (docFichaResumo) {
+        await supabase.from('rh_admissao_documentos').delete().eq('id', docFichaResumo.id)
+      }
+
+      const { error: rowError } = await supabase.from('rh_admissao_documentos').insert({
+        convite_id: invite.id,
+        modelo_id: modeloEtapa1?.id || null,
+        item_id: 'ficha_resumo',
+        nome: file.name,
+        storage_path: path,
+        tamanho_bytes: file.size,
+        mime_type: file.type || 'application/pdf',
+        status: 'aprovado'
+      })
+      if (rowError) throw rowError
+
+      toast('Ficha resumo anexada com sucesso!', 'success')
+      await onRefresh?.()
+    } catch (err: unknown) {
+      toast('Erro: ' + (err instanceof Error ? err.message : 'falha no envio da ficha resumo'), 'error')
+    } finally {
+      setUploadingFicha(false)
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {/* Resumo do Candidato & Ações Superiores */}
@@ -757,48 +870,89 @@ function CadastroTable({
         </div>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button
-            onClick={openModalEfetivo}
-            style={{ ...btnBase, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}` }}
-          >
-            <Calendar size={12} color={C.amber} /> Início Efetivo
-          </button>
-          <button
-            onClick={onCopy}
-            style={{ ...btnBase, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}` }}
-          >
-            <Copy size={12} /> Copiar Link
-          </button>
-          <button
-            onClick={onRegenerate}
-            style={{ ...btnBase, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}` }}
-          >
-            <RefreshCw size={12} /> Prorrogar
-          </button>
-          <button
-            onClick={onRevoke}
-            style={{ ...btnBase, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
-          >
-            Revogar
-          </button>
-          <button
-            onClick={onDelete}
-            style={{ ...btnBase, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
-          >
-            <Trash2 size={12} /> Excluir
-          </button>
-          {invite.status !== 'aprovado' && (
-            <button
-              onClick={onApprove}
-              style={{
-                ...btnBase,
-                background: '#10B981',
-                color: '#0A0A0A',
-                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)'
-              }}
-            >
-              <CheckCircle2 size={13} strokeWidth={2.5} /> Aprovar & Efetivar
-            </button>
+          {invite.status === 'apto' ? (
+            <>
+              {onVoltarAdmissao && (
+                <button
+                  onClick={onVoltarAdmissao}
+                  style={{ ...btnBase, background: C.bgCard, color: C.inkSoft, border: `1px solid ${C.border}` }}
+                  title="Retornar para a fila de Em Admissão"
+                >
+                  <RotateCcw size={12} /> Voltar p/ Admissão
+                </button>
+              )}
+              <button
+                onClick={openModalEfetivo}
+                style={{ ...btnBase, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                <Calendar size={12} color={C.amber} /> Início Efetivo
+              </button>
+              <button
+                onClick={onDelete}
+                style={{ ...btnBase, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
+              >
+                <Trash2 size={12} /> Excluir
+              </button>
+              <button
+                onClick={onApprove}
+                style={{
+                  ...btnBase,
+                  background: '#10B981',
+                  color: '#0A0A0A',
+                  fontWeight: 900,
+                  boxShadow: '0 2px 8px rgba(16, 185, 129, 0.25)'
+                }}
+              >
+                <CheckCircle2 size={13} strokeWidth={2.5} /> Concluir Registro & Efetivar
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={openModalEfetivo}
+                style={{ ...btnBase, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                <Calendar size={12} color={C.amber} /> Início Efetivo
+              </button>
+              <button
+                onClick={onCopy}
+                style={{ ...btnBase, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                <Copy size={12} /> Copiar Link
+              </button>
+              <button
+                onClick={onRegenerate}
+                style={{ ...btnBase, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}` }}
+              >
+                <RefreshCw size={12} /> Prorrogar
+              </button>
+              <button
+                onClick={onRevoke}
+                style={{ ...btnBase, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
+              >
+                Revogar
+              </button>
+              <button
+                onClick={onDelete}
+                style={{ ...btnBase, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
+              >
+                <Trash2 size={12} /> Excluir
+              </button>
+              {invite.status !== 'aprovado' && onDeclararApto && (
+                <button
+                  onClick={onDeclararApto}
+                  style={{
+                    ...btnBase,
+                    background: C.amber,
+                    color: '#0A0A0A',
+                    fontWeight: 900,
+                    boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)'
+                  }}
+                >
+                  <ShieldCheck size={13} strokeWidth={2.5} /> Declarar Apto para Registro
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
@@ -878,7 +1032,7 @@ function CadastroTable({
         </div>
       )}
 
-      {/* ABAS DAS ETAPAS 1 A 3 */}
+      {/* ABAS DAS ETAPAS 1 A 3 + ETAPA 5 (REGISTRO & SALÁRIO SP) */}
       <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden' }}>
         <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.bgWhite }}>
           {modelos.filter(m => m.ordem <= 3).map(m => (
@@ -907,6 +1061,36 @@ function CadastroTable({
               </span>
             </button>
           ))}
+
+          {/* Etapa 5: Registro & Salário SP */}
+          <button
+            onClick={() => setActiveFolder(5)}
+            style={{
+              flex: 1,
+              padding: '10px 12px',
+              fontSize: 11,
+              fontWeight: 800,
+              color: activeFolder === 5 ? C.ink : C.inkSoft,
+              background: activeFolder === 5 ? C.bgPanel : 'transparent',
+              border: 'none',
+              borderBottom: activeFolder === 5 ? `2px solid ${C.amber}` : 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6
+            }}
+          >
+            <span>📁 Etapa 5</span>
+            <span style={{ fontSize: 9, color: activeFolder === 5 ? C.amber : C.inkSoft }}>
+              (Registro & Salário SP)
+            </span>
+            {invite.status === 'apto' && (
+              <span style={{ fontSize: 8, background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', padding: '1px 5px', borderRadius: 3, fontWeight: 900 }}>
+                SP
+              </span>
+            )}
+          </button>
         </div>
 
         <div style={{ padding: 14 }}>
@@ -1025,8 +1209,278 @@ function CadastroTable({
               )}
             </div>
           ))}
+
+          {/* Etapa 5: Conteúdo (Salário, Ficha Resumo e Status de Registro SP) */}
+          {activeFolder === 5 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Card 1: Salário Contratual (R$) */}
+              <div style={{
+                background: C.bgWhite,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                padding: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <DollarSign size={15} color={C.amber} />
+                    <span style={{ fontSize: 11, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Salário Contratual para Registro (CLT)
+                    </span>
+                  </div>
+                  {podeVerSalario && (
+                    <span style={{ fontSize: 9, fontWeight: 800, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', padding: '2px 6px', borderRadius: 3 }}>
+                      ✓ Acesso Autorizado
+                    </span>
+                  )}
+                </div>
+
+                {podeVerSalario ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                    <div>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: C.inkSoft }}>Remuneração Registrada:</span>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: docSalario ? '#10B981' : C.inkSoft, marginTop: 2 }}>
+                        {docSalario?.observacao_rh ? (
+                          docSalario.observacao_rh.startsWith('R$') ? docSalario.observacao_rh : `R$ ${docSalario.observacao_rh}`
+                        ) : docSalario?.nome ? (
+                          docSalario.nome
+                        ) : (
+                          <span style={{ fontSize: 13, fontStyle: 'italic' }}>Não definido ainda</span>
+                        )}
+                      </div>
+                      <p style={{ fontSize: 10, color: C.inkSoft, margin: '3px 0 0' }}>
+                        Utilizado pela equipe de São Paulo para formalização em carteira de trabalho e eSocial.
+                      </p>
+                    </div>
+                    <button
+                      onClick={openModalSalario}
+                      style={{
+                        ...btnBase,
+                        padding: '6px 12px',
+                        fontSize: 10.5,
+                        background: C.amber,
+                        color: '#0A0A0A',
+                        fontWeight: 800
+                      }}
+                    >
+                      <Edit3 size={12} /> {docSalario ? 'Alterar Salário' : 'Definir Salário'}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '12px 14px',
+                    background: C.bgPanel,
+                    border: `1px dashed ${C.border}`,
+                    borderRadius: 4
+                  }}>
+                    <div style={{ background: 'rgba(239, 68, 68, 0.1)', padding: 8, borderRadius: 6 }}>
+                      <Lock size={20} color="#EF4444" />
+                    </div>
+                    <div>
+                      <strong style={{ fontSize: 12, color: C.ink, display: 'block' }}>
+                        Salário Confidencial (Restrito ao RH de SP e Diretoria)
+                      </strong>
+                      <p style={{ fontSize: 10.5, color: C.inkSoft, margin: '2px 0 0' }}>
+                        Seu perfil não possui a permissão <strong style={{ color: C.ink }}>"Salários no RH"</strong>. Apenas os responsáveis em SP e administradores autorizados visualizam esta informação.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Card 2: Ficha Resumo de Admissão */}
+              <div style={{
+                background: C.bgWhite,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                padding: 14,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <FileText size={15} color={C.amber} />
+                    <span style={{ fontSize: 11, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                      Ficha Resumo da Contratação
+                    </span>
+                  </div>
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 800,
+                    color: docFichaResumo ? '#10B981' : C.amber,
+                    background: docFichaResumo ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+                    border: `1px solid ${docFichaResumo ? 'rgba(16, 185, 129, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+                    padding: '2px 6px',
+                    borderRadius: 3
+                  }}>
+                    {docFichaResumo ? '✓ ANEXADA' : 'PENDENTE'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                  <div>
+                    {docFichaResumo ? (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>📄 {docFichaResumo.nome}</span>
+                        </div>
+                        <p style={{ fontSize: 10, color: C.inkSoft, margin: '3px 0 0' }}>
+                          Ficha resumo pronta para conferência e homologação da contratação em São Paulo.
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <span style={{ fontSize: 11, color: C.inkSoft, fontStyle: 'italic' }}>
+                          Nenhuma Ficha Resumo anexada ainda.
+                        </span>
+                        <p style={{ fontSize: 10, color: C.inkSoft, margin: '3px 0 0' }}>
+                          Anexe o arquivo de resumo de contratação gerado pelo escritório para a validação final do RH de SP.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                    {docFichaResumo && (
+                      <button
+                        onClick={() => onOpen(docFichaResumo)}
+                        style={{ ...btnBase, padding: '5px 10px', fontSize: 10, background: C.bgPanel, color: C.ink, border: `1px solid ${C.border}` }}
+                      >
+                        <ExternalLink size={11} color={C.amber} /> Visualizar / Baixar
+                      </button>
+                    )}
+                    <label style={{ ...btnBase, padding: '5px 12px', fontSize: 10, background: C.amber, color: '#0A0A0A', fontWeight: 800, cursor: 'pointer' }}>
+                      <FileUp size={11} /> {uploadingFicha ? 'Enviando...' : docFichaResumo ? 'Substituir Ficha' : 'Anexar Ficha Resumo'}
+                      <input
+                        hidden
+                        type="file"
+                        accept=".pdf,.doc,.docx,.xls,.xlsx"
+                        disabled={uploadingFicha}
+                        onChange={e => void uploadFichaResumo(e.target.files?.[0])}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Checklist de Prontidão para Registro Formal */}
+              <div style={{
+                background: C.bgWhite,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                padding: 14
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, borderBottom: `1px solid ${C.border}`, paddingBottom: 6 }}>
+                  <FileCheck size={14} color={C.amber} />
+                  <span style={{ fontSize: 11, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Checklist de Prontidão para Registro Formal (SP)
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 8 }}>
+                  {[
+                    {
+                      label: 'Etapa 1: Documentos & PIX',
+                      ok: invite.documentos.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 1) || !!docPix
+                    },
+                    {
+                      label: 'Etapa 2: Ficha Cadastral',
+                      ok: invite.documentos.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 2 && d.status === 'aprovado')
+                    },
+                    {
+                      label: 'Etapa 3: Declarações',
+                      ok: invite.documentos.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 3 && d.status === 'aprovado')
+                    },
+                    {
+                      label: 'Etapa 4: Exame ASO Aprovado',
+                      ok: laudoCandidato?.status === 'aprovado'
+                    },
+                    {
+                      label: 'Salário Contratual Definido',
+                      ok: !!docSalario
+                    },
+                    {
+                      label: 'Ficha Resumo Anexada',
+                      ok: !!docFichaResumo
+                    }
+                  ].map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        padding: '6px 10px',
+                        borderRadius: 4,
+                        background: item.ok ? 'rgba(16, 185, 129, 0.08)' : C.bgPanel,
+                        border: `1px solid ${item.ok ? 'rgba(16, 185, 129, 0.25)' : C.border}`
+                      }}
+                    >
+                      <span style={{
+                        width: 14,
+                        height: 14,
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: item.ok ? '#10B981' : C.border,
+                        color: item.ok ? '#0A0A0A' : C.inkSoft,
+                        fontSize: 9,
+                        fontWeight: 900
+                      }}>
+                        {item.ok ? '✓' : '·'}
+                      </span>
+                      <span style={{ fontSize: 10.5, fontWeight: item.ok ? 700 : 500, color: item.ok ? C.ink : C.inkSoft }}>
+                        {item.label}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* MODAL REACT: EDITAR SALÁRIO CONTRATUAL */}
+      {editSalarioOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: 20, maxWidth: 420, width: '100%', boxShadow: '0 10px 25px rgba(0,0,0,0.1)' }}>
+            <h4 style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 900, color: C.ink, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <DollarSign size={15} color={C.amber} /> Salário Contratual para Registro
+            </h4>
+            <p style={{ fontSize: 11, color: C.inkSoft, margin: '0 0 14px' }}>
+              Informe o salário acordado para formalização pelo RH de São Paulo. Esta informação é sigilosa e restrita.
+            </p>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div>
+                <span style={labelStyle}>Valor do Salário (R$) *</span>
+                <input
+                  style={inputStyle}
+                  placeholder="Ex: 3.500,00"
+                  value={inputSalario}
+                  onChange={e => setInputSalario(e.target.value)}
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+              <button onClick={() => setEditSalarioOpen(false)} style={{ ...btnBase, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}>
+                Cancelar
+              </button>
+              <button onClick={() => void handleSaveSalario()} disabled={savingSalario} style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}>
+                {savingSalario ? 'Salvando...' : 'Salvar Salário'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL REACT: ALTERAR INÍCIO EFETIVO */}
       {editIniciandoOpen && (
@@ -1122,14 +1576,16 @@ function CadastroTable({
 export default function RhPage() {
   const { confirm, ConfirmDialog } = useConfirm()
   const { prompt, PromptDialog } = usePrompt()
-  const [activeTab, setActiveTab] = useState<'admissao' | 'ativos'>('admissao')
+  const [activeTab, setActiveTab] = useState<'admissao' | 'aptos' | 'ativos'>('admissao')
   const [pessoas, setPessoas] = useState<Funcionario[]>([])
   const [modelos, setModelos] = useState<ModeloAdmissao[]>([])
   const [convites, setConvites] = useState<Convite[]>([])
+  const [convitesAptos, setConvitesAptos] = useState<Convite[]>([])
   const [todosConvites, setTodosConvites] = useState<Convite[]>([])
   const [selectedInvite, setSelectedInvite] = useState<Convite | null>(null)
   const [selected, setSelected] = useState<Funcionario | null>(null)
   const [details, setDetails] = useState<Details>(emptyDetails)
+  const [cargoPermissao, setCargoPermissao] = useState<any>(null)
 
   // Mapeamento global de dados bancários (PIX, Banco, Agência/Conta) por funcionário
   const dadosBancariosMap = useMemo(() => {
@@ -1159,6 +1615,7 @@ export default function RhPage() {
 
   // Filtros & Busca
   const [buscaConvite, setBuscaConvite] = useState('')
+  const [buscaAptos, setBuscaAptos] = useState('')
   const [filtroStatusConvite, setFiltroStatusConvite] = useState<'todos' | 'expirados' | 'ativos' | 'aguardando' | 'devolvidos' | 'efetivos'>('todos')
   const [buscaPessoas, setBuscaPessoas] = useState('')
 
@@ -1180,6 +1637,16 @@ export default function RhPage() {
     isCustom: false,
     salvando: false
   })
+
+  // Permissão de Visualização / Edição de Salário
+  const podeVerSalario = useMemo(() => {
+    if (!colaboradorAtivo) return false
+    if (colaboradorAtivo.cargo === 'admin_geral') return true
+    if (colaboradorAtivo.pode_ver_salario === true) return true
+    if (cargoPermissao?.pode_ver_salario === true) return true
+    const appsList = (colaboradorAtivo.apps || '').split(',').map((a: string) => a.trim().toLowerCase())
+    return appsList.includes('salarios') || appsList.includes('rh_sp') || appsList.includes('dp')
+  }, [colaboradorAtivo, cargoPermissao])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1207,22 +1674,47 @@ export default function RhPage() {
 
     if (peopleData) setPessoas(peopleData as Funcionario[])
     if (modelData) setModelos(modelData as ModeloAdmissao[])
-    if (colabsData) setColaboradores(colabsData as any[])
+    if (colabsData) {
+      setColaboradores(colabsData as any[])
+      const rawColab = typeof window !== 'undefined' ? localStorage.getItem('colaborador_sessao') : null
+      let logado: any = null
+      if (rawColab) {
+        try { logado = JSON.parse(rawColab) } catch {}
+      }
+      if (logado?.id) {
+        const freshColab = (colabsData as any[]).find(c => c.id === logado.id)
+        if (freshColab) {
+          setColaboradorAtivo(freshColab)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('colaborador_sessao', JSON.stringify(freshColab))
+          }
+          if (freshColab.cargo) {
+            const { data: permData } = await supabase.from('config_permissoes').select('*').eq('cargo', freshColab.cargo).maybeSingle()
+            if (permData) setCargoPermissao(permData)
+          }
+        }
+      } else if (logado?.cargo) {
+        const { data: permData } = await supabase.from('config_permissoes').select('*').eq('cargo', logado.cargo).maybeSingle()
+        if (permData) setCargoPermissao(permData)
+      }
+    }
     if (obrasData) setObrasCadastradas(obrasData as Array<{ id: string; nome: string }>)
     if (inviteData) {
       const inviteList = inviteData as Convite[]
       setTodosConvites(inviteList)
-      const pendingInvites = inviteList.filter(i => i.status !== 'aprovado')
+      const pendingInvites = inviteList.filter(i => i.status !== 'aprovado' && i.status !== 'apto')
+      const aptosInvites = inviteList.filter(i => i.status === 'apto')
       setConvites(pendingInvites)
+      setConvitesAptos(aptosInvites)
       setSelectedInvite(prev => {
-        if (!prev) return pendingInvites[0] || null
-        return pendingInvites.find(i => i.id === prev.id) || pendingInvites[0] || null
+        if (!prev) return (activeTab === 'aptos' ? aptosInvites[0] : pendingInvites[0]) || null
+        return inviteList.find(i => i.id === prev.id) || (activeTab === 'aptos' ? aptosInvites[0] : pendingInvites[0]) || null
       })
     }
     if (peopleData && peopleData.length > 0 && !selected) {
       setSelected(peopleData[0] as Funcionario)
     }
-  }, [selected])
+  }, [selected, activeTab])
 
   useRealtimeSync(load, 'rh-sync', ['funcionarios', 'rh_modelos_admissao', 'rh_admissao_convites', 'funcionario_historico', 'exames_ocupacionais', 'obras'])
   useEffect(() => { load() }, [load])
@@ -1288,12 +1780,13 @@ export default function RhPage() {
 
   // KPIs Executivos
   const stats = useMemo(() => {
-    const totalPessoas = pessoas.length + convites.length
+    const totalPessoas = pessoas.length + convites.length + convitesAptos.length
     const emAdmissao = convites.length
+    const aptosRegistro = convitesAptos.length
     const aguardandoAprovacao = convites.filter(c => c.status === 'aguardando_aprovacao' || c.documentos.some(d => d.status === 'enviado')).length
-    const efetivados = convites.filter(c => c.inicio_efetivo).length + pessoas.length
-    return { totalPessoas, emAdmissao, aguardandoAprovacao, efetivados }
-  }, [pessoas, convites])
+    const efetivados = convites.filter(c => c.inicio_efetivo).length + convitesAptos.filter(c => c.inicio_efetivo).length + pessoas.length
+    return { totalPessoas, emAdmissao, aptosRegistro, aguardandoAprovacao, efetivados }
+  }, [pessoas, convites, convitesAptos])
 
   // Filtros
   const convitesFiltrados = useMemo(() => {
@@ -1320,6 +1813,21 @@ export default function RhPage() {
     }
     return arr
   }, [convites, buscaConvite, filtroStatusConvite])
+
+  const aptosFiltrados = useMemo(() => {
+    let arr = [...convitesAptos]
+    const term = (buscaAptos || buscaConvite).trim()
+    if (term) {
+      const q = term.toLowerCase()
+      arr = arr.filter(c =>
+        c.nome_destinatario.toLowerCase().includes(q) ||
+        (c.cpf && c.cpf.includes(q)) ||
+        (c.cargo && c.cargo.toLowerCase().includes(q)) ||
+        (c.obra && c.obra.toLowerCase().includes(q))
+      )
+    }
+    return arr
+  }, [convitesAptos, buscaAptos, buscaConvite])
 
   const pessoasFiltradas = useMemo(() => {
     let arr = [...pessoas]
@@ -1449,9 +1957,67 @@ export default function RhPage() {
     toast(status === 'aprovado' ? 'Documento aprovado!' : 'Pendência enviada ao candidato.', 'success')
   }
 
-  async function approveInvite(invite: Convite) {
-    if (!(await confirm('Aprovar e Efetivar', `Deseja aprovar o cadastro de ${invite.nome_destinatario} e transferi-lo para a lista de funcionários?`, { confirmLabel: 'Aprovar Funcionário', confirmColor: '#10B981' }))) return
+  async function declararApto(invite: Convite) {
+    if (!(await confirm(
+      'Declarar Apto para Registro',
+      `Deseja encaminhar ${invite.nome_destinatario} para a lista de "Aptos p/ Registro"? O RH de São Paulo terá acesso às informações e salário para concluir a formalização em carteira.`,
+      { confirmLabel: 'Sim, Declarar Apto', confirmColor: '#10B981' }
+    ))) return
 
+    const { error } = await supabase
+      .from('rh_admissao_convites')
+      .update({
+        status: 'apto',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', invite.id)
+
+    if (error) return toast('Erro ao declarar apto: ' + error.message, 'error')
+
+    toast(`${invite.nome_destinatario} declarado apto para registro!`, 'success')
+    await load()
+  }
+
+  async function voltarParaAdmissao(invite: Convite) {
+    if (!(await confirm(
+      'Retornar para Em Admissão',
+      `Deseja retornar o candidato ${invite.nome_destinatario} para a fila inicial de admissão?`,
+      { confirmLabel: 'Sim, Retornar', confirmColor: '#F59E0B' }
+    ))) return
+
+    const { error } = await supabase
+      .from('rh_admissao_convites')
+      .update({
+        status: 'aguardando_aprovacao',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', invite.id)
+
+    if (error) return toast('Erro ao retornar status: ' + error.message, 'error')
+
+    toast(`${invite.nome_destinatario} retornado para Em Admissão.`, 'success')
+    await load()
+  }
+
+  async function approveInvite(invite: Convite) {
+    if (!(await confirm(
+      'Concluir Registro & Efetivar',
+      `Deseja concluir o registro formal de ${invite.nome_destinatario} e transferi-lo definitivamente para a lista de funcionários cadastrados?`,
+      { confirmLabel: 'Concluir & Efetivar', confirmColor: '#10B981' }
+    ))) return
+
+    const docSalario = invite.documentos?.find(d => d.item_id === 'salario_registro')
+    const docFichaResumo = invite.documentos?.find(d => d.item_id === 'ficha_resumo')
+
+    const dadosRegistro = {
+      salario: docSalario?.observacao_rh || docSalario?.nome || null,
+      ficha_resumo_path: docFichaResumo?.storage_path || null,
+      ficha_resumo_nome: docFichaResumo?.nome || null,
+      registrado_em: new Date().toISOString(),
+      registrado_por: colaboradorAtivo?.nome || 'RH SP'
+    }
+
+    let createdId: string | null = null
     const { data: newFunc, error: funcError } = await supabase.from('funcionarios').insert({
       nome: invite.nome_destinatario,
       cpf: invite.cpf,
@@ -1461,21 +2027,40 @@ export default function RhPage() {
       telefone: invite.telefone_destinatario,
       endereco: invite.endereco,
       obra: invite.obra,
-      data_admissao: invite.data_inicio_efetivo || new Date().toISOString().split('T')[0]
+      data_admissao: invite.data_inicio_efetivo || new Date().toISOString().split('T')[0],
+      dados_registro: dadosRegistro
     }).select('id').single()
 
-    if (funcError) return toast('Erro ao criar funcionário: ' + funcError.message, 'error')
+    if (funcError) {
+      // Fallback caso a coluna dados_registro ainda não exista no schema local
+      const { data: fallbackFunc, error: errFallback } = await supabase.from('funcionarios').insert({
+        nome: invite.nome_destinatario,
+        cpf: invite.cpf,
+        matricula: invite.matricula,
+        cargo: invite.cargo,
+        email: invite.email_destinatario,
+        telefone: invite.telefone_destinatario,
+        endereco: invite.endereco,
+        obra: invite.obra,
+        data_admissao: invite.data_inicio_efetivo || new Date().toISOString().split('T')[0]
+      }).select('id').single()
+
+      if (errFallback) return toast('Erro ao criar funcionário: ' + errFallback.message, 'error')
+      createdId = fallbackFunc.id
+    } else {
+      createdId = newFunc.id
+    }
 
     await supabase.from('rh_admissao_convites').update({
       status: 'aprovado',
       aprovado_em: new Date().toISOString(),
-      funcionario_id: newFunc.id,
+      funcionario_id: createdId,
       updated_at: new Date().toISOString()
     }).eq('id', invite.id)
 
     setSelectedInvite(null)
     await load()
-    toast(`Funcionário ${invite.nome_destinatario} aprovado com sucesso!`, 'success')
+    toast(`Funcionário ${invite.nome_destinatario} registrado e efetivado com sucesso!`, 'success')
   }
 
   async function handleDeleteFuncionario(person: Funcionario) {
@@ -1715,7 +2300,8 @@ export default function RhPage() {
   }
 
   const exportarExcel = () => {
-    const data = (activeTab === 'admissao' ? convitesFiltrados : pessoasFiltradas).map((item: any) => ({
+    const listToExport = activeTab === 'admissao' ? convitesFiltrados : activeTab === 'aptos' ? aptosFiltrados : pessoasFiltradas
+    const data = listToExport.map((item: any) => ({
       Nome: item.nome_destinatario || item.nome,
       CPF: item.cpf || '',
       Cargo: item.cargo || '',
@@ -1736,7 +2322,7 @@ export default function RhPage() {
       <PageTitle
         modulo="Pessoas"
         titulo="Gestão de RH & Admissões"
-        subtitle="Fluxo de admissão digital em 4 etapas, baú documental permanente e controle de efetivo."
+        subtitle="Fluxo de admissão em 3 camadas: Admissões, Aptos para Registro SP e Colaboradores Efetivados."
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
@@ -1787,11 +2373,11 @@ export default function RhPage() {
 
         <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', padding: 10, borderRadius: 6 }}>
-            <CheckCircle2 size={20} color="#10B981" />
+            <ShieldCheck size={20} color="#10B981" />
           </div>
           <div>
-            <span style={labelStyle}>Aguardando RH</span>
-            <div style={{ fontSize: 20, fontWeight: 900, color: stats.aguardandoAprovacao > 0 ? C.amber : '#10B981', lineHeight: 1.2 }}>{stats.aguardandoAprovacao}</div>
+            <span style={labelStyle}>Aptos p/ Registro (SP)</span>
+            <div style={{ fontSize: 20, fontWeight: 900, color: stats.aptosRegistro > 0 ? '#10B981' : C.inkSoft, lineHeight: 1.2 }}>{stats.aptosRegistro}</div>
           </div>
         </div>
 
@@ -1800,8 +2386,8 @@ export default function RhPage() {
             <Building size={20} color={C.amber} />
           </div>
           <div>
-            <span style={labelStyle}>Efetivados em Campo</span>
-            <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, lineHeight: 1.2 }}>{stats.efetivados}</div>
+            <span style={labelStyle}>Cadastrados em Campo</span>
+            <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, lineHeight: 1.2 }}>{pessoas.length}</div>
           </div>
         </div>
       </div>
@@ -1880,11 +2466,22 @@ export default function RhPage() {
         {/* Painel Mestre (Esquerda - 5 Cols) */}
         <div className="lg:col-span-5 flex flex-col gap-4">
           <Panel
-            title={activeTab === 'admissao' ? `Admissões em Andamento (${convitesFiltrados.length})` : `Funcionários Ativos (${pessoasFiltradas.length})`}
+            title={
+              activeTab === 'admissao'
+                ? `Admissões em Andamento (${convitesFiltrados.length})`
+                : activeTab === 'aptos'
+                ? `Aptos para Registro SP (${aptosFiltrados.length})`
+                : `Funcionários Cadastrados (${pessoasFiltradas.length})`
+            }
             action={
               <div style={{ display: 'flex', gap: 4 }}>
                 <button
-                  onClick={() => setActiveTab('admissao')}
+                  onClick={() => {
+                    setActiveTab('admissao')
+                    if (!convites.some(c => c.id === selectedInvite?.id)) {
+                      setSelectedInvite(convites[0] || null)
+                    }
+                  }}
                   style={{
                     background: activeTab === 'admissao' ? C.amber : C.bgWhite,
                     color: activeTab === 'admissao' ? '#0A0A0A' : C.inkSoft,
@@ -1897,10 +2494,36 @@ export default function RhPage() {
                     textTransform: 'uppercase'
                   }}
                 >
-                  Admissões ({convites.length})
+                  1. Admissões ({convites.length})
                 </button>
                 <button
-                  onClick={() => setActiveTab('ativos')}
+                  onClick={() => {
+                    setActiveTab('aptos')
+                    if (!convitesAptos.some(c => c.id === selectedInvite?.id)) {
+                      setSelectedInvite(convitesAptos[0] || null)
+                    }
+                  }}
+                  style={{
+                    background: activeTab === 'aptos' ? '#10B981' : C.bgWhite,
+                    color: activeTab === 'aptos' ? '#0A0A0A' : C.inkSoft,
+                    border: `1px solid ${activeTab === 'aptos' ? '#10B981' : C.border}`,
+                    borderRadius: 3,
+                    padding: '3px 8px',
+                    fontSize: 9.5,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    textTransform: 'uppercase'
+                  }}
+                >
+                  2. Aptos SP ({convitesAptos.length})
+                </button>
+                <button
+                  onClick={() => {
+                    setActiveTab('ativos')
+                    if (!selected && pessoas.length > 0) {
+                      setSelected(pessoas[0])
+                    }
+                  }}
                   style={{
                     background: activeTab === 'ativos' ? C.amber : C.bgWhite,
                     color: activeTab === 'ativos' ? '#0A0A0A' : C.inkSoft,
@@ -1913,7 +2536,7 @@ export default function RhPage() {
                     textTransform: 'uppercase'
                   }}
                 >
-                  Ativos ({pessoas.length})
+                  3. Cadastrados ({pessoas.length})
                 </button>
               </div>
             }
@@ -1924,13 +2547,27 @@ export default function RhPage() {
                 <Search size={14} color={C.inkSoft} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   style={{ ...inputStyle, paddingLeft: 32 }}
-                  placeholder={activeTab === 'admissao' ? 'Buscar por candidato, CPF, cargo, obra...' : 'Buscar funcionário por nome, CPF, cargo, obra...'}
-                  value={activeTab === 'admissao' ? buscaConvite : buscaPessoas}
-                  onChange={e => activeTab === 'admissao' ? setBuscaConvite(e.target.value) : setBuscaPessoas(e.target.value)}
+                  placeholder={
+                    activeTab === 'admissao'
+                      ? 'Buscar por candidato, CPF, cargo, obra...'
+                      : activeTab === 'aptos'
+                      ? 'Buscar aptos por nome, CPF, cargo, obra...'
+                      : 'Buscar funcionário por nome, CPF, cargo, obra...'
+                  }
+                  value={activeTab === 'admissao' ? buscaConvite : activeTab === 'aptos' ? buscaAptos : buscaPessoas}
+                  onChange={e => {
+                    if (activeTab === 'admissao') setBuscaConvite(e.target.value)
+                    else if (activeTab === 'aptos') setBuscaAptos(e.target.value)
+                    else setBuscaPessoas(e.target.value)
+                  }}
                 />
-                {(activeTab === 'admissao' ? buscaConvite : buscaPessoas) && (
+                {(activeTab === 'admissao' ? buscaConvite : activeTab === 'aptos' ? buscaAptos : buscaPessoas) && (
                   <button
-                    onClick={() => activeTab === 'admissao' ? setBuscaConvite('') : setBuscaPessoas('')}
+                    onClick={() => {
+                      if (activeTab === 'admissao') setBuscaConvite('')
+                      else if (activeTab === 'aptos') setBuscaAptos('')
+                      else setBuscaPessoas('')
+                    }}
                     style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer' }}
                   >
                     <X size={12} />
@@ -2084,6 +2721,173 @@ export default function RhPage() {
                     </motion.div>
                   )
                 })
+              ) : activeTab === 'aptos' ? (
+                aptosFiltrados.map(invite => {
+                  const active = selectedInvite?.id === invite.id
+                  const docSal = invite.documentos?.find(d => d.item_id === 'salario_registro')
+                  const docRes = invite.documentos?.find(d => d.item_id === 'ficha_resumo')
+                  return (
+                    <motion.div
+                      key={invite.id}
+                      whileHover={{ x: 2, scale: 1.005 }}
+                      transition={{ duration: 0.12 }}
+                      onClick={() => setSelectedInvite(invite)}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 7,
+                        borderRadius: 6,
+                        background: active ? 'rgba(16, 185, 129, 0.08)' : C.bgCard,
+                        border: `1px solid ${active ? '#10B981' : C.border}`,
+                        borderLeft: `4px solid #10B981`,
+                        padding: '12px 14px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                        boxShadow: active ? '0 0 0 1px rgba(16, 185, 129, 0.2), 0 4px 16px rgba(0, 0, 0, 0.06)' : '0 1px 3px rgba(0, 0, 0, 0.03)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>
+                          {invite.nome_destinatario}
+                        </strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{
+                            fontSize: 9.5,
+                            fontWeight: 900,
+                            padding: '2px 7px',
+                            borderRadius: 4,
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            color: '#10B981',
+                            border: '1px solid rgba(16, 185, 129, 0.3)'
+                          }}>
+                            ✓ APTO P/ REGISTRO
+                          </span>
+                          <button
+                            type="button"
+                            title="Excluir Pré-Cadastro"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void handleDeleteInvite(invite)
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              color: C.inkSoft,
+                              cursor: 'pointer',
+                              padding: 3,
+                              borderRadius: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'color 0.15s, background 0.15s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.color = '#EF4444'
+                              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.color = C.inkSoft
+                              e.currentTarget.style.background = 'transparent'
+                            }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 10.5, color: C.inkSoft }}>
+                        <span>Cargo: <strong style={{ color: C.ink }}>{invite.cargo || 'Não informado'}</strong></span>
+                        {invite.obra && <span>· Obra: <strong style={{ color: C.ink }}>{invite.obra}</strong></span>}
+                        <span>· CPF: <strong style={{ color: C.ink }}>{invite.cpf || 'Não informado'}</strong></span>
+                      </div>
+
+                      {/* Salário & Ficha Resumo Info Pill */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', fontSize: 10, marginTop: 1 }}>
+                        {podeVerSalario ? (
+                          <span style={{
+                            background: docSal ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.12)',
+                            color: docSal ? '#10B981' : C.amber,
+                            border: `1px solid ${docSal ? 'rgba(16, 185, 129, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+                            padding: '2px 6px',
+                            borderRadius: 3,
+                            fontWeight: 800
+                          }}>
+                            💰 {docSal ? (docSal.observacao_rh ? `Salário: R$ ${docSal.observacao_rh}` : docSal.nome) : 'Salário pendente'}
+                          </span>
+                        ) : (
+                          <span style={{
+                            background: C.bgPanel,
+                            color: C.inkSoft,
+                            border: `1px solid ${C.border}`,
+                            padding: '2px 6px',
+                            borderRadius: 3,
+                            fontWeight: 700,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4
+                          }}>
+                            <Lock size={10} /> Salário Restrito ao SP
+                          </span>
+                        )}
+
+                        {docRes && (
+                          <span style={{
+                            background: 'rgba(16, 185, 129, 0.08)',
+                            color: '#059669',
+                            border: '1px solid rgba(16, 185, 129, 0.2)',
+                            padding: '2px 6px',
+                            borderRadius: 3,
+                            fontWeight: 700
+                          }}>
+                            📄 Ficha Resumo OK
+                          </span>
+                        )}
+                      </div>
+
+                      {/* PIX / Dados Bancários se houver */}
+                      {(() => {
+                        const docPix = invite.documentos?.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || (d.nome || '').includes('PIX') || (d.nome || '').includes('Dados Bancários'))
+                        const dadosBanco = parseDadosBancarios(docPix?.nome)
+                        if (!dadosBanco.pix && !dadosBanco.banco) return null
+                        return (
+                          <div style={{
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            alignItems: 'center',
+                            gap: 5,
+                            fontSize: 10,
+                            color: '#059669',
+                            background: 'rgba(16, 185, 129, 0.08)',
+                            border: '1px solid rgba(16, 185, 129, 0.22)',
+                            padding: '3px 8px',
+                            borderRadius: 4,
+                            marginTop: 1
+                          }}>
+                            {dadosBanco.pix && (
+                              <span>
+                                <strong>PIX:</strong> <span style={{ fontFamily: 'monospace', fontWeight: 700 }}>{dadosBanco.pix}</span>
+                              </span>
+                            )}
+                            {dadosBanco.banco && (
+                              <span>
+                                {dadosBanco.pix ? '· ' : ''}<strong>Banco:</strong> {dadosBanco.banco}
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
+                        <span>👤 Por: {resolveNomeCriador(invite.criado_por, colaboradores)}</span>
+                        {invite.inicio_efetivo && (
+                          <span style={{ color: C.amber, fontWeight: 800 }}>
+                            🚀 Início Efetivo
+                          </span>
+                        )}
+                      </div>
+                    </motion.div>
+                  )
+                })
               ) : (
                 pessoasFiltradas.map(person => {
                   const active = selected?.id === person.id
@@ -2213,7 +3017,7 @@ export default function RhPage() {
                 })
               )}
 
-              {((activeTab === 'admissao' && convitesFiltrados.length === 0) || (activeTab === 'ativos' && pessoasFiltradas.length === 0)) && (
+              {((activeTab === 'admissao' && convitesFiltrados.length === 0) || (activeTab === 'aptos' && aptosFiltrados.length === 0) || (activeTab === 'ativos' && pessoasFiltradas.length === 0)) && (
                 <div style={{ padding: '40px 15px', textAlign: 'center', color: C.inkSoft, fontSize: 12, background: C.bgCard, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
                   Nenhum registro encontrado com os filtros selecionados.
                 </div>
@@ -2224,15 +3028,17 @@ export default function RhPage() {
 
         {/* Painel Detalhe Executivo (Direita - 7 Cols) */}
         <div className="lg:col-span-7">
-          {activeTab === 'admissao' ? (
+          {(activeTab === 'admissao' || activeTab === 'aptos') ? (
             selectedInvite ? (
-              <Panel title={`Ficha de Admissão: ${selectedInvite.nome_destinatario}`}>
+              <Panel title={activeTab === 'aptos' ? `Registro SP: ${selectedInvite.nome_destinatario}` : `Ficha de Admissão: ${selectedInvite.nome_destinatario}`}>
                 <CadastroTable
                   invite={selectedInvite}
                   modelos={modelos}
                   onOpen={openCadastroDocument}
                   onReview={(doc, st) => void reviewCadastroDocument(selectedInvite, doc, st)}
                   onApprove={() => void approveInvite(selectedInvite)}
+                  onDeclararApto={() => void declararApto(selectedInvite)}
+                  onVoltarAdmissao={() => void voltarParaAdmissao(selectedInvite)}
                   onRevoke={() => void handleRevokeInvite(selectedInvite)}
                   onRegenerate={() => void handleRegenerateInvite(selectedInvite)}
                   onCopy={() => {
@@ -2243,13 +3049,19 @@ export default function RhPage() {
                   onRefresh={() => load()}
                   colaboradorAtivo={colaboradorAtivo}
                   colaboradores={colaboradores}
+                  podeVerSalario={podeVerSalario}
+                  defaultFolder={activeTab === 'aptos' ? 5 : 1}
                 />
               </Panel>
             ) : (
               <div style={{ background: C.bgPanel, border: `1px dashed ${C.border}`, borderRadius: 6, padding: '80px 20px', textAlign: 'center', color: C.inkSoft }}>
                 <Users size={32} color={C.inkSoft} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                 <h4 style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 900, color: C.ink }}>Nenhum candidato selecionado</h4>
-                <p style={{ margin: 0, fontSize: 11 }}>Selecione um candidato na lista à esquerda para conferir e aprovar os documentos.</p>
+                <p style={{ margin: 0, fontSize: 11 }}>
+                  {activeTab === 'aptos'
+                    ? 'Selecione um candidato apto na lista à esquerda para conferir a Etapa 5, salário e concluir o registro.'
+                    : 'Selecione um candidato na lista à esquerda para conferir e aprovar os documentos.'}
+                </p>
               </div>
             )
           ) : (

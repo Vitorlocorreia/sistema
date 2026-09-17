@@ -7718,7 +7718,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
 
   const salvarConfigCargo = async (cargo: string, config: ConfigPermissao) => {
     setSavingPerms(cargo)
-    await supabase.from('config_permissoes').update({
+    const basePayload: any = {
       pode_empresas: config.pode_empresas,
       pode_fornecedores: config.pode_fornecedores,
       pode_lancar: config.pode_lancar,
@@ -7729,7 +7729,20 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       abas_financeiro: config.abas_financeiro || null,
       pode_alterar_status: config.pode_alterar_status ?? true,
       pode_excluir_lancamento: config.pode_excluir_lancamento ?? false,
+    }
+
+    let { error } = await supabase.from('config_permissoes').update({
+      ...basePayload,
+      pode_ver_salario: config.pode_ver_salario ?? false,
     }).eq('cargo', cargo)
+
+    if (error && (error as any).code === '42703') {
+      const res = await supabase.from('config_permissoes').update(basePayload).eq('cargo', cargo)
+      error = res.error
+    }
+    if (error) {
+      toast('Erro ao atualizar regras: ' + error.message, 'error')
+    }
     
     await loadData()
     setSavingPerms(null)
@@ -7910,10 +7923,18 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         updatePayload.senha = editColForm.senha ? editColForm.senha.trim() : null
       }
 
-      const { error } = await supabase
+      let { error } = await supabase
         .from('colaboradores')
-        .update(updatePayload)
+        .update({
+          ...updatePayload,
+          pode_ver_salario: editColForm.pode_ver_salario ?? false
+        })
         .eq('id', editColForm.id)
+
+      if (error && (error as any).code === '42703') {
+        const res = await supabase.from('colaboradores').update(updatePayload).eq('id', editColForm.id)
+        error = res.error
+      }
 
       if (error) throw error
 
@@ -8842,6 +8863,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                               ['pode_empresas',            'Editar Empresas'],
                               ['pode_fornecedores',        'Editar Fornecedores'],
                               ['pode_excluir_lancamento',  'Excluir Lançamentos'],
+                              ['pode_ver_salario',         'Salários no RH'],
                             ] as const).map(([campo, desc]) => {
                               const valorCheck = cfg[campo as keyof ConfigPermissao] as boolean
                               return (
@@ -8994,6 +9016,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                         ['pode_empresas',            'Editar Empresas'],
                         ['pode_fornecedores',        'Editar Fornecedores'],
                         ['pode_excluir_lancamento',  'Excluir Lançamentos'],
+                        ['pode_ver_salario',         'Salários no RH'],
                       ] as const).map(([campo, desc]) => (
                         <label key={campo} style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 11, color: C.ink }}>
                           <button type="button" onClick={() => setEditColForm({ ...editColForm, [campo]: !editColForm[campo] })} style={{ background: 'none', border: 'none', padding: 0, margin: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
