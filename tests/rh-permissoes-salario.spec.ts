@@ -104,7 +104,15 @@ test.describe('RH - Controle de Permissão de Visualização e Edição de Salá
           status: 200,
           contentType: 'application/json',
           body: JSON.stringify([
-            { id: 'f-1', nome: 'Funcionario Ativo 1', cpf: '111.222.333-44', cargo: 'Operador', status: 'Ativo' }
+            {
+              id: 'f-1',
+              nome: 'Funcionario Ativo 1',
+              cpf: '111.222.333-44',
+              cargo: 'Operador',
+              status: 'Ativo',
+              data_admissao: '2026-01-15',
+              dados_registro: { salario: '3.200,00' }
+            }
           ])
         });
       }
@@ -288,6 +296,46 @@ test.describe('RH - Controle de Permissão de Visualização e Edição de Salá
     await expect(page.getByRole('button', { name: /Voltar p\/ Admissão/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Concluir Registro & Efetivar/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Declarar Apto para Registro/i })).not.toBeVisible();
+  });
+
+  test('Cenário 4: Edição Ágil de Salário pelo Card de Aptos e Ficha do Colaborador', async ({ page }) => {
+    await loginAs(page, usuarioComPermissaoSalario);
+    await page.goto('/rh');
+
+    // 1. Vai para a aba Aptos
+    const tabAptos = page.getByRole('button', { name: /2\. Aptos p\/ Registro/i });
+    await expect(tabAptos).toBeVisible({ timeout: 15000 });
+    await tabAptos.click();
+
+    // 2. O botão interativo de salário no card do candidato deve estar presente
+    const btnSalarioCard = page.getByRole('button', { name: /💰 Salário: R\$ 4\.500,00/i });
+    await expect(btnSalarioCard).toBeVisible();
+
+    // Clica diretamente no botão de salário do card -> deve disparar o modal imediatamente
+    await btnSalarioCard.click();
+    await expect(page.getByRole('heading', { name: /Salário Contratual para Registro/i })).toBeVisible();
+    await page.getByRole('button', { name: /Cancelar/i }).click();
+
+    // 3. Na barra superior de ações de CadastroTable, o botão direto de salário também deve existir
+    const btnSalarioTopBar = page.getByTitle(/Definir ou alterar salário contratual para registro/i);
+    await expect(btnSalarioTopBar).toBeVisible();
+
+    // 4. Vai para a aba de Cadastrados (Ativos)
+    const tabAtivos = page.getByRole('button', { name: /3\. Cadastrados/i });
+    await tabAtivos.click();
+
+    const funcCard = page.locator('text=Funcionario Ativo 1').first();
+    await expect(funcCard).toBeVisible();
+    await funcCard.click();
+
+    // Na ficha do colaborador ativo, deve mostrar o salário registrado e o botão 'Editar Salário'
+    await expect(page.getByText(/3\.200,00/i).first()).toBeVisible();
+    const btnEditSalarioFunc = page.getByRole('button', { name: /Editar Salário/i });
+    await expect(btnEditSalarioFunc).toBeVisible();
+    await btnEditSalarioFunc.click();
+
+    // O modal de edição do salário do colaborador ativo deve abrir
+    await expect(page.getByRole('heading', { name: /Editar Salário Registrado/i })).toBeVisible();
   });
 
 });

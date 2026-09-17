@@ -54,6 +54,7 @@ type Funcionario = {
   data_admissao: string | null
   status: string
   email: string | null
+  dados_registro?: any
 }
 
 type ChecklistItem = { id: string; label: string; obrigatorio: boolean; concluido?: boolean }
@@ -227,7 +228,9 @@ function ArchivePanel({
   onDelete,
   onOpen,
   onUpload,
-  onEditObra
+  onEditObra,
+  podeVerSalario = false,
+  onEditSalario
 }: {
   person: Funcionario
   details: Details
@@ -236,6 +239,8 @@ function ArchivePanel({
   onOpen: (documento: Record<string, string | null>) => void
   onUpload?: (order: number, files: FileList) => void
   onEditObra?: () => void
+  podeVerSalario?: boolean
+  onEditSalario?: () => void
 }) {
   const [filter, setFilter] = useState('')
   const documents = details.documentos.filter(doc =>
@@ -313,6 +318,61 @@ function ArchivePanel({
                 <span>·</span>
                 <span style={{ color: C.inkSoft }}>
                   Admitido em: {new Date(person.data_admissao + 'T00:00:00').toLocaleDateString('pt-BR')}
+                </span>
+              </>
+            )}
+            {podeVerSalario && (
+              <>
+                <span>·</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span>Salário:</span>
+                  <strong style={{
+                    color: '#10B981',
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    padding: '1px 6px',
+                    borderRadius: 3,
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}>
+                    <DollarSign size={11} />
+                    {person.dados_registro?.salario
+                      ? (String(person.dados_registro.salario).startsWith('R$') ? person.dados_registro.salario : `R$ ${person.dados_registro.salario}`)
+                      : 'Não informado'}
+                  </strong>
+                  {onEditSalario && (
+                    <button
+                      type="button"
+                      onClick={onEditSalario}
+                      title="Editar salário registrado"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        padding: '2px 7px',
+                        borderRadius: 4,
+                        background: 'rgba(16, 185, 129, 0.12)',
+                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                        color: '#10B981',
+                        fontSize: 10,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = '#10B981'
+                        e.currentTarget.style.color = '#0A0A0A'
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'rgba(16, 185, 129, 0.12)'
+                        e.currentTarget.style.color = '#10B981'
+                      }}
+                    >
+                      <Edit3 size={10} />
+                      Editar Salário
+                    </button>
+                  )}
                 </span>
               </>
             )}
@@ -567,6 +627,7 @@ function CadastroTable({
   colaboradores,
   podeVerSalario = false,
   defaultFolder = 1,
+  openSalarioTrigger,
 }: {
   invite: Convite
   modelos: ModeloAdmissao[]
@@ -584,6 +645,7 @@ function CadastroTable({
   colaboradores?: Array<{ id: string; nome: string; email?: string }>
   podeVerSalario?: boolean
   defaultFolder?: number
+  openSalarioTrigger?: number
 }) {
   const [activeFolder, setActiveFolder] = useState(defaultFolder || 1)
   const [uploadingGuia, setUploadingGuia] = useState(false)
@@ -761,25 +823,32 @@ function CadastroTable({
 
   function openModalSalario() {
     const rawVal = docSalario?.observacao_rh || ''
-    setInputSalario(rawVal)
+    setInputSalario(rawVal.replace(/^R\$\s*/i, ''))
     setEditSalarioOpen(true)
   }
 
+  useEffect(() => {
+    if (openSalarioTrigger) {
+      openModalSalario()
+    }
+  }, [openSalarioTrigger])
+
   async function handleSaveSalario() {
-    if (!inputSalario.trim()) {
+    const cleanVal = inputSalario.trim().replace(/^R\$\s*/i, '')
+    if (!cleanVal) {
       return toast('Informe o valor do salário.', 'error')
     }
     setSavingSalario(true)
     try {
       const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
-      const formattedNome = `Salário Contratual: R$ ${inputSalario.trim()}`
+      const formattedNome = `Salário Contratual: R$ ${cleanVal}`
 
       if (docSalario) {
         const { error } = await supabase
           .from('rh_admissao_documentos')
           .update({
             nome: formattedNome,
-            observacao_rh: inputSalario.trim(),
+            observacao_rh: cleanVal,
             revisado_em: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
@@ -795,7 +864,7 @@ function CadastroTable({
           mime_type: 'text/plain',
           tamanho_bytes: 10,
           status: 'aprovado',
-          observacao_rh: inputSalario.trim()
+          observacao_rh: cleanVal
         })
         if (error) throw error
       }
@@ -894,6 +963,22 @@ function CadastroTable({
               >
                 <Calendar size={12} color={C.amber} /> Início Efetivo
               </button>
+              {podeVerSalario && (
+                <button
+                  onClick={openModalSalario}
+                  style={{
+                    ...btnBase,
+                    background: docSalario ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.15)',
+                    color: docSalario ? '#10B981' : C.amber,
+                    border: `1px solid ${docSalario ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                    fontWeight: 800
+                  }}
+                  title="Definir ou alterar salário contratual para registro"
+                >
+                  <DollarSign size={12} color={docSalario ? '#10B981' : C.amber} />
+                  {docSalario?.observacao_rh ? `Salário: R$ ${docSalario.observacao_rh}` : 'Definir Salário'}
+                </button>
+              )}
               <button
                 onClick={onDelete}
                 style={{ ...btnBase, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
@@ -921,6 +1006,22 @@ function CadastroTable({
               >
                 <Calendar size={12} color={C.amber} /> Início Efetivo
               </button>
+              {podeVerSalario && (
+                <button
+                  onClick={openModalSalario}
+                  style={{
+                    ...btnBase,
+                    background: docSalario ? 'rgba(16, 185, 129, 0.12)' : C.bgCard,
+                    color: docSalario ? '#10B981' : C.ink,
+                    border: `1px solid ${docSalario ? 'rgba(16, 185, 129, 0.35)' : C.border}`,
+                    fontWeight: 700
+                  }}
+                  title="Pré-definir ou alterar salário contratual"
+                >
+                  <DollarSign size={12} color={docSalario ? '#10B981' : C.amber} />
+                  {docSalario?.observacao_rh ? `Salário: R$ ${docSalario.observacao_rh}` : 'Salário'}
+                </button>
+              )}
               <button
                 onClick={onCopy}
                 style={{ ...btnBase, background: C.bgCard, color: C.ink, border: `1px solid ${C.border}` }}
@@ -1640,6 +1741,19 @@ export default function RhPage() {
     salvando: false
   })
 
+  const [salarioTrigger, setSalarioTrigger] = useState<number>(0)
+  const [editSalarioFuncionarioModal, setEditSalarioFuncionarioModal] = useState<{
+    open: boolean
+    person: Funcionario | null
+    salario: string
+    salvando: boolean
+  }>({
+    open: false,
+    person: null,
+    salario: '',
+    salvando: false
+  })
+
   // Permissão de Visualização / Edição de Salário
   const podeVerSalario = useMemo(() => {
     if (!colaboradorAtivo) return false
@@ -2300,6 +2414,55 @@ export default function RhPage() {
     toast(`Obra de "${person.nome}" atualizada com sucesso!`, 'success')
   }
 
+  function abrirModalEditarSalarioFuncionario(person: Funcionario) {
+    const atual = person.dados_registro?.salario || ''
+    setEditSalarioFuncionarioModal({
+      open: true,
+      person,
+      salario: String(atual).replace(/^R\$\s*/i, ''),
+      salvando: false
+    })
+  }
+
+  async function salvarSalarioFuncionario() {
+    if (!editSalarioFuncionarioModal.person) return
+    const person = editSalarioFuncionarioModal.person
+    const cleanSalario = editSalarioFuncionarioModal.salario.trim().replace(/^R\$\s*/i, '')
+    if (!cleanSalario) {
+      return toast('Informe o valor do salário.', 'error')
+    }
+
+    setEditSalarioFuncionarioModal(prev => ({ ...prev, salvando: true }))
+    try {
+      const novosDadosRegistro = {
+        ...(person.dados_registro || {}),
+        salario: cleanSalario,
+        salario_atualizado_em: new Date().toISOString(),
+        salario_atualizado_por: colaboradorAtivo?.nome || 'RH'
+      }
+
+      const { error } = await supabase
+        .from('funcionarios')
+        .update({
+          dados_registro: novosDadosRegistro
+        })
+        .eq('id', person.id)
+
+      if (error) throw error
+
+      setPessoas(prev => prev.map(p => p.id === person.id ? { ...p, dados_registro: novosDadosRegistro } : p))
+      if (selected?.id === person.id) {
+        setSelected(prev => prev ? { ...prev, dados_registro: novosDadosRegistro } : null)
+      }
+
+      setEditSalarioFuncionarioModal({ open: false, person: null, salario: '', salvando: false })
+      toast(`Salário de "${person.nome}" atualizado com sucesso!`, 'success')
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Falha ao atualizar salário do colaborador', 'error')
+      setEditSalarioFuncionarioModal(prev => ({ ...prev, salvando: false }))
+    }
+  }
+
   async function uploadToArchiveFolder(order: number, files: FileList) {
     if (!selected || !files.length) return
     let uploaded = 0
@@ -2833,16 +2996,40 @@ export default function RhPage() {
                       {/* Salário & Ficha Resumo Info Pill */}
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', fontSize: 10, marginTop: 1 }}>
                         {podeVerSalario ? (
-                          <span style={{
-                            background: docSal ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.12)',
-                            color: docSal ? '#10B981' : C.amber,
-                            border: `1px solid ${docSal ? 'rgba(16, 185, 129, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
-                            padding: '2px 6px',
-                            borderRadius: 3,
-                            fontWeight: 800
-                          }}>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedInvite(invite)
+                              setSalarioTrigger(Date.now())
+                            }}
+                            title="Clique para definir ou alterar o salário contratual deste candidato"
+                            style={{
+                              background: docSal ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.15)',
+                              color: docSal ? '#10B981' : C.amber,
+                              border: `1px solid ${docSal ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                              padding: '2px 8px',
+                              borderRadius: 4,
+                              fontSize: 10,
+                              fontWeight: 800,
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.filter = 'brightness(1.15)'
+                              e.currentTarget.style.transform = 'translateY(-1px)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.filter = 'none'
+                              e.currentTarget.style.transform = 'none'
+                            }}
+                          >
                             💰 {docSal ? (docSal.observacao_rh ? `Salário: R$ ${docSal.observacao_rh}` : docSal.nome) : 'Salário pendente'}
-                          </span>
+                            <Edit3 size={10} style={{ opacity: 0.8 }} />
+                          </button>
                         ) : (
                           <span style={{
                             background: C.bgPanel,
@@ -3080,6 +3267,7 @@ export default function RhPage() {
                   colaboradores={colaboradores}
                   podeVerSalario={podeVerSalario}
                   defaultFolder={activeTab === 'aptos' ? 5 : 1}
+                  openSalarioTrigger={salarioTrigger}
                 />
               </Panel>
             ) : (
@@ -3107,6 +3295,8 @@ export default function RhPage() {
                   onOpen={openCadastroDocument}
                   onUpload={uploadToArchiveFolder}
                   onEditObra={() => abrirModalEditarObra(selected)}
+                  podeVerSalario={podeVerSalario}
+                  onEditSalario={() => abrirModalEditarSalarioFuncionario(selected)}
                 />
               </Panel>
             ) : (
@@ -3200,6 +3390,62 @@ export default function RhPage() {
               >
                 {editObraModal.salvando ? 'Salvando...' : 'Salvar Obra'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR SALÁRIO DO FUNCIONÁRIO ATIVO */}
+      {editSalarioFuncionarioModal.open && editSalarioFuncionarioModal.person && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 22, maxWidth: 420, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <DollarSign size={16} color={C.amber} />
+                  Editar Salário Registrado
+                </h3>
+                <p style={{ fontSize: 11, color: C.inkSoft, margin: '2px 0 0' }}>
+                  Colaborador: <strong style={{ color: C.ink }}>{editSalarioFuncionarioModal.person.nome}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setEditSalarioFuncionarioModal(prev => ({ ...prev, open: false }))}
+                style={{ border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <span style={labelStyle}>Valor do Salário (R$) *</span>
+                <input
+                  style={inputStyle}
+                  placeholder="Ex: 3.500,00"
+                  value={editSalarioFuncionarioModal.salario}
+                  onChange={e => setEditSalarioFuncionarioModal(prev => ({ ...prev, salario: e.target.value }))}
+                  autoFocus
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setEditSalarioFuncionarioModal(prev => ({ ...prev, open: false }))}
+                  style={{ ...btnBase, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void salvarSalarioFuncionario()}
+                  disabled={editSalarioFuncionarioModal.salvando}
+                  style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
+                >
+                  {editSalarioFuncionarioModal.salvando ? 'Salvando...' : 'Salvar Salário'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -293,6 +293,7 @@ function FinanceiroContent() {
           abas_financeiro: 'dashboard,historico,contas,empresas,fornecedores,obras,permissoes',
           pode_alterar_status: true,
           pode_excluir_lancamento: true,
+          pode_ver_salario: true,
         })
       } else if (activeUser.override_permissoes) {
         setPermissaoAtiva({
@@ -307,6 +308,7 @@ function FinanceiroContent() {
           abas_financeiro: activeUser.abas_financeiro || perm?.abas_financeiro || null,
           pode_alterar_status: activeUser.pode_alterar_status ?? perm?.pode_alterar_status ?? true,
           pode_excluir_lancamento: activeUser.pode_excluir_lancamento ?? perm?.pode_excluir_lancamento ?? false,
+          pode_ver_salario: activeUser.pode_ver_salario ?? perm?.pode_ver_salario ?? false,
         })
       } else {
         setPermissaoAtiva({
@@ -321,6 +323,7 @@ function FinanceiroContent() {
           abas_financeiro: perm?.abas_financeiro || activeUser.abas_financeiro || null,
           pode_alterar_status: perm?.pode_alterar_status ?? activeUser.pode_alterar_status ?? true,
           pode_excluir_lancamento: perm?.pode_excluir_lancamento ?? activeUser.pode_excluir_lancamento ?? false,
+          pode_ver_salario: perm?.pode_ver_salario ?? activeUser.pode_ver_salario ?? false,
         })
       }
     }
@@ -328,7 +331,7 @@ function FinanceiroContent() {
     // Carrega lista de colaboradores para a aba de permissões
     const { data: cols } = await supabase
       .from('colaboradores')
-      .select('id, nome, email, senha, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento, obras_ids')
+      .select('id, nome, email, senha, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento, obras_ids, pode_ver_salario')
       .order('nome')
     setColaboradores((cols as Colaborador[]) ?? [])
 
@@ -7627,6 +7630,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
           abas_financeiro: 'historico,contas,empresas,fornecedores,obras',
           pode_alterar_status: true,
           pode_excluir_lancamento: false,
+          pode_ver_salario: cargo.codigo === 'admin_geral',
         })
       }
     })
@@ -7702,7 +7706,8 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       apps: cargoForm.apps.trim() || 'financeiro',
       abas_financeiro: 'historico,contas',
       pode_alterar_status: true,
-      pode_excluir_lancamento: false
+      pode_excluir_lancamento: false,
+      pode_ver_salario: false
     })
     if (permError) {
       await supabase.from('cargos_sistema').delete().eq('codigo', codigo)
