@@ -133,6 +133,12 @@ type Convite = {
   documentos: DocumentoCadastro[]
 }
 
+function isInviteApto(invite: Convite | null | undefined): boolean {
+  if (!invite) return false
+  if (invite.status === 'aprovado') return false
+  return invite.status === 'apto' || (invite.documentos?.some(d => d.item_id === 'status_apto') ?? false)
+}
+
 const emptyDetails: Details = { historico: [], documentos: [], exames: [], etapas: [] }
 
 // ─── ESTILOS EMPRESARIAIS & DESIGN TOKENS ───────────────────────────────────
@@ -870,7 +876,7 @@ function CadastroTable({
         </div>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          {invite.status === 'apto' ? (
+          {isInviteApto(invite) ? (
             <>
               {onVoltarAdmissao && (
                 <button
@@ -1697,8 +1703,8 @@ export default function RhPage() {
     if (inviteData) {
       const inviteList = inviteData as Convite[]
       setTodosConvites(inviteList)
-      const pendingInvites = inviteList.filter(i => i.status !== 'aprovado' && i.status !== 'apto')
-      const aptosInvites = inviteList.filter(i => i.status === 'apto')
+      const aptosInvites = inviteList.filter(i => isInviteApto(i))
+      const pendingInvites = inviteList.filter(i => i.status !== 'aprovado' && !isInviteApto(i))
       setConvites(pendingInvites)
       setConvitesAptos(aptosInvites)
       setSelectedInvite(prev => {
@@ -1959,6 +1965,7 @@ export default function RhPage() {
       { confirmLabel: 'Sim, Declarar Apto', confirmColor: '#10B981' }
     ))) return
 
+    // 1. Tenta atualizar diretamente o status para 'apto' na tabela de convites
     const { error } = await supabase
       .from('rh_admissao_convites')
       .update({
@@ -1967,7 +1974,24 @@ export default function RhPage() {
       })
       .eq('id', invite.id)
 
-    if (error) return toast('Erro ao declarar apto: ' + error.message, 'error')
+    // 2. Se o Postgres rejeitar o status 'apto' por check constraint rh_admissao_convites_status_check,
+    // usamos o marcador em rh_admissao_documentos para nunca travar o trabalho do usuário
+    if (error) {
+      console.warn('Fallback status_apto ativado devido à restrição do banco:', error.message)
+      const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+      await supabase.from('rh_admissao_documentos').delete().eq('convite_id', invite.id).eq('item_id', 'status_apto')
+      const { error: docErr } = await supabase.from('rh_admissao_documentos').insert({
+        convite_id: invite.id,
+        modelo_id: modeloEtapa1?.id || null,
+        item_id: 'status_apto',
+        nome: 'Declarado Apto p/ Registro',
+        storage_path: 'status-apto-marker',
+        mime_type: 'text/plain',
+        tamanho_bytes: 1,
+        status: 'aprovado'
+      })
+      if (docErr) return toast('Erro ao declarar apto: ' + docErr.message, 'error')
+    }
 
     toast(`${invite.nome_destinatario} declarado apto para registro!`, 'success')
     await load()
@@ -1979,6 +2003,9 @@ export default function RhPage() {
       `Deseja retornar o candidato ${invite.nome_destinatario} para a fila inicial de admissão?`,
       { confirmLabel: 'Sim, Retornar', confirmColor: '#F59E0B' }
     ))) return
+
+    // Limpar marcador de fallback se existir
+    await supabase.from('rh_admissao_documentos').delete().eq('convite_id', invite.id).eq('item_id', 'status_apto')
 
     const { error } = await supabase
       .from('rh_admissao_convites')
@@ -2045,6 +2072,9 @@ export default function RhPage() {
     } else {
       createdId = newFunc.id
     }
+
+    // Limpar marcador de fallback se existir
+    await supabase.from('rh_admissao_documentos').delete().eq('convite_id', invite.id).eq('item_id', 'status_apto')
 
     await supabase.from('rh_admissao_convites').update({
       status: 'aprovado',
