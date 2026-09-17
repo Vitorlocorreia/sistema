@@ -1032,7 +1032,7 @@ function CadastroTable({
         </div>
       )}
 
-      {/* ABAS DAS ETAPAS 1 A 3 + ETAPA 5 (REGISTRO & SALÁRIO SP) */}
+      {/* ABAS DAS ETAPAS 1 A 3 + ETAPA 5 (REGISTRO & SALÁRIO) */}
       <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 6, overflow: 'hidden' }}>
         <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.bgWhite }}>
           {modelos.filter(m => m.ordem <= 3).map(m => (
@@ -1062,7 +1062,7 @@ function CadastroTable({
             </button>
           ))}
 
-          {/* Etapa 5: Registro & Salário SP */}
+          {/* Etapa 5: Registro & Salário */}
           <button
             onClick={() => setActiveFolder(5)}
             style={{
@@ -1083,13 +1083,8 @@ function CadastroTable({
           >
             <span>📁 Etapa 5</span>
             <span style={{ fontSize: 9, color: activeFolder === 5 ? C.amber : C.inkSoft }}>
-              (Registro & Salário SP)
+              (Registro & Salário)
             </span>
-            {invite.status === 'apto' && (
-              <span style={{ fontSize: 8, background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', padding: '1px 5px', borderRadius: 3, fontWeight: 900 }}>
-                SP
-              </span>
-            )}
           </button>
         </div>
 
@@ -1210,7 +1205,7 @@ function CadastroTable({
             </div>
           ))}
 
-          {/* Etapa 5: Conteúdo (Salário, Ficha Resumo e Status de Registro SP) */}
+          {/* Etapa 5: Conteúdo (Salário, Ficha Resumo e Status de Registro) */}
           {activeFolder === 5 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {/* Card 1: Salário Contratual (R$) */}
@@ -1251,7 +1246,7 @@ function CadastroTable({
                         )}
                       </div>
                       <p style={{ fontSize: 10, color: C.inkSoft, margin: '3px 0 0' }}>
-                        Utilizado pela equipe de São Paulo para formalização em carteira de trabalho e eSocial.
+                        Utilizado pela equipe para formalização em carteira de trabalho e eSocial.
                       </p>
                     </div>
                     <button
@@ -1283,10 +1278,10 @@ function CadastroTable({
                     </div>
                     <div>
                       <strong style={{ fontSize: 12, color: C.ink, display: 'block' }}>
-                        Salário Confidencial (Restrito ao RH de SP e Diretoria)
+                        Salário Confidencial (Restrito ao RH e Diretoria)
                       </strong>
                       <p style={{ fontSize: 10.5, color: C.inkSoft, margin: '2px 0 0' }}>
-                        Seu perfil não possui a permissão <strong style={{ color: C.ink }}>"Salários no RH"</strong>. Apenas os responsáveis em SP e administradores autorizados visualizam esta informação.
+                        Seu perfil não possui a permissão <strong style={{ color: C.ink }}>"Salários no RH"</strong>. Apenas os responsáveis e administradores autorizados visualizam esta informação.
                       </p>
                     </div>
                   </div>
@@ -1331,7 +1326,7 @@ function CadastroTable({
                           <span style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>📄 {docFichaResumo.nome}</span>
                         </div>
                         <p style={{ fontSize: 10, color: C.inkSoft, margin: '3px 0 0' }}>
-                          Ficha resumo pronta para conferência e homologação da contratação em São Paulo.
+                          Ficha resumo pronta para conferência e homologação da contratação.
                         </p>
                       </div>
                     ) : (
@@ -1340,7 +1335,7 @@ function CadastroTable({
                           Nenhuma Ficha Resumo anexada ainda.
                         </span>
                         <p style={{ fontSize: 10, color: C.inkSoft, margin: '3px 0 0' }}>
-                          Anexe o arquivo de resumo de contratação gerado pelo escritório para a validação final do RH de SP.
+                          Anexe o arquivo de resumo de contratação gerado pelo escritório para a validação final do RH.
                         </p>
                       </div>
                     )}
@@ -1379,7 +1374,7 @@ function CadastroTable({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, borderBottom: `1px solid ${C.border}`, paddingBottom: 6 }}>
                   <FileCheck size={14} color={C.amber} />
                   <span style={{ fontSize: 11, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    Checklist de Prontidão para Registro Formal (SP)
+                    Checklist de Prontidão para Registro Formal
                   </span>
                 </div>
 
@@ -1456,7 +1451,7 @@ function CadastroTable({
               <DollarSign size={15} color={C.amber} /> Salário Contratual para Registro
             </h4>
             <p style={{ fontSize: 11, color: C.inkSoft, margin: '0 0 14px' }}>
-              Informe o salário acordado para formalização pelo RH de São Paulo. Esta informação é sigilosa e restrita.
+              Informe o salário acordado para formalização pelo RH. Esta informação é sigilosa e restrita.
             </p>
             <div style={{ display: 'grid', gap: 10 }}>
               <div>
@@ -1960,7 +1955,7 @@ export default function RhPage() {
   async function declararApto(invite: Convite) {
     if (!(await confirm(
       'Declarar Apto para Registro',
-      `Deseja encaminhar ${invite.nome_destinatario} para a lista de "Aptos p/ Registro"? O RH de São Paulo terá acesso às informações e salário para concluir a formalização em carteira.`,
+      `Deseja encaminhar ${invite.nome_destinatario} para a lista de "Aptos p/ Registro"? O RH terá acesso às informações e salário para concluir a formalização em carteira.`,
       { confirmLabel: 'Sim, Declarar Apto', confirmColor: '#10B981' }
     ))) return
 
@@ -2014,7 +2009,7 @@ export default function RhPage() {
       ficha_resumo_path: docFichaResumo?.storage_path || null,
       ficha_resumo_nome: docFichaResumo?.nome || null,
       registrado_em: new Date().toISOString(),
-      registrado_por: colaboradorAtivo?.nome || 'RH SP'
+      registrado_por: colaboradorAtivo?.nome || 'RH'
     }
 
     let createdId: string | null = null
@@ -2322,7 +2317,7 @@ export default function RhPage() {
       <PageTitle
         modulo="Pessoas"
         titulo="Gestão de RH & Admissões"
-        subtitle="Fluxo de admissão em 3 camadas: Admissões, Aptos para Registro SP e Colaboradores Efetivados."
+        subtitle="Fluxo de admissão em 3 camadas: Admissões, Aptos para Registro e Colaboradores Efetivados."
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
@@ -2376,7 +2371,7 @@ export default function RhPage() {
             <ShieldCheck size={20} color="#10B981" />
           </div>
           <div>
-            <span style={labelStyle}>Aptos p/ Registro (SP)</span>
+            <span style={labelStyle}>Aptos p/ Registro</span>
             <div style={{ fontSize: 20, fontWeight: 900, color: stats.aptosRegistro > 0 ? '#10B981' : C.inkSoft, lineHeight: 1.2 }}>{stats.aptosRegistro}</div>
           </div>
         </div>
@@ -2470,7 +2465,7 @@ export default function RhPage() {
               activeTab === 'admissao'
                 ? `Admissões em Andamento (${convitesFiltrados.length})`
                 : activeTab === 'aptos'
-                ? `Aptos para Registro SP (${aptosFiltrados.length})`
+                ? `Aptos para Registro (${aptosFiltrados.length})`
                 : `Funcionários Cadastrados (${pessoasFiltradas.length})`
             }
             action={
@@ -2515,7 +2510,7 @@ export default function RhPage() {
                     textTransform: 'uppercase'
                   }}
                 >
-                  2. Aptos SP ({convitesAptos.length})
+                  2. Aptos p/ Registro ({convitesAptos.length})
                 </button>
                 <button
                   onClick={() => {
@@ -2826,7 +2821,7 @@ export default function RhPage() {
                             alignItems: 'center',
                             gap: 4
                           }}>
-                            <Lock size={10} /> Salário Restrito ao SP
+                            <Lock size={10} /> Salário Restrito
                           </span>
                         )}
 
@@ -3030,7 +3025,7 @@ export default function RhPage() {
         <div className="lg:col-span-7">
           {(activeTab === 'admissao' || activeTab === 'aptos') ? (
             selectedInvite ? (
-              <Panel title={activeTab === 'aptos' ? `Registro SP: ${selectedInvite.nome_destinatario}` : `Ficha de Admissão: ${selectedInvite.nome_destinatario}`}>
+              <Panel title={activeTab === 'aptos' ? `Apto p/ Registro: ${selectedInvite.nome_destinatario}` : `Ficha de Admissão: ${selectedInvite.nome_destinatario}`}>
                 <CadastroTable
                   invite={selectedInvite}
                   modelos={modelos}
