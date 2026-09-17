@@ -320,15 +320,25 @@ test.describe('RH - Controle de Permissão de Visualização e Edição de Salá
     const btnSalarioTopBar = page.getByTitle(/Definir ou alterar salário contratual para registro/i);
     await expect(btnSalarioTopBar).toBeVisible();
 
-    // 4. Vai para a aba de Cadastrados (Ativos)
-    const tabAtivos = page.getByRole('button', { name: /3\. Cadastrados/i });
+    // 4. Vai para a aba de Registrados (Ativos)
+    const tabAtivos = page.getByRole('button', { name: /3\. Registrados/i });
     await tabAtivos.click();
 
     const funcCard = page.locator('text=Funcionario Ativo 1').first();
     await expect(funcCard).toBeVisible();
+
+    // No card do colaborador na lista de Registrados, deve ter o botão de deslocamento rápido para Aptos
+    const btnDeslocarCard = page.locator('button[title="Deslocar de volta para Aptos p/ Registro"]').first();
+    await expect(btnDeslocarCard).toBeVisible();
+
     await funcCard.click();
 
-    // Na ficha do colaborador ativo, deve mostrar o salário registrado e o botão 'Editar Salário'
+    // Na ficha do colaborador registrado, deve ter o badge REGISTRADO (ATIVO) e o botão 'Voltar p/ Aptos'
+    await expect(page.getByText('✓ REGISTRADO (ATIVO)')).toBeVisible();
+    const btnVoltarAptos = page.getByRole('button', { name: /Voltar p\/ Aptos/i });
+    await expect(btnVoltarAptos).toBeVisible();
+
+    // Deve mostrar o salário registrado e o botão 'Editar Salário'
     await expect(page.getByText(/3\.200,00/i).first()).toBeVisible();
     const btnEditSalarioFunc = page.getByRole('button', { name: /Editar Salário/i });
     await expect(btnEditSalarioFunc).toBeVisible();

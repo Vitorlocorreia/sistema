@@ -27,6 +27,7 @@ import {
   DollarSign,
   Lock,
   RotateCcw,
+  Rocket,
   ShieldCheck,
   FileCheck,
   FileText,
@@ -230,7 +231,9 @@ function ArchivePanel({
   onUpload,
   onEditObra,
   podeVerSalario = false,
-  onEditSalario
+  onEditSalario,
+  onVoltarAptos,
+  onVoltarAdmissao
 }: {
   person: Funcionario
   details: Details
@@ -241,6 +244,8 @@ function ArchivePanel({
   onEditObra?: () => void
   podeVerSalario?: boolean
   onEditSalario?: () => void
+  onVoltarAptos?: () => void
+  onVoltarAdmissao?: () => void
 }) {
   const [filter, setFilter] = useState('')
   const documents = details.documentos.filter(doc =>
@@ -257,7 +262,7 @@ function ArchivePanel({
               {person.nome}
             </h3>
             <span style={{ fontSize: 9.5, fontWeight: 900, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-              ✓ COLABORADOR ATIVO
+              ✓ REGISTRADO (ATIVO)
             </span>
           </div>
           <div style={{ color: C.inkSoft, fontSize: 11, marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -414,36 +419,96 @@ function ArchivePanel({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={onDelete}
-          title="Excluir Colaborador"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '7px 14px',
-            borderRadius: 6,
-            background: 'rgba(239, 68, 68, 0.08)',
-            border: '1px solid rgba(239, 68, 68, 0.25)',
-            color: '#EF4444',
-            fontSize: 11,
-            fontWeight: 800,
-            cursor: 'pointer',
-            transition: 'all 0.15s ease'
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = '#EF4444'
-            e.currentTarget.style.color = '#FFFFFF'
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'
-            e.currentTarget.style.color = '#EF4444'
-          }}
-        >
-          <Trash2 size={13} />
-          Excluir Colaborador
-        </button>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {onVoltarAptos && (
+            <button
+              type="button"
+              onClick={onVoltarAptos}
+              title="Deslocar colaborador: retornar para a fila de Aptos p/ Registro"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 12px',
+                borderRadius: 6,
+                background: 'rgba(245, 158, 11, 0.12)',
+                border: '1px solid rgba(245, 158, 11, 0.35)',
+                color: C.amber,
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = C.amber
+                e.currentTarget.style.color = '#0A0A0A'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(245, 158, 11, 0.12)'
+                e.currentTarget.style.color = C.amber
+              }}
+            >
+              <RotateCcw size={12} />
+              Voltar p/ Aptos
+            </button>
+          )}
+
+          {onVoltarAdmissao && (
+            <button
+              type="button"
+              onClick={onVoltarAdmissao}
+              title="Deslocar colaborador: retornar para a fila de Em Admissão"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 12px',
+                borderRadius: 6,
+                background: C.bgCard,
+                border: `1px solid ${C.border}`,
+                color: C.inkSoft,
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <RotateCcw size={12} />
+              Voltar p/ Admissão
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={onDelete}
+            title="Excluir Colaborador"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 12px',
+              borderRadius: 6,
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.25)',
+              color: '#EF4444',
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: 'pointer',
+              transition: 'all 0.15s ease'
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = '#EF4444'
+              e.currentTarget.style.color = '#FFFFFF'
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'
+              e.currentTarget.style.color = '#EF4444'
+            }}
+          >
+            <Trash2 size={12} />
+            Excluir
+          </button>
+        </div>
       </div>
 
       {/* Header do Baú Documental */}
@@ -2142,7 +2207,7 @@ export default function RhPage() {
   async function approveInvite(invite: Convite) {
     if (!(await confirm(
       'Concluir Registro & Efetivar',
-      `Deseja concluir o registro formal de ${invite.nome_destinatario} e transferi-lo definitivamente para a lista de funcionários cadastrados?`,
+      `Deseja concluir o registro formal de ${invite.nome_destinatario} e transferi-lo definitivamente para a lista de funcionários registrados?`,
       { confirmLabel: 'Concluir & Efetivar', confirmColor: '#10B981' }
     ))) return
 
@@ -2463,6 +2528,216 @@ export default function RhPage() {
     }
   }
 
+  async function handleDeslocarParaAptos(person: Funcionario) {
+    if (!(await confirm(
+      'Deslocar: Retornar para Aptos',
+      `Deseja retornar o colaborador "${person.nome}" para a lista de Aptos p/ Registro? O registro atual em funcionários será desfeito e ele voltará para a fila de Aptos para conferência de dados e salário.`,
+      { confirmLabel: 'Sim, Voltar para Aptos', confirmColor: C.amber }
+    ))) return
+
+    try {
+      let targetConviteId: string | null = null
+
+      // 1. Tenta localizar convite existente vinculado a este funcionário
+      const { data: convByFunc } = await supabase
+        .from('rh_admissao_convites')
+        .select('*')
+        .eq('funcionario_id', person.id)
+        .maybeSingle()
+
+      let conviteEncontrado = convByFunc
+
+      if (!conviteEncontrado && person.cpf) {
+        const cpfClean = person.cpf.replace(/\D/g, '')
+        const { data: convByCpf } = await supabase
+          .from('rh_admissao_convites')
+          .select('*')
+          .or(`cpf.eq.${person.cpf},cpf.eq.${cpfClean}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+        if (convByCpf && convByCpf.length > 0) conviteEncontrado = convByCpf[0]
+      }
+
+      if (!conviteEncontrado && person.nome) {
+        const { data: convByNome } = await supabase
+          .from('rh_admissao_convites')
+          .select('*')
+          .ilike('nome_destinatario', person.nome.trim())
+          .order('created_at', { ascending: false })
+          .limit(1)
+        if (convByNome && convByNome.length > 0) conviteEncontrado = convByNome[0]
+      }
+
+      if (conviteEncontrado) {
+        // Atualiza convite para apto
+        await supabase
+          .from('rh_admissao_convites')
+          .update({
+            status: 'apto',
+            funcionario_id: null,
+            aprovado_em: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', conviteEncontrado.id)
+        targetConviteId = conviteEncontrado.id
+
+        // Garante que o salário esteja registrado no convite se existir em dados_registro
+        if (person.dados_registro?.salario) {
+          const cleanSal = String(person.dados_registro.salario).replace(/^R\$\s*/i, '')
+          const { data: existingSal } = await supabase
+            .from('rh_admissao_documentos')
+            .select('id')
+            .eq('convite_id', conviteEncontrado.id)
+            .eq('item_id', 'salario_registro')
+            .maybeSingle()
+          if (!existingSal) {
+            await supabase.from('rh_admissao_documentos').insert({
+              convite_id: conviteEncontrado.id,
+              item_id: 'salario_registro',
+              nome: `Salário Contratual: R$ ${cleanSal}`,
+              storage_path: 'salario-registro-confidencial',
+              mime_type: 'text/plain',
+              tamanho_bytes: 10,
+              status: 'aprovado',
+              observacao_rh: cleanSal
+            })
+          }
+        }
+      } else {
+        // Cria convite direto com status apto se não existia previamente
+        const bytes = new Uint8Array(16)
+        crypto.getRandomValues(bytes)
+        const token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+        const tokenHash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+
+        const { data: newConv, error: newConvErr } = await supabase
+          .from('rh_admissao_convites')
+          .insert({
+            nome_destinatario: person.nome,
+            cpf: person.cpf,
+            matricula: person.matricula,
+            cargo: person.cargo,
+            obra: person.obra,
+            email_destinatario: person.email || `${person.nome.toLowerCase().replace(/[^a-z0-9]/g, '.')}@sistema.com`,
+            status: 'apto',
+            token_code: token,
+            token_hash: tokenHash,
+            expires_at: new Date(Date.now() + 365 * 86400000).toISOString(),
+            data_inicio_efetivo: person.data_admissao,
+            inicio_efetivo: !!person.data_admissao
+          })
+          .select('id')
+          .single()
+
+        if (newConv && !newConvErr) {
+          targetConviteId = newConv.id
+          if (person.dados_registro?.salario) {
+            const cleanSal = String(person.dados_registro.salario).replace(/^R\$\s*/i, '')
+            await supabase.from('rh_admissao_documentos').insert({
+              convite_id: newConv.id,
+              item_id: 'salario_registro',
+              nome: `Salário Contratual: R$ ${cleanSal}`,
+              storage_path: 'salario-registro-confidencial',
+              mime_type: 'text/plain',
+              tamanho_bytes: 10,
+              status: 'aprovado',
+              observacao_rh: cleanSal
+            })
+          }
+        }
+      }
+
+      // 2. Remove da tabela de funcionários
+      await supabase.from('funcionario_documentos').delete().eq('funcionario_id', person.id)
+      const { error: delErr } = await supabase.from('funcionarios').delete().eq('id', person.id)
+      if (delErr) throw delErr
+
+      // 3. Atualiza dados em tela e redireciona para Aptos
+      await load()
+      setActiveTab('aptos')
+      setSelected(null)
+      toast(`Colaborador "${person.nome}" deslocado para a fila de Aptos p/ Registro!`, 'success')
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Falha ao deslocar colaborador para Aptos', 'error')
+    }
+  }
+
+  async function handleDeslocarParaAdmissao(person: Funcionario) {
+    if (!(await confirm(
+      'Deslocar: Retornar para Admissão',
+      `Deseja retornar o colaborador "${person.nome}" para a lista de Em Admissão? Ele voltará para a 1ª fase do fluxo para revisão de documentos.`,
+      { confirmLabel: 'Sim, Voltar para Admissão', confirmColor: C.amber }
+    ))) return
+
+    try {
+      const { data: convByFunc } = await supabase
+        .from('rh_admissao_convites')
+        .select('*')
+        .eq('funcionario_id', person.id)
+        .maybeSingle()
+
+      let conviteEncontrado = convByFunc
+
+      if (!conviteEncontrado && person.cpf) {
+        const cpfClean = person.cpf.replace(/\D/g, '')
+        const { data: convByCpf } = await supabase
+          .from('rh_admissao_convites')
+          .select('*')
+          .or(`cpf.eq.${person.cpf},cpf.eq.${cpfClean}`)
+          .order('created_at', { ascending: false })
+          .limit(1)
+        if (convByCpf && convByCpf.length > 0) conviteEncontrado = convByCpf[0]
+      }
+
+      if (conviteEncontrado) {
+        await supabase
+          .from('rh_admissao_convites')
+          .update({
+            status: 'aguardando_aprovacao',
+            funcionario_id: null,
+            aprovado_em: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', conviteEncontrado.id)
+      } else {
+        const bytes = new Uint8Array(16)
+        crypto.getRandomValues(bytes)
+        const token = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
+        const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(token))
+        const tokenHash = Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')
+
+        await supabase
+          .from('rh_admissao_convites')
+          .insert({
+            nome_destinatario: person.nome,
+            cpf: person.cpf,
+            matricula: person.matricula,
+            cargo: person.cargo,
+            obra: person.obra,
+            email_destinatario: person.email || `${person.nome.toLowerCase().replace(/[^a-z0-9]/g, '.')}@sistema.com`,
+            status: 'aguardando_aprovacao',
+            token_code: token,
+            token_hash: tokenHash,
+            expires_at: new Date(Date.now() + 365 * 86400000).toISOString(),
+            data_inicio_efetivo: person.data_admissao,
+            inicio_efetivo: !!person.data_admissao
+          })
+      }
+
+      await supabase.from('funcionario_documentos').delete().eq('funcionario_id', person.id)
+      const { error: delErr } = await supabase.from('funcionarios').delete().eq('id', person.id)
+      if (delErr) throw delErr
+
+      await load()
+      setActiveTab('admissao')
+      setSelected(null)
+      toast(`Colaborador "${person.nome}" retornado para Em Admissão!`, 'success')
+    } catch (err: unknown) {
+      toast(err instanceof Error ? err.message : 'Falha ao deslocar colaborador para Admissão', 'error')
+    }
+  }
+
   async function uploadToArchiveFolder(order: number, files: FileList) {
     if (!selected || !files.length) return
     let uploaded = 0
@@ -2578,7 +2853,7 @@ export default function RhPage() {
             <Building size={20} color={C.amber} />
           </div>
           <div>
-            <span style={labelStyle}>Cadastrados em Campo</span>
+            <span style={labelStyle}>Registrados em Campo</span>
             <div style={{ fontSize: 20, fontWeight: 900, color: C.ink, lineHeight: 1.2 }}>{pessoas.length}</div>
           </div>
         </div>
@@ -2602,51 +2877,103 @@ export default function RhPage() {
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <div style={{ gridColumn: 'span 2' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+              <div>
                 <span style={labelStyle}>Nome Completo do Candidato *</span>
-                <input style={inputStyle} placeholder="Ex: João da Silva" value={inviteForm.nome} onChange={e => setInviteForm({ ...inviteForm, nome: e.target.value })} />
+                <input style={inputStyle} value={inviteForm.nome} onChange={e => setInviteForm({ ...inviteForm, nome: e.target.value })} placeholder="Ex: João da Silva" />
+              </div>
+              <div>
+                <span style={labelStyle}>Cargo Pretendido *</span>
+                <input style={inputStyle} value={inviteForm.cargo} onChange={e => setInviteForm({ ...inviteForm, cargo: e.target.value })} placeholder="Ex: Pedreiro, Encarregado" />
+              </div>
+              <div>
+                <span style={labelStyle}>E-mail de Notificação</span>
+                <input style={inputStyle} type="email" value={inviteForm.email} onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })} placeholder="candidato@email.com" />
+              </div>
+              <div>
+                <span style={labelStyle}>WhatsApp / Telefone</span>
+                <input style={inputStyle} value={inviteForm.telefone} onChange={e => setInviteForm({ ...inviteForm, telefone: e.target.value })} placeholder="(11) 99999-9999" />
               </div>
               <div>
                 <span style={labelStyle}>CPF</span>
-                <input style={inputStyle} placeholder="000.000.000-00" value={inviteForm.cpf} onChange={e => setInviteForm({ ...inviteForm, cpf: e.target.value })} />
+                <input style={inputStyle} value={inviteForm.cpf} onChange={e => setInviteForm({ ...inviteForm, cpf: e.target.value })} placeholder="000.000.000-00" />
               </div>
               <div>
-                <span style={labelStyle}>Matrícula</span>
-                <input style={inputStyle} placeholder="Ex: JWA-102" value={inviteForm.matricula} onChange={e => setInviteForm({ ...inviteForm, matricula: e.target.value })} />
+                <span style={labelStyle}>Matrícula (opcional)</span>
+                <input style={inputStyle} value={inviteForm.matricula} onChange={e => setInviteForm({ ...inviteForm, matricula: e.target.value })} placeholder="Ex: MAT-001" />
               </div>
               <div>
-                <span style={labelStyle}>E-mail</span>
-                <input style={inputStyle} placeholder="candidato@email.com" value={inviteForm.email} onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })} />
+                <span style={labelStyle}>Obra / Destino</span>
+                <select
+                  style={inputStyle}
+                  value={inviteForm.obra}
+                  onChange={e => setInviteForm({ ...inviteForm, obra: e.target.value })}
+                >
+                  <option value="">🏢 Selecione a Obra...</option>
+                  {obrasCadastradas.map(o => (
+                    <option key={o.id} value={o.nome}>
+                      {o.nome}
+                    </option>
+                  ))}
+                  <option value="__custom__">➕ Outra Obra (digitar manual)</option>
+                </select>
+                {inviteForm.obra === '__custom__' && (
+                  <input
+                    style={{ ...inputStyle, marginTop: 6 }}
+                    placeholder="Digite o nome da obra..."
+                    onChange={e => setInviteForm({ ...inviteForm, obra: e.target.value })}
+                    autoFocus
+                  />
+                )}
               </div>
               <div>
-                <span style={labelStyle}>Telefone / WhatsApp</span>
-                <input style={inputStyle} placeholder="(11) 99999-9999" value={inviteForm.telefone} onChange={e => setInviteForm({ ...inviteForm, telefone: e.target.value })} />
-              </div>
-              <div>
-                <span style={labelStyle}>Cargo / Profissão</span>
-                <input style={inputStyle} placeholder="Ex: Encarregado de Obras" value={inviteForm.cargo} onChange={e => setInviteForm({ ...inviteForm, cargo: e.target.value })} />
-              </div>
-              <div>
-                <span style={labelStyle}>Obra / Alocação</span>
-                <input style={inputStyle} placeholder="Ex: Obra Shopping Cidade" value={inviteForm.obra} onChange={e => setInviteForm({ ...inviteForm, obra: e.target.value })} />
-              </div>
-              <div>
-                <span style={labelStyle}>Data de Início Efetivo</span>
-                <input type="date" style={inputStyle} value={inviteForm.data_inicio_efetivo} onChange={e => setInviteForm({ ...inviteForm, data_inicio_efetivo: e.target.value })} />
-              </div>
-              <div>
-                <span style={labelStyle}>Validade do Link (Horas)</span>
-                <input type="number" min={1} max={168} style={inputStyle} value={inviteForm.validade} onChange={e => setInviteForm({ ...inviteForm, validade: e.target.value })} />
+                <span style={labelStyle}>Validade do Link</span>
+                <select style={inputStyle} value={inviteForm.validade} onChange={e => setInviteForm({ ...inviteForm, validade: e.target.value })}>
+                  <option value="24">24 Horas (1 dia)</option>
+                  <option value="48">48 Horas (2 dias)</option>
+                  <option value="72">72 Horas (3 dias)</option>
+                  <option value="168">7 Dias (1 semana)</option>
+                </select>
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 20 }}>
+            {/* Início Efetivo Antecipado */}
+            <div style={{ marginTop: 14, padding: 12, borderRadius: 6, background: 'rgba(245, 158, 11, 0.08)', border: `1px dashed ${C.amber}66` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Rocket size={14} color={C.amber} />
+                <span style={{ fontSize: 11, fontWeight: 900, color: C.ink, textTransform: 'uppercase' }}>
+                  Colaborador com Início Efetivo?
+                </span>
+              </div>
+              <p style={{ fontSize: 10.5, color: C.inkSoft, margin: '0 0 10px' }}>
+                Marque se o profissional já começará a trabalhar imediatamente no canteiro antes da formalização final.
+              </p>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={inviteForm.inicio_efetivo}
+                    onChange={e => setInviteForm({ ...inviteForm, inicio_efetivo: e.target.checked })}
+                  />
+                  Sim, marcar como início efetivo
+                </label>
+                {inviteForm.inicio_efetivo && (
+                  <input
+                    type="date"
+                    style={{ ...inputStyle, width: 'auto', padding: '4px 8px' }}
+                    value={inviteForm.data_inicio_efetivo}
+                    onChange={e => setInviteForm({ ...inviteForm, data_inicio_efetivo: e.target.value })}
+                  />
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
               <button onClick={() => setInviteOpen(false)} style={{ ...btnBase, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}>
                 Cancelar
               </button>
               <button onClick={() => void createInvite()} disabled={inviteSaving} style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}>
-                {inviteSaving ? 'Gerando...' : 'Gerar e Copiar Link'}
+                {inviteSaving ? 'Gerando Link...' : 'Gerar Convite de Admissão'}
               </button>
             </div>
           </div>
@@ -2663,7 +2990,7 @@ export default function RhPage() {
                 ? `Admissões em Andamento (${convitesFiltrados.length})`
                 : activeTab === 'aptos'
                 ? `Aptos para Registro (${aptosFiltrados.length})`
-                : `Funcionários Cadastrados (${pessoasFiltradas.length})`
+                : `Funcionários Registrados (${pessoasFiltradas.length})`
             }
             action={
               <div style={{ display: 'flex', gap: 4 }}>
@@ -2728,7 +3055,7 @@ export default function RhPage() {
                     textTransform: 'uppercase'
                   }}
                 >
-                  3. Cadastrados ({pessoas.length})
+                  3. Registrados ({pessoas.length})
                 </button>
               </div>
             }
@@ -3134,6 +3461,36 @@ export default function RhPage() {
                           </span>
                           <button
                             type="button"
+                            title="Deslocar de volta para Aptos p/ Registro"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              void handleDeslocarParaAptos(person)
+                            }}
+                            style={{
+                              border: 'none',
+                              background: 'transparent',
+                              color: C.inkSoft,
+                              cursor: 'pointer',
+                              padding: 3,
+                              borderRadius: 4,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              transition: 'color 0.15s, background 0.15s'
+                            }}
+                            onMouseEnter={e => {
+                              e.currentTarget.style.color = C.amber
+                              e.currentTarget.style.background = 'rgba(245, 158, 11, 0.12)'
+                            }}
+                            onMouseLeave={e => {
+                              e.currentTarget.style.color = C.inkSoft
+                              e.currentTarget.style.background = 'transparent'
+                            }}
+                          >
+                            <RotateCcw size={13} />
+                          </button>
+                          <button
+                            type="button"
                             title="Excluir Colaborador"
                             onClick={(e) => {
                               e.stopPropagation()
@@ -3292,6 +3649,8 @@ export default function RhPage() {
                     return dadosBancariosMap[selected.id] || (cpfClean ? dadosBancariosMap[cpfClean] : null) || dadosBancariosMap[selected.nome.toLowerCase().trim()] || null
                   })()}
                   onDelete={() => void handleDeleteFuncionario(selected)}
+                  onVoltarAptos={() => void handleDeslocarParaAptos(selected)}
+                  onVoltarAdmissao={() => void handleDeslocarParaAdmissao(selected)}
                   onOpen={openCadastroDocument}
                   onUpload={uploadToArchiveFolder}
                   onEditObra={() => abrirModalEditarObra(selected)}
@@ -3303,7 +3662,7 @@ export default function RhPage() {
               <div style={{ background: C.bgPanel, border: `1px dashed ${C.border}`, borderRadius: 6, padding: '80px 20px', textAlign: 'center', color: C.inkSoft }}>
                 <Users size={32} color={C.inkSoft} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
                 <h4 style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 900, color: C.ink }}>Nenhum funcionário selecionado</h4>
-                <p style={{ margin: 0, fontSize: 11 }}>Selecione um funcionário ativo para visualizar o baú documental permanente.</p>
+                <p style={{ margin: 0, fontSize: 11 }}>Selecione um funcionário registrado para visualizar o baú documental permanente.</p>
               </div>
             )
           )}
