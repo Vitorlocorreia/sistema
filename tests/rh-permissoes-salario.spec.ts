@@ -438,26 +438,4 @@ test.describe('RH - Controle de Permissão de Visualização e Edição de Salá
     await expect(page.getByRole('button', { name: /3\. Registrados/i })).toBeVisible();
   });
 
-  test('Cenário 7: Botão de Aviso de Registro à Obra (WhatsApp)', async ({ page }) => {
-    await loginAs(page, usuarioComPermissaoSalario);
-    await page.goto('/rh');
-
-    // 1. Acessa a Aba 3 (Registrados)
-    const tabRegistrados = page.getByRole('button', { name: /3\. Registrados/i });
-    await expect(tabRegistrados).toBeVisible({ timeout: 15000 });
-    await tabRegistrados.click();
-
-    // 2. No card do colaborador registrado, o botão 'Avisar Obra' deve estar disponível
-    const btnAvisarCard = page.getByRole('button', { name: /Avisar Obra/i }).first();
-    await expect(btnAvisarCard).toBeVisible();
-
-    // 3. Clica no card para abrir a Ficha do Colaborador
-    const funcCard = page.locator('text=Funcionario Ativo 1').first();
-    await funcCard.click();
-
-    // 4. No painel executivo à direita, o botão 'Avisar Obra (WhatsApp)' deve estar visível
-    const btnAvisarPanel = page.getByRole('button', { name: /Avisar Obra \(WhatsApp\)/i });
-    await expect(btnAvisarPanel).toBeVisible();
-  });
-
 });

@@ -31,8 +31,7 @@ import {
   ShieldCheck,
   FileCheck,
   FileText,
-  Check,
-  MessageCircle
+  Check
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { PageTitle } from '@/components/PageTitle'
@@ -222,86 +221,6 @@ function parseDadosBancarios(nome?: string | null) {
   return { pix: nome, banco: '', agenciaConta: '' }
 }
 
-// ─── HELPER: AVISO DE LIBERAÇÃO DE REGISTRO PARA A OBRA (WHATSAPP) ───────────
-function formatarAvisoObraWhatsApp(colaborador: {
-  nome: string
-  cargo?: string | null
-  obra?: string | null
-  data_admissao?: string | null
-}) {
-  const dataFmt = colaborador.data_admissao
-    ? new Date(colaborador.data_admissao + (colaborador.data_admissao.includes('T') ? '' : 'T00:00:00')).toLocaleDateString('pt-BR')
-    : new Date().toLocaleDateString('pt-BR')
-
-  return [
-    `*COMUNICADO DE REGISTRO & LIBERAÇÃO DE TRABALHO* 🏗️✅`,
-    ``,
-    `Olá, equipe da obra *${colaborador.obra || 'Geral / Sede'}*!`,
-    ``,
-    `Informamos que o profissional abaixo foi devidamente *REGISTRADO* pelo escritório (RH SP) e está *LIBERADO PARA O INÍCIO DAS ATIVIDADES*:`,
-    ``,
-    `👤 *Colaborador:* ${colaborador.nome}`,
-    `💼 *Função / Cargo:* ${colaborador.cargo || 'Não especificado'}`,
-    `🏗️ *Obra / Lotação:* ${colaborador.obra || 'Geral / Sede'}`,
-    `📅 *Data de Admissão:* ${dataFmt}`,
-    ``,
-    `Todos os documentos e dados contratuais foram validados no sistema.`
-  ].join('\n')
-}
-
-function abrirAvisoObraWhatsApp(colaborador: {
-  nome: string
-  cargo?: string | null
-  obra?: string | null
-  data_admissao?: string | null
-}) {
-  const msg = formatarAvisoObraWhatsApp(colaborador)
-  try {
-    navigator.clipboard?.writeText(msg)
-  } catch {}
-
-  const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`
-  window.open(url, '_blank')
-  toast('Mensagem copiada para a área de transferência e WhatsApp aberto!', 'success')
-}
-
-function abrirAvisoObraLoteWhatsApp(colaboradores: Array<{
-  nome_destinatario?: string
-  nome?: string
-  cargo?: string | null
-  obra?: string | null
-  data_inicio_efetivo?: string | null
-  data_admissao?: string | null
-}>) {
-  const lista = colaboradores.map((c, i) => {
-    const nome = c.nome_destinatario || c.nome || 'Colaborador'
-    const cargo = c.cargo || 'Função não inf.'
-    const obra = c.obra || 'Geral / Sede'
-    return `${i + 1}. *${nome}* — ${cargo} (Obra: *${obra}*)`
-  }).join('\n')
-
-  const msg = [
-    `*COMUNICADO DE REGISTROS CONCLUÍDOS & LIBERAÇÃO* 🏗️✅`,
-    ``,
-    `Olá, equipe de Obras!`,
-    ``,
-    `Informamos que os seguintes profissionais foram devidamente *REGISTRADOS* pelo escritório (RH SP) e estão *LIBERADOS PARA INICIAR OS TRABALHOS*:`,
-    ``,
-    lista,
-    ``,
-    `📅 Data de Liberação: ${new Date().toLocaleDateString('pt-BR')}`,
-    `Processo de admissão formal e validação cadastral concluídos no sistema.`
-  ].join('\n')
-
-  try {
-    navigator.clipboard?.writeText(msg)
-  } catch {}
-
-  const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`
-  window.open(url, '_blank')
-  toast('Lista de liberação copiada e WhatsApp aberto para envio!', 'success')
-}
-
 // ─── COMPONENTE: PAINEL DE ARQUIVO DOCUMENTAL DO FUNCIONÁRIO ────────────────
 function ArchivePanel({
   person,
@@ -314,8 +233,7 @@ function ArchivePanel({
   podeVerSalario = false,
   onEditSalario,
   onVoltarAptos,
-  onVoltarAdmissao,
-  onAvisarObra
+  onVoltarAdmissao
 }: {
   person: Funcionario
   details: Details
@@ -328,7 +246,6 @@ function ArchivePanel({
   onEditSalario?: () => void
   onVoltarAptos?: () => void
   onVoltarAdmissao?: () => void
-  onAvisarObra?: () => void
 }) {
   const [filter, setFilter] = useState('')
   const documents = details.documentos.filter(doc =>
@@ -503,39 +420,6 @@ function ArchivePanel({
         </div>
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-          {onAvisarObra && (
-            <button
-              type="button"
-              onClick={onAvisarObra}
-              title="Avisar a equipe da obra via WhatsApp que o colaborador está registrado e liberado"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '7px 12px',
-                borderRadius: 6,
-                background: 'rgba(16, 185, 129, 0.12)',
-                border: '1px solid rgba(16, 185, 129, 0.35)',
-                color: '#10B981',
-                fontSize: 11,
-                fontWeight: 800,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-              onMouseEnter={e => {
-                e.currentTarget.style.background = '#10B981'
-                e.currentTarget.style.color = '#0A0A0A'
-              }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = 'rgba(16, 185, 129, 0.12)'
-                e.currentTarget.style.color = '#10B981'
-              }}
-            >
-              <MessageCircle size={13} />
-              Avisar Obra (WhatsApp)
-            </button>
-          )}
-
           {onVoltarAptos && (
             <button
               type="button"
@@ -2378,17 +2262,6 @@ export default function RhPage() {
       setSelectedIds(new Set())
       await load()
       setActiveTab('ativos')
-
-      if (count > 0) {
-        const avisarLote = await confirm(
-          'Registros Concluídos!',
-          `Deseja gerar o comunicado via WhatsApp para a equipe da(s) Obra(s) avisando a liberação dos ${count} profissionais registrados?`,
-          { confirmLabel: 'Avisar Obras (WhatsApp)', confirmColor: '#10B981' }
-        )
-        if (avisarLote) {
-          abrirAvisoObraLoteWhatsApp(aptosToApprove)
-        }
-      }
     } catch (err: any) {
       toast('Erro ao aprovar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
     } finally {
@@ -2835,20 +2708,6 @@ export default function RhPage() {
     setSelectedInvite(null)
     await load()
     toast(`Funcionário ${invite.nome_destinatario} registrado e efetivado com sucesso!`, 'success')
-
-    const avisar = await confirm(
-      'Registro Concluído!',
-      `Deseja avisar a equipe da obra "${invite.obra || 'Geral'}" via WhatsApp que ${invite.nome_destinatario} foi devidamente registrado(a) e está liberado(a) para iniciar o trabalho?`,
-      { confirmLabel: 'Avisar Obra (WhatsApp)', confirmColor: '#10B981' }
-    )
-    if (avisar) {
-      abrirAvisoObraWhatsApp({
-        nome: invite.nome_destinatario,
-        cargo: invite.cargo,
-        obra: invite.obra,
-        data_admissao: invite.data_inicio_efetivo || new Date().toISOString().split('T')[0]
-      })
-    }
   }
 
   async function handleDeleteFuncionario(person: Funcionario) {
@@ -4323,39 +4182,6 @@ export default function RhPage() {
                           </span>
                           <button
                             type="button"
-                            title="Avisar a equipe da obra via WhatsApp que o colaborador está registrado e liberado"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              abrirAvisoObraWhatsApp(person)
-                            }}
-                            style={{
-                              border: '1px solid rgba(16, 185, 129, 0.3)',
-                              background: 'rgba(16, 185, 129, 0.1)',
-                              color: '#10B981',
-                              cursor: 'pointer',
-                              padding: '2px 7px',
-                              borderRadius: 4,
-                              fontSize: 9.5,
-                              fontWeight: 800,
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 3.5,
-                              transition: 'all 0.15s ease'
-                            }}
-                            onMouseEnter={e => {
-                              e.currentTarget.style.background = '#10B981'
-                              e.currentTarget.style.color = '#0A0A0A'
-                            }}
-                            onMouseLeave={e => {
-                              e.currentTarget.style.background = 'rgba(16, 185, 129, 0.1)'
-                              e.currentTarget.style.color = '#10B981'
-                            }}
-                          >
-                            <MessageCircle size={10.5} />
-                            Avisar Obra
-                          </button>
-                          <button
-                            type="button"
                             title="Deslocar de volta para Aptos p/ Registro"
                             onClick={(e) => {
                               e.stopPropagation()
@@ -4551,7 +4377,6 @@ export default function RhPage() {
                   onEditObra={() => abrirModalEditarObra(selected)}
                   podeVerSalario={podeVerSalario}
                   onEditSalario={() => abrirModalEditarSalarioFuncionario(selected)}
-                  onAvisarObra={() => abrirAvisoObraWhatsApp(selected)}
                 />
               </Panel>
             ) : (
