@@ -592,12 +592,13 @@ function CadastroTable({
     if (defaultFolder) setActiveFolder(defaultFolder)
   }, [defaultFolder, invite.id])
 
+  const docsList = invite.documentos || []
   const modeloEtapa4 = modelos.find(m => m.ordem === 4)
-  const guiaRH = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && (d.item_id === GUIA_ITEM_ID || d.item_id === '__guia_rh__')) : null
-  const laudoCandidato = modeloEtapa4 ? invite.documentos.find(d => d.modelo_id === modeloEtapa4.id && (d.item_id === LAUDO_ITEM_ID || d.item_id === '__laudo_candidato__')) : null
-  const docPix = invite.documentos.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
-  const docSalario = invite.documentos.find(d => d.item_id === 'salario_registro')
-  const docFichaResumo = invite.documentos.find(d => d.item_id === 'ficha_resumo')
+  const guiaRH = modeloEtapa4 ? docsList.find(d => d.modelo_id === modeloEtapa4.id && (d.item_id === GUIA_ITEM_ID || d.item_id === '__guia_rh__')) : null
+  const laudoCandidato = modeloEtapa4 ? docsList.find(d => d.modelo_id === modeloEtapa4.id && (d.item_id === LAUDO_ITEM_ID || d.item_id === '__laudo_candidato__')) : null
+  const docPix = docsList.find(d => d.item_id === 'pix' || d.item_id?.includes('pix') || d.nome?.includes('PIX') || d.nome?.includes('Dados Bancários'))
+  const docSalario = docsList.find(d => d.item_id === 'salario_registro')
+  const docFichaResumo = docsList.find(d => d.item_id === 'ficha_resumo')
 
   // Modais de Edição
   const [editPixOpen, setEditPixOpen] = useState(false)
@@ -1099,7 +1100,7 @@ function CadastroTable({
             <div key={modelo.id} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {/* Etapas 2 e 3 (Documento Único) */}
               {(modelo.ordem === 2 || modelo.ordem === 3) && (() => {
-                const docs = invite.documentos.filter(d => d.modelo_id === modelo.id)
+                const docs = docsList.filter(d => d.modelo_id === modelo.id)
                 const doc = docs[docs.length - 1]
                 return (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4 }}>
@@ -1174,7 +1175,7 @@ function CadastroTable({
 
                   {/* Lista de Documentos da Etapa 1 */}
                   {modelo.checklist.filter(item => !item.id?.includes('pix')).map(item => {
-                    const docs = invite.documentos.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
+                    const docs = docsList.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
                     const doc = docs[docs.length - 1]
                     return (
                       <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4 }}>
@@ -1388,15 +1389,15 @@ function CadastroTable({
                   {[
                     {
                       label: 'Etapa 1: Documentos & PIX',
-                      ok: invite.documentos.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 1) || !!docPix
+                      ok: docsList.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 1) || !!docPix
                     },
                     {
                       label: 'Etapa 2: Ficha Cadastral',
-                      ok: invite.documentos.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 2 && d.status === 'aprovado')
+                      ok: docsList.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 2 && d.status === 'aprovado')
                     },
                     {
                       label: 'Etapa 3: Declarações',
-                      ok: invite.documentos.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 3 && d.status === 'aprovado')
+                      ok: docsList.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 3 && d.status === 'aprovado')
                     },
                     {
                       label: 'Etapa 4: Exame ASO Aprovado',
@@ -1701,7 +1702,10 @@ export default function RhPage() {
     }
     if (obrasData) setObrasCadastradas(obrasData as Array<{ id: string; nome: string }>)
     if (inviteData) {
-      const inviteList = inviteData as Convite[]
+      const inviteList = ((inviteData || []) as Convite[]).map(i => ({
+        ...i,
+        documentos: Array.isArray(i.documentos) ? i.documentos : []
+      }))
       setTodosConvites(inviteList)
       const aptosInvites = inviteList.filter(i => isInviteApto(i))
       const pendingInvites = inviteList.filter(i => i.status !== 'aprovado' && !isInviteApto(i))
@@ -1784,7 +1788,7 @@ export default function RhPage() {
     const totalPessoas = pessoas.length + convites.length + convitesAptos.length
     const emAdmissao = convites.length
     const aptosRegistro = convitesAptos.length
-    const aguardandoAprovacao = convites.filter(c => c.status === 'aguardando_aprovacao' || c.documentos.some(d => d.status === 'enviado')).length
+    const aguardandoAprovacao = convites.filter(c => c.status === 'aguardando_aprovacao' || (c.documentos?.some(d => d.status === 'enviado') ?? false)).length
     const efetivados = convites.filter(c => c.inicio_efetivo).length + convitesAptos.filter(c => c.inicio_efetivo).length + pessoas.length
     return { totalPessoas, emAdmissao, aptosRegistro, aguardandoAprovacao, efetivados }
   }, [pessoas, convites, convitesAptos])
