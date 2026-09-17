@@ -1228,7 +1228,7 @@ function CadastroTable({
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <DollarSign size={15} color={C.amber} />
                     <span style={{ fontSize: 11, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                      Salário Contratual para Registro (CLT)
+                      Salário Contratual para Registro
                     </span>
                   </div>
                   {podeVerSalario && (
