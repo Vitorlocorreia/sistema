@@ -8,6 +8,7 @@ const usuarioComPermissaoSalario = {
   cargo: 'admin_geral',
   pode_ver_salario: true,
   override_permissoes: true,
+  abas_rh: 'admissao,aptos,ativos',
   apps: 'rh,salarios'
 };
 
@@ -18,6 +19,18 @@ const usuarioSemPermissaoSalario = {
   cargo: 'assistente_rh',
   pode_ver_salario: false,
   override_permissoes: true,
+  abas_rh: 'admissao,aptos,ativos',
+  apps: 'rh'
+};
+
+const usuarioObraCampo = {
+  id: 'user-obra-1',
+  nome: 'Mestre Gilberto Obra',
+  email: 'gilberto.obra@empresa.com',
+  cargo: 'operador',
+  pode_ver_salario: false,
+  override_permissoes: true,
+  abas_rh: 'admissao',
   apps: 'rh'
 };
 
@@ -128,7 +141,7 @@ test.describe('RH - Controle de Permissão de Visualização e Edição de Salá
       }
 
       if (pathname.includes('colaboradores')) {
-        const colabs = [usuarioComPermissaoSalario, usuarioSemPermissaoSalario];
+        const colabs = [usuarioComPermissaoSalario, usuarioSemPermissaoSalario, usuarioObraCampo];
         if (isSingle || url.search.includes('id=eq.')) {
           const match = url.search.match(/id=eq\.([^&]+)/);
           const colab = match ? colabs.find(c => c.id === decodeURIComponent(match[1])) : colabs[0];
@@ -147,8 +160,9 @@ test.describe('RH - Controle de Permissão de Visualização e Edição de Salá
 
       if (pathname.includes('config_permissoes')) {
         const perms = [
-          { cargo: 'admin_geral', pode_ver_salario: true, apps: 'rh,financeiro,salarios' },
-          { cargo: 'assistente_rh', pode_ver_salario: false, apps: 'rh' }
+          { cargo: 'admin_geral', pode_ver_salario: true, apps: 'rh,financeiro,salarios', abas_rh: 'admissao,aptos,ativos' },
+          { cargo: 'assistente_rh', pode_ver_salario: false, apps: 'rh', abas_rh: 'admissao,aptos,ativos' },
+          { cargo: 'operador', pode_ver_salario: false, apps: 'rh', abas_rh: 'admissao' }
         ];
         if (isSingle || url.search.includes('cargo=eq.')) {
           const match = url.search.match(/cargo=eq\.([^&]+)/);
@@ -399,6 +413,51 @@ test.describe('RH - Controle de Permissão de Visualização e Edição de Salá
     await expect(page.getByRole('button', { name: /Deslocar p\/ Aptos \(1\)/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Deslocar p\/ Admissão \(1\)/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Excluir \(1\)/i })).toBeVisible();
+  });
+
+  test('Cenário 6: Controle de Visibilidade de Abas do RH por Perfil (Obra x RH SP)', async ({ page }) => {
+    // 1. Usuário de Obra/Campo (abas_rh: 'admissao')
+    await loginAs(page, usuarioObraCampo);
+    await page.goto('/rh');
+
+    // Aba 1. Admissões DEVE estar visível
+    const tabAdmissao = page.getByRole('button', { name: /1\. Admissões/i });
+    await expect(tabAdmissao).toBeVisible({ timeout: 15000 });
+
+    // Abas 2. Aptos p/ Registro e 3. Registrados NÃO DEVEM estar visíveis para a Obra
+    await expect(page.getByRole('button', { name: /2\. Aptos p\/ Registro/i })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: /3\. Registrados/i })).not.toBeVisible();
+
+    // 2. Usuário de RH SP / Diretoria (abas_rh: 'admissao,aptos,ativos')
+    await loginAs(page, usuarioComPermissaoSalario);
+    await page.goto('/rh');
+
+    // Todas as 3 abas devem estar visíveis
+    await expect(page.getByRole('button', { name: /1\. Admissões/i })).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('button', { name: /2\. Aptos p\/ Registro/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /3\. Registrados/i })).toBeVisible();
+  });
+
+  test('Cenário 7: Botão de Aviso de Registro à Obra (WhatsApp)', async ({ page }) => {
+    await loginAs(page, usuarioComPermissaoSalario);
+    await page.goto('/rh');
+
+    // 1. Acessa a Aba 3 (Registrados)
+    const tabRegistrados = page.getByRole('button', { name: /3\. Registrados/i });
+    await expect(tabRegistrados).toBeVisible({ timeout: 15000 });
+    await tabRegistrados.click();
+
+    // 2. No card do colaborador registrado, o botão 'Avisar Obra' deve estar disponível
+    const btnAvisarCard = page.getByRole('button', { name: /Avisar Obra/i }).first();
+    await expect(btnAvisarCard).toBeVisible();
+
+    // 3. Clica no card para abrir a Ficha do Colaborador
+    const funcCard = page.locator('text=Funcionario Ativo 1').first();
+    await funcCard.click();
+
+    // 4. No painel executivo à direita, o botão 'Avisar Obra (WhatsApp)' deve estar visível
+    const btnAvisarPanel = page.getByRole('button', { name: /Avisar Obra \(WhatsApp\)/i });
+    await expect(btnAvisarPanel).toBeVisible();
   });
 
 });

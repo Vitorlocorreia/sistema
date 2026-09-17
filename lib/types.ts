@@ -351,6 +351,7 @@ export interface Colaborador {
   limite_valor: number
   apps: string
   abas_financeiro?: string | null
+  abas_rh?: string | null
   pode_alterar_status?: boolean | null
   pode_excluir_lancamento?: boolean | null
   pode_ver_salario?: boolean | null
@@ -366,6 +367,7 @@ export interface ConfigPermissao {
   limite_valor: number
   apps: string
   abas_financeiro?: string | null
+  abas_rh?: string | null
   pode_alterar_status?: boolean | null
   pode_excluir_lancamento?: boolean | null
   pode_ver_salario?: boolean | null

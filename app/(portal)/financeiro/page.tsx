@@ -324,6 +324,7 @@ function FinanceiroContent() {
           pode_alterar_status: perm?.pode_alterar_status ?? activeUser.pode_alterar_status ?? true,
           pode_excluir_lancamento: perm?.pode_excluir_lancamento ?? activeUser.pode_excluir_lancamento ?? false,
           pode_ver_salario: perm?.pode_ver_salario ?? activeUser.pode_ver_salario ?? false,
+          abas_rh: activeUser.override_permissoes ? (activeUser.abas_rh || perm?.abas_rh || null) : (perm?.abas_rh || activeUser.abas_rh || null),
         })
       }
     }
@@ -331,7 +332,7 @@ function FinanceiroContent() {
     // Carrega lista de colaboradores para a aba de permissões
     const { data: cols } = await supabase
       .from('colaboradores')
-      .select('id, nome, email, senha, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, pode_alterar_status, pode_excluir_lancamento, obras_ids, pode_ver_salario')
+      .select('id, nome, email, senha, cargo, empresa_id, empresas_ids, override_permissoes, apps, pode_empresas, pode_fornecedores, pode_lancar, pode_pagar, pode_aprovar, limite_valor, abas_financeiro, abas_rh, pode_alterar_status, pode_excluir_lancamento, obras_ids, pode_ver_salario')
       .order('nome')
     setColaboradores((cols as Colaborador[]) ?? [])
 
@@ -7705,6 +7706,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       limite_valor: 0,
       apps: cargoForm.apps.trim() || 'financeiro',
       abas_financeiro: 'historico,contas',
+      abas_rh: 'admissao',
       pode_alterar_status: true,
       pode_excluir_lancamento: false,
       pode_ver_salario: false
@@ -7732,6 +7734,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       limite_valor: Number(config.limite_valor),
       apps: config.apps,
       abas_financeiro: config.abas_financeiro || null,
+      abas_rh: config.abas_rh || null,
       pode_alterar_status: config.pode_alterar_status ?? true,
       pode_excluir_lancamento: config.pode_excluir_lancamento ?? false,
     }
@@ -7919,6 +7922,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         limite_valor: Number(editColForm.limite_valor || 0),
         apps: editColForm.apps,
         abas_financeiro: editColForm.abas_financeiro || null,
+        abas_rh: editColForm.abas_rh || null,
         pode_alterar_status: editColForm.pode_alterar_status ?? true,
         pode_excluir_lancamento: editColForm.pode_excluir_lancamento ?? false,
         obras_ids: editColForm.cargo === 'admin_geral' ? null : (editColForm.obras_ids || []),
@@ -8160,6 +8164,28 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
       ? abasList.filter((x: string) => x !== abaId)
       : [...abasList, abaId]
     setEditColForm({ ...editColForm, abas_financeiro: newAbasList.join(',') })
+  }
+
+  const handleToggleAbaRH = (cargo: string, abaId: string) => {
+    setConfigPermissoes(prev => prev.map(c => {
+      if (c.cargo === cargo) {
+        const abasList = c.abas_rh ? c.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+        const newAbasList = abasList.includes(abaId)
+          ? abasList.filter((x: string) => x !== abaId)
+          : [...abasList, abaId]
+        return { ...c, abas_rh: newAbasList.join(',') }
+      }
+      return c
+    }))
+  }
+
+  const handleToggleAbaRHColaborador = (abaId: string) => {
+    if (!editColForm) return
+    const abasList = editColForm.abas_rh ? editColForm.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+    const newAbasList = abasList.includes(abaId)
+      ? abasList.filter((x: string) => x !== abaId)
+      : [...abasList, abaId]
+    setEditColForm({ ...editColForm, abas_rh: newAbasList.join(',') })
   }
 
   // Filtragem de colaboradores
@@ -8853,11 +8879,62 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                         </div>
                       )}
 
-                      {/* Seção 3: Governança & Ações Críticas */}
+                      {/* Seção 3: Abas do Recursos Humanos (RH) */}
+                      {cfg.cargo !== 'admin_geral' && (
+                        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                              3. Abas do Recursos Humanos (RH)
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const ALL_RH_ABAS = ['admissao', 'aptos', 'ativos']
+                                const abasRhList = cfg.abas_rh ? cfg.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                                const todasMarcadas = ALL_RH_ABAS.every(a => abasRhList.includes(a))
+                                setConfigPermissoes(prev => prev.map(c => c.cargo === cfg.cargo
+                                  ? { ...c, abas_rh: todasMarcadas ? '' : ALL_RH_ABAS.join(',') }
+                                  : c
+                                ))
+                              }}
+                              style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
+                            >
+                              {(() => {
+                                const ALL_RH_ABAS = ['admissao', 'aptos', 'ativos']
+                                const abasRhList = cfg.abas_rh ? cfg.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                                return ALL_RH_ABAS.every(a => abasRhList.includes(a)) ? 'Desmarcar todas' : '✓ Selecionar todas'
+                              })()}
+                            </button>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                            {([
+                              ['admissao', '1. Admissões (Obra / Campo)'],
+                              ['aptos',    '2. Aptos p/ Registro (RH SP)'],
+                              ['ativos',   '3. Registrados'],
+                            ] as const).map(([abaId, abaLabel]) => {
+                              const abasRhList = cfg.abas_rh ? cfg.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                              const checked = abasRhList.includes(abaId)
+                              return (
+                                <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4, border: `1px solid ${checked ? '#F59E0B22' : 'transparent'}` }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => handleToggleAbaRH(cfg.cargo, abaId)}
+                                    style={{ accentColor: C.amber, cursor: 'pointer' }}
+                                  />
+                                  {abaLabel}
+                                </label>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Seção 4: Governança & Ações Críticas */}
                       {cfg.cargo !== 'admin_geral' && (
                         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
                           <span style={{ fontSize: 9.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 6 }}>
-                            3. Governança & Ações Críticas
+                            4. Governança & Ações Críticas
                           </span>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                             {([
@@ -9068,6 +9145,31 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                                 type="checkbox"
                                 checked={checked}
                                 onChange={() => handleToggleAbaFinanceiroColaborador(abaId)}
+                                style={{ accentColor: C.amber, cursor: 'pointer' }}
+                              />
+                              {abaLabel}
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Abas do Recursos Humanos (RH)</span>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                        {([
+                          ['admissao', '1. Admissões (Obra / Campo)'],
+                          ['aptos',    '2. Aptos p/ Registro (RH SP)'],
+                          ['ativos',   '3. Registrados'],
+                        ] as const).map(([abaId, abaLabel]) => {
+                          const abasList = editColForm.abas_rh ? editColForm.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                          const checked = abasList.includes(abaId)
+                          return (
+                            <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.ink, cursor: 'pointer' }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => handleToggleAbaRHColaborador(abaId)}
                                 style={{ accentColor: C.amber, cursor: 'pointer' }}
                               />
                               {abaLabel}
