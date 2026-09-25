@@ -73,6 +73,16 @@ export function parseAnexos(url: string | null | undefined): string[] {
   return [trimmed]
 }
 
+export function resolveFotoUrl(f: { imagem_url?: string; rdo_id?: string | null }): string {
+  if (!f?.imagem_url) return ''
+  if (f.imagem_url.startsWith('http://') || f.imagem_url.startsWith('https://')) {
+    return f.imagem_url
+  }
+  const isComprovantes = f.imagem_url.includes('comprovantes') || f.imagem_url.startsWith('rdo/')
+  const bucket = isComprovantes ? 'comprovantes' : 'rdo-fotos'
+  return supabase.storage.from(bucket).getPublicUrl(f.imagem_url).data.publicUrl
+}
+
 function ObservacaoExpandivel({ text, maxLength = 60, showTitleLabel = true }: { text: string | null | undefined; maxLength?: number; showTitleLabel?: boolean }) {
   const [expanded, setExpanded] = useState(false)
 
@@ -522,7 +532,11 @@ function FinanceiroContent() {
 function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colaboradores = [] }: TabProps) {
   const [obras, setObras] = useState<Obra[]>([])
   const [obraId, setObraId] = useState<string>('todas')
-  const [fotos, setFotos] = useState<any[]>([])
+  const [fotosCountByObra, setFotosCountByObra] = useState<Record<string, number>>({})
+  const [fotosObra, setFotosObra] = useState<any[]>([])
+  const [carregandoFotos, setCarregandoFotos] = useState(false)
+  const [filtroTipoFoto, setFiltroTipoFoto] = useState<'todas' | 'rdo' | 'diretas'>('todas')
+  const [buscaFoto, setBuscaFoto] = useState('')
   const [form, setForm] = useState({ nome: '', cliente: '', endereco: '', valor: '' })
   const [legenda, setLegenda] = useState('')
   const [showForm, setShowForm] = useState(false)
@@ -601,9 +615,13 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
     setProcessandoLote(false)
     if (error) return toast(error.message, 'error')
     
+    const countDeleted = selecionadasFotos.length
     setSelecionadasFotos([])
-    await load()
-    toast(`${selecionadasFotos.length} fotos excluídas com sucesso.`, 'success')
+    if (obraId !== 'todas') {
+      await carregarFotosObra(obraId)
+    }
+    await load(true)
+    toast(`${countDeleted} fotos excluídas com sucesso.`, 'success')
   }
 
   async function baixarFotosEmLote(lista: any[]) {
@@ -613,30 +631,60 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
     
     for (let i = 0; i < fotosParaBaixar.length; i++) {
       const f = fotosParaBaixar[i]
+      const url = resolveFotoUrl(f)
+      if (!url) continue
       try {
-        const response = await fetch(f.resolvedUrl || f.imagem_url)
+        const response = await fetch(url)
         const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
+        const objectUrl = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
-        a.href = url
-        const ext = f.imagem_url.includes('.png') ? 'png' : 'jpg'
-        a.download = `${f.legenda || 'foto_obra'}_${i + 1}.${ext}`
+        a.href = objectUrl
+        const ext = url.toLowerCase().includes('.png') ? 'png' : 'jpg'
+        a.download = `${(f.legenda || 'foto_obra').replace(/[^a-zA-Z0-9_-]/g, '_')}_${i + 1}.${ext}`
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
-        window.URL.revokeObjectURL(url)
+        window.URL.revokeObjectURL(objectUrl)
       } catch {
         // Fallback para abrir link direto
-        window.open(f.resolvedUrl || f.imagem_url, '_blank')
+        window.open(url, '_blank')
       }
     }
   }
+
+  const carregarFotosObra = useCallback(async (targetObraId: string) => {
+    if (!targetObraId || targetObraId === 'todas') {
+      setFotosObra([])
+      return
+    }
+    setCarregandoFotos(true)
+    try {
+      const { data, error } = await fetchAllChunks(client => {
+        let q = client.from('fotos').select('*').order('created_at', { ascending: false })
+        if (targetObraId === 'geral') {
+          return q.or('obra_id.eq.geral,obra_id.is.null')
+        }
+        return q.eq('obra_id', targetObraId)
+      })
+      if (error) {
+        console.error('Erro ao carregar fotos da obra:', error)
+        toast('Erro ao carregar fotos da obra.', 'error')
+        return
+      }
+      const seen = new Set<string>()
+      const unicas = (data || []).filter(f => {
+        if (!f.imagem_url || seen.has(f.imagem_url)) return false
+        seen.add(f.imagem_url)
+        return true
+      })
+      setFotosObra(unicas)
+    } finally {
+      setCarregandoFotos(false)
+    }
+  }, [])
   
   const load = useCallback(async (isBackground = false) => {
-    const [{ data: o }, { data: f }] = await Promise.all([
-      supabase.from('obras').select('*').order('nome'),
-      supabase.from('fotos').select('*').not('obra_id', 'is', null).order('created_at', { ascending: false }).limit(60),
-    ])
+    const { data: o } = await supabase.from('obras').select('*').order('nome')
     let obrasList = (o as Obra[]) || []
     const obraGeral = { id: 'geral', nome: 'Geral / Administrativo', cliente: '', endereco: '', valor_contrato: 0, progresso: 0, status: 'Em dia' } as Obra
     obrasList = [obraGeral, ...obrasList]
@@ -645,11 +693,46 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
       const allowedIds = colaboradorAtivo.obras_ids || []
       obrasList = obrasList.filter(obra => allowedIds.includes(obra.id))
     }
-    setObras(obrasList); setFotos(f || []);
+    setObras(obrasList)
+
+    try {
+      const counts = await Promise.all(
+        obrasList.map(async (obra) => {
+          let query = supabase.from('fotos').select('*', { count: 'exact', head: true })
+          if (obra.id === 'geral') {
+            query = query.or('obra_id.eq.geral,obra_id.is.null')
+          } else {
+            query = query.eq('obra_id', obra.id)
+          }
+          const { count } = await query
+          return [obra.id, count || 0] as const
+        })
+      )
+      const map: Record<string, number> = {}
+      counts.forEach(([id, c]) => { map[id] = c })
+      setFotosCountByObra(map)
+    } catch (err) {
+      console.error('Erro ao computar contagem de fotos por obra:', err)
+    }
   }, [colaboradorAtivo])
   
-  useRealtimeSync(load, 'financeiro-obras', ['obras'])
+  useRealtimeSync(() => {
+    void load(true)
+    if (obraId && obraId !== 'todas') {
+      void carregarFotosObra(obraId)
+    }
+  }, 'financeiro-obras', ['obras', 'fotos'])
+
   useEffect(() => { void load() }, [load])
+
+  useEffect(() => {
+    if (obraId !== 'todas') {
+      void carregarFotosObra(obraId)
+    } else {
+      setFotosObra([])
+      setSelecionadasFotos([])
+    }
+  }, [obraId, carregarFotosObra])
   
   async function criarObra(e: React.FormEvent) {
     e.preventDefault(); if (!form.nome.trim()) return toast('Informe o nome da obra.', 'error')
@@ -703,14 +786,20 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
     if (upload.error) return toast(upload.error.message, 'error')
     const { data: pub } = supabase.storage.from('comprovantes').getPublicUrl(path)
     const { error } = await supabase.from('fotos').insert({ obra_id: obraId, imagem_url: pub.publicUrl, legenda: legenda || file.name, data_iso: new Date().toISOString().slice(0, 10) })
-    if (error) return toast(error.message, 'error'); setLegenda(''); await load(); toast('Foto anexada.', 'success')
+    if (error) return toast(error.message, 'error')
+    setLegenda('')
+    await carregarFotosObra(obraId)
+    await load(true)
+    toast('Foto anexada.', 'success')
   }
 
   async function excluirFoto(fotoId: string) {
     if (!(await confirm('Excluir Foto', 'Deseja realmente remover esta foto da galeria?', { confirmLabel: 'Excluir', confirmColor: C.red }))) return
     const { error } = await supabase.from('fotos').delete().eq('id', fotoId)
     if (error) return toast(error.message, 'error')
-    await load(); toast('Foto excluída com sucesso.', 'success')
+    await carregarFotosObra(obraId)
+    await load(true)
+    toast('Foto excluída com sucesso.', 'success')
   }
 
   async function salvarEdicaoFoto(fotoId: string) {
@@ -718,7 +807,8 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
     const { error } = await supabase.from('fotos').update({ legenda: editFotoLegenda.trim() }).eq('id', fotoId)
     if (error) return toast(error.message, 'error')
     setEditandoFotoId(null)
-    await load(); toast('Legenda da foto atualizada.', 'success')
+    setFotosObra(prev => prev.map(f => f.id === fotoId ? { ...f, legenda: editFotoLegenda.trim() } : f))
+    toast('Legenda da foto atualizada.', 'success')
   }
 
   async function salvarMetricasObra(id: string) {
@@ -827,15 +917,28 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
   }
   
   const obraSelecionada = obras.find(o => o.id === obraId)
-  const fotosObra = useMemo(() => {
-    const raw = fotos.filter(f => f.obra_id === obraId)
-    const seen = new Set<string>()
-    return raw.filter(f => {
-      if (!f.imagem_url || seen.has(f.imagem_url)) return false
-      seen.add(f.imagem_url)
-      return true
-    })
-  }, [fotos, obraId])
+
+  const fotosFiltradas = useMemo(() => {
+    let list = fotosObra
+    if (filtroTipoFoto === 'rdo') {
+      list = list.filter(f => Boolean(f.rdo_id) || (f.imagem_url && !f.imagem_url.includes('comprovantes')))
+    } else if (filtroTipoFoto === 'diretas') {
+      list = list.filter(f => !f.rdo_id && f.imagem_url && f.imagem_url.includes('comprovantes'))
+    }
+    if (buscaFoto.trim()) {
+      const q = buscaFoto.toLowerCase().trim()
+      list = list.filter(f => (f.legenda || '').toLowerCase().includes(q))
+    }
+    return list
+  }, [fotosObra, filtroTipoFoto, buscaFoto])
+
+  const contagemRdo = useMemo(() => {
+    return fotosObra.filter(f => Boolean(f.rdo_id) || (f.imagem_url && !f.imagem_url.includes('comprovantes'))).length
+  }, [fotosObra])
+
+  const contagemDiretas = useMemo(() => {
+    return fotosObra.filter(f => !f.rdo_id && f.imagem_url && f.imagem_url.includes('comprovantes')).length
+  }, [fotosObra])
   
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1169,7 +1272,7 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
                         <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Fotos</span>
-                        <strong style={{ fontSize: 13, color: C.ink, fontWeight: 800 }}>{new Set(fotos.filter(f => f.obra_id === o.id).map(f => f.imagem_url).filter(Boolean)).size}</strong>
+                        <strong style={{ fontSize: 13, color: C.ink, fontWeight: 800 }}>{fotosCountByObra[o.id] ?? 0}</strong>
                       </div>
                     </div>
                   </div>
@@ -1590,21 +1693,24 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                   <span style={{ fontSize: 10, fontWeight: 800, color: C.amber, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '2px 8px', borderRadius: 4 }}>
                     {fotosObra.length} registros
                   </span>
+                  {carregandoFotos && (
+                    <RefreshCw size={12} color={C.amber} className="animate-spin" />
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  {fotosObra.length > 0 && (
+                  {fotosFiltradas.length > 0 && (
                     <button
-                      onClick={() => selecionarTodasFotos(fotosObra)}
+                      onClick={() => selecionarTodasFotos(fotosFiltradas)}
                       style={{ ...btnGhost, padding: '6px 12px', fontSize: 10.5, color: C.ink, fontWeight: 700 }}
                     >
-                      {selecionadasFotos.length === fotosObra.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                      {selecionadasFotos.length === fotosFiltradas.length ? 'Desmarcar Todas' : 'Selecionar Todas'}
                     </button>
                   )}
 
                   {selecionadasFotos.length > 0 && (
                     <>
                       <button
-                        onClick={() => void baixarFotosEmLote(fotosObra)}
+                        onClick={() => void baixarFotosEmLote(fotosFiltradas)}
                         style={{ ...btn(C.amber), padding: '6px 12px', fontSize: 10.5 }}
                       >
                         <Download size={12} /> Baixar ({selecionadasFotos.length})
@@ -1633,89 +1739,163 @@ function ObrasFinanceiroTab({ colaboradorAtivo, permissaoAtiva, confirm, colabor
                   )}
                 </div>
               </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
-                {fotosObra.map(f => {
-                  const isRdo = Boolean(f.rdo_id) || (f.imagem_url && !f.imagem_url.includes('comprovantes'))
-                  const fotoUrl = !f.imagem_url ? '' : f.imagem_url.startsWith('http')
-                    ? f.imagem_url
-                    : supabase.storage.from(isRdo ? 'rdo-fotos' : 'comprovantes').getPublicUrl(f.imagem_url).data.publicUrl
 
-                  const isChecked = selecionadasFotos.includes(f.id)
+              {/* Filtros e Busca */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap', background: 'rgba(0,0,0,0.18)', padding: '10px 14px', borderRadius: 6, border: `1px solid ${C.border}` }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => setFiltroTipoFoto('todas')}
+                    style={{
+                      ...btnGhost,
+                      padding: '4px 10px',
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      background: filtroTipoFoto === 'todas' ? `${C.amber}22` : 'transparent',
+                      color: filtroTipoFoto === 'todas' ? C.amber : C.inkSoft,
+                      borderColor: filtroTipoFoto === 'todas' ? `${C.amber}55` : 'transparent'
+                    }}
+                  >
+                    Todas ({fotosObra.length})
+                  </button>
+                  <button
+                    onClick={() => setFiltroTipoFoto('rdo')}
+                    style={{
+                      ...btnGhost,
+                      padding: '4px 10px',
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      background: filtroTipoFoto === 'rdo' ? 'rgba(245, 158, 11, 0.22)' : 'transparent',
+                      color: filtroTipoFoto === 'rdo' ? C.amber : C.inkSoft,
+                      borderColor: filtroTipoFoto === 'rdo' ? 'rgba(245, 158, 11, 0.55)' : 'transparent'
+                    }}
+                  >
+                    Diários RDO ({contagemRdo})
+                  </button>
+                  <button
+                    onClick={() => setFiltroTipoFoto('diretas')}
+                    style={{
+                      ...btnGhost,
+                      padding: '4px 10px',
+                      fontSize: 10.5,
+                      fontWeight: 700,
+                      background: filtroTipoFoto === 'diretas' ? 'rgba(16, 185, 129, 0.22)' : 'transparent',
+                      color: filtroTipoFoto === 'diretas' ? '#10B981' : C.inkSoft,
+                      borderColor: filtroTipoFoto === 'diretas' ? 'rgba(16, 185, 129, 0.55)' : 'transparent'
+                    }}
+                  >
+                    Vistorias Diretas ({contagemDiretas})
+                  </button>
+                </div>
 
-                  return (
-                    <div key={f.id} style={{ border: `1px solid ${isChecked ? C.amber : C.border}`, borderRadius: 8, overflow: 'hidden', background: isChecked ? 'rgba(245, 158, 11, 0.12)' : C.bgCard, position: 'relative', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
-                      <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setFotoExpandida({ ...f, resolvedUrl: fotoUrl })}>
-                        <img src={fotoUrl} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 140, objectFit: 'cover' }} />
-                        
-                        {/* Checkbox de Seleção */}
-                        <div
-                          onClick={e => { e.stopPropagation(); toggleFotoSelecionada(f.id) }}
-                          style={{
-                            position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: 4,
-                            background: isChecked ? C.amber : 'rgba(11,12,14,0.85)',
-                            border: `1.5px solid ${isChecked ? C.amber : '#fff'}`,
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', zIndex: 2, backdropFilter: 'blur(4px)'
-                          }}
-                          title={isChecked ? 'Desmarcar foto' : 'Selecionar foto'}
-                        >
-                          {isChecked && <Check size={14} color="#0B0C0E" strokeWidth={3} />}
-                        </div>
-
-                        <div style={{ position: 'absolute', bottom: 8, left: 8, background: isRdo ? 'rgba(245, 158, 11, 0.92)' : 'rgba(16, 185, 129, 0.92)', padding: '2px 7px', borderRadius: 4, fontSize: 8.5, fontWeight: 900, color: '#0B0C0E', backdropFilter: 'blur(3px)', textTransform: 'uppercase' }}>
-                          {isRdo ? 'Diário RDO' : 'Financeiro'}
-                        </div>
-                        {podeGerenciar && (
-                          <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4, background: 'rgba(11,12,14,0.85)', padding: '2px 4px', borderRadius: 4, backdropFilter: 'blur(4px)' }} onClick={e => e.stopPropagation()}>
-                            <button
-                              onClick={() => { setEditandoFotoId(f.id); setEditFotoLegenda(f.legenda || '') }}
-                              style={{ background: 'none', border: 'none', color: C.ink, cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
-                              title="Editar legenda"
-                            >
-                              <Edit3 size={12} color={C.amber} />
-                            </button>
-                            <button
-                              onClick={() => excluirFoto(f.id)}
-                              style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
-                              title="Excluir foto"
-                            >
-                              <Trash2 size={12} color="#F87171" />
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div style={{ padding: '10px 12px' }}>
-                        {editandoFotoId === f.id ? (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            <input
-                              style={{ ...input, fontSize: 11, padding: '4px 6px' }}
-                              value={editFotoLegenda}
-                              onChange={e => setEditFotoLegenda(e.target.value)}
-                              placeholder="Legenda da foto..."
-                              autoFocus
-                            />
-                            <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                              <button onClick={() => salvarEdicaoFoto(f.id)} style={{ ...btn(C.amber), padding: '3px 10px', fontSize: 10 }}>Salvar</button>
-                              <button onClick={() => setEditandoFotoId(null)} style={{ ...btnGhost, padding: '3px 10px', fontSize: 10 }}>Cancelar</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div style={{ fontSize: 11.5, fontWeight: 800, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda informada'}</div>
-                            <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>{new Date(f.data_iso).toLocaleDateString('pt-BR')}</div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-                {fotosObra.length === 0 && (
-                  <div style={{ gridColumn: '1 / -1', padding: '36px 0', textAlign: 'center', color: C.inkSoft, border: `1px dashed ${C.border}`, borderRadius: 8, fontSize: 11.5 }}>
-                    Nenhuma evidência ou foto anexada a esta obra até o momento.
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                    <input
+                      style={{ ...input, width: 200, paddingLeft: 26, fontSize: 11, padding: '5px 8px 5px 26px' }}
+                      placeholder="Filtrar legenda..."
+                      value={buscaFoto}
+                      onChange={e => setBuscaFoto(e.target.value)}
+                    />
                   </div>
-                )}
+                  <button
+                    onClick={() => void carregarFotosObra(obraId)}
+                    disabled={carregandoFotos}
+                    style={{ ...btnGhost, padding: '5px 8px', fontSize: 10.5, color: C.inkSoft }}
+                    title="Atualizar fotos"
+                  >
+                    <RefreshCw size={12} className={carregandoFotos ? 'animate-spin' : ''} />
+                  </button>
+                </div>
               </div>
+              
+              {carregandoFotos && fotosObra.length === 0 ? (
+                <div style={{ padding: '48px 0', textAlign: 'center', color: C.inkSoft, border: `1px dashed ${C.border}`, borderRadius: 8, fontSize: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+                  <RefreshCw size={20} color={C.amber} className="animate-spin" />
+                  <span>Carregando galeria de fotos e evidências da obra...</span>
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 14 }}>
+                  {fotosFiltradas.map(f => {
+                    const isRdo = Boolean(f.rdo_id) || (f.imagem_url && !f.imagem_url.includes('comprovantes'))
+                    const fotoUrl = resolveFotoUrl(f)
+                    const isChecked = selecionadasFotos.includes(f.id)
+
+                    return (
+                      <div key={f.id} style={{ border: `1px solid ${isChecked ? C.amber : C.border}`, borderRadius: 8, overflow: 'hidden', background: isChecked ? 'rgba(245, 158, 11, 0.12)' : C.bgCard, position: 'relative', transition: 'all 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.04)' }}>
+                        <div style={{ position: 'relative', cursor: 'pointer' }} onClick={() => setFotoExpandida({ ...f, resolvedUrl: fotoUrl })}>
+                          <img src={fotoUrl} alt={f.legenda || 'Foto'} style={{ width: '100%', height: 140, objectFit: 'cover' }} loading="lazy" />
+                          
+                          {/* Checkbox de Seleção */}
+                          <div
+                            onClick={e => { e.stopPropagation(); toggleFotoSelecionada(f.id) }}
+                            style={{
+                              position: 'absolute', top: 8, left: 8, width: 22, height: 22, borderRadius: 4,
+                              background: isChecked ? C.amber : 'rgba(11,12,14,0.85)',
+                              border: `1.5px solid ${isChecked ? C.amber : '#fff'}`,
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              cursor: 'pointer', zIndex: 2, backdropFilter: 'blur(4px)'
+                            }}
+                            title={isChecked ? 'Desmarcar foto' : 'Selecionar foto'}
+                          >
+                            {isChecked && <Check size={14} color="#0B0C0E" strokeWidth={3} />}
+                          </div>
+
+                          <div style={{ position: 'absolute', bottom: 8, left: 8, background: isRdo ? 'rgba(245, 158, 11, 0.92)' : 'rgba(16, 185, 129, 0.92)', padding: '2px 7px', borderRadius: 4, fontSize: 8.5, fontWeight: 900, color: '#0B0C0E', backdropFilter: 'blur(3px)', textTransform: 'uppercase' }}>
+                            {isRdo ? 'Diário RDO' : 'Financeiro'}
+                          </div>
+                          {podeGerenciar && (
+                            <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 4, background: 'rgba(11,12,14,0.85)', padding: '2px 4px', borderRadius: 4, backdropFilter: 'blur(4px)' }} onClick={e => e.stopPropagation()}>
+                              <button
+                                onClick={() => { setEditandoFotoId(f.id); setEditFotoLegenda(f.legenda || '') }}
+                                style={{ background: 'none', border: 'none', color: C.ink, cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
+                                title="Editar legenda"
+                              >
+                                <Edit3 size={12} color={C.amber} />
+                              </button>
+                              <button
+                                onClick={() => excluirFoto(f.id)}
+                                style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 3, display: 'flex', alignItems: 'center' }}
+                                title="Excluir foto"
+                              >
+                                <Trash2 size={12} color="#F87171" />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ padding: '10px 12px' }}>
+                          {editandoFotoId === f.id ? (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              <input
+                                style={{ ...input, fontSize: 11, padding: '4px 6px' }}
+                                value={editFotoLegenda}
+                                onChange={e => setEditFotoLegenda(e.target.value)}
+                                placeholder="Legenda da foto..."
+                                autoFocus
+                              />
+                              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                <button onClick={() => salvarEdicaoFoto(f.id)} style={{ ...btn(C.amber), padding: '3px 10px', fontSize: 10 }}>Salvar</button>
+                                <button onClick={() => setEditandoFotoId(null)} style={{ ...btnGhost, padding: '3px 10px', fontSize: 10 }}>Cancelar</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <div style={{ fontSize: 11.5, fontWeight: 800, color: C.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={f.legenda}>{f.legenda || 'Sem legenda informada'}</div>
+                              <div style={{ fontSize: 10, color: C.inkSoft, marginTop: 4 }}>{f.data_iso ? new Date(f.data_iso + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}</div>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                  {fotosFiltradas.length === 0 && (
+                    <div style={{ gridColumn: '1 / -1', padding: '36px 0', textAlign: 'center', color: C.inkSoft, border: `1px dashed ${C.border}`, borderRadius: 8, fontSize: 11.5 }}>
+                      {buscaFoto || filtroTipoFoto !== 'todas'
+                        ? 'Nenhuma foto encontrada para os filtros selecionados.'
+                        : 'Nenhuma evidência ou foto anexada a esta obra até o momento. As fotos enviadas via Diário de Obra (RDO) e uploads manuais aparecem aqui.'}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
