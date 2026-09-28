@@ -788,7 +788,7 @@ function CadastroTable({
     setSavingPix(true)
     try {
       const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
-      if (!modeloEtapa1) throw new Error('Modelo de admissão não encontrado')
+      const modeloId = modeloEtapa1?.id || 'bc3d0f7e-cf71-4dfc-8840-bf72aca43ada'
 
       const formattedNome = `Dados Bancários: PIX: ${inputPix.trim()} | Banco: ${inputBanco.trim()} | Agência/Conta: ${inputAgenciaConta.trim()}`
 
@@ -797,7 +797,7 @@ function CadastroTable({
           .from('rh_admissao_documentos')
           .update({
             nome: formattedNome,
-            storage_path: docPix.storage_path || 'pix-dados-bancarios',
+            storage_path: docPix.storage_path || `pix/${invite.id}-dados-bancarios.txt`,
             status: 'aprovado',
             revisado_em: new Date().toISOString(),
             updated_at: new Date().toISOString()
@@ -807,10 +807,10 @@ function CadastroTable({
       } else {
         const { error } = await supabase.from('rh_admissao_documentos').insert({
           convite_id: invite.id,
-          modelo_id: modeloEtapa1.id,
+          modelo_id: modeloId,
           item_id: 'pix',
           nome: formattedNome,
-          storage_path: 'pix-dados-bancarios',
+          storage_path: `pix/${invite.id}-dados-bancarios.txt`,
           mime_type: 'text/plain',
           tamanho_bytes: 10,
           status: 'aprovado'
@@ -887,7 +887,7 @@ function CadastroTable({
   }
 
   function openModalSalario() {
-    const rawVal = docSalario?.observacao_rh || ''
+    const rawVal = docSalario?.observacao_rh || (docSalario?.nome ? docSalario.nome.replace(/^Salário Contratual:\s*R\$\s*/i, '') : '')
     setInputSalario(rawVal.replace(/^R\$\s*/i, ''))
     setEditSalarioOpen(true)
   }
@@ -906,6 +906,7 @@ function CadastroTable({
     setSavingSalario(true)
     try {
       const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+      const modeloId = modeloEtapa1?.id || 'bc3d0f7e-cf71-4dfc-8840-bf72aca43ada'
       const formattedNome = `Salário Contratual: R$ ${cleanVal}`
 
       if (docSalario) {
@@ -914,6 +915,7 @@ function CadastroTable({
           .update({
             nome: formattedNome,
             observacao_rh: cleanVal,
+            storage_path: docSalario.storage_path || `salarios/${invite.id}-registro-confidencial.txt`,
             revisado_em: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
@@ -922,10 +924,10 @@ function CadastroTable({
       } else {
         const { error } = await supabase.from('rh_admissao_documentos').insert({
           convite_id: invite.id,
-          modelo_id: modeloEtapa1?.id || null,
+          modelo_id: modeloId,
           item_id: 'salario_registro',
           nome: formattedNome,
-          storage_path: 'salario-registro-confidencial',
+          storage_path: `salarios/${invite.id}-registro-confidencial.txt`,
           mime_type: 'text/plain',
           tamanho_bytes: 10,
           status: 'aprovado',
@@ -937,6 +939,7 @@ function CadastroTable({
       setEditSalarioOpen(false)
       await onRefresh?.()
     } catch (err: unknown) {
+      console.error('Erro ao salvar salário:', err)
       toast(err instanceof Error ? err.message : 'Erro ao salvar salário', 'error')
     } finally {
       setSavingSalario(false)
@@ -953,13 +956,14 @@ function CadastroTable({
       if (uploadError) throw uploadError
 
       const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+      const modeloId = modeloEtapa1?.id || 'bc3d0f7e-cf71-4dfc-8840-bf72aca43ada'
       if (docFichaResumo) {
         await supabase.from('rh_admissao_documentos').delete().eq('id', docFichaResumo.id)
       }
 
       const { error: rowError } = await supabase.from('rh_admissao_documentos').insert({
         convite_id: invite.id,
-        modelo_id: modeloEtapa1?.id || null,
+        modelo_id: modeloId,
         item_id: 'ficha_resumo',
         nome: file.name,
         storage_path: path,
@@ -1634,6 +1638,7 @@ function CadastroTable({
                   placeholder="Ex: 3.500,00"
                   value={inputSalario}
                   onChange={e => setInputSalario(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') void handleSaveSalario() }}
                   autoFocus
                 />
               </div>
@@ -1777,7 +1782,7 @@ export default function RhPage() {
   const [inviteForm, setInviteForm] = useState({
     nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '',
     cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false,
-    validade: '72', pix: '', banco: '', agencia_conta: ''
+    validade: '72', pix: '', banco: '', agencia_conta: '', salario: ''
   })
   const [inviteSaving, setInviteSaving] = useState(false)
 
@@ -2506,25 +2511,41 @@ export default function RhPage() {
 
       if (createdConvite && (inviteForm.pix.trim() || inviteForm.banco.trim() || inviteForm.agencia_conta.trim())) {
         const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
-        if (modeloEtapa1) {
-          const formattedNome = `Dados Bancários: PIX: ${inviteForm.pix.trim()} | Banco: ${inviteForm.banco.trim()} | Agência/Conta: ${inviteForm.agencia_conta.trim()}`
-          await supabase.from('rh_admissao_documentos').insert({
-            convite_id: createdConvite.id,
-            modelo_id: modeloEtapa1.id,
-            item_id: 'pix',
-            nome: formattedNome,
-            storage_path: 'pix-dados-bancarios',
-            mime_type: 'text/plain',
-            tamanho_bytes: 10,
-            status: 'aprovado'
-          })
-        }
+        const modeloId = modeloEtapa1?.id || 'bc3d0f7e-cf71-4dfc-8840-bf72aca43ada'
+        const formattedNome = `Dados Bancários: PIX: ${inviteForm.pix.trim()} | Banco: ${inviteForm.banco.trim()} | Agência/Conta: ${inviteForm.agencia_conta.trim()}`
+        await supabase.from('rh_admissao_documentos').insert({
+          convite_id: createdConvite.id,
+          modelo_id: modeloId,
+          item_id: 'pix',
+          nome: formattedNome,
+          storage_path: `pix/${createdConvite.id}-dados-bancarios.txt`,
+          mime_type: 'text/plain',
+          tamanho_bytes: 10,
+          status: 'aprovado'
+        })
+      }
+
+      if (createdConvite && inviteForm.salario?.trim()) {
+        const cleanSal = inviteForm.salario.trim().replace(/^R\$\s*/i, '')
+        const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+        const modeloId = modeloEtapa1?.id || 'bc3d0f7e-cf71-4dfc-8840-bf72aca43ada'
+        await supabase.from('rh_admissao_documentos').insert({
+          convite_id: createdConvite.id,
+          modelo_id: modeloId,
+          item_id: 'salario_registro',
+          nome: `Salário Contratual: R$ ${cleanSal}`,
+          storage_path: `salarios/${createdConvite.id}-registro-confidencial.txt`,
+          mime_type: 'text/plain',
+          tamanho_bytes: 10,
+          status: 'aprovado',
+          observacao_rh: cleanSal
+        })
       }
 
       const link = `${window.location.origin}/admissao/${token}`
       await navigator.clipboard?.writeText(link)
       setInviteOpen(false)
-      setInviteForm({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false, validade: '72', pix: '', banco: '', agencia_conta: '' })
+      setInviteForm({ nome: '', cpf: '', matricula: '', email: '', telefone: '', endereco: '', cargo: '', obra: '', data_inicio_efetivo: '', inicio_efetivo: false, validade: '72', pix: '', banco: '', agencia_conta: '', salario: '' })
       await load()
       toast(`Link de admissão gerado e copiado! Expira em ${hours}h.`, 'success')
     } catch (err: unknown) {
@@ -2601,13 +2622,14 @@ export default function RhPage() {
     if (error) {
       console.warn('Fallback status_apto ativado devido à restrição do banco:', error.message)
       const modeloEtapa1 = modelos.find(m => m.ordem === 1) || modelos[0]
+      const modeloId = modeloEtapa1?.id || 'bc3d0f7e-cf71-4dfc-8840-bf72aca43ada'
       await supabase.from('rh_admissao_documentos').delete().eq('convite_id', invite.id).eq('item_id', 'status_apto')
       const { error: docErr } = await supabase.from('rh_admissao_documentos').insert({
         convite_id: invite.id,
-        modelo_id: modeloEtapa1?.id || null,
+        modelo_id: modeloId,
         item_id: 'status_apto',
         nome: 'Declarado Apto p/ Registro',
-        storage_path: 'status-apto-marker',
+        storage_path: `status-apto/${invite.id}-marker.txt`,
         mime_type: 'text/plain',
         tamanho_bytes: 1,
         status: 'aprovado'
@@ -2653,8 +2675,12 @@ export default function RhPage() {
     const docSalario = invite.documentos?.find(d => d.item_id === 'salario_registro')
     const docFichaResumo = invite.documentos?.find(d => d.item_id === 'ficha_resumo')
 
+    const cleanSal = docSalario?.observacao_rh
+      ? docSalario.observacao_rh.replace(/^R\$\s*/i, '').trim()
+      : (docSalario?.nome ? docSalario.nome.replace(/^Salário Contratual:\s*R\$\s*/i, '').trim() : null)
+
     const dadosRegistro = {
-      salario: docSalario?.observacao_rh || docSalario?.nome || null,
+      salario: cleanSal || null,
       ficha_resumo_path: docFichaResumo?.storage_path || null,
       ficha_resumo_nome: docFichaResumo?.nome || null,
       registrado_em: new Date().toISOString(),
@@ -2948,7 +2974,8 @@ export default function RhPage() {
       const { error } = await supabase
         .from('funcionarios')
         .update({
-          dados_registro: novosDadosRegistro
+          dados_registro: novosDadosRegistro,
+          updated_at: new Date().toISOString()
         })
         .eq('id', person.id)
 
@@ -2962,6 +2989,7 @@ export default function RhPage() {
       setEditSalarioFuncionarioModal({ open: false, person: null, salario: '', salvando: false })
       toast(`Salário de "${person.nome}" atualizado com sucesso!`, 'success')
     } catch (err: unknown) {
+      console.error('Falha ao atualizar salário do colaborador:', err)
       toast(err instanceof Error ? err.message : 'Falha ao atualizar salário do colaborador', 'error')
       setEditSalarioFuncionarioModal(prev => ({ ...prev, salvando: false }))
     }
@@ -3364,6 +3392,15 @@ export default function RhPage() {
                     autoFocus
                   />
                 )}
+              </div>
+              <div>
+                <span style={labelStyle}>Salário Contratual (R$)</span>
+                <input
+                  style={inputStyle}
+                  placeholder="Ex: 2.500,00"
+                  value={inviteForm.salario}
+                  onChange={e => setInviteForm({ ...inviteForm, salario: e.target.value })}
+                />
               </div>
               <div>
                 <span style={labelStyle}>Validade do Link</span>
@@ -4268,6 +4305,34 @@ export default function RhPage() {
                           </span>
                         )}
                         <span>· CPF: {person.cpf || 'Não informado'}</span>
+                        {podeVerSalario && (
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirModalEditarSalarioFuncionario(person)
+                            }}
+                            title="Clique para definir ou alterar o salário contratual"
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              background: person.dados_registro?.salario ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.15)',
+                              color: person.dados_registro?.salario ? '#10B981' : C.amber,
+                              border: `1px solid ${person.dados_registro?.salario ? 'rgba(16, 185, 129, 0.35)' : 'rgba(245, 158, 11, 0.35)'}`,
+                              padding: '1px 6px',
+                              borderRadius: 3,
+                              fontWeight: 800,
+                              fontSize: 10,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <DollarSign size={10} />
+                            {person.dados_registro?.salario
+                              ? (String(person.dados_registro.salario).startsWith('R$') ? person.dados_registro.salario : `R$ ${person.dados_registro.salario}`)
+                              : 'Definir Salário'}
+                            <Edit3 size={9} style={{ opacity: 0.7 }} />
+                          </span>
+                        )}
                       </div>
 
                       {(() => {
@@ -4505,6 +4570,7 @@ export default function RhPage() {
                   placeholder="Ex: 3.500,00"
                   value={editSalarioFuncionarioModal.salario}
                   onChange={e => setEditSalarioFuncionarioModal(prev => ({ ...prev, salario: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') void salvarSalarioFuncionario() }}
                   autoFocus
                 />
               </div>
