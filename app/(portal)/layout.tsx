@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import { EmbeddedBrowser } from '@/components/EmbeddedBrowser'
 import { ConnectionStatusBanner } from '@/components/ConnectionStatusBanner'
 import { supabase } from '@/lib/supabase'
+import { NotificationCenter } from '@/components/NotificationCenter'
 
 // ─── TIPAGEM DA ÁRVORE MULTI-NÍVEL COLLAPSIBLE ──────────────────────────────
 export type NavItem = {
@@ -611,6 +612,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="flex items-center gap-2 flex-shrink-0">
+          <NotificationCenter />
           <button
             onClick={toggleTheme}
             aria-label="Alternar tema"
@@ -838,6 +840,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               >
                 {colaborador ? getInitials(colaborador.nome) : '?'}
               </div>
+
+              <NotificationCenter />
 
               <button
                 onClick={toggleTheme}

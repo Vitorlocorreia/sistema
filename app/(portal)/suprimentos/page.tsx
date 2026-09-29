@@ -32,7 +32,10 @@ import {
   User,
   ShieldCheck,
   FileCheck2,
-  CheckSquare
+  CheckSquare,
+  MessageSquare,
+  Paperclip,
+  Share2
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { toast } from '@/components/Toast'
@@ -40,6 +43,8 @@ import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { useConfirm } from '@/hooks/useConfirm'
+import { NotificationCenter } from '@/components/NotificationCenter'
+import { SuprimentoCardDrawer, ColaboradorOption } from '@/components/SuprimentoCardDrawer'
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -56,6 +61,13 @@ export interface SuprimentoItem {
   solicitante: string | null
   prioridade: 'baixa' | 'media' | 'alta' | 'urgente'
   created_at: string
+  responsavel_id?: string | null
+  responsavel_nome?: string | null
+  itens_checklist?: any[]
+  chat_mensagens?: any[]
+  historico_atividades?: any[]
+  anexos?: any[]
+  data_previsao_entrega?: string | null
 }
 
 export interface ObraItem {
@@ -158,9 +170,14 @@ export default function SuprimentosPage() {
   const [suprimentos, setSuprimentos] = useState<SuprimentoItem[]>([])
   const [obras, setObras] = useState<ObraItem[]>([])
   const [fornecedores, setFornecedores] = useState<FornecedorItem[]>([])
+  const [colaboradores, setColaboradores] = useState<ColaboradorOption[]>([])
   const [contasVinculadas, setContasVinculadas] = useState<Record<string, ContaVinculada>>({})
   const [loading, setLoading] = useState(true)
   const [colaboradorAtivo, setColaboradorAtivo] = useState<any>(null)
+
+  // Drawer 360 do Card
+  const [drawerItem, setDrawerItem] = useState<SuprimentoItem | null>(null)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   // Mesas e Filtros
   const [mesaAtiva, setMesaAtiva] = useState<string>('todas')
@@ -187,7 +204,9 @@ export default function SuprimentosPage() {
     valor: '',
     prioridade: 'media' as SuprimentoItem['prioridade'],
     data_vencimento: '',
-    solicitante: ''
+    solicitante: '',
+    responsavel_id: '',
+    responsavel_nome: ''
   })
   const [salvandoNovo, setSalvandoNovo] = useState(false)
 
@@ -226,21 +245,44 @@ export default function SuprimentosPage() {
         { data: sups, error: supErr },
         { data: obs, error: obErr },
         { data: forns, error: fornErr },
-        { data: contas, error: contasErr }
+        { data: contas, error: contasErr },
+        { data: cols, error: colErr }
       ] = await Promise.all([
         supabase.from('suprimentos').select('*').order('created_at', { ascending: false }).limit(2000),
         supabase.from('obras').select('id, nome, cliente').order('nome'),
         supabase.from('fornecedores').select('id, razao_social, nome_fantasia, cnpj, pix, banco, agencia, conta, telefone, prazo_pagamento').order('razao_social').limit(1000),
-        supabase.from('contas').select('id, status, valor, data_vencimento, pago_em, comprovante_url, observacoes, codigo_sequencial').ilike('observacoes', '%Suprimentos ID:%').limit(2000)
+        supabase.from('contas').select('id, status, valor, data_vencimento, pago_em, comprovante_url, observacoes, codigo_sequencial').ilike('observacoes', '%Suprimentos ID:%').limit(2000),
+        supabase.from('colaboradores').select('id, nome, cargo, email').order('nome')
       ])
 
       if (supErr) console.error('Erro suprimentos:', supErr)
       if (obErr) console.error('Erro obras:', obErr)
       if (fornErr) console.error('Erro fornecedores:', fornErr)
+      if (colErr) console.error('Erro colaboradores:', colErr)
 
-      if (sups) setSuprimentos(sups as SuprimentoItem[])
+      if (sups) {
+        setSuprimentos(sups as SuprimentoItem[])
+        setDrawerItem(prev => {
+          if (!prev) return null
+          const found = (sups as SuprimentoItem[]).find(s => s.id === prev.id)
+          return found || prev
+        })
+
+        if (typeof window !== 'undefined') {
+          const urlParams = new URLSearchParams(window.location.search)
+          const cardId = urlParams.get('cardId')
+          if (cardId) {
+            const itemFromUrl = (sups as SuprimentoItem[]).find(s => s.id === cardId)
+            if (itemFromUrl) {
+              setDrawerItem(itemFromUrl)
+              setDrawerOpen(true)
+            }
+          }
+        }
+      }
       if (obs) setObras(obs as ObraItem[])
       if (forns) setFornecedores(forns as FornecedorItem[])
+      if (cols) setColaboradores(cols as ColaboradorOption[])
 
       // Mapear contas pelo suprimento_id salvo em observacoes
       const cMap: Record<string, ContaVinculada> = {}
@@ -291,7 +333,9 @@ export default function SuprimentosPage() {
   const suprimentosFiltrados = useMemo(() => {
     return suprimentos.filter(item => {
       // 1. Filtro da Mesa Ativa
-      if (mesaAtiva === 'urgentes') {
+      if (mesaAtiva === 'minhas') {
+        if (item.responsavel_id !== colaboradorAtivo?.id) return false
+      } else if (mesaAtiva === 'urgentes') {
         if (item.prioridade !== 'alta' && item.prioridade !== 'urgente') return false
       } else if (mesaAtiva.startsWith('obra-')) {
         const targetObraId = mesaAtiva.replace('obra-', '')
@@ -357,6 +401,27 @@ export default function SuprimentosPage() {
 
       const cleanValor = novoForm.valor ? parseFloat(novoForm.valor.replace(/\./g, '').replace(',', '.')) : null
 
+      const responsavelEscolhido = colaboradores.find(c => c.id === novoForm.responsavel_id)
+      const respNome = responsavelEscolhido?.nome || colaboradorAtivo?.nome || null
+      const respId = responsavelEscolhido?.id || colaboradorAtivo?.id || null
+
+      const historicoInicial = [{
+        id: 'act-' + Date.now(),
+        data: new Date().toISOString(),
+        autor_nome: colaboradorAtivo?.nome || 'Canteiro de Obras',
+        acao: 'criacao_demanda',
+        detalhe: `Solicitação criada no canteiro.${respNome ? ` Responsável atribuído: ${respNome}.` : ''}`
+      }]
+
+      const checklistInicial = novoForm.quantidade ? [{
+        id: 'chk-' + Date.now(),
+        descricao: novoForm.titulo.trim(),
+        qtd_pedida: parseFloat(novoForm.quantidade.replace(',', '.')) || 1,
+        qtd_entregue: 0,
+        unidade: novoForm.unidade || 'un',
+        status: 'pendente'
+      }] : []
+
       const { data, error } = await supabase.from('suprimentos').insert({
         obra_id: novoForm.obra_id || null,
         titulo: novoForm.titulo.trim(),
@@ -367,10 +432,29 @@ export default function SuprimentosPage() {
         status: 'Solicitado',
         data_vencimento: novoForm.data_vencimento || null,
         solicitante: novoForm.solicitante.trim() || colaboradorAtivo?.nome || 'Canteiro de Obras',
-        prioridade: novoForm.prioridade
+        prioridade: novoForm.prioridade,
+        responsavel_id: respId,
+        responsavel_nome: respNome,
+        itens_checklist: checklistInicial,
+        historico_atividades: historicoInicial,
+        chat_mensagens: [],
+        anexos: []
       }).select().single()
 
       if (error) throw error
+
+      if (respId && respId !== colaboradorAtivo?.id) {
+        await supabase.from('notificacoes').insert({
+          destinatario_id: respId,
+          remetente_id: colaboradorAtivo?.id || null,
+          remetente_nome: colaboradorAtivo?.nome || 'Canteiro',
+          tipo: 'transferencia_responsavel',
+          titulo: 'Nova Demanda de Suprimentos',
+          mensagem: `${colaboradorAtivo?.nome || 'Alguém'} atribuiu a nova demanda "${novoForm.titulo}" para você.`,
+          link: `/suprimentos?cardId=${data.id}`,
+          lida: false
+        })
+      }
 
       toast('Solicitação de compra criada com sucesso!', 'success')
       setModalNovoOpen(false)
@@ -383,7 +467,9 @@ export default function SuprimentosPage() {
         valor: '',
         prioridade: 'media',
         data_vencimento: '',
-        solicitante: colaboradorAtivo?.nome || ''
+        solicitante: colaboradorAtivo?.nome || '',
+        responsavel_id: '',
+        responsavel_nome: ''
       })
       await loadData(true)
     } catch (err: any) {
@@ -687,6 +773,8 @@ export default function SuprimentosPage() {
             <RefreshCw size={13} className={loading ? 'animate-spin' : ''} />
           </button>
 
+          <NotificationCenter />
+
           <button
             onClick={() => setModalNovoOpen(true)}
             style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900, boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)' }}
@@ -775,6 +863,32 @@ export default function SuprimentosPage() {
             }}
           >
             <Building2 size={12} /> Todas as Obras (Geral)
+          </button>
+
+          <button
+            onClick={() => setMesaAtiva('minhas')}
+            style={{
+              ...btnBase,
+              padding: '6px 12px',
+              background: mesaAtiva === 'minhas' ? C.amber : 'transparent',
+              color: mesaAtiva === 'minhas' ? '#0A0A0A' : C.inkSoft,
+              border: `1px solid ${mesaAtiva === 'minhas' ? C.amber : C.border}`
+            }}
+          >
+            <User size={12} /> Minhas Demandas
+            {suprimentos.filter(s => s.responsavel_id === colaboradorAtivo?.id).length > 0 && (
+              <span style={{
+                marginLeft: 5,
+                fontSize: 9.5,
+                fontWeight: 900,
+                background: mesaAtiva === 'minhas' ? '#0A0A0A' : C.amber,
+                color: mesaAtiva === 'minhas' ? C.amber : '#0A0A0A',
+                padding: '1px 5px',
+                borderRadius: 8
+              }}>
+                {suprimentos.filter(s => s.responsavel_id === colaboradorAtivo?.id).length}
+              </span>
+            )}
           </button>
 
           <button
@@ -982,9 +1096,19 @@ export default function SuprimentosPage() {
                         item.prioridade === 'alta' ? C.amber :
                         item.prioridade === 'media' ? '#3B82F6' : '#9CA3AF'
 
+                      const checklist = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
+                      const totalChecklist = checklist.length
+                      const entreguesChecklist = checklist.filter((c: any) => c.status === 'entregue').length
+                      const anexosCount = Array.isArray(item.anexos) ? item.anexos.length : 0
+                      const chatCount = Array.isArray(item.chat_mensagens) ? item.chat_mensagens.length : 0
+
                       return (
                         <div
                           key={item.id}
+                          onClick={() => {
+                            setDrawerItem(item)
+                            setDrawerOpen(true)
+                          }}
                           style={{
                             background: C.bgCard,
                             border: `1px solid ${C.border}`,
@@ -994,8 +1118,11 @@ export default function SuprimentosPage() {
                             flexDirection: 'column',
                             gap: 9,
                             boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                            transition: 'all 0.15s ease'
+                            transition: 'all 0.15s ease',
+                            cursor: 'pointer'
                           }}
+                          onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.amber)}
+                          onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}
                         >
                           {/* Topo do Card */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
@@ -1025,6 +1152,49 @@ export default function SuprimentosPage() {
                                 Quantidade: <strong style={{ color: C.ink }}>{item.quantidade} {item.unidade}</strong>
                               </div>
                             )}
+                          </div>
+
+                          {/* Responsável da Demanda & Badges de Atividade */}
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10.5, paddingTop: 2 }}>
+                            <div style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              color: item.responsavel_nome ? C.ink : C.inkSoft,
+                              background: item.responsavel_nome ? 'rgba(255,255,255,0.04)' : 'transparent',
+                              padding: item.responsavel_nome ? '2px 6px' : '0',
+                              borderRadius: 4,
+                              border: item.responsavel_nome ? `1px solid ${C.border}` : 'none'
+                            }}>
+                              <User size={11} color={item.responsavel_nome ? C.amber : C.inkSoft} />
+                              <span style={{ fontWeight: item.responsavel_nome ? 700 : 400 }}>
+                                {item.responsavel_nome || 'Sem responsável'}
+                              </span>
+                            </div>
+
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: C.inkSoft }}>
+                              {totalChecklist > 0 && (
+                                <span style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 2,
+                                  color: entreguesChecklist === totalChecklist ? '#10B981' : C.amber,
+                                  fontWeight: 700
+                                }} title={`Checklist: ${entreguesChecklist}/${totalChecklist} entregues`}>
+                                  <CheckSquare size={11} /> {entreguesChecklist}/{totalChecklist}
+                                </span>
+                              )}
+                              {anexosCount > 0 && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title={`${anexosCount} arquivo(s) anexado(s)`}>
+                                  <Paperclip size={11} /> {anexosCount}
+                                </span>
+                              )}
+                              {chatCount > 0 && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title={`${chatCount} mensagem(ns) no chat`}>
+                                  <MessageSquare size={11} /> {chatCount}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Fornecedor & Valor */}
@@ -1100,11 +1270,17 @@ export default function SuprimentosPage() {
                           </div>
 
                           {/* AÇÕES NO CARD */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2 }}>
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2 }}
+                          >
                             <div style={{ display: 'flex', gap: 4 }}>
                               <button
                                 type="button"
-                                onClick={() => handleExcluirSuprimento(item)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleExcluirSuprimento(item)
+                                }}
                                 style={{ border: 'none', background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 4, borderRadius: 3 }}
                                 title="Excluir pedido"
                               >
@@ -1115,7 +1291,10 @@ export default function SuprimentosPage() {
                             {/* Botão de Ação Primária dependendo da etapa */}
                             {item.status === 'Solicitado' && (
                               <button
-                                onClick={() => handleMoverEtapa(item, 'Em Cotação')}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleMoverEtapa(item, 'Em Cotação')
+                                }}
                                 style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: 'rgba(245, 158, 11, 0.15)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.3)` }}
                               >
                                 Cotar Fornecedores <ArrowRight size={11} />
@@ -1124,7 +1303,10 @@ export default function SuprimentosPage() {
 
                             {item.status === 'Em Cotação' && (
                               <button
-                                onClick={() => handleMoverEtapa(item, 'Aprovação')}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleMoverEtapa(item, 'Aprovação')
+                                }}
                                 style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: 'rgba(139, 92, 246, 0.15)', color: '#8B5CF6', border: `1px solid rgba(139, 92, 246, 0.3)` }}
                               >
                                 Enviar p/ Aprovação <ArrowRight size={11} />
@@ -1133,7 +1315,10 @@ export default function SuprimentosPage() {
 
                             {item.status === 'Aprovação' && (
                               <button
-                                onClick={() => abrirModalAprovacao(item)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  abrirModalAprovacao(item)
+                                }}
                                 style={{ ...btnBase, padding: '5px 9px', fontSize: 10.5, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
                               >
                                 <ShieldCheck size={12} /> Aprovar Compra
@@ -1142,7 +1327,10 @@ export default function SuprimentosPage() {
 
                             {item.status === 'Em Trânsito' && (
                               <button
-                                onClick={() => abrirModalRecebimento(item)}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  abrirModalRecebimento(item)
+                                }}
                                 style={{ ...btnBase, padding: '5px 9px', fontSize: 10.5, background: '#10B981', color: '#0A0A0A', fontWeight: 900 }}
                               >
                                 <CheckSquare size={12} /> Confirmar Entrega
@@ -1171,6 +1359,7 @@ export default function SuprimentosPage() {
             <thead>
               <tr style={{ background: C.bgWhite, borderBottom: `1px solid ${C.border}`, textAlign: 'left' }}>
                 <th style={{ padding: '10px 12px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', color: C.inkSoft }}>Código / Material</th>
+                <th style={{ padding: '10px 12px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', color: C.inkSoft }}>Responsável</th>
                 <th style={{ padding: '10px 12px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', color: C.inkSoft }}>Obra</th>
                 <th style={{ padding: '10px 12px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', color: C.inkSoft }}>Etapa Esteira</th>
                 <th style={{ padding: '10px 12px', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', color: C.inkSoft }}>Fornecedor</th>
@@ -1182,7 +1371,7 @@ export default function SuprimentosPage() {
             <tbody>
               {suprimentosFiltrados.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding: '40px 12px', textAlign: 'center', color: C.inkSoft, fontSize: 12 }}>
+                  <td colSpan={8} style={{ padding: '40px 12px', textAlign: 'center', color: C.inkSoft, fontSize: 12 }}>
                     Nenhum pedido encontrado com os filtros atuais.
                   </td>
                 </tr>
@@ -1190,14 +1379,39 @@ export default function SuprimentosPage() {
                 suprimentosFiltrados.map(item => {
                   const obra = obras.find(o => o.id === item.obra_id)
                   const conta = contasVinculadas[item.id]
+                  const checklist = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
+                  const entregues = checklist.filter((c: any) => c.status === 'entregue').length
+                  const totalChk = checklist.length
+                  const anexosCount = Array.isArray(item.anexos) ? item.anexos.length : 0
+                  const chatCount = Array.isArray(item.chat_mensagens) ? item.chat_mensagens.length : 0
 
                   return (
-                    <tr key={item.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <tr
+                      key={item.id}
+                      onClick={() => {
+                        setDrawerItem(item)
+                        setDrawerOpen(true)
+                      }}
+                      style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer', transition: 'background 0.1s ease' }}
+                    >
                       <td style={{ padding: '10px 12px' }}>
                         <div style={{ fontWeight: 800, color: C.ink }}>{item.titulo}</div>
-                        <div style={{ fontSize: 10, color: C.inkSoft, fontFamily: 'monospace' }}>
-                          OC-{item.id.slice(0, 6).toUpperCase()} · {item.quantidade || ''} {item.unidade || ''}
+                        <div style={{ fontSize: 10, color: C.inkSoft, fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span>OC-{item.id.slice(0, 6).toUpperCase()} · {item.quantidade || ''} {item.unidade || ''}</span>
+                          {totalChk > 0 && (
+                            <span style={{ color: entregues === totalChk ? '#10B981' : C.amber, fontWeight: 700 }}>
+                              ☑ {entregues}/{totalChk}
+                            </span>
+                          )}
+                          {anexosCount > 0 && <span>📎 {anexosCount}</span>}
+                          {chatCount > 0 && <span>💬 {chatCount}</span>}
                         </div>
+                      </td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <span style={{ fontSize: 11, color: item.responsavel_nome ? C.ink : C.inkSoft, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <User size={12} color={item.responsavel_nome ? C.amber : C.inkSoft} />
+                          {item.responsavel_nome || 'Sem responsável'}
+                        </span>
                       </td>
                       <td style={{ padding: '10px 12px', color: C.ink }}>
                         {obra ? obra.nome : 'Geral / Sede'}
@@ -1240,11 +1454,14 @@ export default function SuprimentosPage() {
                           <span style={{ fontSize: 10, color: C.inkSoft }}>Aguardando Aprovação</span>
                         )}
                       </td>
-                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                      <td style={{ padding: '10px 12px', textAlign: 'right' }} onClick={e => e.stopPropagation()}>
                         <div style={{ display: 'inline-flex', gap: 6 }}>
                           {item.status === 'Aprovação' && (
                             <button
-                              onClick={() => abrirModalAprovacao(item)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                abrirModalAprovacao(item)
+                              }}
                               style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: C.amber, color: '#0A0A0A' }}
                             >
                               Aprovar
@@ -1252,14 +1469,20 @@ export default function SuprimentosPage() {
                           )}
                           {item.status === 'Em Trânsito' && (
                             <button
-                              onClick={() => abrirModalRecebimento(item)}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                abrirModalRecebimento(item)
+                              }}
                               style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A' }}
                             >
                               Receber
                             </button>
                           )}
                           <button
-                            onClick={() => handleExcluirSuprimento(item)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleExcluirSuprimento(item)
+                            }}
                             style={{ border: 'none', background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 4 }}
                             title="Excluir"
                           >
@@ -1395,14 +1618,37 @@ export default function SuprimentosPage() {
                   />
                 </div>
 
-                <div style={{ gridColumn: 'span 2' }}>
-                  <span style={labelStyle}>Solicitante / Responsável</span>
+                <div>
+                  <span style={labelStyle}>Solicitante (Origem)</span>
                   <input
                     style={inputStyle}
                     placeholder="Nome do engenheiro, mestre ou comprador"
                     value={novoForm.solicitante}
                     onChange={e => setNovoForm({ ...novoForm, solicitante: e.target.value })}
                   />
+                </div>
+
+                <div>
+                  <span style={labelStyle}>Responsável da Demanda</span>
+                  <select
+                    style={inputStyle}
+                    value={novoForm.responsavel_id || ''}
+                    onChange={e => {
+                      const colab = colaboradores.find(c => c.id === e.target.value)
+                      setNovoForm({
+                        ...novoForm,
+                        responsavel_id: e.target.value,
+                        responsavel_nome: colab ? colab.nome : ''
+                      })
+                    }}
+                  >
+                    <option value="">Sem responsável inicial</option>
+                    {colaboradores.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome} {c.cargo ? `(${c.cargo})` : ''}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -1722,6 +1968,22 @@ export default function SuprimentosPage() {
           </div>
         </div>
       )}
+
+      {/* ─── DRAWER 360: DETALHES, CHECKLIST, ANEXOS, CHAT & HISTÓRICO ─── */}
+      <SuprimentoCardDrawer
+        item={drawerItem}
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onUpdateItem={(updatedItem) => {
+          setSuprimentos(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s))
+          setDrawerItem(updatedItem)
+        }}
+        colaboradores={colaboradores}
+        obras={obras}
+        fornecedores={fornecedores}
+        colaboradorAtivo={colaboradorAtivo}
+        contaVinculada={drawerItem ? contasVinculadas[drawerItem.id] : undefined}
+      />
 
       {ConfirmDialog}
     </div>
