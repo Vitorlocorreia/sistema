@@ -680,6 +680,7 @@ function CadastroTable({
   modelos,
   onOpen,
   onReview,
+  onReviewMultiple,
   onApprove,
   onDeclararApto,
   onVoltarAdmissao,
@@ -698,6 +699,7 @@ function CadastroTable({
   modelos: ModeloAdmissao[]
   onOpen: (documento: DocumentoCadastro) => void
   onReview: (documento: DocumentoCadastro, status: 'aprovado' | 'devolvido') => void
+  onReviewMultiple?: (documentos: DocumentoCadastro[], status: 'aprovado' | 'devolvido') => void
   onApprove: () => void
   onDeclararApto?: () => void
   onVoltarAdmissao?: () => void
@@ -1346,33 +1348,128 @@ function CadastroTable({
                   {/* Lista de Documentos da Etapa 1 */}
                   {modelo.checklist.filter(item => !item.id?.includes('pix')).map(item => {
                     const docs = docsList.filter(d => d.modelo_id === modelo.id && d.item_id === item.id)
-                    const doc = docs[docs.length - 1]
-                    return (
-                      <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4 }}>
-                        <div>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: C.ink }}>
-                            {item.label} {item.obrigatorio && <strong style={{ color: '#EF4444' }}>*</strong>}
-                          </span>
-                          {doc && (
-                            <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, cursor: 'pointer', padding: 0, display: 'block', marginTop: 2 }}>
+
+                    // Se não houver documento enviado para este item
+                    if (docs.length === 0) {
+                      return (
+                        <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4 }}>
+                          <div>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: C.ink }}>
+                              {item.label} {item.obrigatorio && <strong style={{ color: '#EF4444' }}>*</strong>}
+                            </span>
+                            <p style={{ margin: '2px 0 0', fontSize: 9.5, color: C.inkSoft, fontStyle: 'italic' }}>
+                              Nenhum documento anexado ainda.
+                            </p>
+                          </div>
+                          <span style={{ fontSize: 9, fontWeight: 800, color: C.inkSoft }}>Pendente</span>
+                        </div>
+                      )
+                    }
+
+                    // Se houver exatamente 1 documento
+                    if (docs.length === 1) {
+                      const doc = docs[0]
+                      return (
+                        <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 12px', background: C.bgWhite, border: `1px solid ${doc.status === 'aprovado' ? '#10B98155' : doc.status === 'devolvido' ? '#EF444455' : C.border}`, borderRadius: 4 }}>
+                          <div>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: C.ink }}>
+                              {item.label} {item.obrigatorio && <strong style={{ color: '#EF4444' }}>*</strong>}
+                            </span>
+                            <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, cursor: 'pointer', padding: 0, display: 'block', marginTop: 2, fontWeight: 700 }}>
                               ↗ {doc.nome}
                             </button>
-                          )}
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 9, fontWeight: 800, color: doc?.status === 'aprovado' ? '#10B981' : doc ? C.amber : C.inkSoft }}>
-                            {doc?.status === 'aprovado' ? '✓ Aprovado' : doc ? 'Em Análise' : 'Pendente'}
-                          </span>
-                          {doc && doc.status !== 'aprovado' && (
+                            {doc.status === 'devolvido' && doc.observacao_rh && (
+                              <span style={{ fontSize: 8.5, color: '#F87171', display: 'block', marginTop: 2 }}>{doc.observacao_rh}</span>
+                            )}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 9, fontWeight: 800, color: doc.status === 'aprovado' ? '#10B981' : doc.status === 'devolvido' ? '#F87171' : C.amber }}>
+                              {doc.status === 'aprovado' ? '✓ Aprovado' : doc.status === 'devolvido' ? 'Devolvido' : 'Em Análise'}
+                            </span>
                             <div style={{ display: 'flex', gap: 4 }}>
-                              <button onClick={() => onReview(doc, 'aprovado')} style={{ ...btnBase, padding: '3px 7px', fontSize: 8.5, background: '#10B981', color: '#0A0A0A' }}>
-                                Aprovar
-                              </button>
+                              {doc.status !== 'aprovado' && (
+                                <button onClick={() => onReview(doc, 'aprovado')} style={{ ...btnBase, padding: '3px 7px', fontSize: 8.5, background: '#10B981', color: '#0A0A0A' }}>
+                                  Aprovar
+                                </button>
+                              )}
                               <button onClick={() => onReview(doc, 'devolvido')} style={{ ...btnBase, padding: '3px 7px', fontSize: 8.5, background: 'rgba(239, 68, 68, 0.12)', color: '#F87171' }}>
                                 Recusar
                               </button>
                             </div>
+                          </div>
+                        </div>
+                      )
+                    }
+
+                    // Se houver mais de 1 documento (ex: cônjuge + filhos, frente e verso)
+                    const todosAprovados = docs.every(d => d.status === 'aprovado')
+                    const pendentesAprovacao = docs.filter(d => d.status !== 'aprovado')
+
+                    return (
+                      <div key={item.id} style={{ padding: '10px 12px', background: C.bgWhite, border: `1px solid ${todosAprovados ? '#10B98155' : C.border}`, borderRadius: 5 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingBottom: 6, borderBottom: `1px solid ${C.border}` }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>
+                              {item.label} {item.obrigatorio && <strong style={{ color: '#EF4444' }}>*</strong>}
+                            </span>
+                            <span style={{ fontSize: 8.5, background: 'rgba(245, 158, 11, 0.15)', color: C.amber, border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1px 6px', borderRadius: 99, fontWeight: 800 }}>
+                              {docs.length} anexos recebidos
+                            </span>
+                          </div>
+                          {pendentesAprovacao.length > 0 && onReviewMultiple && (
+                            <button
+                              onClick={() => onReviewMultiple(pendentesAprovacao, 'aprovado')}
+                              style={{ ...btnBase, padding: '3px 8px', fontSize: 8.5, background: '#10B981', color: '#0A0A0A', fontWeight: 900 }}
+                              title="Aprovar todos os documentos pendentes deste item"
+                            >
+                              ✓ Aprovar Todos ({pendentesAprovacao.length})
+                            </button>
                           )}
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          {docs.map((doc, idx) => (
+                            <div
+                              key={doc.id || idx}
+                              style={{
+                                display: 'flex',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: '6px 8px',
+                                background: C.bgPanel,
+                                borderRadius: 4,
+                                border: `1px solid ${doc.status === 'aprovado' ? 'rgba(16, 185, 129, 0.25)' : doc.status === 'devolvido' ? 'rgba(239, 68, 68, 0.25)' : C.border}`,
+                              }}
+                            >
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <button
+                                  onClick={() => onOpen(doc)}
+                                  style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, cursor: 'pointer', padding: 0, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, textAlign: 'left' }}
+                                >
+                                  ↗ {doc.nome}
+                                </button>
+                                {doc.status === 'devolvido' && doc.observacao_rh && (
+                                  <div style={{ fontSize: 8.5, color: '#F87171', marginTop: 2 }}>{doc.observacao_rh}</div>
+                                )}
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                <span style={{ fontSize: 8.5, fontWeight: 800, color: doc.status === 'aprovado' ? '#10B981' : doc.status === 'devolvido' ? '#F87171' : C.amber }}>
+                                  {doc.status === 'aprovado' ? '✓ Aprovado' : doc.status === 'devolvido' ? 'Devolvido' : 'Em Análise'}
+                                </span>
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                  {doc.status !== 'aprovado' && (
+                                    <button onClick={() => onReview(doc, 'aprovado')} style={{ ...btnBase, padding: '2px 6px', fontSize: 8, background: '#10B981', color: '#0A0A0A' }}>
+                                      Aprovar
+                                    </button>
+                                  )}
+                                  <button onClick={() => onReview(doc, 'devolvido')} style={{ ...btnBase, padding: '2px 6px', fontSize: 8, background: 'rgba(239, 68, 68, 0.12)', color: '#F87171' }}>
+                                    Recusar
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     )
@@ -2599,6 +2696,38 @@ export default function RhPage() {
 
     await load()
     toast(status === 'aprovado' ? 'Documento aprovado!' : 'Pendência enviada ao candidato.', 'success')
+  }
+
+  async function reviewMultipleDocuments(invite: Convite, documentos: DocumentoCadastro[], status: 'aprovado' | 'devolvido') {
+    if (!documentos.length) return
+    let observacao: string | null = null
+    if (status === 'devolvido') {
+      observacao = await prompt('Solicitar Correção', { description: 'Informe o motivo da devolução ao candidato:' })
+      if (observacao === null) return
+    }
+
+    const nomeUsuario = colaboradorAtivo?.nome || 'RH'
+    const obsComUsuario = status === 'devolvido'
+      ? (observacao ? `[${nomeUsuario}]: ${observacao}` : `Devolvido por ${nomeUsuario}`)
+      : `Aprovado por ${nomeUsuario}`
+
+    const ids = documentos.map(d => d.id)
+    const { error } = await supabase.from('rh_admissao_documentos').update({
+      status,
+      observacao_rh: obsComUsuario,
+      revisado_em: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }).in('id', ids)
+
+    if (error) return toast(error.message, 'error')
+    await supabase.from('rh_admissao_convites').update(
+      status === 'devolvido'
+        ? { status: 'devolvido', justificativa_devolucao: obsComUsuario, updated_at: new Date().toISOString() }
+        : { justificativa_devolucao: null, updated_at: new Date().toISOString() }
+    ).eq('id', invite.id)
+
+    await load()
+    toast(status === 'aprovado' ? `${documentos.length} documento(s) aprovado(s)!` : 'Pendência enviada ao candidato.', 'success')
   }
 
   async function declararApto(invite: Convite) {
@@ -4395,6 +4524,7 @@ export default function RhPage() {
                   modelos={modelos}
                   onOpen={openCadastroDocument}
                   onReview={(doc, st) => void reviewCadastroDocument(selectedInvite, doc, st)}
+                  onReviewMultiple={(docs, st) => void reviewMultipleDocuments(selectedInvite, docs, st)}
                   onApprove={() => void approveInvite(selectedInvite)}
                   onDeclararApto={() => void declararApto(selectedInvite)}
                   onVoltarAdmissao={() => void voltarParaAdmissao(selectedInvite)}

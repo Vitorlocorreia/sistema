@@ -1,7 +1,7 @@
 'use client'
 
 import { use, useCallback, useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, Clock3, FileCheck2, FileUp, ShieldCheck, CreditCard, Download } from 'lucide-react'
+import { CheckCircle2, Clock3, FileCheck2, FileUp, ShieldCheck, CreditCard, Download, Trash2, FileText, Plus, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
 
@@ -74,46 +74,73 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     }
   }
 
-  async function enviarArquivo(modelo: Modelo, item: ChecklistItem, file: File | undefined) {
-    if (!file) return
+  async function enviarArquivos(modelo: Modelo, item: ChecklistItem, files: FileList | File[] | null) {
+    if (!files || files.length === 0) return
+    const fileArray = Array.from(files)
     const uploadId = `${modelo.id}:${item.id}`
     setEnviando(uploadId)
     setErro('')
     try {
-      const mimeType = getMimeType(file)
-      const targetItemId = modelo.checklist.find(i => i.id === item.id)?.id || item.id
-      const request = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'request_upload',
-          token,
-          modelo_id: modelo.id,
-          item_id: targetItemId,
-          nome: file.name,
-          mime_type: mimeType,
-          tamanho_bytes: file.size,
-        }),
-      })
-      const prepared = await request.json()
-      if (!request.ok) throw new Error(prepared.error || 'Não foi possível preparar o envio.')
+      for (const file of fileArray) {
+        const mimeType = getMimeType(file)
+        const targetItemId = modelo.checklist.find(i => i.id === item.id)?.id || item.id
+        const request = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'request_upload',
+            token,
+            modelo_id: modelo.id,
+            item_id: targetItemId,
+            nome: file.name,
+            mime_type: mimeType,
+            tamanho_bytes: file.size,
+          }),
+        })
+        const prepared = await request.json()
+        if (!request.ok) throw new Error(prepared.error || `Não foi possível preparar o envio de ${file.name}.`)
 
-      const { error: uploadError } = await supabase.storage
-        .from('rh-documentos')
-        .uploadToSignedUrl(prepared.path, prepared.upload_token, file, { contentType: mimeType })
-      if (uploadError) throw uploadError
+        const { error: uploadError } = await supabase.storage
+          .from('rh-documentos')
+          .uploadToSignedUrl(prepared.path, prepared.upload_token, file, { contentType: mimeType })
+        if (uploadError) throw uploadError
 
-      const confirm = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'confirm_upload', token, document_id: prepared.document_id }),
-      })
-      const confirmed = await confirm.json()
-      if (!confirm.ok) throw new Error(confirmed.error || 'Arquivo enviado, mas não foi confirmado.')
-
+        const confirm = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'confirm_upload', token, document_id: prepared.document_id }),
+        })
+        const confirmed = await confirm.json()
+        if (!confirm.ok) throw new Error(confirmed.error || `Arquivo ${file.name} enviado, mas não foi confirmado.`)
+      }
       await carregar()
     } catch (error) {
-      setErro(error instanceof Error ? error.message : 'Falha ao enviar documento.')
+      setErro(error instanceof Error ? error.message : 'Falha ao enviar documento(s).')
+    } finally {
+      setEnviando('')
+    }
+  }
+
+  async function enviarArquivo(modelo: Modelo, item: ChecklistItem, file: File | undefined) {
+    if (!file) return
+    await enviarArquivos(modelo, item, [file])
+  }
+
+  async function excluirDocumento(documentId: string) {
+    if (!confirm('Deseja realmente remover este documento anexado?')) return
+    setEnviando(documentId)
+    setErro('')
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete_document', token, document_id: documentId }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Não foi possível remover o documento.')
+      await carregar()
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Falha ao remover documento.')
     } finally {
       setEnviando('')
     }
@@ -230,12 +257,30 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     }
   }
 
-  const enviados = fluxo?.documentos.filter(documento => ['enviado', 'aprovado'].includes(documento.status)).length ?? 0
+  const concluidosObrigatorios = useMemo(() => {
+    if (!fluxo) return 0
+    let count = 0
+    for (const modelo of fluxo.modelos) {
+      if (modelo.ordem === 2 || modelo.ordem === 3) {
+        const hasDoc = fluxo.documentos.some(d => d.modelo_id === modelo.id && ['enviado', 'aprovado'].includes(d.status))
+        if (hasDoc) count++
+      } else if (modelo.ordem === 1) {
+        for (const item of modelo.checklist.filter(i => i.obrigatorio)) {
+          const hasDoc = fluxo.documentos.some(d => d.modelo_id === modelo.id && d.item_id === item.id && ['enviado', 'aprovado'].includes(d.status))
+          if (hasDoc) count++
+        }
+      }
+    }
+    return count
+  }, [fluxo])
+
   const totalObrigatorios = useMemo(() => fluxo?.modelos.reduce((total, modelo) => {
     if (modelo.ordem === 2 || modelo.ordem === 3) return total + 1
     if (modelo.ordem === 4) return total
     return total + modelo.checklist.filter(item => item.obrigatorio).length
   }, 0) ?? 0, [fluxo])
+
+  const totalArquivosEnviados = fluxo?.documentos.filter(documento => ['enviado', 'aprovado'].includes(documento.status)).length ?? 0
 
   return <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, padding: '28px 16px' }}>
     <section style={{ width: '100%', maxWidth: 900, margin: '0 auto' }}>
@@ -250,8 +295,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5 }}>{fluxo.convite.cargo || 'Cargo não informado'}{fluxo.convite.obra ? ` · ${fluxo.convite.obra}` : ''}{fluxo.convite.telefone_destinatario ? ` · ${fluxo.convite.telefone_destinatario}` : ''}</div>
           <p style={{ color: C.inkSoft, fontSize: 11, lineHeight: 1.6, margin: '12px 0 0' }}>O RH já realizou seu pré-cadastro. Siga as etapas abaixo para concluir sua admissão.</p>
           {fluxo.convite.status === 'devolvido' && <div style={{ marginTop: 12, padding: 10, borderRadius: 5, border: '1px solid #EF444466', background: '#EF444412', color: '#FCA5A5', fontSize: 10 }}><strong>Documentação devolvida pelo RH</strong><div style={{ marginTop: 4 }}>{fluxo.convite.justificativa_devolucao || 'Revise os itens marcados e envie novamente.'}</div></div>}
-          <div style={{ marginTop: 12, height: 7, borderRadius: 99, background: '#FFFFFF0D', overflow: 'hidden' }}><div style={{ width: `${totalObrigatorios ? Math.min(100, Math.round((enviados / totalObrigatorios) * 100)) : 0}%`, height: '100%', background: C.amber }} /></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: C.inkSoft, fontSize: 9, marginTop: 5 }}><span>{enviados} documento(s) enviados</span><span>Etapa atual: {fluxo.progresso.etapa_atual} de 4</span></div>
+          <div style={{ marginTop: 12, height: 7, borderRadius: 99, background: '#FFFFFF0D', overflow: 'hidden' }}><div style={{ width: `${totalObrigatorios ? Math.min(100, Math.round((concluidosObrigatorios / totalObrigatorios) * 100)) : 0}%`, height: '100%', background: C.amber }} /></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: C.inkSoft, fontSize: 9, marginTop: 5 }}><span>{concluidosObrigatorios} de {totalObrigatorios} etapas concluídas ({totalArquivosEnviados} arquivo{totalArquivosEnviados === 1 ? '' : 's'} anexado{totalArquivosEnviados === 1 ? '' : 's'})</span><span>Etapa atual: {fluxo.progresso.etapa_atual} de 4</span></div>
         </section>
 
         <div style={{ display: 'grid', gap: 12 }}>
@@ -305,14 +350,16 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                     </div>
                     {modelo.checklist.map(item => {
                       const docs = fluxo.documentos.filter(documento => documento.modelo_id === modelo.id && documento.item_id === item.id)
-                      const accepted = docs.find(documento => ['enviado', 'aprovado'].includes(documento.status))
-                      const pending = docs.find(documento => documento.status === 'devolvido')
+                      const acceptedDocs = docs.filter(documento => ['enviado', 'aprovado'].includes(documento.status))
+                      const pendingDocs = docs.filter(documento => documento.status === 'devolvido')
+                      const isItemConcluido = acceptedDocs.length > 0
                       const id = `${modelo.id}:${item.id}`
                       const isPix = item.id === 'pix' || item.label.toLowerCase().includes('pix')
                       const isVem = item.id === 'vem' || item.label.toLowerCase().includes('vem')
 
                       // Última box: Campo de texto para digitar Chave PIX
                       if (isPix) {
+                        const accepted = acceptedDocs[0]
                         return (
                           <div key={item.id} style={{ padding: 12, background: C.bgWhite, border: `1px solid ${accepted ? '#22C55E55' : C.border}`, borderRadius: 5 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -352,46 +399,211 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                       }
 
                       if (isVem) {
+                        const declSemVem = docs.find(d => d.nome === 'nao_possui_vem.pdf' || d.nome === 'O funcionário declarou que não possui VEM.')
+                        const realDocs = docs.filter(d => d.id !== declSemVem?.id)
+
                         return (
-                          <div key={item.id} style={{ padding: 10, background: C.bgWhite, border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                          <div key={item.id} style={{ padding: 12, background: C.bgWhite, border: `1px solid ${isItemConcluido ? '#22C55E55' : pendingDocs.length > 0 ? '#EF444455' : C.border}`, borderRadius: 5 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                               <div>
-                                <strong style={{ fontSize: 10 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
-                                {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>✓ {accepted.nome === 'O funcionário declarou que não possui VEM.' || accepted.nome === 'nao_possui_vem.pdf' ? 'Declarou não possuir VEM' : accepted.nome}</div>}
-                                {pending && <div style={{ color: '#F87171', fontSize: 9, marginTop: 4 }}>Pendência: {pending.observacao_rh || 'envie novamente com melhor qualidade'}</div>}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <strong style={{ fontSize: 11 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
+                                  {isItemConcluido && (
+                                    <span style={{ fontSize: 8.5, background: 'rgba(34, 197, 94, 0.12)', color: '#22C55E', border: '1px solid rgba(34, 197, 94, 0.25)', padding: '1px 6px', borderRadius: 99, fontWeight: 800 }}>
+                                      ✓ {declSemVem ? 'Declarado não possuir VEM' : `${realDocs.length} ${realDocs.length === 1 ? 'anexo' : 'anexos'}`}
+                                    </span>
+                                  )}
+                                </div>
+                                {declSemVem && (
+                                  <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>
+                                    ✓ Você declarou que não possui ou não utiliza cartão VEM.
+                                  </div>
+                                )}
                               </div>
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                 <button
+                                  type="button"
                                   disabled={!!enviando}
                                   onClick={() => void salvarSemVem(modelo, item)}
                                   style={{ padding: '6px 10px', background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 9, cursor: 'pointer', opacity: enviando === id ? 0.6 : 1 }}
                                 >
                                   {enviando === id ? 'Salvando...' : 'Não possuo VEM'}
                                 </button>
-                                <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1 }}>
-                                  <FileUp size={12} />{enviando === id ? 'Enviando…' : accepted && accepted.nome !== 'nao_possui_vem.pdf' && accepted.nome !== 'O funcionário declarou que não possui VEM.' ? 'Substituir' : 'Anexar'}
-                                  <input hidden type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => void enviarArquivo(modelo, item, event.target.files?.[0])} />
+                                <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1, background: realDocs.length > 0 ? 'rgba(245, 158, 11, 0.08)' : C.amber, color: realDocs.length > 0 ? C.amber : '#0A0A0A', border: `1px solid ${realDocs.length > 0 ? 'rgba(245, 158, 11, 0.3)' : 'transparent'}` }}>
+                                  <FileUp size={12} />
+                                  {enviando === id ? 'Enviando…' : realDocs.length > 0 ? '+ Adicionar outro' : 'Anexar cartão'}
+                                  <input hidden type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => { void enviarArquivos(modelo, item, event.target.files); event.target.value = '' }} />
                                 </label>
                               </div>
                             </div>
+
+                            {/* Lista de documentos VEM anexados */}
+                            {docs.length > 0 && (
+                              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+                                {docs.map(doc => {
+                                  const isAprovado = doc.status === 'aprovado'
+                                  const isDevolvido = doc.status === 'devolvido'
+                                  const isDecl = doc.id === declSemVem?.id
+
+                                  return (
+                                    <div
+                                      key={doc.id}
+                                      style={{
+                                        display: 'flex',
+                                        justifyContent: 'space-between',
+                                        alignItems: 'center',
+                                        gap: 8,
+                                        padding: '6px 10px',
+                                        background: C.bgCard,
+                                        borderRadius: 4,
+                                        border: `1px solid ${isAprovado ? 'rgba(34, 197, 94, 0.25)' : isDevolvido ? 'rgba(239, 68, 68, 0.3)' : C.border}`,
+                                      }}
+                                    >
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
+                                        <FileText size={13} color={isAprovado ? '#22C55E' : isDevolvido ? '#EF4444' : C.amber} style={{ flexShrink: 0 }} />
+                                        <span style={{ fontSize: 10, fontWeight: 700, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {isDecl ? 'Declaração: Não possui VEM' : doc.nome}
+                                        </span>
+                                      </div>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        <span style={{ fontSize: 8.5, fontWeight: 800, padding: '2px 6px', borderRadius: 3, background: isAprovado ? 'rgba(34, 197, 94, 0.15)' : 'rgba(245, 158, 11, 0.12)', color: isAprovado ? '#22C55E' : C.amber }}>
+                                          {isAprovado ? '✓ Aprovado' : 'Enviado'}
+                                        </span>
+                                        <button
+                                          type="button"
+                                          title="Remover"
+                                          disabled={!!enviando}
+                                          onClick={() => void excluirDocumento(doc.id)}
+                                          style={{ background: 'transparent', border: 'none', color: '#EF4444', cursor: 'pointer', padding: 4 }}
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
                           </div>
                         )
                       }
 
-                      // Demais boxes: Upload normal de arquivo
+                      // Demais boxes: Suporte a múltiplos arquivos com listagem e remoção
                       return (
-                        <div key={item.id} style={{ padding: 10, background: C.bgWhite, border: `1px solid ${accepted ? '#22C55E55' : pending ? '#EF444455' : C.border}`, borderRadius: 5 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                        <div key={item.id} style={{ padding: 12, background: C.bgWhite, border: `1px solid ${isItemConcluido ? '#22C55E55' : pendingDocs.length > 0 ? '#EF444455' : C.border}`, borderRadius: 5 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                             <div>
-                              <strong style={{ fontSize: 10 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
-                              {accepted && <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>✓ {accepted.nome}</div>}
-                              {pending && <div style={{ color: '#F87171', fontSize: 9, marginTop: 4 }}>Pendência: {pending.observacao_rh || 'envie novamente com melhor qualidade'}</div>}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <strong style={{ fontSize: 11, color: C.ink }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
+                                {isItemConcluido && (
+                                  <span style={{ fontSize: 8.5, background: 'rgba(34, 197, 94, 0.12)', color: '#22C55E', border: '1px solid rgba(34, 197, 94, 0.25)', padding: '1px 6px', borderRadius: 99, fontWeight: 800 }}>
+                                    ✓ {acceptedDocs.length} {acceptedDocs.length === 1 ? 'anexo' : 'anexos'}
+                                  </span>
+                                )}
+                              </div>
+                              {(item.id === 'dependentes' || item.label.toLowerCase().includes('cônjuge') || item.label.toLowerCase().includes('filhos')) && (
+                                <p style={{ margin: '3px 0 0', fontSize: 9.5, color: C.inkSoft }}>
+                                  Anexe a documentação de cônjuge e de cada um dos filhos (certidão de casamento, nascimento, RG, etc.). Você pode anexar vários arquivos.
+                                </p>
+                              )}
                             </div>
-                            <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1 }}>
-                              <FileUp size={12} />{enviando === id ? 'Enviando…' : accepted ? 'Substituir' : 'Anexar'}
-                              <input hidden type="file" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx" disabled={!!enviando} onChange={event => void enviarArquivo(modelo, item, event.target.files?.[0])} />
+
+                            <label style={{ ...uploadButton, opacity: enviando === id ? 0.6 : 1, background: isItemConcluido ? 'rgba(245, 158, 11, 0.08)' : C.amber, color: isItemConcluido ? C.amber : '#0A0A0A', border: `1px solid ${isItemConcluido ? 'rgba(245, 158, 11, 0.3)' : 'transparent'}` }}>
+                              <FileUp size={12} />
+                              {enviando === id ? 'Enviando…' : isItemConcluido ? '+ Adicionar outro arquivo' : 'Anexar arquivo'}
+                              <input
+                                hidden
+                                type="file"
+                                multiple
+                                accept=".pdf,.jpg,.jpeg,.png,.doc,.docx,.xls,.xlsx"
+                                disabled={!!enviando}
+                                onChange={event => {
+                                  void enviarArquivos(modelo, item, event.target.files)
+                                  event.target.value = ''
+                                }}
+                              />
                             </label>
                           </div>
+
+                          {/* Lista de Documentos Anexados no Item */}
+                          {docs.length > 0 && (
+                            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+                              {docs.map(doc => {
+                                const isAprovado = doc.status === 'aprovado'
+                                const isDevolvido = doc.status === 'devolvido'
+                                const isExcluindo = enviando === doc.id
+
+                                return (
+                                  <div
+                                    key={doc.id}
+                                    style={{
+                                      display: 'flex',
+                                      justifyContent: 'space-between',
+                                      alignItems: 'center',
+                                      gap: 8,
+                                      padding: '6px 10px',
+                                      background: C.bgCard,
+                                      borderRadius: 4,
+                                      border: `1px solid ${isAprovado ? 'rgba(34, 197, 94, 0.25)' : isDevolvido ? 'rgba(239, 68, 68, 0.3)' : C.border}`,
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
+                                      <FileText size={13} color={isAprovado ? '#22C55E' : isDevolvido ? '#EF4444' : C.amber} style={{ flexShrink: 0 }} />
+                                      <div style={{ minWidth: 0 }}>
+                                        <span style={{ fontSize: 10.5, fontWeight: 700, color: C.ink, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={doc.nome}>
+                                          {doc.nome}
+                                        </span>
+                                        {doc.tamanho_bytes ? (
+                                          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+                                            {(doc.tamanho_bytes / 1024).toFixed(0)} KB
+                                          </span>
+                                        ) : null}
+                                        {isDevolvido && (
+                                          <div style={{ color: '#F87171', fontSize: 9, marginTop: 2 }}>
+                                            Pendência: {doc.observacao_rh || 'Documento ilegível ou incorreto. Reenvie com boa qualidade.'}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                                      <span
+                                        style={{
+                                          fontSize: 8.5,
+                                          fontWeight: 800,
+                                          padding: '2px 6px',
+                                          borderRadius: 3,
+                                          background: isAprovado ? 'rgba(34, 197, 94, 0.15)' : isDevolvido ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.12)',
+                                          color: isAprovado ? '#22C55E' : isDevolvido ? '#F87171' : C.amber,
+                                        }}
+                                      >
+                                        {isAprovado ? '✓ Aprovado' : isDevolvido ? 'Devolvido' : 'Enviado'}
+                                      </span>
+
+                                      <button
+                                        type="button"
+                                        title="Remover documento"
+                                        disabled={!!enviando}
+                                        onClick={() => void excluirDocumento(doc.id)}
+                                        style={{
+                                          background: 'transparent',
+                                          border: 'none',
+                                          color: '#EF4444',
+                                          cursor: 'pointer',
+                                          padding: 4,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          opacity: isExcluindo ? 0.3 : 0.8,
+                                        }}
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
                         </div>
                       )
                     })}
