@@ -35,7 +35,8 @@ import {
   CheckSquare,
   MessageSquare,
   Paperclip,
-  Share2
+  Share2,
+  Bot
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { toast } from '@/components/Toast'
@@ -1265,6 +1266,12 @@ export default function SuprimentosPage() {
                             {item.status === 'Entregue' && (
                               <div style={{ fontSize: 9.5, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                                 <CheckCircle2 size={10} /> Recebido e conferido no canteiro
+                              </div>
+                            )}
+
+                            {Array.isArray(item.historico_atividades) && item.historico_atividades.some((a: any) => a.dgenny_quotation_id || a.acao === 'dgenny_cotacao_iniciada') && (
+                              <div style={{ fontSize: 9.5, color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}>
+                                <Bot size={11} /> Cotação IA dgenny no WhatsApp
                               </div>
                             )}
                           </div>

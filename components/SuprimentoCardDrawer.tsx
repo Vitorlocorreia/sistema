@@ -24,11 +24,13 @@ import {
   Check,
   PackageCheck,
   ShieldCheck,
-  Share2
+  Share2,
+  Bot
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
 import { toast } from '@/components/Toast'
+import { DgennyCotacaoTab } from '@/components/DgennyCotacaoTab'
 
 export interface ItemChecklist {
   id: string
@@ -97,8 +99,8 @@ export function SuprimentoCardDrawer({
   colaboradorAtivo,
   contaVinculada
 }: SuprimentoCardDrawerProps) {
-  // Aba ativa: 'checklist' | 'anexos' | 'chat' | 'historico'
-  const [tabAtiva, setTabAtiva] = useState<'checklist' | 'anexos' | 'chat' | 'historico'>('checklist')
+  // Aba ativa: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'
+  const [tabAtiva, setTabAtiva] = useState<'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'>('checklist')
 
   // Estados de edição inline
   const [editandoTitulo, setEditandoTitulo] = useState(false)
@@ -748,6 +750,28 @@ export function SuprimentoCardDrawer({
           </button>
 
           <button
+            onClick={() => setTabAtiva('dgenny')}
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              fontWeight: tabAtiva === 'dgenny' ? 800 : 600,
+              color: tabAtiva === 'dgenny' ? C.amber : C.inkSoft,
+              borderBottom: `2px solid ${tabAtiva === 'dgenny' ? C.amber : 'transparent'}`,
+              background: 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Bot size={13} />
+            Cotação IA (WhatsApp)
+          </button>
+
+          <button
             onClick={() => setTabAtiva('anexos')}
             style={{
               padding: '10px 14px',
@@ -960,6 +984,18 @@ export function SuprimentoCardDrawer({
                 </button>
               </form>
             </div>
+          )}
+
+          {/* ════ ABA DGENNY: COTAÇÃO IA NO WHATSAPP ═══════════════════════════ */}
+          {tabAtiva === 'dgenny' && (
+            <DgennyCotacaoTab
+              suprimento={item}
+              obra={obras.find(o => o.id === item.obra_id)}
+              fornecedoresDisponiveis={fornecedores}
+              onSuprimentoUpdated={(updated) => {
+                onUpdateItem(updated)
+              }}
+            />
           )}
 
           {/* ════ ABA 2: ANEXOS (DOCUMENTOS, NOTAS FISCAIS, COMPROVANTES) ═══════ */}
