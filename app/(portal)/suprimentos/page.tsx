@@ -919,28 +919,63 @@ export default function SuprimentosPage() {
               padding: '6px 12px',
               background: mesaAtiva === 'urgentes' ? '#EF4444' : 'transparent',
               color: mesaAtiva === 'urgentes' ? '#FFFFFF' : C.inkSoft,
-              border: `1px solid ${mesaAtiva === 'urgentes' ? '#EF4444' : C.border}`
+              border: `1px solid ${mesaAtiva === 'urgentes' ? '#EF4444' : C.border}`,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6
             }}
           >
             <AlertTriangle size={12} /> ⚡ Urgentes & Críticas
+            {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && s.status !== 'Entregue').length > 0 && (
+              <span style={{
+                fontSize: 9.5,
+                fontWeight: 900,
+                background: mesaAtiva === 'urgentes' ? '#FFFFFF' : '#EF4444',
+                color: mesaAtiva === 'urgentes' ? '#EF4444' : '#FFFFFF',
+                padding: '1px 5px',
+                borderRadius: 8
+              }}>
+                {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && s.status !== 'Entregue').length}
+              </span>
+            )}
           </button>
 
-          {/* Mesas Fixas por Obra Ativa */}
-          {obras.slice(0, 4).map(o => (
-            <button
-              key={o.id}
-              onClick={() => setMesaAtiva(`obra-${o.id}`)}
-              style={{
-                ...btnBase,
-                padding: '6px 12px',
-                background: mesaAtiva === `obra-${o.id}` ? C.amber : 'transparent',
-                color: mesaAtiva === `obra-${o.id}` ? '#0A0A0A' : C.inkSoft,
-                border: `1px solid ${mesaAtiva === `obra-${o.id}` ? C.amber : C.border}`
-              }}
-            >
-              🏢 {o.nome}
-            </button>
-          ))}
+          {/* Mesas Automáticas por Obra Cadastrada */}
+          {obras.map(o => {
+            const countObra = suprimentos.filter(s => s.obra_id === o.id && s.status !== 'Entregue').length
+            const isAtiva = mesaAtiva === `obra-${o.id}`
+            return (
+              <button
+                key={o.id}
+                onClick={() => setMesaAtiva(`obra-${o.id}`)}
+                style={{
+                  ...btnBase,
+                  padding: '6px 12px',
+                  background: isAtiva ? C.amber : 'transparent',
+                  color: isAtiva ? '#0A0A0A' : C.inkSoft,
+                  border: `1px solid ${isAtiva ? C.amber : C.border}`,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                title={`Mesa da obra: ${o.nome}${o.cliente ? ` (${o.cliente})` : ''}`}
+              >
+                <span>🏢 {o.nome}</span>
+                {countObra > 0 && (
+                  <span style={{
+                    fontSize: 9.5,
+                    fontWeight: 900,
+                    background: isAtiva ? '#0A0A0A' : C.amber,
+                    color: isAtiva ? C.amber : '#0A0A0A',
+                    padding: '1px 5px',
+                    borderRadius: 8
+                  }}>
+                    {countObra}
+                  </span>
+                )}
+              </button>
+            )
+          })}
 
           {/* Mesas Personalizadas Criadas pelo Usuário */}
           {mesasCustom.map(m => (
