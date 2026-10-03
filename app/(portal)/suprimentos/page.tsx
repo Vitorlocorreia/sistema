@@ -797,7 +797,14 @@ export default function SuprimentosPage() {
           </button>
 
           <button
-            onClick={() => setModalNovoOpen(true)}
+            onClick={() => {
+              const currentObraId = mesaAtiva.startsWith('obra-') ? mesaAtiva.replace('obra-', '') : ''
+              setNovoForm(prev => ({
+                ...prev,
+                obra_id: currentObraId || prev.obra_id
+              }))
+              setModalNovoOpen(true)
+            }}
             style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900, boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)' }}
           >
             <Plus size={15} /> Nova Solicitação de Compra
