@@ -213,9 +213,17 @@ export default function SuprimentosPage() {
     data_vencimento: '',
     solicitante: '',
     responsavel_id: '',
-    responsavel_nome: ''
+    responsavel_nome: '',
+    status: 'Solicitado' as SuprimentoItem['status']
   })
   const [salvandoNovo, setSalvandoNovo] = useState(false)
+
+  // Criação Rápida Direto na Coluna
+  const [colunaCriacaoAtiva, setColunaCriacaoAtiva] = useState<SuprimentoItem['status'] | null>(null)
+  const [quickTitulo, setQuickTitulo] = useState('')
+  const [quickObraId, setQuickObraId] = useState('')
+  const [quickPrioridade, setQuickPrioridade] = useState<SuprimentoItem['prioridade']>('media')
+  const [salvandoQuick, setSalvandoQuick] = useState(false)
 
   // Formulário Aprovação Financeira
   const [aprovForm, setAprovForm] = useState({
@@ -436,7 +444,7 @@ export default function SuprimentosPage() {
         unidade: novoForm.unidade.trim() || 'un',
         fornecedor: fornNome || null,
         valor: cleanValor,
-        status: 'Solicitado',
+        status: novoForm.status || 'Solicitado',
         data_vencimento: novoForm.data_vencimento || null,
         solicitante: novoForm.solicitante.trim() || colaboradorAtivo?.nome || 'Canteiro de Obras',
         prioridade: novoForm.prioridade,
@@ -476,7 +484,8 @@ export default function SuprimentosPage() {
         data_vencimento: '',
         solicitante: colaboradorAtivo?.nome || '',
         responsavel_id: '',
-        responsavel_nome: ''
+        responsavel_nome: '',
+        status: 'Solicitado'
       })
       await loadData(true)
     } catch (err: any) {
@@ -484,6 +493,78 @@ export default function SuprimentosPage() {
     } finally {
       setSalvandoNovo(false)
     }
+  }
+
+  // 1.1 Criar Demanda Rápida Diretamente na Coluna da Esteira
+  async function handleSalvarQuickDemanda(statusColuna: SuprimentoItem['status']) {
+    if (!quickTitulo.trim()) return toast('Informe o que precisa ser comprado.', 'error')
+
+    setSalvandoQuick(true)
+    try {
+      const historicoInicial = [{
+        id: 'act-' + Date.now(),
+        data: new Date().toISOString(),
+        autor_nome: colaboradorAtivo?.nome || 'Canteiro de Obras',
+        acao: 'criacao_demanda',
+        detalhe: `Demanda criada diretamente na coluna "${statusColuna}".`
+      }]
+
+      const checklistInicial = [{
+        id: 'chk-' + Date.now(),
+        descricao: quickTitulo.trim(),
+        qtd_pedida: 1,
+        qtd_entregue: 0,
+        unidade: 'un',
+        status: 'pendente'
+      }]
+
+      const { data, error } = await supabase.from('suprimentos').insert({
+        obra_id: quickObraId || null,
+        titulo: quickTitulo.trim(),
+        quantidade: '1',
+        unidade: 'un',
+        fornecedor: null,
+        valor: null,
+        status: statusColuna,
+        data_vencimento: null,
+        solicitante: colaboradorAtivo?.nome || 'Canteiro de Obras',
+        prioridade: quickPrioridade,
+        responsavel_id: colaboradorAtivo?.id || null,
+        responsavel_nome: colaboradorAtivo?.nome || null,
+        itens_checklist: checklistInicial,
+        historico_atividades: historicoInicial,
+        chat_mensagens: [],
+        anexos: []
+      }).select().single()
+
+      if (error) throw error
+
+      if (data) {
+        setSuprimentos(prev => [data as SuprimentoItem, ...prev])
+      }
+      toast(`Demanda adicionada com sucesso na coluna "${statusColuna}"!`, 'success')
+      setQuickTitulo('')
+      setColunaCriacaoAtiva(null)
+      await loadData(true)
+    } catch (err: any) {
+      toast('Erro ao criar demanda: ' + err.message, 'error')
+    } finally {
+      setSalvandoQuick(false)
+    }
+  }
+
+  // 1.2 Abrir Modal Completo a partir da Coluna
+  function abrirModalCompleto(statusColuna: SuprimentoItem['status']) {
+    const currentObraId = quickObraId || (mesaAtiva.startsWith('obra-') ? mesaAtiva.replace('obra-', '') : '')
+    setNovoForm(prev => ({
+      ...prev,
+      titulo: quickTitulo || prev.titulo,
+      obra_id: currentObraId || prev.obra_id,
+      prioridade: quickPrioridade || prev.prioridade,
+      status: statusColuna
+    }))
+    setColunaCriacaoAtiva(null)
+    setModalNovoOpen(true)
   }
 
   // 2. Mover Card de Etapa Manualmente / Arrastando
@@ -1149,9 +1230,36 @@ export default function SuprimentosPage() {
                       </p>
                     </div>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 900, background: col.bg, color: col.cor, padding: '2px 7px', borderRadius: 12 }}>
-                    {cardsDaColuna.length}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 900, background: col.bg, color: col.cor, padding: '2px 7px', borderRadius: 12 }}>
+                      {cardsDaColuna.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const currentObra = mesaAtiva.startsWith('obra-') ? mesaAtiva.replace('obra-', '') : ''
+                        setQuickObraId(currentObra)
+                        setQuickTitulo('')
+                        setColunaCriacaoAtiva(col.id)
+                      }}
+                      style={{
+                        border: 'none',
+                        background: col.bg,
+                        color: col.cor,
+                        width: 22,
+                        height: 22,
+                        borderRadius: 4,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        transition: 'opacity 0.15s ease'
+                      }}
+                      title={`Criar nova demanda na etapa "${col.nome}"`}
+                    >
+                      <Plus size={13} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Subtotal da Coluna */}
@@ -1166,6 +1274,149 @@ export default function SuprimentosPage() {
 
                 {/* Lista de Cards da Coluna */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {/* Formulário Rápido Inline ou Botão + Adicionar */}
+                  {colunaCriacaoAtiva === col.id ? (
+                    <div style={{
+                      background: C.bgCard,
+                      border: `1.5px solid ${col.cor}`,
+                      borderRadius: 6,
+                      padding: 10,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 8,
+                      boxShadow: `0 4px 16px ${col.cor}25`
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, fontWeight: 900, color: col.cor, textTransform: 'uppercase' }}>
+                          + Nova Demanda nesta coluna
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setColunaCriacaoAtiva(null)}
+                          style={{ border: 'none', background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+
+                      <input
+                        autoFocus
+                        style={{
+                          ...inputStyle,
+                          fontSize: 11.5,
+                          padding: '7px 10px',
+                          background: C.bgWhite
+                        }}
+                        placeholder="Material ou insumo (Ex: 50 sacos de areia)"
+                        value={quickTitulo}
+                        onChange={e => setQuickTitulo(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            handleSalvarQuickDemanda(col.id)
+                          }
+                          if (e.key === 'Escape') {
+                            setColunaCriacaoAtiva(null)
+                          }
+                        }}
+                      />
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 6 }}>
+                        <select
+                          style={{ ...inputStyle, fontSize: 10.5, padding: '4px 6px' }}
+                          value={quickObraId}
+                          onChange={e => setQuickObraId(e.target.value)}
+                        >
+                          <option value="">🏢 Geral / Sede</option>
+                          {obras.map(o => (
+                            <option key={o.id} value={o.id}>{o.nome}</option>
+                          ))}
+                        </select>
+
+                        <select
+                          style={{ ...inputStyle, fontSize: 10.5, padding: '4px 6px' }}
+                          value={quickPrioridade}
+                          onChange={e => setQuickPrioridade(e.target.value as any)}
+                        >
+                          <option value="baixa">Baixa</option>
+                          <option value="media">Média</option>
+                          <option value="alta">Alta</option>
+                          <option value="urgente">⚡ Urgente</option>
+                        </select>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 2 }}>
+                        <button
+                          type="button"
+                          onClick={() => abrirModalCompleto(col.id)}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: C.inkSoft,
+                            fontSize: 10,
+                            cursor: 'pointer',
+                            textDecoration: 'underline'
+                          }}
+                        >
+                          Mais detalhes...
+                        </button>
+
+                        <div style={{ display: 'flex', gap: 6 }}>
+                          <button
+                            type="button"
+                            onClick={() => setColunaCriacaoAtiva(null)}
+                            style={{ ...btnBase, padding: '4px 8px', fontSize: 10.5, background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}` }}
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            type="button"
+                            disabled={salvandoQuick}
+                            onClick={() => handleSalvarQuickDemanda(col.id)}
+                            style={{ ...btnBase, padding: '4px 10px', fontSize: 10.5, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
+                          >
+                            {salvandoQuick ? 'Salvando...' : 'Adicionar'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const currentObra = mesaAtiva.startsWith('obra-') ? mesaAtiva.replace('obra-', '') : ''
+                        setQuickObraId(currentObra)
+                        setQuickTitulo('')
+                        setColunaCriacaoAtiva(col.id)
+                      }}
+                      style={{
+                        border: `1px dashed ${C.border}`,
+                        background: 'rgba(255,255,255,0.02)',
+                        color: C.inkSoft,
+                        borderRadius: 6,
+                        padding: '7px 10px',
+                        fontSize: 11,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.borderColor = col.cor
+                        e.currentTarget.style.color = C.ink
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.borderColor = C.border
+                        e.currentTarget.style.color = C.inkSoft
+                      }}
+                      title={`Adicionar demanda diretamente em ${col.nome}`}
+                    >
+                      <Plus size={12} color={col.cor} />
+                      <span>Adicionar nesta coluna</span>
+                    </button>
+                  )}
                   {cardsDaColuna.length === 0 ? (
                     <div style={{
                       padding: '40px 10px',
@@ -1685,6 +1936,21 @@ export default function SuprimentosPage() {
                     {obras.map(o => (
                       <option key={o.id} value={o.id}>
                         {o.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <span style={labelStyle}>Etapa da Esteira</span>
+                  <select
+                    style={inputStyle}
+                    value={novoForm.status}
+                    onChange={e => setNovoForm({ ...novoForm, status: e.target.value as any })}
+                  >
+                    {COLUNAS_ESTEIRA.map(col => (
+                      <option key={col.id} value={col.id}>
+                        {col.nome}
                       </option>
                     ))}
                   </select>
