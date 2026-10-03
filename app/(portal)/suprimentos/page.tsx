@@ -37,7 +37,6 @@ import {
   Paperclip,
   Share2,
   Bot,
-  BookOpen,
   GripVertical
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
@@ -48,7 +47,6 @@ import { useRealtimeSync } from '@/hooks/useRealtimeSync'
 import { useConfirm } from '@/hooks/useConfirm'
 import { NotificationCenter } from '@/components/NotificationCenter'
 import { SuprimentoCardDrawer, ColaboradorOption } from '@/components/SuprimentoCardDrawer'
-import { ModalRegrasSuprimentos } from '@/components/ModalRegrasSuprimentos'
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
 
@@ -201,7 +199,6 @@ export default function SuprimentosPage() {
   const [modalAprovarOpen, setModalAprovarOpen] = useState(false)
   const [modalReceberOpen, setModalReceberOpen] = useState(false)
   const [modalNovaMesaOpen, setModalNovaMesaOpen] = useState(false)
-  const [modalRegrasOpen, setModalRegrasOpen] = useState(false)
   const [itemSelecionado, setItemSelecionado] = useState<SuprimentoItem | null>(null)
 
   // Formulário Novo Pedido
@@ -791,23 +788,6 @@ export default function SuprimentosPage() {
           </button>
 
           <NotificationCenter />
-
-          <button
-            onClick={() => setModalRegrasOpen(true)}
-            style={{
-              ...btnBase,
-              background: C.bgCard,
-              color: C.ink,
-              border: `1px solid ${C.border}`,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-            title="Consultar regras operacionais e alçadas de suprimentos"
-          >
-            <BookOpen size={14} color={C.amber} />
-            <span>Regras do Setor</span>
-          </button>
 
           <button
             onClick={() => {
@@ -2130,12 +2110,6 @@ export default function SuprimentosPage() {
           </div>
         </div>
       )}
-
-      {/* ─── MODAL: REGRAS E DIRETRIZES DE SUPRIMENTOS ─── */}
-      <ModalRegrasSuprimentos
-        isOpen={modalRegrasOpen}
-        onClose={() => setModalRegrasOpen(false)}
-      />
 
       {/* ─── DRAWER 360: DETALHES, CHECKLIST, ANEXOS, CHAT & HISTÓRICO ─── */}
       <SuprimentoCardDrawer
