@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Package,
   ShoppingCart,
@@ -37,7 +37,8 @@ import {
   Paperclip,
   Share2,
   Bot,
-  BookOpen
+  BookOpen,
+  GripVertical
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { toast } from '@/components/Toast'
@@ -189,6 +190,11 @@ export default function SuprimentosPage() {
   const [filtroPrioridade, setFiltroPrioridade] = useState('todas')
   const [filtroStatusFinanceiro, setFiltroStatusFinanceiro] = useState('todos')
   const [visao, setVisao] = useState<'esteira' | 'tabela'>('esteira')
+
+  // Drag and Drop da Esteira
+  const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
+  const [dragOverCol, setDragOverCol] = useState<SuprimentoItem['status'] | null>(null)
+  const justDraggedRef = useRef(false)
 
   // Modais
   const [modalNovoOpen, setModalNovoOpen] = useState(false)
@@ -483,7 +489,7 @@ export default function SuprimentosPage() {
     }
   }
 
-  // 2. Mover Card de Etapa Manualmente
+  // 2. Mover Card de Etapa Manualmente / Arrastando
   async function handleMoverEtapa(item: SuprimentoItem, novoStatus: SuprimentoItem['status']) {
     if (novoStatus === 'Em Trânsito' && !contasVinculadas[item.id]) {
       // Se tentar mover para Em Trânsito sem ter gerado conta, abre o modal de aprovação
@@ -491,9 +497,16 @@ export default function SuprimentosPage() {
       return
     }
 
+    const statusAntigo = item.status
+    // Atualização otimista imediata na UI
+    setSuprimentos(prev => prev.map(s => s.id === item.id ? { ...s, status: novoStatus } : s))
+
     try {
       const { error } = await supabase.from('suprimentos').update({ status: novoStatus }).eq('id', item.id)
-      if (error) throw error
+      if (error) {
+        setSuprimentos(prev => prev.map(s => s.id === item.id ? { ...s, status: statusAntigo } : s))
+        throw error
+      }
       toast(`Pedido movido para "${novoStatus}"`, 'success')
       await loadData(true)
     } catch (err: any) {
@@ -1087,25 +1100,58 @@ export default function SuprimentosPage() {
 
       {/* CONTEÚDO PRINCIPAL: ESTEIRA OU TABELA */}
       {visao === 'esteira' ? (
-        /* VISÃO 1: ESTEIRA KANBAN COM AS 5 ETAPAS */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, alignItems: 'start' }}>
+        /* VISÃO 1: ESTEIRA KANBAN COM AS 5 ETAPAS (TODAS LADO A LADO) */
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(5, minmax(290px, 1fr))',
+          gap: 14,
+          alignItems: 'start',
+          overflowX: 'auto',
+          paddingBottom: 16,
+          scrollbarWidth: 'thin'
+        }}>
           {COLUNAS_ESTEIRA.map(col => {
             const cardsDaColuna = suprimentosFiltrados.filter(s => s.status === col.id)
             const valorTotalColuna = cardsDaColuna.reduce((acc, s) => acc + (s.valor || 0), 0)
             const Icon = col.icone
+            const isDragOver = dragOverCol === col.id
 
             return (
               <div
                 key={col.id}
+                onDragOver={(e) => {
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  if (dragOverCol !== col.id) setDragOverCol(col.id)
+                }}
+                onDragLeave={(e) => {
+                  if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                    setDragOverCol(null)
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setDragOverCol(null)
+                  const cardId = e.dataTransfer.getData('text/plain') || draggingCardId
+                  if (cardId) {
+                    const itemArrastado = suprimentos.find(s => s.id === cardId)
+                    if (itemArrastado && itemArrastado.status !== col.id) {
+                      handleMoverEtapa(itemArrastado, col.id)
+                    }
+                  }
+                  setDraggingCardId(null)
+                }}
                 style={{
-                  background: C.bgPanel,
-                  border: `1px solid ${C.border}`,
+                  background: isDragOver ? `${col.cor}0D` : C.bgPanel,
+                  border: isDragOver ? `2px dashed ${col.cor}` : `1px solid ${C.border}`,
                   borderRadius: 8,
                   padding: 12,
                   display: 'flex',
                   flexDirection: 'column',
                   gap: 10,
-                  minHeight: 450
+                  minHeight: 520,
+                  transition: 'background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+                  boxShadow: isDragOver ? `0 0 20px ${col.cor}25` : 'none'
                 }}
               >
                 {/* Cabeçalho da Coluna */}
@@ -1141,8 +1187,17 @@ export default function SuprimentosPage() {
                 {/* Lista de Cards da Coluna */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {cardsDaColuna.length === 0 ? (
-                    <div style={{ padding: '30px 10px', textAlign: 'center', color: C.inkSoft, fontSize: 11, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
-                      Nenhum pedido nesta etapa
+                    <div style={{
+                      padding: '40px 10px',
+                      textAlign: 'center',
+                      color: isDragOver ? col.cor : C.inkSoft,
+                      fontSize: 11,
+                      border: `1px dashed ${isDragOver ? col.cor : C.border}`,
+                      borderRadius: 6,
+                      background: isDragOver ? `${col.cor}12` : 'transparent',
+                      transition: 'all 0.15s ease'
+                    }}>
+                      {isDragOver ? 'Solte o card aqui' : 'Nenhum pedido nesta etapa'}
                     </div>
                   ) : (
                     cardsDaColuna.map(item => {
@@ -1164,32 +1219,56 @@ export default function SuprimentosPage() {
                       const entreguesChecklist = checklist.filter((c: any) => c.status === 'entregue').length
                       const anexosCount = Array.isArray(item.anexos) ? item.anexos.length : 0
                       const chatCount = Array.isArray(item.chat_mensagens) ? item.chat_mensagens.length : 0
+                      const isDraggingThis = draggingCardId === item.id
 
                       return (
                         <div
                           key={item.id}
+                          draggable={true}
+                          onDragStart={(e) => {
+                            e.dataTransfer.setData('text/plain', item.id)
+                            e.dataTransfer.effectAllowed = 'move'
+                            setDraggingCardId(item.id)
+                            justDraggedRef.current = true
+                          }}
+                          onDragEnd={() => {
+                            setDraggingCardId(null)
+                            setDragOverCol(null)
+                            setTimeout(() => {
+                              justDraggedRef.current = false
+                            }, 150)
+                          }}
                           onClick={() => {
+                            if (justDraggedRef.current) return
                             setDrawerItem(item)
                             setDrawerOpen(true)
                           }}
                           style={{
                             background: C.bgCard,
-                            border: `1px solid ${C.border}`,
+                            border: `1px solid ${isDraggingThis ? C.amber : C.border}`,
                             borderRadius: 6,
                             padding: 12,
                             display: 'flex',
                             flexDirection: 'column',
                             gap: 9,
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                            transition: 'all 0.15s ease',
-                            cursor: 'pointer'
+                            boxShadow: isDraggingThis ? '0 8px 24px rgba(0,0,0,0.4)' : '0 1px 3px rgba(0,0,0,0.05)',
+                            opacity: isDraggingThis ? 0.35 : 1,
+                            transform: isDraggingThis ? 'scale(0.97)' : 'none',
+                            transition: 'transform 0.15s ease, opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+                            cursor: isDraggingThis ? 'grabbing' : 'grab',
+                            userSelect: 'none'
                           }}
-                          onMouseEnter={(e) => (e.currentTarget.style.borderColor = C.amber)}
-                          onMouseLeave={(e) => (e.currentTarget.style.borderColor = C.border)}
+                          onMouseEnter={(e) => {
+                            if (!draggingCardId) e.currentTarget.style.borderColor = C.amber
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!draggingCardId) e.currentTarget.style.borderColor = C.border
+                          }}
                         >
                           {/* Topo do Card */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
+                              <GripVertical size={13} color={C.inkSoft} style={{ opacity: 0.6, cursor: 'grab', marginRight: -2 }} />
                               <span style={{ fontSize: 9.5, fontWeight: 900, fontFamily: 'monospace', color: C.amber }}>
                                 OC-{item.id.slice(0, 6).toUpperCase()}
                               </span>
@@ -1415,6 +1494,20 @@ export default function SuprimentosPage() {
                         </div>
                       )
                     })
+                  )}
+                  {isDragOver && cardsDaColuna.length > 0 && (
+                    <div style={{
+                      padding: '10px',
+                      textAlign: 'center',
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      color: col.cor,
+                      border: `1px dashed ${col.cor}`,
+                      borderRadius: 6,
+                      background: `${col.cor}12`
+                    }}>
+                      Soltar aqui em {col.nome}
+                    </div>
                   )}
                 </div>
               </div>
