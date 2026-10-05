@@ -4685,7 +4685,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtObra, setFiltObra] = useState('')
   const [filtFornecedor, setFiltFornecedor] = useState(initialFornecedorId || '')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
-  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Pago sem Nota Fiscal'|'Negado'>('todos')
+  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Atenção'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Pago sem Nota Fiscal'|'Negado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [filtTipoData, setFiltTipoData] = useState<'previsao_vencimento' | 'vencimento' | 'previsao' | 'pago_em' | 'created_at'>('previsao_vencimento')
@@ -5631,6 +5631,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     { value: 'todos', label: 'Todos os Status' },
     { value: 'Lançado', label: 'Lançado' },
     { value: 'Bloqueado', label: 'Bloqueado' },
+    { value: 'Atenção', label: '⚠️ Atenção' },
     { value: 'Aguardando aprovação', label: 'Aguardando aprovação' },
     { value: 'Liberado/OK', label: 'Liberado/OK' },
     { value: 'A pagar', label: 'A pagar' },
@@ -6610,8 +6611,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                         onClick={() => setExpandedContaId(isExpanded ? null : c.id)}
                         style={{ 
                           borderBottom: isExpanded ? 'none' : `1px solid ${C.border}`, 
-                          background: isSelected ? 'rgba(245, 158, 11, 0.08)' : c.status === 'Bloqueado' ? '#F9731610' : c.status === 'Aguardando aprovação' ? '#F59E0B08' : (isExpanded ? C.bgWhite : 'transparent'),
-                          borderLeft: isSelected ? `3px solid ${C.amber}` : c.status === 'Bloqueado' ? '3px solid #F97316' : c.status === 'Aguardando aprovação' ? '3px solid #F59E0B' : 'none',
+                          background: isSelected ? 'rgba(245, 158, 11, 0.08)' : c.status === 'Bloqueado' ? '#F9731610' : c.status === 'Atenção' ? '#F59E0B10' : c.status === 'Aguardando aprovação' ? '#F59E0B08' : (isExpanded ? C.bgWhite : 'transparent'),
+                          borderLeft: isSelected ? `3px solid ${C.amber}` : c.status === 'Bloqueado' ? '3px solid #F97316' : c.status === 'Atenção' ? '3px solid #F59E0B' : c.status === 'Aguardando aprovação' ? '3px solid #F59E0B' : 'none',
                           cursor: 'pointer',
                           transition: 'background 0.15s ease'
                         }}
@@ -6724,12 +6725,12 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           <span style={{
                             fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
                             letterSpacing: 0.4,
-                            background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Aguardando aprovação' ? '#F59E0B20' : c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#F59E0B20' : venc ? '#F8717120' : C.amber + '20',
-                            color: c.status === 'Bloqueado' ? '#FB923C' : c.status === 'Aguardando aprovação' ? '#F59E0B' : c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#F59E0B' : venc ? '#F87171' : C.amber,
-                            border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Aguardando aprovação' ? '1px solid #F59E0B44' : 'none',
-                            boxShadow: c.status === 'Bloqueado' ? '0 0 8px #F9731633' : 'none'
+                            background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Atenção' ? '#F59E0B25' : c.status === 'Aguardando aprovação' ? '#F59E0B20' : c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#F59E0B20' : venc ? '#F8717120' : C.amber + '20',
+                            color: c.status === 'Bloqueado' ? '#FB923C' : c.status === 'Atenção' ? '#F59E0B' : c.status === 'Aguardando aprovação' ? '#F59E0B' : c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#F59E0B' : venc ? '#F87171' : C.amber,
+                            border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Atenção' ? '1px solid #F59E0B66' : c.status === 'Aguardando aprovação' ? '1px solid #F59E0B44' : 'none',
+                            boxShadow: c.status === 'Bloqueado' ? '0 0 8px #F9731633' : c.status === 'Atenção' ? '0 0 8px #F59E0B33' : 'none'
                           }}>
-                            {c.status === 'Bloqueado' ? 'BLOQUEADO' : c.status === 'Aguardando aprovação' ? 'AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : (c.status || 'LANÇADO').toUpperCase()}
+                            {c.status === 'Bloqueado' ? 'BLOQUEADO' : c.status === 'Atenção' ? '⚠️ ATENÇÃO' : c.status === 'Aguardando aprovação' ? 'AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : (c.status || 'LANÇADO').toUpperCase()}
                           </span>
                           {c.criado_por && (
                             <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
@@ -6755,6 +6756,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                               <select aria-label="Alterar status" value={c.status} onChange={e => void alterarStatus(c.id, e.target.value as ContaComRelacoes['status'])} style={{ ...input, width: 100, padding: '3px 4px', fontSize: 9.5 }}>
                                 <option value="Lançado">Lançado</option>
                                 <option value="Bloqueado">Bloqueado</option>
+                                <option value="Atenção">Atenção</option>
                                 <option value="Aguardando aprovação">Aguardando aprovação</option>
                                 <option value="Liberado/OK">Liberado/OK</option>
                                 <option value="A pagar">A pagar</option>
@@ -7268,6 +7270,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   <select style={input} value={formEdicao.status || ''} onChange={e => setFormEdicao(f => ({ ...f, status: e.target.value as any }))}>
                     <option value="Lançado">Lançado</option>
                     <option value="Bloqueado">Bloqueado</option>
+                    <option value="Atenção">Atenção</option>
                     <option value="Aguardando aprovação">Aguardando aprovação</option>
                     <option value="Liberado/OK">Liberado/OK</option>
                     <option value="A pagar">A pagar</option>
