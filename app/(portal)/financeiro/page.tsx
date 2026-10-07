@@ -319,6 +319,7 @@ function FinanceiroContent() {
           pode_alterar_status: activeUser.pode_alterar_status ?? perm?.pode_alterar_status ?? true,
           pode_excluir_lancamento: activeUser.pode_excluir_lancamento ?? perm?.pode_excluir_lancamento ?? false,
           pode_ver_salario: activeUser.pode_ver_salario ?? perm?.pode_ver_salario ?? false,
+          abas_rh: activeUser.abas_rh || perm?.abas_rh || 'admissao,ativos,aptos',
         })
       } else {
         setPermissaoAtiva({
@@ -3212,6 +3213,8 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     endereco: '', banco: '', agencia: '', conta: ''
   })
   const [saving, setSaving] = useState(false)
+  const [modoExportacaoFornecedores, setModoExportacaoFornecedores] = useState(false)
+  const [selecionadosFornecedores, setSelecionadosFornecedores] = useState<string[]>([])
 
   const load = useCallback(async (isBackground = false) => {
     if (!isBackground) setLoading(true)
@@ -3358,6 +3361,98 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     toast('Fornecedor removido com sucesso.', 'success')
   }
 
+  const toggleSelecionarFornecedor = (id: string) => {
+    setSelecionadosFornecedores(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    )
+  }
+
+  const selecionarTodosFornecedores = (lista: Fornecedor[]) => {
+    if (selecionadosFornecedores.length === lista.length) {
+      setSelecionadosFornecedores([])
+    } else {
+      setSelecionadosFornecedores(lista.map(f => f.id))
+    }
+  }
+
+  const exportarFornecedores = (listaParaExportar: Fornecedor[], formato: 'xlsx' | 'csv' = 'xlsx') => {
+    if (listaParaExportar.length === 0) {
+      return toast('Nenhum fornecedor disponível para exportar.', 'error')
+    }
+
+    const empresasMap: Record<string, string> = {}
+    empresas.forEach(e => {
+      empresasMap[e.id] = e.nome_fantasia || e.razao_social
+    })
+
+    const dataFormatted = listaParaExportar.map(f => {
+      const resumo = contasResumoMap[f.id] || { totalEmAberto: 0, totalPago: 0, totalPagasCount: 0, temVencidas: false }
+      const docLabel = f.tipo === 'PF' ? 'CPF' : 'CNPJ'
+
+      return {
+        'ID': f.id,
+        'Tipo': f.tipo === 'PF' ? 'Pessoa Física' : 'Pessoa Jurídica',
+        'Razão Social / Nome': f.razao_social || '',
+        'Nome Fantasia': f.nome_fantasia || '',
+        [docLabel]: f.cnpj || '',
+        'Categoria': f.categoria || '',
+        'Telefone': f.telefone || '',
+        'E-mail': f.email || '',
+        'Contato Responsável': f.responsavel || '',
+        'Chave PIX': f.pix || '',
+        'Banco': f.banco || '',
+        'Agência': f.agencia || '',
+        'Conta': f.conta || '',
+        'Empresa Vinculada': f.empresa_id ? (empresasMap[f.empresa_id] || 'Empresa Vinculada') : 'Compartilhado',
+        'Endereço': f.endereco || '',
+        'Total em Aberto (R$)': resumo.totalEmAberto,
+        'Total Pago (R$)': resumo.totalPago,
+        'Contas Pagas (Qtd)': resumo.totalPagasCount,
+        'Situação Financeira': resumo.temVencidas ? 'Possui Contas Vencidas' : resumo.totalEmAberto > 0 ? 'Com Saldo em Aberto' : 'Em Dia / Quitado',
+        'Cadastrado Em': f.created_at ? new Date(f.created_at).toLocaleDateString('pt-BR') : ''
+      }
+    })
+
+    const dataAtual = new Date().toISOString().slice(0, 10)
+    const fileName = `fornecedores_${listaParaExportar.length}_itens_${dataAtual}`
+
+    if (formato === 'xlsx') {
+      try {
+        const ws = XLSX.utils.json_to_sheet(dataFormatted)
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, 'Fornecedores')
+        XLSX.writeFile(wb, `${fileName}.xlsx`)
+        toast(`${listaParaExportar.length} fornecedor(es) exportado(s) em Excel (.xlsx)!`, 'success')
+        return
+      } catch (err: any) {
+        console.warn('Fallback para CSV:', err)
+      }
+    }
+
+    // Exportação em CSV
+    const headers = Object.keys(dataFormatted[0])
+    const rows = dataFormatted.map(obj =>
+      headers.map(h => {
+        const val = (obj as any)[h]
+        if (typeof val === 'number') {
+          return val.toFixed(2).replace('.', ',')
+        }
+        return `"${String(val ?? '').replace(/"/g, '""')}"`
+      }).join(';')
+    )
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${fileName}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    toast(`${listaParaExportar.length} fornecedor(es) exportado(s) em CSV!`, 'success')
+  }
+
   const empresasIds = colaboradorAtivo.empresas_ids?.length ? colaboradorAtivo.empresas_ids : (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
 
   // Indexador O(1): pré-computa totais de contas por fornecedor
@@ -3438,25 +3533,57 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
             </p>
           </div>
 
-          {podeCriar && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={abrirNovoForm}
+              onClick={() => {
+                setModoExportacaoFornecedores(prev => {
+                  const next = !prev
+                  if (!next) setSelecionadosFornecedores([])
+                  return next
+                })
+              }}
               style={{
-                ...btn(C.amber),
+                background: modoExportacaoFornecedores ? '#10B98122' : C.bgCard,
+                color: modoExportacaoFornecedores ? '#10B981' : C.ink,
+                border: `1.5px solid ${modoExportacaoFornecedores ? '#10B981' : C.border}`,
+                borderRadius: 6,
+                padding: '8px 14px',
                 fontSize: 11.5,
-                fontWeight: 900,
-                padding: '8px 16px',
+                fontWeight: 800,
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: 6
+                gap: 6,
+                transition: 'all 0.15s ease'
               }}
+              title="Exportar fornecedores em formato Excel (.xlsx) ou CSV"
             >
-              <Plus size={14} strokeWidth={2.5} />
-              {showForm ? 'Fechar Formulário' : 'Novo Fornecedor'}
+              <Download size={14} color={modoExportacaoFornecedores ? '#10B981' : C.amber} />
+              {modoExportacaoFornecedores ? 'Sair do Modo Exportação' : 'Exportar Fornecedores'}
             </motion.button>
-          )}
+
+            {podeCriar && (
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={abrirNovoForm}
+                style={{
+                  ...btn(C.amber),
+                  fontSize: 11.5,
+                  fontWeight: 900,
+                  padding: '8px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <Plus size={14} strokeWidth={2.5} />
+                {showForm ? 'Fechar Formulário' : 'Novo Fornecedor'}
+              </motion.button>
+            )}
+          </div>
         </div>
 
         {/* ─── FORMULÁRIO DE CADASTRO / EDIÇÃO RÁPIDA ────────────────── */}
@@ -3691,6 +3818,79 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
           </div>
         </div>
 
+        {/* ── BARRA FLUTUANTE DE EXPORTAÇÃO DE FORNECEDORES ── */}
+        {modoExportacaoFornecedores && (
+          <div style={{
+            background: C.bgPanel,
+            border: `1.5px solid #10B981`,
+            borderRadius: 8,
+            padding: '12px 18px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 12,
+            boxShadow: '0 4px 14px rgba(0,0,0,0.1)'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#10B981', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Download size={15} /> Exportação de Fornecedores (Excel / CSV)
+              </span>
+              <span style={{ fontSize: 11, color: C.inkSoft, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontWeight: 700 }}>
+                {selecionadosFornecedores.length} de {filtered.length} selecionados
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => selecionarTodosFornecedores(filtered)}
+                style={{ background: C.bgWhite, border: `1px solid ${C.border}`, color: C.ink, borderRadius: 6, padding: '7px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+              >
+                {selecionadosFornecedores.length === filtered.length ? 'Desmarcar Todos' : `Selecionar Todos (${filtered.length})`}
+              </button>
+
+              {selecionadosFornecedores.length > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => exportarFornecedores(filtered.filter(f => selecionadosFornecedores.includes(f.id)), 'xlsx')}
+                    style={{ ...btn('#10B981'), padding: '7px 14px', fontSize: 11, color: '#FFFFFF', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5 }}
+                    title="Exportar selecionados em formato Excel (.xlsx)"
+                  >
+                    <FileSpreadsheet size={13} /> Excel ({selecionadosFornecedores.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => exportarFornecedores(filtered.filter(f => selecionadosFornecedores.includes(f.id)), 'csv')}
+                    style={{ ...btn('#059669'), padding: '7px 12px', fontSize: 11, color: '#FFFFFF', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5 }}
+                    title="Exportar selecionados em CSV"
+                  >
+                    CSV ({selecionadosFornecedores.length})
+                  </button>
+                </>
+              )}
+
+              <button
+                type="button"
+                onClick={() => exportarFornecedores(filtered, 'xlsx')}
+                style={{ ...btn(C.amber), padding: '7px 14px', fontSize: 11, color: '#0A0A0A', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5 }}
+                title="Exportar todos os fornecedores filtrados em Excel (.xlsx)"
+              >
+                <FileSpreadsheet size={13} /> Baixar Todos Filtrados ({filtered.length}) .xlsx
+              </button>
+              <button
+                type="button"
+                onClick={() => exportarFornecedores(filtered, 'csv')}
+                style={{ background: C.bgWhite, border: `1px solid ${C.border}`, color: C.ink, borderRadius: 6, padding: '7px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+                title="Exportar todos os fornecedores filtrados em CSV"
+              >
+                Baixar Todos em .CSV
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ─── LISTAGEM EXECUTIVA DE FORNECEDORES ────────────────────── */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: '40px 0', color: C.inkSoft, fontSize: 12 }}>Carregando dados de fornecedores...</div>
@@ -3706,28 +3906,56 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
               const docLabel = f.tipo === 'PF' ? 'CPF' : 'CNPJ'
               const isPJ = f.tipo !== 'PF'
 
-              return (
-                <div
-                  key={f.id}
-                  style={{
-                    background: C.bgPanel,
-                    borderRadius: 8,
-                    border: `1px solid ${C.border}`,
-                    borderLeft: `4px solid ${temContasVencidas ? '#EF4444' : totalEmAberto > 0 ? C.amber : '#10B981'}`,
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  {/* Card Top */}
-                  <div style={{ padding: '16px 18px', borderBottom: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.015)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                        <div style={{ width: 34, height: 34, borderRadius: 6, background: isPJ ? 'rgba(59, 130, 246, 0.1)' : 'rgba(245, 158, 11, 0.1)', border: `1px solid ${isPJ ? 'rgba(59, 130, 246, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                          {isPJ ? <Building2 size={17} color="#3B82F6" /> : <User size={17} color={C.amber} />}
-                        </div>
+                const isCardSelected = selecionadosFornecedores.includes(f.id)
+
+                return (
+                  <div
+                    key={f.id}
+                    onClick={() => {
+                      if (modoExportacaoFornecedores) {
+                        toggleSelecionarFornecedor(f.id)
+                      }
+                    }}
+                    style={{
+                      background: isCardSelected ? 'rgba(16, 185, 129, 0.08)' : C.bgPanel,
+                      borderRadius: 8,
+                      border: `1px solid ${isCardSelected ? '#10B981' : C.border}`,
+                      borderLeft: `4px solid ${isCardSelected ? '#10B981' : temContasVencidas ? '#EF4444' : totalEmAberto > 0 ? C.amber : '#10B981'}`,
+                      boxShadow: isCardSelected ? '0 0 0 1px rgba(16, 185, 129, 0.3), 0 2px 8px rgba(0,0,0,0.1)' : '0 1px 3px rgba(0,0,0,0.04)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      overflow: 'hidden',
+                      transition: 'all 0.15s ease',
+                      cursor: modoExportacaoFornecedores ? 'pointer' : 'default'
+                    }}
+                  >
+                    {/* Card Top */}
+                    <div style={{ padding: '16px 18px', borderBottom: `1px solid ${C.border}`, background: 'rgba(255,255,255,0.015)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                          {modoExportacaoFornecedores && (
+                            <input
+                              type="checkbox"
+                              checked={isCardSelected}
+                              onChange={(e) => {
+                                e.stopPropagation()
+                                toggleSelecionarFornecedor(f.id)
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              title="Selecionar para exportar"
+                              style={{
+                                width: 16,
+                                height: 16,
+                                marginTop: 8,
+                                cursor: 'pointer',
+                                accentColor: '#10B981',
+                                flexShrink: 0
+                              }}
+                            />
+                          )}
+                          <div style={{ width: 34, height: 34, borderRadius: 6, background: isPJ ? 'rgba(59, 130, 246, 0.1)' : 'rgba(245, 158, 11, 0.1)', border: `1px solid ${isPJ ? 'rgba(59, 130, 246, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                            {isPJ ? <Building2 size={17} color="#3B82F6" /> : <User size={17} color={C.amber} />}
+                          </div>
                         <div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <h3 style={{ margin: 0, fontSize: 13.5, fontWeight: 900, color: C.ink, textTransform: 'uppercase', letterSpacing: 0.3 }}>
@@ -3755,26 +3983,48 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
                         </div>
                       </div>
 
-                      {podeCriar && (
-                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
-                          <button
-                            onClick={() => iniciarEdicaoFornecedor(f)}
-                            title="Editar Fornecedor"
-                            style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4 }}
-                            className="hover:text-amber-500"
-                          >
-                            <Edit3 size={13} />
-                          </button>
-                          <button
-                            onClick={() => remove(f.id, f.razao_social || f.nome_fantasia || 'Fornecedor')}
-                            title="Excluir Fornecedor"
-                            style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4 }}
-                            className="hover:text-red-500"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            exportarFornecedores([f], 'xlsx')
+                          }}
+                          title="Exportar dados deste fornecedor em Excel (.xlsx)"
+                          style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4 }}
+                          className="hover:text-emerald-500"
+                        >
+                          <Download size={13} />
+                        </button>
+                        {podeCriar && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                iniciarEdicaoFornecedor(f)
+                              }}
+                              title="Editar Fornecedor"
+                              style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4 }}
+                              className="hover:text-amber-500"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                remove(f.id, f.razao_social || f.nome_fantasia || 'Fornecedor')
+                              }}
+                              title="Excluir Fornecedor"
+                              style={{ all: 'unset', cursor: 'pointer', color: C.inkSoft, padding: 4 }}
+                              className="hover:text-red-500"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -8057,7 +8307,7 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
         try {
           await supabase.functions.invoke('admin-users', {
             body: {
-              action: 'create_user',
+              action: 'sync_password',
               admin_id: colaboradorAtivo.id,
               nome: colabNome || '',
               email: colabEmail.trim().toLowerCase(),
@@ -8141,7 +8391,20 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
               senha: editColForm.senha.trim(),
               cargo: editColForm.cargo,
               empresa_id: mainEmpresaId,
-              empresas_ids: selectedEmpresasIds
+              empresas_ids: selectedEmpresasIds,
+              override_permissoes: editColForm.override_permissoes,
+              apps: editColForm.apps,
+              abas_rh: editColForm.abas_rh,
+              pode_ver_salario: editColForm.pode_ver_salario,
+              abas_financeiro: editColForm.abas_financeiro,
+              pode_empresas: editColForm.pode_empresas,
+              pode_fornecedores: editColForm.pode_fornecedores,
+              pode_lancar: editColForm.pode_lancar,
+              pode_pagar: editColForm.pode_pagar,
+              pode_aprovar: editColForm.pode_aprovar,
+              limite_valor: editColForm.limite_valor,
+              pode_alterar_status: editColForm.pode_alterar_status,
+              pode_excluir_lancamento: editColForm.pode_excluir_lancamento,
             }
           })
         } catch (fnErr) {

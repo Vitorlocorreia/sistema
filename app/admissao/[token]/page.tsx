@@ -261,7 +261,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     if (!fluxo) return 0
     let count = 0
     for (const modelo of fluxo.modelos) {
-      if (modelo.ordem === 2 || modelo.ordem === 3) {
+      if (modelo.ordem === 3) continue // Etapa interna RH/DP, não é exigida do candidato
+      if (modelo.ordem === 2) {
         const hasDoc = fluxo.documentos.some(d => d.modelo_id === modelo.id && ['enviado', 'aprovado'].includes(d.status))
         if (hasDoc) count++
       } else if (modelo.ordem === 1) {
@@ -269,18 +270,24 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           const hasDoc = fluxo.documentos.some(d => d.modelo_id === modelo.id && d.item_id === item.id && ['enviado', 'aprovado'].includes(d.status))
           if (hasDoc) count++
         }
+      } else if (modelo.ordem === 4) {
+        const itemLaudo = modelo.checklist.find(i => i.id === 'responsavel') || modelo.checklist[modelo.checklist.length - 1]
+        const hasDoc = fluxo.documentos.some(d => d.modelo_id === modelo.id && (d.item_id === '__laudo_candidato__' || d.item_id === 'responsavel' || (itemLaudo && d.item_id === itemLaudo.id)) && ['enviado', 'aprovado'].includes(d.status))
+        if (hasDoc) count++
       }
     }
     return count
   }, [fluxo])
 
   const totalObrigatorios = useMemo(() => fluxo?.modelos.reduce((total, modelo) => {
-    if (modelo.ordem === 2 || modelo.ordem === 3) return total + 1
-    if (modelo.ordem === 4) return total
+    if (modelo.ordem === 3) return total // Etapa interna RH/DP ignorada
+    if (modelo.ordem === 2) return total + 1
+    if (modelo.ordem === 4) return total + 1
     return total + modelo.checklist.filter(item => item.obrigatorio).length
   }, 0) ?? 0, [fluxo])
 
   const totalArquivosEnviados = fluxo?.documentos.filter(documento => ['enviado', 'aprovado'].includes(documento.status)).length ?? 0
+  const etapaAtualDisplay = fluxo ? Math.min(fluxo.progresso.etapa_atual === 4 ? 3 : fluxo.progresso.etapa_atual, 3) : 1
 
   return <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, padding: '28px 16px' }}>
     <section style={{ width: '100%', maxWidth: 900, margin: '0 auto' }}>
@@ -296,11 +303,11 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           <p style={{ color: C.inkSoft, fontSize: 11, lineHeight: 1.6, margin: '12px 0 0' }}>O RH já realizou seu pré-cadastro. Siga as etapas abaixo para concluir sua admissão.</p>
           {fluxo.convite.status === 'devolvido' && <div style={{ marginTop: 12, padding: 10, borderRadius: 5, border: '1px solid #EF444466', background: '#EF444412', color: '#FCA5A5', fontSize: 10 }}><strong>Documentação devolvida pelo RH</strong><div style={{ marginTop: 4 }}>{fluxo.convite.justificativa_devolucao || 'Revise os itens marcados e envie novamente.'}</div></div>}
           <div style={{ marginTop: 12, height: 7, borderRadius: 99, background: '#FFFFFF0D', overflow: 'hidden' }}><div style={{ width: `${totalObrigatorios ? Math.min(100, Math.round((concluidosObrigatorios / totalObrigatorios) * 100)) : 0}%`, height: '100%', background: C.amber }} /></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: C.inkSoft, fontSize: 9, marginTop: 5 }}><span>{concluidosObrigatorios} de {totalObrigatorios} etapas concluídas ({totalArquivosEnviados} arquivo{totalArquivosEnviados === 1 ? '' : 's'} anexado{totalArquivosEnviados === 1 ? '' : 's'})</span><span>Etapa atual: {fluxo.progresso.etapa_atual} de 4</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: C.inkSoft, fontSize: 9, marginTop: 5 }}><span>{concluidosObrigatorios} de {totalObrigatorios} etapas concluídas ({totalArquivosEnviados} arquivo{totalArquivosEnviados === 1 ? '' : 's'} anexado{totalArquivosEnviados === 1 ? '' : 's'})</span><span>Etapa atual: {etapaAtualDisplay} de 3</span></div>
         </section>
 
         <div style={{ display: 'grid', gap: 12 }}>
-          {fluxo.modelos.map(modelo => {
+          {fluxo.modelos.filter(m => m.ordem !== 3).map(modelo => {
             const etapa = fluxo.progresso.etapas.find(item => item.modelo_id === modelo.id)
 
             // ── ETAPA 1: Caixas de upload normais + Input de texto na última box (Chave PIX) ──────
@@ -309,7 +316,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                 <article key={modelo.id} style={{ ...card, borderColor: etapa?.concluida ? '#22C55E66' : C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
-                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 1 DE 4</span>
+                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 1 DE 3</span>
                       <span style={{ fontSize: 8, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Preenchido pelo Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
@@ -612,8 +619,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
               )
             }
 
-            // ── ETAPA 2 (Autodeclaração) & ETAPA 3 (Ficha de Registro): Apenas 1 box de upload ────
-            if (modelo.ordem === 2 || modelo.ordem === 3) {
+            // ── ETAPA 2 (Autodeclaração): Apenas 1 box de upload ────
+            if (modelo.ordem === 2) {
               const itemUnico = modelo.checklist[0] || { id: `etapa_${modelo.ordem}`, label: modelo.nome, obrigatorio: true }
               const docs = fluxo.documentos.filter(documento => documento.modelo_id === modelo.id)
               const accepted = docs.find(documento => ['enviado', 'aprovado'].includes(documento.status))
@@ -624,7 +631,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                 <article key={modelo.id} style={{ ...card, borderColor: accepted ? '#22C55E66' : C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
-                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA {modelo.ordem} DE 4</span>
+                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 2 DE 3</span>
                       <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: 'C.amber', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Modelo da Empresa · Assinatura do Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
@@ -657,7 +664,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
               )
             }
 
-            // ── ETAPA 4: Guia de Exame Admissional (Baixar guia do RH + Anexar laudo médico) ──────
+            // ── ETAPA 3 DO CANDIDATO: Guia de Exame Admissional (Baixar guia do RH + Anexar laudo médico) ──────
             if (modelo.ordem === 4) {
               const itemLaudo = modelo.checklist.find(i => i.id === 'responsavel') || modelo.checklist[modelo.checklist.length - 1] || { id: 'responsavel', label: 'Laudo Médico', obrigatorio: true }
               const guiaRH = fluxo.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === '__guia_rh__' || d.item_id === 'identificacao'))
@@ -668,7 +675,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                 <article key={modelo.id} style={{ ...card, borderColor: laudoCandidato ? '#22C55E66' : C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
-                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 4 DE 4</span>
+                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 3 DE 3</span>
                       <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: 'C.amber', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Guia do RH · Laudo do Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>

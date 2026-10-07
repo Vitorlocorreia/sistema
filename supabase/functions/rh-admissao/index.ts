@@ -53,14 +53,16 @@ async function loadFlow(inviteId: string) {
 }
 
 function progress(modelos: any[], documentos: any[]) {
-  const etapas = modelos.map(modelo => {
+  // A Etapa 3 (Documentos Admissionais) é preenchida internamente pelo DP/RH e não é exigida do candidato
+  const modelosCandidato = modelos.filter(m => m.ordem !== 3);
+  const etapas = modelosCandidato.map(modelo => {
     const required = (modelo.checklist || []).filter((item: any) => item.obrigatorio);
     const complete = required.every((item: any) => documentos.some((doc: any) => doc.modelo_id === modelo.id && doc.item_id === item.id && ["enviado", "aprovado"].includes(doc.status)));
     const count = documentos.filter((doc: any) => doc.modelo_id === modelo.id && doc.status !== "pendencia").length;
     return { modelo_id: modelo.id, ordem: modelo.ordem, concluida: complete, enviados: count, obrigatorios: required.length };
   });
   const firstPending = etapas.find((etapa: any) => !etapa.concluida);
-  return { etapas, etapa_atual: firstPending?.ordem || 4, completo: etapas.length === 4 && etapas.every((etapa: any) => etapa.concluida) };
+  return { etapas, etapa_atual: firstPending?.ordem || 4, completo: etapas.length === 3 && etapas.every((etapa: any) => etapa.concluida) };
 }
 
 async function requireRh(req: Request) {
@@ -126,7 +128,12 @@ Deno.serve(async req => {
 
     if (action === "view") {
       if (convite.status === "ativo") await admin.from("rh_admissao_convites").update({ status: "em_preenchimento", updated_at: new Date().toISOString() }).eq("id", convite.id);
-      return json({ convite: { id: convite.id, nome_destinatario: convite.nome_destinatario, email_destinatario: convite.email_destinatario, telefone_destinatario: convite.telefone_destinatario, cargo: convite.cargo, obra: convite.obra, expires_at: convite.expires_at, status: convite.status === "ativo" ? "em_preenchimento" : convite.status }, ...flow, progresso: state });
+      return json({
+        convite: { id: convite.id, nome_destinatario: convite.nome_destinatario, email_destinatario: convite.email_destinatario, telefone_destinatario: convite.telefone_destinatario, cargo: convite.cargo, obra: convite.obra, expires_at: convite.expires_at, status: convite.status === "ativo" ? "em_preenchimento" : convite.status },
+        modelos: flow.modelos.filter((m: any) => m.ordem !== 3),
+        documentos: flow.documentos,
+        progresso: state
+      });
     }
 
     if (action === "request_upload") {
@@ -156,7 +163,7 @@ Deno.serve(async req => {
       const refreshed = await loadFlow(convite.id);
       const refreshedState = progress(refreshed.modelos, refreshed.documentos);
       await admin.from("rh_admissao_convites").update({ etapa_atual: refreshedState.etapa_atual, status: "em_preenchimento", updated_at: new Date().toISOString() }).eq("id", convite.id);
-      return json({ ok: true, ...refreshed, progresso: refreshedState });
+      return json({ ok: true, modelos: refreshed.modelos.filter((m: any) => m.ordem !== 3), documentos: refreshed.documentos, progresso: refreshedState });
     }
 
     if (action === "delete_document") {
@@ -173,11 +180,11 @@ Deno.serve(async req => {
       const refreshed = await loadFlow(convite.id);
       const refreshedState = progress(refreshed.modelos, refreshed.documentos);
       await admin.from("rh_admissao_convites").update({ etapa_atual: refreshedState.etapa_atual, status: "em_preenchimento", updated_at: new Date().toISOString() }).eq("id", convite.id);
-      return json({ ok: true, ...refreshed, progresso: refreshedState });
+      return json({ ok: true, modelos: refreshed.modelos.filter((m: any) => m.ordem !== 3), documentos: refreshed.documentos, progresso: refreshedState });
     }
 
     if (action === "submit") {
-      if (!state.completo) return json({ error: "Envie todos os documentos obrigatórios das quatro etapas antes de finalizar." }, 400);
+      if (!state.completo) return json({ error: "Envie todos os documentos obrigatórios antes de finalizar." }, 400);
       await admin.from("rh_admissao_convites").update({ status: "aguardando_aprovacao", etapa_atual: 4, usado_em: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", convite.id);
       return json({ ok: true });
     }

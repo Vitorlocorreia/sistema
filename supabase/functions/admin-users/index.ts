@@ -75,6 +75,21 @@ Deno.serve(async request => {
       return json({ ok: true })
     }
 
+    // Ação exclusiva para sincronizar senha no Supabase Auth sem sobrescrever dados do colaborador
+    if (payload.action === 'sync_password' || payload.action === 'update_password') {
+      const email = String(payload.email || '').trim().toLowerCase()
+      const rawSenha = String(payload.senha || '').trim()
+      const senha = rawSenha ? (rawSenha.length < 6 ? rawSenha.padEnd(6, '0') : rawSenha) : '123456'
+      if (!email) return json({ error: 'Informe o e-mail.' }, 400)
+      const existingAuth = await findAuthUserByEmail(email)
+      if (existingAuth) {
+        await admin.auth.admin.updateUserById(existingAuth.id, { password: senha, email_confirm: true, user_metadata: { nome: payload.nome } })
+      } else {
+        await admin.auth.admin.createUser({ email, password: senha, email_confirm: true, user_metadata: { nome: payload.nome } })
+      }
+      return json({ ok: true })
+    }
+
     if (payload.action !== 'create_user' && payload.action !== 'approve_user') return json({ error: 'Ação inválida.' }, 400)
 
     const nome = String(payload.nome || '').trim()
@@ -99,9 +114,11 @@ Deno.serve(async request => {
       console.warn('Auth admin operation warning:', authErr)
     }
 
+    const { data: existing } = await admin.from('colaboradores').select('*').ilike('email', email).maybeSingle()
+
     const { data: config } = await admin
       .from('config_permissoes')
-      .select('apps,pode_empresas,pode_fornecedores,pode_lancar,pode_pagar,pode_aprovar,limite_valor,abas_financeiro,pode_alterar_status,pode_excluir_lancamento')
+      .select('apps,pode_empresas,pode_fornecedores,pode_lancar,pode_pagar,pode_aprovar,limite_valor,abas_financeiro,abas_rh,pode_alterar_status,pode_excluir_lancamento,pode_ver_salario')
       .eq('cargo', cargo)
       .maybeSingle()
 
@@ -113,27 +130,36 @@ Deno.serve(async request => {
       ? payload.empresas_ids as string[]
       : null
 
-    const profile = {
+    const hasOverride = payload.override_permissoes !== undefined
+      ? Boolean(payload.override_permissoes)
+      : (existing?.override_permissoes ?? isGlobalAdmin)
+
+    const resolvedApps = payload.apps !== undefined
+      ? String(payload.apps)
+      : (hasOverride && existing?.apps ? existing.apps : (isGlobalAdmin ? allApps : (config?.apps || cargo)))
+
+    const profile: Record<string, unknown> = {
       nome,
       email,
       cargo,
-      empresa_id: isGlobalAdmin ? null : (payload.empresa_id || (empresasIds?.[0] ?? null)),
-      empresas_ids: isGlobalAdmin ? null : empresasIds,
-      senha: senha,
-      override_permissoes: isGlobalAdmin,
-      apps: isGlobalAdmin ? allApps : (config?.apps || cargo),
-      pode_empresas: isGlobalAdmin || Boolean(config?.pode_empresas),
-      pode_fornecedores: isGlobalAdmin || Boolean(config?.pode_fornecedores),
-      pode_lancar: isGlobalAdmin || Boolean(config?.pode_lancar),
-      pode_pagar: isGlobalAdmin || Boolean(config?.pode_pagar),
-      pode_aprovar: isGlobalAdmin || Boolean(config?.pode_aprovar),
-      limite_valor: isGlobalAdmin ? null : (config?.limite_valor ?? 0),
-      abas_financeiro: isGlobalAdmin ? null : (config?.abas_financeiro ?? null),
-      pode_alterar_status: isGlobalAdmin ? true : (config?.pode_alterar_status ?? true),
-      pode_excluir_lancamento: isGlobalAdmin ? true : (config?.pode_excluir_lancamento ?? false),
+      empresa_id: isGlobalAdmin ? null : (payload.empresa_id || (empresasIds?.[0] ?? existing?.empresa_id ?? null)),
+      empresas_ids: isGlobalAdmin ? null : (empresasIds ?? existing?.empresas_ids ?? null),
+      senha: rawSenha || senha,
+      override_permissoes: hasOverride,
+      apps: resolvedApps,
+      pode_empresas: payload.pode_empresas !== undefined ? Boolean(payload.pode_empresas) : (hasOverride && existing?.pode_empresas !== undefined ? existing.pode_empresas : (isGlobalAdmin || Boolean(config?.pode_empresas))),
+      pode_fornecedores: payload.pode_fornecedores !== undefined ? Boolean(payload.pode_fornecedores) : (hasOverride && existing?.pode_fornecedores !== undefined ? existing.pode_fornecedores : (isGlobalAdmin || Boolean(config?.pode_fornecedores))),
+      pode_lancar: payload.pode_lancar !== undefined ? Boolean(payload.pode_lancar) : (hasOverride && existing?.pode_lancar !== undefined ? existing.pode_lancar : (isGlobalAdmin || Boolean(config?.pode_lancar))),
+      pode_pagar: payload.pode_pagar !== undefined ? Boolean(payload.pode_pagar) : (hasOverride && existing?.pode_pagar !== undefined ? existing.pode_pagar : (isGlobalAdmin || Boolean(config?.pode_pagar))),
+      pode_aprovar: payload.pode_aprovar !== undefined ? Boolean(payload.pode_aprovar) : (hasOverride && existing?.pode_aprovar !== undefined ? existing.pode_aprovar : (isGlobalAdmin || Boolean(config?.pode_aprovar))),
+      limite_valor: payload.limite_valor !== undefined ? Number(payload.limite_valor) : (hasOverride && existing?.limite_valor !== undefined ? existing.limite_valor : (isGlobalAdmin ? null : (config?.limite_valor ?? 0))),
+      abas_financeiro: payload.abas_financeiro !== undefined ? payload.abas_financeiro : (existing?.abas_financeiro ?? (isGlobalAdmin ? null : (config?.abas_financeiro ?? null))),
+      abas_rh: payload.abas_rh !== undefined ? payload.abas_rh : (existing?.abas_rh ?? (config?.abas_rh ?? null)),
+      pode_ver_salario: payload.pode_ver_salario !== undefined ? Boolean(payload.pode_ver_salario) : (existing?.pode_ver_salario ?? (isGlobalAdmin || Boolean(config?.pode_ver_salario))),
+      pode_alterar_status: payload.pode_alterar_status !== undefined ? Boolean(payload.pode_alterar_status) : (existing?.pode_alterar_status ?? (config?.pode_alterar_status ?? true)),
+      pode_excluir_lancamento: payload.pode_excluir_lancamento !== undefined ? Boolean(payload.pode_excluir_lancamento) : (existing?.pode_excluir_lancamento ?? (config?.pode_excluir_lancamento ?? false)),
     }
 
-    const { data: existing } = await admin.from('colaboradores').select('id').ilike('email', email).maybeSingle()
     const profileResult = existing
       ? await admin.from('colaboradores').update(profile).eq('id', existing.id)
       : await admin.from('colaboradores').insert(profile)

@@ -106,6 +106,8 @@ type DocumentoCadastro = {
   enviado_em: string | null
   created_at?: string | null
   revisado_em?: string | null
+  tamanho_bytes?: number | null
+  mime_type?: string | null
   modelo?: { id: string; ordem: number; nome: string }
 }
 
@@ -548,7 +550,7 @@ function ArchivePanel({
           const pastaTitulos: Record<number, string> = {
             1: 'Identificação & Pessoal',
             2: 'Ficha Cadastral',
-            3: 'Declarações & Termos',
+            3: 'Documentos Admissionais',
             4: 'Saúde & ASO'
           }
 
@@ -740,6 +742,7 @@ function CadastroTable({
   const [inputSalario, setInputSalario] = useState('')
   const [savingSalario, setSavingSalario] = useState(false)
   const [uploadingFicha, setUploadingFicha] = useState(false)
+  const [uploadingDocAdmissional, setUploadingDocAdmissional] = useState(false)
 
   const [editEmailOpen, setEditEmailOpen] = useState(false)
   const [inputEmail, setInputEmail] = useState('')
@@ -981,6 +984,62 @@ function CadastroTable({
       toast('Erro: ' + (err instanceof Error ? err.message : 'falha no envio da ficha resumo'), 'error')
     } finally {
       setUploadingFicha(false)
+    }
+  }
+
+  async function uploadDocAdmissional(file: File | undefined) {
+    if (!file) return
+    const modeloEtapa3 = modelos.find(m => m.ordem === 3)
+    if (!modeloEtapa3) return
+    setUploadingDocAdmissional(true)
+    try {
+      const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
+      const path = `documentos-admissionais/${invite.id}-${Date.now()}-${safeName}`
+      const { error: uploadError } = await supabase.storage.from('rh-documentos').upload(path, file, { contentType: file.type || 'application/pdf', upsert: true })
+      if (uploadError) throw uploadError
+
+      const itemId = modeloEtapa3.checklist?.[0]?.id || 'documentos_admissionais'
+      const existing = docsList.find(d => d.modelo_id === modeloEtapa3.id)
+      if (existing) {
+        await supabase.from('rh_admissao_documentos').delete().eq('id', existing.id)
+      }
+
+      const { error: rowError } = await supabase.from('rh_admissao_documentos').insert({
+        convite_id: invite.id,
+        modelo_id: modeloEtapa3.id,
+        item_id: itemId,
+        nome: file.name,
+        storage_path: path,
+        tamanho_bytes: file.size,
+        mime_type: file.type || 'application/pdf',
+        status: 'aprovado'
+      })
+      if (rowError) throw rowError
+
+      toast('Documentos admissionais anexados com sucesso!', 'success')
+      await onRefresh?.()
+    } catch (err: unknown) {
+      toast('Erro: ' + (err instanceof Error ? err.message : 'falha no envio dos documentos admissionais'), 'error')
+    } finally {
+      setUploadingDocAdmissional(false)
+    }
+  }
+
+  async function removerDocAdmissional(docId: string) {
+    if (!confirm('Deseja realmente remover o documento admissional anexado?')) return
+    try {
+      const doc = docsList.find(d => d.id === docId)
+      if (doc?.storage_path) {
+        try {
+          await supabase.storage.from('rh-documentos').remove([doc.storage_path])
+        } catch (_) {}
+      }
+      const { error } = await supabase.from('rh_admissao_documentos').delete().eq('id', docId)
+      if (error) throw error
+      toast('Documento admissional removido com sucesso!', 'success')
+      await onRefresh?.()
+    } catch (err: unknown) {
+      toast('Erro ao remover documento: ' + (err instanceof Error ? err.message : ''), 'error')
     }
   }
 
@@ -1270,8 +1329,8 @@ function CadastroTable({
         <div style={{ padding: 14 }}>
           {modelos.filter(m => m.ordem === activeFolder).map(modelo => (
             <div key={modelo.id} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {/* Etapas 2 e 3 (Documento Único) */}
-              {(modelo.ordem === 2 || modelo.ordem === 3) && (() => {
+              {/* Etapa 2 (Autodeclaração do Candidato) */}
+              {modelo.ordem === 2 && (() => {
                 const docs = docsList.filter(d => d.modelo_id === modelo.id)
                 const doc = docs[docs.length - 1]
                 return (
@@ -1299,6 +1358,74 @@ function CadastroTable({
                           </button>
                         </div>
                       )}
+                    </div>
+                  </div>
+                )
+              })()}
+
+              {/* Etapa 3 (Documentos Admissionais - Alimentado internamente pelo DP / RH) */}
+              {modelo.ordem === 3 && (() => {
+                const docs = docsList.filter(d => d.modelo_id === modelo.id)
+                const doc = docs[docs.length - 1]
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ padding: '10px 12px', background: 'rgba(245, 158, 11, 0.05)', border: `1px solid ${C.amber}44`, borderRadius: 5 }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 900, color: C.amber, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        ℹ️ Preenchimento Interno (DP / RH)
+                      </span>
+                      <p style={{ fontSize: 10.5, color: C.inkSoft, margin: '4px 0 0', lineHeight: 1.5 }}>
+                        O funcionário não anexa nada nesta etapa pelo link público. Este espaço é alimentado pela equipe do Departamento Pessoal / RH com os documentos admissionais e dados formais de registro do colaborador.
+                      </p>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: C.bgWhite, border: `1px solid ${doc ? '#10B98155' : C.border}`, borderRadius: 5, flexWrap: 'wrap', gap: 10 }}>
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <span style={{ fontSize: 11.5, fontWeight: 800, color: C.ink }}>{modelo.nome}</span>
+                          <span style={{ fontSize: 8.5, background: doc ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)', color: doc ? '#10B981' : C.amber, padding: '1px 6px', borderRadius: 3, fontWeight: 800 }}>
+                            {doc ? '✓ Alimentado pelo DP' : 'Aguardando Anexo'}
+                          </span>
+                        </div>
+                        {doc ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                            <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10.5, fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <ExternalLink size={11} /> 📄 {doc.nome}
+                            </button>
+                            {doc.tamanho_bytes ? (
+                              <span style={{ fontSize: 9, color: C.inkSoft }}>
+                                ({(doc.tamanho_bytes / 1024).toFixed(0)} KB)
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <p style={{ fontSize: 10, color: C.inkSoft, margin: '3px 0 0' }}>
+                            Nenhum documento admissional anexado ainda. Faça o upload do arquivo para formalizar a pasta do colaborador.
+                          </p>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                        {doc && (
+                          <button
+                            type="button"
+                            onClick={() => void removerDocAdmissional(doc.id)}
+                            style={{ ...btnBase, padding: '5px 8px', fontSize: 9.5, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
+                            title="Remover documento"
+                          >
+                            <Trash2 size={11} /> Remover
+                          </button>
+                        )}
+                        <label style={{ ...btnBase, padding: '6px 12px', fontSize: 10, background: C.amber, color: '#0A0A0A', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                          <FileUp size={12} /> {uploadingDocAdmissional ? 'Enviando...' : doc ? 'Substituir Documento' : 'Anexar Documentos Admissionais'}
+                          <input
+                            hidden
+                            type="file"
+                            accept=".pdf,.doc,.docx,.xls,.xlsx"
+                            disabled={uploadingDocAdmissional}
+                            onChange={e => void uploadDocAdmissional(e.target.files?.[0])}
+                          />
+                        </label>
+                      </div>
                     </div>
                   </div>
                 )
@@ -1663,8 +1790,8 @@ function CadastroTable({
                       ok: docsList.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 2 && d.status === 'aprovado')
                     },
                     {
-                      label: 'Etapa 3: Declarações',
-                      ok: docsList.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 3 && d.status === 'aprovado')
+                      label: 'Etapa 3: Documentos Admissionais (DP)',
+                      ok: docsList.some(d => d.modelo_id && modelos.find(m => m.id === d.modelo_id)?.ordem === 3)
                     },
                     {
                       label: 'Etapa 4: Exame ASO Aprovado',
@@ -2066,6 +2193,7 @@ export default function RhPage() {
       convitesRelacionados.forEach((c: any) => {
         if (c.documentos && Array.isArray(c.documentos)) {
           c.documentos.forEach((d: any) => {
+            if (d.item_id === 'salario_registro' || d.item_id === 'status_apto') return
             let ordemDoc = null
             if (d.modelo_id) {
               const mod = modelos.find(m => m.id === d.modelo_id)
@@ -2653,18 +2781,39 @@ export default function RhPage() {
   }
 
   async function openCadastroDocument(documento: DocumentoCadastro | Record<string, string | null>) {
-    const path = documento.storage_path || (documento as any).arquivo_url
-    if (!path) return toast('Documento sem arquivo vinculado.', 'error')
+    const rawPath = documento.storage_path || (documento as any).arquivo_url
+    if (!rawPath) return toast('Documento sem arquivo vinculado.', 'error')
 
-    const w = window.open('', '_blank')
+    const path = rawPath.startsWith('/') ? rawPath.slice(1) : rawPath
+
+    if (path.startsWith('salarios/') || (documento as any).item_id === 'salario_registro') {
+      return toast('Este registro é informativo de salário e não possui arquivo anexado.', 'info')
+    }
+    if ((documento as any).status === 'aguardando_upload') {
+      return toast('O arquivo ainda não foi enviado pelo candidato.', 'warning')
+    }
+
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      window.open(path, '_blank')
+      return
+    }
+
+    let w: Window | null = null
+    try {
+      w = window.open('', '_blank')
+    } catch {}
+
     const { data, error } = await supabase.storage.from('rh-documentos').createSignedUrl(path, 3600)
     if (error || !data?.signedUrl) {
-      if (w) w.close()
+      if (w && !w.closed) w.close()
+      console.warn('Erro ao abrir documento:', error, 'Path:', path)
       return toast('Não foi possível abrir o documento.', 'error')
     }
-    if (w) {
+    if (w && !w.closed) {
       w.location.href = data.signedUrl
       w.focus()
+    } else {
+      window.open(data.signedUrl, '_blank')
     }
   }
 
