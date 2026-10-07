@@ -3419,6 +3419,17 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     if (formato === 'xlsx') {
       try {
         const ws = XLSX.utils.json_to_sheet(dataFormatted)
+        // Ajuste automático de largura de colunas (autowidth) para não cortar texto
+        const colWidths = Object.keys(dataFormatted[0] || {}).map(key => {
+          let maxLen = key.length
+          dataFormatted.forEach(row => {
+            const val = String((row as any)[key] ?? '')
+            if (val.length > maxLen) maxLen = val.length
+          })
+          return { wch: Math.min(Math.max(maxLen + 3, 12), 55) }
+        })
+        ws['!cols'] = colWidths
+
         const wb = XLSX.utils.book_new()
         XLSX.utils.book_append_sheet(wb, ws, 'Fornecedores')
         XLSX.writeFile(wb, `${fileName}.xlsx`)
@@ -4966,55 +4977,89 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     }
   }
 
-  const exportarContasCSV = (listaExportar: ContaComRelacoes[]) => {
+  const exportarContas = (listaExportar: ContaComRelacoes[], formato: 'xlsx' | 'csv' = 'xlsx') => {
     if (listaExportar.length === 0) return toast('Nenhum lançamento selecionado para exportar.', 'error')
 
-    const headers = [
-      'Código', 'ID', 'Tipo', 'Descrição', 'Empresa', 'Fornecedor', 'CNPJ/CPF Fornecedor',
-      'PIX', 'Banco', 'Agência', 'Conta Bancária', 'Obra', 'Categoria',
-      'Valor Original (R$)', 'Status', 'Data Vencimento/Previsao', 'Pago Em',
-      'Criado Por', 'Aprovado Por', 'Observacoes'
-    ]
+    const qtd = listaExportar.length
+    const dataAtual = new Date().toISOString().slice(0, 10)
+    const fileName = `relatorio_pagamentos_${qtd}_itens_${dataAtual}`
 
-    const rows = listaExportar.map(c => {
+    const rowsFormatted = listaExportar.map(c => {
       const forn = c.fornecedor
-      return [
-        fmtCodigo(c) || `#${c.id.slice(0, 5)}`,
-        c.id,
-        c.tipo === 'pagar' ? 'Conta a Pagar' : 'Conta a Receber',
-        `"${(c.descricao || '').replace(/"/g, '""')}"`,
-        `"${(c.empresa?.nome_fantasia || c.empresa?.razao_social || '').replace(/"/g, '""')}"`,
-        `"${(forn?.razao_social || forn?.nome_fantasia || 'Geral').replace(/"/g, '""')}"`,
-        `"${forn?.cnpj || ''}"`,
-        `"${forn?.pix || ''}"`,
-        `"${forn?.banco || ''}"`,
-        `"${forn?.agencia || ''}"`,
-        `"${forn?.conta || ''}"`,
-        `"${(c.obra?.nome || 'Geral').replace(/"/g, '""')}"`,
-        `"${(c.categoria || '').replace(/"/g, '""')}"`,
-        c.valor ? c.valor.toFixed(2).replace('.', ',') : '0,00',
-        c.status,
-        c.data_vencimento || c.data_previsao || '',
-        c.pago_em ? new Date(c.pago_em).toLocaleDateString('pt-BR') : '',
-        `"${(c.criado_por || '').replace(/"/g, '""')}"`,
-        `"${(c.aprovado_por || '').replace(/"/g, '""')}"`,
-        `"${(c.observacoes || '').replace(/"/g, '""')}"`
-      ]
+      return {
+        'Código': fmtCodigo(c) || `#${c.id.slice(0, 5)}`,
+        'Tipo': c.tipo === 'pagar' ? 'Conta a Pagar' : 'Conta a Receber',
+        'Descrição': c.descricao || '',
+        'Empresa': c.empresa?.nome_fantasia || c.empresa?.razao_social || 'Geral',
+        'Fornecedor / Beneficiário': forn?.razao_social || forn?.nome_fantasia || 'Geral',
+        'CNPJ / CPF': forn?.cnpj || '',
+        'Chave PIX': forn?.pix || '',
+        'Banco': forn?.banco || '',
+        'Agência': forn?.agencia || '',
+        'Conta': forn?.conta || '',
+        'Obra': c.obra?.nome || 'Geral',
+        'Categoria': c.categoria || '',
+        'Valor (R$)': Number(c.valor || 0),
+        'Status': c.status || '',
+        'Vencimento / Previsão': c.data_vencimento || c.data_previsao ? fmtDate(c.data_vencimento || c.data_previsao || '') : '',
+        'Data do Pagamento': c.pago_em ? new Date(c.pago_em).toLocaleDateString('pt-BR') : '',
+        'Criado Por': c.criado_por || '',
+        'Aprovado Por': c.aprovado_por || '',
+        'Observações': c.observacoes || ''
+      }
     })
 
-    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n')
+    if (formato === 'xlsx') {
+      try {
+        const ws = XLSX.utils.json_to_sheet(rowsFormatted)
+        // Autowidth dinâmico por coluna para evitar colunas espremidas ou texto cortado
+        const colWidths = Object.keys(rowsFormatted[0] || {}).map(key => {
+          let maxLen = key.length
+          rowsFormatted.forEach(row => {
+            const val = String((row as any)[key] ?? '')
+            if (val.length > maxLen) maxLen = val.length
+          })
+          return { wch: Math.min(Math.max(maxLen + 3, 11), 60) }
+        })
+        ws['!cols'] = colWidths
+
+        const wb = XLSX.utils.book_new()
+        XLSX.utils.book_append_sheet(wb, ws, 'Lancamentos')
+        XLSX.writeFile(wb, `${fileName}.xlsx`)
+        toast(`${qtd} lançamento(s) exportado(s) com sucesso em Excel (.xlsx)!`, 'success')
+        return
+      } catch (err) {
+        console.warn('Erro ao gerar XLSX, gerando fallback CSV:', err)
+      }
+    }
+
+    // CSV formatado com separador ponto-e-vírgula e UTF-8 BOM
+    const headers = Object.keys(rowsFormatted[0])
+    const rows = rowsFormatted.map(obj =>
+      headers.map(h => {
+        const val = (obj as any)[h]
+        if (typeof val === 'number') {
+          return val.toFixed(2).replace('.', ',')
+        }
+        return `"${String(val ?? '').replace(/"/g, '""')}"`
+      }).join(';')
+    )
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows].join('\n')
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    const qtd = listaExportar.length
-    link.download = `relatorio_pagamentos_${qtd}_itens_${new Date().toISOString().slice(0,10)}.csv`
+    link.download = `${fileName}.csv`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
-    toast(`${qtd} lançamento(s) exportado(s) com sucesso!`, 'success')
+    toast(`${qtd} lançamento(s) exportado(s) com sucesso em CSV!`, 'success')
   }
+
+  // Alias para retrocompatibilidade
+  const exportarContasCSV = (listaExportar: ContaComRelacoes[]) => exportarContas(listaExportar, 'xlsx')
 
   const [expandedContaId, setExpandedContaId] = useState<string | null>(null)
   const [formNegociacao, setFormNegociacao] = useState({
@@ -6722,19 +6767,41 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
             </button>
 
             {selecionadasContas.length > 0 && (
-              <button
-                onClick={() => exportarContasCSV(filtered.filter(c => selecionadasContas.includes(c.id)))}
-                style={{ ...btn('#10B981'), padding: '7px 14px', fontSize: 11, color: '#FFFFFF', fontWeight: 800 }}
-              >
-                Baixar Selecionados ({selecionadasContas.length})
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => exportarContas(filtered.filter(c => selecionadasContas.includes(c.id)), 'xlsx')}
+                  style={{ ...btn('#10B981'), padding: '7px 14px', fontSize: 11, color: '#FFFFFF', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5 }}
+                  title="Baixar selecionados em Excel (.xlsx) formatado"
+                >
+                  <FileSpreadsheet size={13} /> Excel ({selecionadasContas.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => exportarContas(filtered.filter(c => selecionadasContas.includes(c.id)), 'csv')}
+                  style={{ ...btn('#059669'), padding: '7px 12px', fontSize: 11, color: '#FFFFFF', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5 }}
+                  title="Baixar selecionados em CSV formatado"
+                >
+                  CSV ({selecionadasContas.length})
+                </button>
+              </>
             )}
 
             <button
-              onClick={() => exportarContasCSV(filtered)}
-              style={{ ...btn(C.amber), padding: '7px 14px', fontSize: 11, color: '#0A0A0A', fontWeight: 800 }}
+              type="button"
+              onClick={() => exportarContas(filtered, 'xlsx')}
+              style={{ ...btn(C.amber), padding: '7px 14px', fontSize: 11, color: '#0A0A0A', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 5 }}
+              title="Baixar todas as contas filtradas em Excel (.xlsx) formatado"
             >
-              Baixar Todas as Filtradas ({filtered.length})
+              <FileSpreadsheet size={13} /> Baixar Todas ({filtered.length}) .xlsx
+            </button>
+            <button
+              type="button"
+              onClick={() => exportarContas(filtered, 'csv')}
+              style={{ background: C.bgWhite, border: `1px solid ${C.border}`, color: C.ink, borderRadius: 6, padding: '7px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+              title="Baixar todas as contas filtradas em formato CSV"
+            >
+              Baixar Todas em .CSV
             </button>
           </div>
         </div>
