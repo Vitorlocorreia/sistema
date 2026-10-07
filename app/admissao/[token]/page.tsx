@@ -242,6 +242,52 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     }
   }
 
+  async function salvarPrimeiraViaVem(modelo: Modelo, item: ChecklistItem) {
+    const uploadId = `${modelo.id}:${item.id}`
+    setEnviando(uploadId)
+    setErro('')
+    try {
+      const textContent = `Solicitação de 1ª via do cartão VEM pelo funcionário.`
+      const textBlob = new Blob([textContent], { type: 'application/pdf' })
+      const textFile = new File([textBlob], 'solicitacao_1via_vem.pdf', { type: 'application/pdf' })
+
+      const request = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'request_upload',
+          token,
+          modelo_id: modelo.id,
+          item_id: item.id,
+          nome: textContent,
+          mime_type: 'application/pdf',
+          tamanho_bytes: textBlob.size,
+        }),
+      })
+      const prepared = await request.json()
+      if (!request.ok) throw new Error(prepared.error || 'Não foi possível preparar a solicitação da 1ª via.')
+
+      const { error: uploadError } = await supabase.storage
+        .from('rh-documentos')
+        .uploadToSignedUrl(prepared.path, prepared.upload_token, textFile, { contentType: 'application/pdf' })
+      if (uploadError) throw uploadError
+
+      const confirm = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'confirm_upload', token, document_id: prepared.document_id }),
+      })
+      const confirmed = await confirm.json()
+      if (!confirm.ok) throw new Error(confirmed.error || 'Não foi possível confirmar a solicitação de 1ª via.')
+
+      await carregar()
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Falha ao salvar solicitação de 1ª via do VEM.')
+    } finally {
+      setEnviando('')
+    }
+  }
+
   async function finalizar() {
     setEnviando('finalizar')
     setErro('')
@@ -407,7 +453,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
 
                       if (isVem) {
                         const declSemVem = docs.find(d => d.nome === 'nao_possui_vem.pdf' || d.nome === 'O funcionário declarou que não possui VEM.')
-                        const realDocs = docs.filter(d => d.id !== declSemVem?.id)
+                        const decl1ViaVem = docs.find(d => d.nome === 'solicitacao_1via_vem.pdf' || d.nome === 'Solicitação de 1ª via do cartão VEM pelo funcionário.')
+                        const realDocs = docs.filter(d => d.id !== declSemVem?.id && d.id !== decl1ViaVem?.id)
 
                         return (
                           <div key={item.id} style={{ padding: 12, background: C.bgWhite, border: `1px solid ${isItemConcluido ? '#22C55E55' : pendingDocs.length > 0 ? '#EF444455' : C.border}`, borderRadius: 5 }}>
@@ -417,22 +464,37 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                                   <strong style={{ fontSize: 11 }}>{item.label}{item.obrigatorio ? ' *' : ''}</strong>
                                   {isItemConcluido && (
                                     <span style={{ fontSize: 8.5, background: 'rgba(34, 197, 94, 0.12)', color: '#22C55E', border: '1px solid rgba(34, 197, 94, 0.25)', padding: '1px 6px', borderRadius: 99, fontWeight: 800 }}>
-                                      ✓ {declSemVem ? 'Declarado não possuir VEM' : `${realDocs.length} ${realDocs.length === 1 ? 'anexo' : 'anexos'}`}
+                                      ✓ {decl1ViaVem ? 'Solicitação de 1ª Via do VEM' : declSemVem ? 'Declarado não possuir VEM' : `${realDocs.length} ${realDocs.length === 1 ? 'anexo' : 'anexos'}`}
                                     </span>
                                   )}
                                 </div>
+                                {decl1ViaVem && (
+                                  <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>
+                                    ✓ Você solicitou a emissão da 1ª via do cartão VEM. O RH providenciará seu cartão.
+                                  </div>
+                                )}
                                 {declSemVem && (
                                   <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>
                                     ✓ Você declarou que não possui ou não utiliza cartão VEM.
                                   </div>
                                 )}
                               </div>
-                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <button
+                                  type="button"
+                                  disabled={!!enviando}
+                                  onClick={() => void salvarPrimeiraViaVem(modelo, item)}
+                                  title="Clique aqui se você nunca teve cartão VEM e precisa que a empresa solicite a 1ª via"
+                                  style={{ padding: '6px 10px', background: decl1ViaVem ? 'rgba(34, 197, 94, 0.12)' : 'rgba(245, 158, 11, 0.08)', color: decl1ViaVem ? '#22C55E' : C.amber, border: `1px solid ${decl1ViaVem ? 'rgba(34, 197, 94, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`, borderRadius: 4, fontSize: 9, fontWeight: 800, cursor: 'pointer', opacity: enviando === id ? 0.6 : 1 }}
+                                >
+                                  {enviando === id ? 'Salvando...' : '1ª Via do VEM'}
+                                </button>
                                 <button
                                   type="button"
                                   disabled={!!enviando}
                                   onClick={() => void salvarSemVem(modelo, item)}
-                                  style={{ padding: '6px 10px', background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 4, fontSize: 9, cursor: 'pointer', opacity: enviando === id ? 0.6 : 1 }}
+                                  title="Clique aqui se você não utiliza transporte ou não necessita de VEM"
+                                  style={{ padding: '6px 10px', background: declSemVem ? 'rgba(34, 197, 94, 0.12)' : 'transparent', color: declSemVem ? '#22C55E' : C.inkSoft, border: `1px solid ${declSemVem ? 'rgba(34, 197, 94, 0.3)' : C.border}`, borderRadius: 4, fontSize: 9, cursor: 'pointer', opacity: enviando === id ? 0.6 : 1 }}
                                 >
                                   {enviando === id ? 'Salvando...' : 'Não possuo VEM'}
                                 </button>
@@ -450,7 +512,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                                 {docs.map(doc => {
                                   const isAprovado = doc.status === 'aprovado'
                                   const isDevolvido = doc.status === 'devolvido'
-                                  const isDecl = doc.id === declSemVem?.id
+                                  const isDeclSem = doc.id === declSemVem?.id
+                                  const isDecl1Via = doc.id === decl1ViaVem?.id
 
                                   return (
                                     <div
@@ -469,7 +532,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 7, minWidth: 0, flex: 1 }}>
                                         <FileText size={13} color={isAprovado ? '#22C55E' : isDevolvido ? '#EF4444' : C.amber} style={{ flexShrink: 0 }} />
                                         <span style={{ fontSize: 10, fontWeight: 700, color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                          {isDecl ? 'Declaração: Não possui VEM' : doc.nome}
+                                          {isDecl1Via ? 'Solicitação: 1ª Via do Cartão VEM' : isDeclSem ? 'Declaração: Não possui VEM' : doc.nome}
                                         </span>
                                       </div>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
