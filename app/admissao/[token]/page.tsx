@@ -307,7 +307,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
     if (!fluxo) return 0
     let count = 0
     for (const modelo of fluxo.modelos) {
-      if (modelo.ordem === 3) continue // Etapa interna RH/DP, não é exigida do candidato
+      if (modelo.ordem === 3 || modelo.ordem === 4) continue // Etapas internas RH/DP, não são exigidas do candidato
       if (modelo.ordem === 2) {
         const hasDoc = fluxo.documentos.some(d => d.modelo_id === modelo.id && ['enviado', 'aprovado'].includes(d.status))
         if (hasDoc) count++
@@ -316,24 +316,19 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           const hasDoc = fluxo.documentos.some(d => d.modelo_id === modelo.id && d.item_id === item.id && ['enviado', 'aprovado'].includes(d.status))
           if (hasDoc) count++
         }
-      } else if (modelo.ordem === 4) {
-        const itemLaudo = modelo.checklist.find(i => i.id === 'responsavel') || modelo.checklist[modelo.checklist.length - 1]
-        const hasDoc = fluxo.documentos.some(d => d.modelo_id === modelo.id && (d.item_id === '__laudo_candidato__' || d.item_id === 'responsavel' || (itemLaudo && d.item_id === itemLaudo.id)) && ['enviado', 'aprovado'].includes(d.status))
-        if (hasDoc) count++
       }
     }
     return count
   }, [fluxo])
 
   const totalObrigatorios = useMemo(() => fluxo?.modelos.reduce((total, modelo) => {
-    if (modelo.ordem === 3) return total // Etapa interna RH/DP ignorada
+    if (modelo.ordem === 3 || modelo.ordem === 4) return total // Etapas internas RH/DP ignoradas
     if (modelo.ordem === 2) return total + 1
-    if (modelo.ordem === 4) return total + 1
     return total + modelo.checklist.filter(item => item.obrigatorio).length
   }, 0) ?? 0, [fluxo])
 
   const totalArquivosEnviados = fluxo?.documentos.filter(documento => ['enviado', 'aprovado'].includes(documento.status)).length ?? 0
-  const etapaAtualDisplay = fluxo ? Math.min(fluxo.progresso.etapa_atual === 4 ? 3 : fluxo.progresso.etapa_atual, 3) : 1
+  const etapaAtualDisplay = fluxo ? Math.min(fluxo.progresso.etapa_atual > 2 ? 2 : fluxo.progresso.etapa_atual, 2) : 1
 
   return <main style={{ minHeight: '100vh', background: C.bg, color: C.ink, padding: '28px 16px' }}>
     <section style={{ width: '100%', maxWidth: 900, margin: '0 auto' }}>
@@ -349,7 +344,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           <p style={{ color: C.inkSoft, fontSize: 11, lineHeight: 1.6, margin: '12px 0 0' }}>O RH já realizou seu pré-cadastro. Siga as etapas abaixo para concluir sua admissão.</p>
           {fluxo.convite.status === 'devolvido' && <div style={{ marginTop: 12, padding: 10, borderRadius: 5, border: '1px solid #EF444466', background: '#EF444412', color: '#FCA5A5', fontSize: 10 }}><strong>Documentação devolvida pelo RH</strong><div style={{ marginTop: 4 }}>{fluxo.convite.justificativa_devolucao || 'Revise os itens marcados e envie novamente.'}</div></div>}
           <div style={{ marginTop: 12, height: 7, borderRadius: 99, background: '#FFFFFF0D', overflow: 'hidden' }}><div style={{ width: `${totalObrigatorios ? Math.min(100, Math.round((concluidosObrigatorios / totalObrigatorios) * 100)) : 0}%`, height: '100%', background: C.amber }} /></div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', color: C.inkSoft, fontSize: 9, marginTop: 5 }}><span>{concluidosObrigatorios} de {totalObrigatorios} etapas concluídas ({totalArquivosEnviados} arquivo{totalArquivosEnviados === 1 ? '' : 's'} anexado{totalArquivosEnviados === 1 ? '' : 's'})</span><span>Etapa atual: {etapaAtualDisplay} de 3</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', color: C.inkSoft, fontSize: 9, marginTop: 5 }}><span>{concluidosObrigatorios} de {totalObrigatorios} etapas concluídas ({totalArquivosEnviados} arquivo{totalArquivosEnviados === 1 ? '' : 's'} anexado{totalArquivosEnviados === 1 ? '' : 's'})</span><span>Etapa atual: {etapaAtualDisplay} de 2</span></div>
         </section>
 
         <div style={{ display: 'grid', gap: 12 }}>
@@ -362,7 +357,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                 <article key={modelo.id} style={{ ...card, borderColor: etapa?.concluida ? '#22C55E66' : C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
-                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 1 DE 3</span>
+                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 1 DE 2</span>
                       <span style={{ fontSize: 8, background: '#F59E0B20', color: C.amber, border: '1px solid #F59E0B44', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Preenchido pelo Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
@@ -694,8 +689,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                 <article key={modelo.id} style={{ ...card, borderColor: accepted ? '#22C55E66' : C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
-                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 2 DE 3</span>
-                      <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: 'C.amber', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Modelo da Empresa · Assinatura do Funcionário]</span>
+                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 2 DE 2</span>
+                      <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Modelo da Empresa · Assinatura do Funcionário]</span>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>{modelo.descricao}</p>
                       {modelo.arquivo_url && (
@@ -727,25 +722,35 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
               )
             }
 
-            // ── ETAPA 3 DO CANDIDATO: Guia de Exame Admissional (Baixar guia do RH + Anexar laudo médico) ──────
+            // ── ETAPA 4: Controle de Exame Admissional (Gerenciada exclusivamente pelo RH) ──────
             if (modelo.ordem === 4) {
-              const itemLaudo = modelo.checklist.find(i => i.id === 'responsavel') || modelo.checklist[modelo.checklist.length - 1] || { id: 'responsavel', label: 'Laudo Médico', obrigatorio: true }
               const guiaRH = fluxo.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === '__guia_rh__' || d.item_id === 'identificacao'))
-              const laudoCandidato = fluxo.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === '__laudo_candidato__' || d.item_id === 'responsavel' || d.item_id === itemLaudo.id))
-              const uploadId = `${modelo.id}:${itemLaudo.id}`
+              const laudoRH = fluxo.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === '__laudo_candidato__' || d.item_id === 'responsavel'))
 
               return (
-                <article key={modelo.id} style={{ ...card, borderColor: laudoCandidato ? '#22C55E66' : C.border }}>
+                <article key={modelo.id} style={{ ...card, borderColor: laudoRH ? '#22C55E66' : C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
-                      <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>ETAPA 3 DE 3</span>
-                      <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: 'C.amber', border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, marginLeft: 6 }}>[Guia do RH · Laudo do Funcionário]</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>CONTROLE DE EXAME MÉDICO (ASO)</span>
+                        <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
+                          🔒 Gerenciado Exclusivamente pelo RH
+                        </span>
+                      </div>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>
-                        Baixe sua guia médica personalizada, realize os exames na clínica informada e anexe o laudo/resultado de retorno abaixo.
+                        Esta etapa é controlada pelo setor de Recursos Humanos. Se a sua guia médica foi emitida, baixe-a abaixo para realizar a consulta. O resultado e laudo são gerenciados internamente pelo RH.
                       </p>
                     </div>
-                    {laudoCandidato && <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap' }}><FileCheck2 size={14} /> Laudo Enviado</span>}
+                    {laudoRH ? (
+                      <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <FileCheck2 size={14} /> Laudo Registrado
+                      </span>
+                    ) : guiaRH ? (
+                      <span style={{ color: C.amber, fontSize: 10, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <FileCheck2 size={14} /> Guia Emitida
+                      </span>
+                    ) : null}
                   </div>
 
                   <div style={{ marginTop: 12, padding: 12, background: C.bgWhite, borderRadius: 5, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -754,7 +759,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                       <div>
                         <strong style={{ fontSize: 11, display: 'block' }}>1. Guia Médica Emitida pelo RH</strong>
                         <span style={{ fontSize: 9, color: C.inkSoft }}>
-                          {guiaRH ? 'Sua guia já está disponível para download abaixo.' : 'Aguardando o RH gerar e disponibilizar a sua guia médica.'}
+                          {guiaRH ? 'Sua guia já está disponível para download. Baixe o arquivo e apresente na clínica médica.' : 'Aguardando o RH gerar e disponibilizar a sua guia médica.'}
                         </span>
                       </div>
                       {guiaRH ? (
@@ -764,40 +769,33 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                           rel="noopener noreferrer"
                           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 12px', background: C.amber, color: '#0A0A0A', fontWeight: 900, fontSize: 10, borderRadius: 4, textDecoration: 'none' }}
                         >
-                          <FileCheck2 size={13} /> Baixar Guia Médica ({guiaRH.nome})
+                          <Download size={13} /> Baixar Guia Médica ({guiaRH.nome})
                         </a>
                       ) : (
                         <p style={{ fontSize: 10, color: C.inkSoft, margin: 0 }}>
-                          ⏳ O RH ainda está preenchendo sua guia de exame. Ela estará disponível aqui em breve.
+                          ⏳ O RH está preenchendo sua guia de exame. Ela estará disponível aqui assim que for emitida.
                         </p>
                       )}
                     </div>
 
-                    {/* Bloco 2: Upload do Laudo pelo Candidato */}
+                    {/* Bloco 2: Informativo do Laudo (Sem botões de upload para o candidato) */}
                     <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                         <div>
-                          <strong style={{ fontSize: 11, color: C.ink }}>2. Resultado / Laudo do Exame Admissional *</strong>
-                          {laudoCandidato && (
-                            <div style={{ color: laudoCandidato.status === 'aprovado' ? '#4ADE80' : laudoCandidato.status === 'devolvido' ? '#F87171' : C.amber, fontSize: 9, marginTop: 4 }}>
-                              {laudoCandidato.status === 'aprovado' ? '✓ Aprovado pelo RH' : laudoCandidato.status === 'devolvido' ? `Pendência: ${laudoCandidato.observacao_rh || 'Reenvie com melhor qualidade'}` : `✓ Enviado: ${laudoCandidato.nome}`}
+                          <strong style={{ fontSize: 11, color: C.ink }}>2. Resultado / Laudo do Exame Admissional (ASO)</strong>
+                          {laudoRH ? (
+                            <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>
+                              ✓ Laudo médico anexado e conferido pelo RH.
+                            </div>
+                          ) : (
+                            <div style={{ color: C.inkSoft, fontSize: 9, marginTop: 2 }}>
+                              ℹ️ O candidato não precisa anexar laudo por este link. O resultado é conferido e homologado diretamente pelo RH.
                             </div>
                           )}
-                          {!laudoCandidato && (
-                            <div style={{ color: C.inkSoft, fontSize: 9, marginTop: 2 }}>Anexe a folha de laudo/ASO entregue pelo médico após a consulta.</div>
-                          )}
                         </div>
-
-                        <label style={{ ...uploadButton, opacity: enviando === uploadId ? 0.6 : 1 }}>
-                          <FileUp size={12} />{enviando === uploadId ? 'Enviando…' : laudoCandidato ? 'Substituir Laudo' : 'Anexar Laudo'}
-                          <input
-                            hidden
-                            type="file"
-                            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-                            disabled={!!enviando}
-                            onChange={event => void enviarArquivo(modelo, itemLaudo, event.target.files?.[0])}
-                          />
-                        </label>
+                        <span style={{ fontSize: 9, background: 'rgba(255, 255, 255, 0.05)', color: C.inkSoft, border: `1px solid ${C.border}`, padding: '3px 8px', borderRadius: 4, fontWeight: 700 }}>
+                          Controle Exclusivo RH
+                        </span>
                       </div>
                     </div>
                   </div>

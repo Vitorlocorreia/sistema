@@ -235,7 +235,9 @@ function ArchivePanel({
   podeVerSalario = false,
   onEditSalario,
   onVoltarAptos,
-  onVoltarAdmissao
+  onVoltarAdmissao,
+  email,
+  onEditEmail
 }: {
   person: Funcionario
   details: Details
@@ -248,11 +250,15 @@ function ArchivePanel({
   onEditSalario?: () => void
   onVoltarAptos?: () => void
   onVoltarAdmissao?: () => void
+  email?: string | null
+  onEditEmail?: () => void
 }) {
   const [filter, setFilter] = useState('')
   const documents = details.documentos.filter(doc =>
     `${doc.nome || ''} ${doc.tipo || ''}`.toLowerCase().includes(filter.toLowerCase())
   )
+
+  const emailExibicao = email || person.email || ''
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -271,6 +277,68 @@ function ArchivePanel({
             <span>Cargo: <strong style={{ color: C.ink }}>{person.cargo || 'Não informado'}</strong></span>
             <span>·</span>
             <span>CPF: <strong style={{ color: C.ink }}>{person.cpf || 'Não informado'}</strong></span>
+            <span>·</span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <Mail size={12} color={C.amber} />
+              <span>E-mail:</span>
+              <strong style={{ color: emailExibicao ? C.ink : C.inkSoft }}>
+                {emailExibicao || 'Não informado'}
+              </strong>
+              {emailExibicao && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(emailExibicao)
+                    toast('E-mail copiado com sucesso!', 'success')
+                  }}
+                  title="Copiar e-mail"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    padding: '2px 5px',
+                    borderRadius: 3,
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: `1px solid ${C.border}`,
+                    color: C.inkSoft,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Copy size={9} />
+                </button>
+              )}
+              {onEditEmail && (
+                <button
+                  type="button"
+                  onClick={onEditEmail}
+                  title="Alterar ou cadastrar e-mail do colaborador"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    padding: '2px 7px',
+                    borderRadius: 4,
+                    background: 'rgba(245, 158, 11, 0.12)',
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    color: C.amber,
+                    fontSize: 10,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = C.amber
+                    e.currentTarget.style.color = '#0A0A0A'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(245, 158, 11, 0.12)'
+                    e.currentTarget.style.color = C.amber
+                  }}
+                >
+                  <Edit3 size={10} />
+                  {emailExibicao ? 'Alterar' : 'Cadastrar E-mail'}
+                </button>
+              )}
+            </span>
             <span>·</span>
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <span>Obra:</span>
@@ -718,6 +786,7 @@ function CadastroTable({
 }) {
   const [activeFolder, setActiveFolder] = useState(defaultFolder || 1)
   const [uploadingGuia, setUploadingGuia] = useState(false)
+  const [uploadingLaudo, setUploadingLaudo] = useState(false)
 
   useEffect(() => {
     if (defaultFolder) setActiveFolder(defaultFolder)
@@ -888,6 +957,38 @@ function CadastroTable({
       toast('Erro: ' + (err instanceof Error ? err.message : 'falha no envio'), 'error')
     } finally {
       setUploadingGuia(false)
+    }
+  }
+
+  async function uploadLaudoRH(file: File | undefined) {
+    if (!file || !modeloEtapa4) return
+    setUploadingLaudo(true)
+    try {
+      const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
+      const path = `laudos/${invite.id}-${Date.now()}-${safeName}`
+      const { error: uploadError } = await supabase.storage.from('rh-documentos').upload(path, file, { contentType: file.type || 'application/pdf', upsert: true })
+      if (uploadError) throw uploadError
+      if (laudoCandidato) {
+        await supabase.from('rh_admissao_documentos').delete().eq('id', laudoCandidato.id)
+      }
+      const { error: rowError } = await supabase.from('rh_admissao_documentos').insert({
+        convite_id: invite.id,
+        modelo_id: modeloEtapa4.id,
+        item_id: LAUDO_ITEM_ID,
+        nome: file.name,
+        storage_path: path,
+        tamanho_bytes: file.size,
+        mime_type: file.type || 'application/pdf',
+        status: 'aprovado',
+        revisado_em: new Date().toISOString()
+      })
+      if (rowError) throw rowError
+      toast('Laudo / ASO anexado e aprovado com sucesso!', 'success')
+      await onRefresh?.()
+    } catch (err: unknown) {
+      toast('Erro: ' + (err instanceof Error ? err.message : 'falha no envio do laudo'), 'error')
+    } finally {
+      setUploadingLaudo(false)
     }
   }
 
@@ -1233,11 +1334,11 @@ function CadastroTable({
               </div>
             </div>
 
-            {/* 2. Candidato Retorna o Laudo */}
+            {/* 2. Laudo / ASO Retornado (Controlado pelo RH) */}
             <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                 <span style={{ fontSize: 10, fontWeight: 800, color: C.ink }}>2. Laudo / ASO Retornado</span>
-                <span style={{ fontSize: 8.5, background: 'rgba(16, 185, 129, 0.12)', color: '#10B981', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>Candidato</span>
+                <span style={{ fontSize: 8.5, background: 'rgba(16, 185, 129, 0.12)', color: '#10B981', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>RH / Clínica</span>
               </div>
               {laudoCandidato ? (
                 <div>
@@ -1249,21 +1350,28 @@ function CadastroTable({
                       {laudoCandidato.status === 'aprovado' ? '✓ Aprovado' : 'Aguardando Análise'}
                     </span>
                   </div>
-                  {laudoCandidato.status !== 'aprovado' && (
-                    <div style={{ display: 'flex', gap: 6 }}>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                    {laudoCandidato.status !== 'aprovado' && (
                       <button onClick={() => onReview(laudoCandidato, 'aprovado')} style={{ ...btnBase, padding: '4px 8px', fontSize: 9.5, background: '#10B981', color: '#0A0A0A' }}>
                         ✓ Aprovar Laudo
                       </button>
-                      <button onClick={() => onReview(laudoCandidato, 'devolvido')} style={{ ...btnBase, padding: '4px 8px', fontSize: 9.5, background: 'rgba(239, 68, 68, 0.12)', color: '#F87171' }}>
-                        Solicitar Correção
-                      </button>
-                    </div>
-                  )}
+                    )}
+                    <label style={{ ...btnBase, padding: '4px 8px', fontSize: 9.5, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}`, cursor: 'pointer' }}>
+                      <FileUp size={10} color={C.amber} /> {uploadingLaudo ? 'Enviando...' : 'Substituir Laudo'}
+                      <input hidden type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" disabled={uploadingLaudo} onChange={e => void uploadLaudoRH(e.target.files?.[0])} />
+                    </label>
+                  </div>
                 </div>
               ) : (
-                <p style={{ fontSize: 10, color: C.inkSoft, fontStyle: 'italic', margin: '6px 0 0' }}>
-                  {guiaRH ? '⏳ Aguardando envio do laudo pelo candidato.' : '⚠️ Envie a guia médica primeiro.'}
-                </p>
+                <div>
+                  <p style={{ fontSize: 10, color: C.inkSoft, fontStyle: 'italic', margin: '4px 0 8px' }}>
+                    {guiaRH ? 'Anexe o Laudo/ASO emitido para o colaborador.' : '⚠️ Envie a guia médica primeiro.'}
+                  </p>
+                  <label style={{ ...btnBase, padding: '4px 10px', fontSize: 9.5, background: C.amber, color: '#0A0A0A', cursor: 'pointer' }}>
+                    <FileUp size={11} /> {uploadingLaudo ? 'Enviando...' : 'Anexar Laudo / ASO'}
+                    <input hidden type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png" disabled={uploadingLaudo} onChange={e => void uploadLaudoRH(e.target.files?.[0])} />
+                  </label>
+                </div>
               )}
             </div>
           </div>
@@ -2045,6 +2153,18 @@ export default function RhPage() {
     open: false,
     person: null,
     salario: '',
+    salvando: false
+  })
+
+  const [editEmailFuncionarioModal, setEditEmailFuncionarioModal] = useState<{
+    open: boolean
+    person: Funcionario | null
+    email: string
+    salvando: boolean
+  }>({
+    open: false,
+    person: null,
+    email: '',
     salvando: false
   })
 
@@ -3270,6 +3390,77 @@ export default function RhPage() {
       console.error('Falha ao atualizar salário do colaborador:', err)
       toast(err instanceof Error ? err.message : 'Falha ao atualizar salário do colaborador', 'error')
       setEditSalarioFuncionarioModal(prev => ({ ...prev, salvando: false }))
+    }
+  }
+
+  const getEmailFuncionario = useCallback((p: Funcionario | null | undefined): string => {
+    if (!p) return ''
+    if (p.email && p.email.trim()) return p.email.trim()
+    const cpfClean = (p.cpf || '').replace(/\D/g, '')
+    const convite = todosConvites.find(c =>
+      c.funcionario_id === p.id ||
+      (cpfClean && c.cpf && c.cpf.replace(/\D/g, '') === cpfClean) ||
+      (c.nome_destinatario && p.nome && c.nome_destinatario.trim().toLowerCase() === p.nome.trim().toLowerCase())
+    )
+    if (convite?.email_destinatario?.trim()) return convite.email_destinatario.trim()
+    const colab = colaboradores.find(c =>
+      (cpfClean && (c as any).cpf && String((c as any).cpf).replace(/\D/g, '') === cpfClean) ||
+      (c.nome && p.nome && c.nome.trim().toLowerCase() === p.nome.trim().toLowerCase())
+    )
+    if (colab?.email?.trim()) return colab.email.trim()
+    return ''
+  }, [todosConvites, colaboradores])
+
+  function abrirModalEditarEmailFuncionario(person: Funcionario) {
+    const atual = getEmailFuncionario(person)
+    setEditEmailFuncionarioModal({
+      open: true,
+      person,
+      email: atual,
+      salvando: false
+    })
+  }
+
+  async function handleSalvarEmailFuncionario() {
+    if (!editEmailFuncionarioModal.person) return
+    const novoEmail = editEmailFuncionarioModal.email.trim()
+    if (novoEmail && !novoEmail.includes('@')) {
+      return toast('Informe um e-mail válido.', 'error')
+    }
+    setEditEmailFuncionarioModal(prev => ({ ...prev, salvando: true }))
+    try {
+      const p = editEmailFuncionarioModal.person
+      const { error: funcErr } = await supabase
+        .from('funcionarios')
+        .update({ email: novoEmail || null })
+        .eq('id', p.id)
+
+      if (funcErr) throw funcErr
+
+      const cpfClean = (p.cpf || '').replace(/\D/g, '')
+      const convitesIds = todosConvites
+        .filter(c => c.funcionario_id === p.id || (cpfClean && c.cpf && c.cpf.replace(/\D/g, '') === cpfClean))
+        .map(c => c.id)
+
+      if (convitesIds.length > 0) {
+        await supabase
+          .from('rh_admissao_convites')
+          .update({ email_destinatario: novoEmail || null, updated_at: new Date().toISOString() })
+          .in('id', convitesIds)
+      }
+
+      setPessoas(prev => prev.map(item => item.id === p.id ? { ...item, email: novoEmail || null } : item))
+      if (selected?.id === p.id) {
+        setSelected(prev => prev ? { ...prev, email: novoEmail || null } : null)
+      }
+
+      toast('E-mail do colaborador atualizado com sucesso!', 'success')
+      setEditEmailFuncionarioModal(prev => ({ ...prev, open: false }))
+      await load()
+    } catch (err: any) {
+      toast('Erro ao salvar e-mail: ' + (err?.message || 'Falha na gravação'), 'error')
+    } finally {
+      setEditEmailFuncionarioModal(prev => ({ ...prev, salvando: false }))
     }
   }
 
@@ -4583,6 +4774,34 @@ export default function RhPage() {
                           </span>
                         )}
                         <span>· CPF: {person.cpf || 'Não informado'}</span>
+                        {(() => {
+                          const emailResolved = getEmailFuncionario(person)
+                          return (
+                            <span
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                abrirModalEditarEmailFuncionario(person)
+                              }}
+                              title="Clique para cadastrar ou alterar o e-mail"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 4,
+                                background: emailResolved ? 'rgba(255, 255, 255, 0.05)' : 'rgba(245, 158, 11, 0.1)',
+                                color: emailResolved ? C.ink : C.amber,
+                                border: `1px solid ${emailResolved ? C.border : 'rgba(245, 158, 11, 0.3)'}`,
+                                padding: '1px 6px',
+                                borderRadius: 3,
+                                fontSize: 10,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              <Mail size={10} color={C.amber} />
+                              <span>{emailResolved || 'Sem e-mail'}</span>
+                              <Edit3 size={8} style={{ opacity: 0.7 }} />
+                            </span>
+                          )
+                        })()}
                         {podeVerSalario && (
                           <span
                             onClick={(e) => {
@@ -4709,6 +4928,8 @@ export default function RhPage() {
                 <ArchivePanel
                   person={selected}
                   details={details}
+                  email={getEmailFuncionario(selected)}
+                  onEditEmail={() => abrirModalEditarEmailFuncionario(selected)}
                   dadosBanco={(() => {
                     const cpfClean = (selected.cpf || '').replace(/\D/g, '')
                     return dadosBancariosMap[selected.id] || (cpfClean ? dadosBancariosMap[cpfClean] : null) || dadosBancariosMap[selected.nome.toLowerCase().trim()] || null
@@ -4869,6 +5090,67 @@ export default function RhPage() {
                   style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
                 >
                   {editSalarioFuncionarioModal.salvando ? 'Salvando...' : 'Salvar Salário'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EDITAR / CADASTRAR E-MAIL DO COLABORADOR ATIVO */}
+      {editEmailFuncionarioModal.open && editEmailFuncionarioModal.person && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 22, maxWidth: 440, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Mail size={16} color={C.amber} />
+                  Cadastrar / Alterar E-mail
+                </h3>
+                <p style={{ fontSize: 11, color: C.inkSoft, margin: '2px 0 0' }}>
+                  Colaborador: <strong style={{ color: C.ink }}>{editEmailFuncionarioModal.person.nome}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setEditEmailFuncionarioModal(prev => ({ ...prev, open: false }))}
+                style={{ border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <span style={labelStyle}>E-mail do Colaborador *</span>
+                <input
+                  type="email"
+                  style={inputStyle}
+                  placeholder="exemplo@empresa.com.br"
+                  value={editEmailFuncionarioModal.email}
+                  onChange={e => setEditEmailFuncionarioModal(prev => ({ ...prev, email: e.target.value }))}
+                  onKeyDown={e => { if (e.key === 'Enter') void handleSalvarEmailFuncionario() }}
+                  autoFocus
+                />
+                <span style={{ fontSize: 10, color: C.inkSoft, marginTop: 4, display: 'block' }}>
+                  Este e-mail será salvo no cadastro oficial do colaborador e utilizado para finalizar o cadastro e comunicações.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                <button
+                  type="button"
+                  onClick={() => setEditEmailFuncionarioModal(prev => ({ ...prev, open: false }))}
+                  style={{ ...btnBase, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleSalvarEmailFuncionario()}
+                  disabled={editEmailFuncionarioModal.salvando}
+                  style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
+                >
+                  {editEmailFuncionarioModal.salvando ? 'Salvando...' : 'Salvar E-mail'}
                 </button>
               </div>
             </div>

@@ -53,8 +53,8 @@ async function loadFlow(inviteId: string) {
 }
 
 function progress(modelos: any[], documentos: any[]) {
-  // A Etapa 3 (Documentos Admissionais) é preenchida internamente pelo DP/RH e não é exigida do candidato
-  const modelosCandidato = modelos.filter(m => m.ordem !== 3);
+  // As etapas 3 (Documentos Admissionais) e 4 (Exame Admissional/ASO) são gerenciadas exclusivamente pelo RH e não são exigidas do candidato
+  const modelosCandidato = modelos.filter(m => m.ordem !== 3 && m.ordem !== 4);
   const etapas = modelosCandidato.map(modelo => {
     const required = (modelo.checklist || []).filter((item: any) => item.obrigatorio);
     const complete = required.every((item: any) => documentos.some((doc: any) => doc.modelo_id === modelo.id && doc.item_id === item.id && ["enviado", "aprovado"].includes(doc.status)));
@@ -62,7 +62,7 @@ function progress(modelos: any[], documentos: any[]) {
     return { modelo_id: modelo.id, ordem: modelo.ordem, concluida: complete, enviados: count, obrigatorios: required.length };
   });
   const firstPending = etapas.find((etapa: any) => !etapa.concluida);
-  return { etapas, etapa_atual: firstPending?.ordem || 4, completo: etapas.length === 3 && etapas.every((etapa: any) => etapa.concluida) };
+  return { etapas, etapa_atual: firstPending?.ordem || 3, completo: etapas.length > 0 && etapas.every((etapa: any) => etapa.concluida) };
 }
 
 async function requireRh(req: Request) {
@@ -141,6 +141,9 @@ Deno.serve(async req => {
       const modelo = flow.modelos.find((item: any) => item.id === payload.modelo_id);
       const checklistItem = modelo?.checklist?.find((item: any) => item.id === payload.item_id);
       if (!modelo || !checklistItem) return json({ error: "Documento não pertence a uma etapa válida." }, 400);
+      if (modelo.ordem === 3 || modelo.ordem === 4 || checklistItem.id === "identificacao" || checklistItem.id === "__guia_rh__" || checklistItem.id === "responsavel" || checklistItem.id === "__laudo_candidato__") {
+        return json({ error: "Esta etapa é gerenciada exclusivamente pelo RH." }, 403);
+      }
       const size = Number(payload.tamanho_bytes || 0);
       const mime = String(payload.mime_type || "application/octet-stream");
       if (!size || size > 15728640) return json({ error: "O arquivo deve ter no máximo 15 MB." }, 400);
