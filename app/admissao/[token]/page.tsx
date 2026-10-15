@@ -296,6 +296,8 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || 'Não foi possível finalizar.')
       setFinalizado(true)
+      await carregar()
+      window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (error) {
       setErro(error instanceof Error ? error.message : 'Não foi possível finalizar.')
     } finally {
@@ -337,7 +339,43 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
         {fluxo && <div style={{ fontSize: 10, color: C.inkSoft, textAlign: 'right' }}><Clock3 size={13} style={{ verticalAlign: 'middle', marginRight: 4 }} />Expira em<br /><strong style={{ color: C.ink }}>{new Date(fluxo.convite.expires_at).toLocaleString('pt-BR')}</strong></div>}
       </header>
 
-      {carregando ? <div style={card}>Validando convite…</div> : erro && !fluxo ? <div style={{ ...card, color: '#F87171', textAlign: 'center' }}><h2>Convite indisponível</h2><p>{erro}</p></div> : finalizado || fluxo?.convite.status === 'aguardando_aprovacao' ? <div style={{ ...card, textAlign: 'center', padding: 42 }}><CheckCircle2 size={46} color="#4ADE80" /><h2>Documentação enviada ao RH</h2><p style={{ color: C.inkSoft }}>Seu cadastro está aguardando conferência. O RH entrará em contato caso exista alguma pendência.</p></div> : fluxo && <>
+      {carregando ? (
+        <div style={card}>Validando convite…</div>
+      ) : erro && !fluxo ? (
+        <div style={{ ...card, color: '#F87171', textAlign: 'center' }}>
+          <h2>Convite indisponível</h2>
+          <p>{erro}</p>
+        </div>
+      ) : fluxo?.convite.status === 'aprovado' ? (
+        <div style={{ ...card, textAlign: 'center', padding: 42 }}>
+          <CheckCircle2 size={46} color="#4ADE80" />
+          <h2>Cadastro Concluído e Aprovado</h2>
+          <p style={{ color: C.inkSoft }}>Sua admissão foi formalizada com sucesso pelo RH. Seja bem-vindo à equipe!</p>
+        </div>
+      ) : fluxo ? (
+        <>
+          {(finalizado || fluxo.convite.status === 'aguardando_aprovacao') && (
+            <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14, background: 'rgba(34, 197, 94, 0.08)', borderColor: 'rgba(34, 197, 94, 0.3)' }}>
+              <CheckCircle2 size={26} color="#22C55E" style={{ flexShrink: 0 }} />
+              <div>
+                <strong style={{ fontSize: 13, color: '#4ADE80' }}>Documentação em conferência pelo RH</strong>
+                <p style={{ color: C.inkSoft, fontSize: 10.5, margin: '3px 0 0', lineHeight: 1.4 }}>
+                  Seus documentos foram enviados ao RH. Acompanhe abaixo o status, baixe sua Guia Médica emitida pelo RH e anexe o Laudo do Exame (ASO).
+                </p>
+              </div>
+            </div>
+          )}
+          {fluxo.convite.status === 'apto' && (
+            <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 14, marginBottom: 14, background: 'rgba(34, 197, 94, 0.08)', borderColor: 'rgba(34, 197, 94, 0.3)' }}>
+              <CheckCircle2 size={26} color="#22C55E" style={{ flexShrink: 0 }} />
+              <div>
+                <strong style={{ fontSize: 13, color: '#4ADE80' }}>Cadastro Apto para Registro</strong>
+                <p style={{ color: C.inkSoft, fontSize: 10.5, margin: '3px 0 0', lineHeight: 1.4 }}>
+                  Seus dados e exames foram conferidos e validados pela equipe de RH.
+                </p>
+              </div>
+            </div>
+          )}
         <section style={{ ...card, marginBottom: 14 }}>
           <strong style={{ fontSize: 13 }}>{fluxo.convite.nome_destinatario}</strong>
           <div style={{ color: C.inkSoft, fontSize: 10, marginTop: 5 }}>{fluxo.convite.cargo || 'Cargo não informado'}{fluxo.convite.obra ? ` · ${fluxo.convite.obra}` : ''}{fluxo.convite.telefone_destinatario ? ` · ${fluxo.convite.telefone_destinatario}` : ''}</div>
@@ -722,29 +760,31 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
               )
             }
 
-            // ── ETAPA 4: Controle de Exame Admissional (Gerenciada exclusivamente pelo RH) ──────
+            // ── ETAPA 4: Controle de Exame Admissional (Guia pelo RH · Laudo pelo Candidato) ──────
             if (modelo.ordem === 4) {
               const guiaRH = fluxo.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === '__guia_rh__' || d.item_id === 'identificacao'))
               const laudoRH = fluxo.documentos.find(d => d.modelo_id === modelo.id && (d.item_id === '__laudo_candidato__' || d.item_id === 'responsavel'))
+              const itemLaudo = modelo.checklist.find(i => i.id === 'responsavel') || { id: 'responsavel', label: 'Resultado do Exame (ASO)', obrigatorio: false }
+              const uploadLaudoId = `${modelo.id}:${itemLaudo.id}`
 
               return (
-                <article key={modelo.id} style={{ ...card, borderColor: laudoRH ? '#22C55E66' : C.border }}>
+                <article key={modelo.id} style={{ ...card, borderColor: laudoRH?.status === 'aprovado' ? '#22C55E66' : laudoRH ? C.amber : C.border }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'start' }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         <span style={{ color: C.amber, fontSize: 9, fontWeight: 900 }}>CONTROLE DE EXAME MÉDICO (ASO)</span>
                         <span style={{ fontSize: 8, background: 'rgba(245, 158, 11, 0.12)', color: C.amber, border: '1px solid rgba(245, 158, 11, 0.25)', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
-                          🔒 Gerenciado Exclusivamente pelo RH
+                          Guia pelo RH · Envio do Laudo pelo Candidato
                         </span>
                       </div>
                       <h2 style={{ fontSize: 14, margin: '5px 0' }}>{modelo.nome}</h2>
                       <p style={{ color: C.inkSoft, fontSize: 10, lineHeight: 1.5, margin: 0 }}>
-                        Esta etapa é controlada pelo setor de Recursos Humanos. Se a sua guia médica foi emitida, baixe-a abaixo para realizar a consulta. O resultado e laudo são gerenciados internamente pelo RH.
+                        Baixe a guia emitida pelo RH para realizar o exame na clínica indicada. Após a consulta médica, anexe abaixo o comprovante ou laudo do seu exame (ASO).
                       </p>
                     </div>
                     {laudoRH ? (
-                      <span style={{ color: '#4ADE80', fontSize: 10, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                        <FileCheck2 size={14} /> Laudo Registrado
+                      <span style={{ color: laudoRH.status === 'aprovado' ? '#4ADE80' : C.amber, fontSize: 10, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <FileCheck2 size={14} /> {laudoRH.status === 'aprovado' ? 'ASO Aprovado' : 'Laudo Anexado'}
                       </span>
                     ) : guiaRH ? (
                       <span style={{ color: C.amber, fontSize: 10, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
@@ -754,7 +794,7 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                   </div>
 
                   <div style={{ marginTop: 12, padding: 12, background: C.bgWhite, borderRadius: 5, border: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', gap: 12 }}>
-                    {/* Bloco 1: Download da Guia do RH */}
+                    {/* Bloco 1: Download da Guia do RH (Apenas Leitura/Download - candidato NUNCA substitui nem exclui a guia do RH) */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <div>
                         <strong style={{ fontSize: 11, display: 'block' }}>1. Guia Médica Emitida pelo RH</strong>
@@ -778,24 +818,69 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
                       )}
                     </div>
 
-                    {/* Bloco 2: Informativo do Laudo (Sem botões de upload para o candidato) */}
+                    {/* Bloco 2: Resultado / Laudo do Exame Admissional (ASO) */}
                     <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                        <div>
+                        <div style={{ flex: 1, minWidth: 200 }}>
                           <strong style={{ fontSize: 11, color: C.ink }}>2. Resultado / Laudo do Exame Admissional (ASO)</strong>
                           {laudoRH ? (
-                            <div style={{ color: '#4ADE80', fontSize: 9, marginTop: 4 }}>
-                              ✓ Laudo médico anexado e conferido pelo RH.
+                            <div style={{ marginTop: 4 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                <span style={{ color: laudoRH.status === 'aprovado' ? '#4ADE80' : C.amber, fontSize: 9.5, fontWeight: 700 }}>
+                                  {laudoRH.status === 'aprovado' ? '✓ Laudo conferido e aprovado pelo RH' : '⏳ Laudo anexado · Aguardando análise do RH'}
+                                </span>
+                                <span style={{ fontSize: 9, color: C.inkSoft }}>({laudoRH.nome})</span>
+                              </div>
+                              {laudoRH.observacao_rh && laudoRH.status === 'devolvido' && (
+                                <div style={{ color: '#F87171', fontSize: 9, marginTop: 2 }}>
+                                  Pendência: {laudoRH.observacao_rh}
+                                </div>
+                              )}
                             </div>
                           ) : (
                             <div style={{ color: C.inkSoft, fontSize: 9, marginTop: 2 }}>
-                              ℹ️ O candidato não precisa anexar laudo por este link. O resultado é conferido e homologado diretamente pelo RH.
+                              Após realizar o exame na clínica indicada, anexe aqui o laudo / resultado (ASO).
                             </div>
                           )}
                         </div>
-                        <span style={{ fontSize: 9, background: 'rgba(255, 255, 255, 0.05)', color: C.inkSoft, border: `1px solid ${C.border}`, padding: '3px 8px', borderRadius: 4, fontWeight: 700 }}>
-                          Controle Exclusivo RH
-                        </span>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {laudoRH && (
+                            <button
+                              type="button"
+                              title="Remover laudo anexado"
+                              disabled={!!enviando}
+                              onClick={() => void excluirDocumento(laudoRH.id)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#EF4444',
+                                cursor: 'pointer',
+                                padding: '4px 6px',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                opacity: enviando === laudoRH.id ? 0.3 : 0.8,
+                              }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                          <label style={{ ...uploadButton, opacity: enviando === uploadLaudoId ? 0.6 : 1, background: laudoRH ? 'transparent' : C.amber, color: laudoRH ? C.ink : '#0A0A0A' }}>
+                            <FileUp size={12} />
+                            {enviando === uploadLaudoId ? 'Enviando…' : laudoRH ? 'Substituir Laudo' : 'Anexar Resultado do Exame'}
+                            <input
+                              hidden
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              disabled={!!enviando}
+                              onChange={e => {
+                                const f = e.target.files?.[0]
+                                if (f) void enviarArquivo(modelo, itemLaudo, f)
+                                e.target.value = ''
+                              }}
+                            />
+                          </label>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -807,8 +892,28 @@ export default function AdmissaoPublica({ params }: { params: Promise<{ token: s
           })}
         </div>
         {erro && <p style={{ color: '#F87171', fontSize: 11 }}>{erro}</p>}
-        <button disabled={!fluxo.progresso.completo || !!enviando} onClick={() => void finalizar()} style={{ ...primaryButton, opacity: fluxo.progresso.completo && !enviando ? 1 : 0.5, marginTop: 14 }}>{enviando === 'finalizar' ? 'Enviando…' : fluxo.progresso.completo ? 'Enviar tudo para aprovação do RH' : 'Envie todos os documentos obrigatórios'}</button>
-      </>}
+        <button
+          disabled={!fluxo.progresso.completo || !!enviando || fluxo.convite.status === 'aguardando_aprovacao' || fluxo.convite.status === 'apto'}
+          onClick={() => void finalizar()}
+          style={{
+            ...primaryButton,
+            opacity: fluxo.progresso.completo && !enviando && fluxo.convite.status !== 'aguardando_aprovacao' && fluxo.convite.status !== 'apto' ? 1 : 0.5,
+            marginTop: 14,
+            cursor: fluxo.convite.status === 'aguardando_aprovacao' || fluxo.convite.status === 'apto' ? 'default' : 'pointer'
+          }}
+        >
+          {enviando === 'finalizar'
+            ? 'Enviando…'
+            : fluxo.convite.status === 'aguardando_aprovacao'
+            ? 'Documentação já enviada ao RH (Em conferência) ✓'
+            : fluxo.convite.status === 'apto'
+            ? 'Cadastro aprovado pelo RH ✓'
+            : fluxo.progresso.completo
+            ? 'Enviar tudo para aprovação do RH'
+            : 'Envie todos os documentos obrigatórios'}
+        </button>
+      </>
+    ) : null}
     </section>
   </main>
 }

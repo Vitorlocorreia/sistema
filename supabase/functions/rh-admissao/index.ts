@@ -37,7 +37,7 @@ async function getInvite(token: string) {
   if (error || !data) return { error: "Convite não encontrado.", status: 404 };
   if (data.status === "revogado") return { error: "Este convite foi revogado pelo RH.", status: 410 };
   if (data.status === "aprovado") return { error: "Este cadastro já foi aprovado.", status: 410 };
-  if (new Date(data.expires_at).getTime() <= Date.now() && !["aguardando_aprovacao", "aprovado"].includes(data.status)) {
+  if (new Date(data.expires_at).getTime() <= Date.now() && !["aguardando_aprovacao", "aprovado", "apto"].includes(data.status)) {
     await admin.from("rh_admissao_convites").update({ status: "expirado", updated_at: new Date().toISOString() }).eq("id", data.id);
     return { error: "Este convite expirou. Solicite um novo link ao RH.", status: 410 };
   }
@@ -137,13 +137,23 @@ Deno.serve(async req => {
     }
 
     if (action === "request_upload") {
-      if (convite.status === "aguardando_aprovacao") return json({ error: "O cadastro já foi enviado ao RH." }, 409);
       const modelo = flow.modelos.find((item: any) => item.id === payload.modelo_id);
       const checklistItem = modelo?.checklist?.find((item: any) => item.id === payload.item_id);
       if (!modelo || !checklistItem) return json({ error: "Documento não pertence a uma etapa válida." }, 400);
-      if (modelo.ordem === 3 || modelo.ordem === 4 || checklistItem.id === "identificacao" || checklistItem.id === "__guia_rh__" || checklistItem.id === "responsavel" || checklistItem.id === "__laudo_candidato__") {
-        return json({ error: "Esta etapa é gerenciada exclusivamente pelo RH." }, 403);
+
+      const isLaudo = checklistItem.id === "responsavel" || checklistItem.id === "__laudo_candidato__";
+
+      // A etapa 3 (interna) e a Guia Médica (identificacao/__guia_rh__) são exclusivas do RH
+      if (modelo.ordem === 3 || checklistItem.id === "identificacao" || checklistItem.id === "__guia_rh__") {
+        return json({ error: "A guia médica e etapas internas são gerenciadas exclusivamente pelo RH." }, 403);
       }
+
+      // Se já foi enviado para aprovação ou está apto, apenas o laudo do exame (ASO) pode ser enviado/atualizado pelo candidato
+      if ((convite.status === "aguardando_aprovacao" || convite.status === "apto") && !isLaudo) {
+        return json({ error: "Os documentos já foram enviados ao RH." }, 409);
+      }
+      if (convite.status === "aprovado") return json({ error: "O cadastro já foi aprovado e registrado." }, 409);
+
       const size = Number(payload.tamanho_bytes || 0);
       const mime = String(payload.mime_type || "application/octet-stream");
       if (!size || size > 15728640) return json({ error: "O arquivo deve ter no máximo 15 MB." }, 400);
@@ -165,15 +175,25 @@ Deno.serve(async req => {
       await admin.from("rh_admissao_documentos").update({ status: "enviado", enviado_em: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("id", document.id);
       const refreshed = await loadFlow(convite.id);
       const refreshedState = progress(refreshed.modelos, refreshed.documentos);
-      await admin.from("rh_admissao_convites").update({ etapa_atual: refreshedState.etapa_atual, status: "em_preenchimento", updated_at: new Date().toISOString() }).eq("id", convite.id);
+      const nextStatus = (convite.status === "aguardando_aprovacao" || convite.status === "apto") ? convite.status : (convite.status === "ativo" ? "em_preenchimento" : convite.status);
+      await admin.from("rh_admissao_convites").update({ etapa_atual: refreshedState.etapa_atual, status: nextStatus, updated_at: new Date().toISOString() }).eq("id", convite.id);
       return json({ ok: true, modelos: refreshed.modelos.filter((m: any) => m.ordem !== 3), documentos: refreshed.documentos, progresso: refreshedState });
     }
 
     if (action === "delete_document") {
-      if (convite.status === "aguardando_aprovacao") return json({ error: "O cadastro já foi enviado ao RH." }, 409);
-      if (convite.status === "aprovado") return json({ error: "O cadastro já foi aprovado." }, 409);
       const { data: document } = await admin.from("rh_admissao_documentos").select("*").eq("id", payload.document_id).eq("convite_id", convite.id).maybeSingle();
       if (!document) return json({ error: "Documento não encontrado." }, 404);
+
+      if (document.item_id === "identificacao" || document.item_id === "__guia_rh__") {
+        return json({ error: "A guia médica é gerenciada exclusivamente pelo RH." }, 403);
+      }
+
+      const isLaudo = document.item_id === "responsavel" || document.item_id === "__laudo_candidato__";
+      if ((convite.status === "aguardando_aprovacao" || convite.status === "apto") && !isLaudo) {
+        return json({ error: "Os documentos já foram enviados ao RH." }, 409);
+      }
+      if (convite.status === "aprovado") return json({ error: "O cadastro já foi aprovado." }, 409);
+
       if (document.storage_path) {
         try {
           await admin.storage.from(bucket).remove([document.storage_path]);
@@ -182,7 +202,8 @@ Deno.serve(async req => {
       await admin.from("rh_admissao_documentos").delete().eq("id", document.id);
       const refreshed = await loadFlow(convite.id);
       const refreshedState = progress(refreshed.modelos, refreshed.documentos);
-      await admin.from("rh_admissao_convites").update({ etapa_atual: refreshedState.etapa_atual, status: "em_preenchimento", updated_at: new Date().toISOString() }).eq("id", convite.id);
+      const nextStatus = (convite.status === "aguardando_aprovacao" || convite.status === "apto") ? convite.status : (convite.status === "ativo" ? "em_preenchimento" : convite.status);
+      await admin.from("rh_admissao_convites").update({ etapa_atual: refreshedState.etapa_atual, status: nextStatus, updated_at: new Date().toISOString() }).eq("id", convite.id);
       return json({ ok: true, modelos: refreshed.modelos.filter((m: any) => m.ordem !== 3), documentos: refreshed.documentos, progresso: refreshedState });
     }
 
