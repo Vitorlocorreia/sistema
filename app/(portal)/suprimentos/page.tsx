@@ -52,7 +52,9 @@ import { SuprimentoCardDrawer, ColaboradorOption } from '@/components/Suprimento
 
 export interface SuprimentoItem {
   id: string
+  codigo?: string | null
   obra_id: string | null
+  obra_nome_manual?: string | null
   titulo: string
   quantidade: string | null
   unidade: string | null
@@ -65,6 +67,8 @@ export interface SuprimentoItem {
   created_at: string
   responsavel_id?: string | null
   responsavel_nome?: string | null
+  proximo_responsavel_id?: string | null
+  proximo_responsavel_nome?: string | null
   itens_checklist?: any[]
   chat_mensagens?: any[]
   historico_atividades?: any[]
@@ -203,20 +207,48 @@ export default function SuprimentosPage() {
 
   // Formulário Novo Pedido
   const [novoForm, setNovoForm] = useState({
+    codigo: '',
     obra_id: '',
+    obra_nome_manual: '',
     titulo: '',
-    quantidade: '',
-    unidade: 'un',
+    itens: [
+      { id: 'item-1', descricao: '', quantidade: '', unidade: 'un' }
+    ],
     fornecedor_id: '',
     valor: '',
     prioridade: 'media' as SuprimentoItem['prioridade'],
     data_vencimento: '',
-    solicitante: '',
     responsavel_id: '',
     responsavel_nome: '',
+    proximo_responsavel_id: '',
+    proximo_responsavel_nome: '',
     status: 'Solicitado' as SuprimentoItem['status']
   })
   const [salvandoNovo, setSalvandoNovo] = useState(false)
+
+  const handleAdicionarItemForm = () => {
+    setNovoForm(prev => ({
+      ...prev,
+      itens: [...prev.itens, { id: `item-${Date.now()}-${prev.itens.length}`, descricao: '', quantidade: '', unidade: 'un' }]
+    }))
+  }
+
+  const handleRemoverItemForm = (id: string) => {
+    setNovoForm(prev => {
+      if (prev.itens.length <= 1) return prev
+      return {
+        ...prev,
+        itens: prev.itens.filter(it => it.id !== id)
+      }
+    })
+  }
+
+  const handleAtualizarItemForm = (id: string, campo: 'descricao' | 'quantidade' | 'unidade', valor: string) => {
+    setNovoForm(prev => ({
+      ...prev,
+      itens: prev.itens.map(it => it.id === id ? { ...it, [campo]: valor } : it)
+    }))
+  }
 
   // Criação Rápida Direto na Coluna
   const [colunaCriacaoAtiva, setColunaCriacaoAtiva] = useState<SuprimentoItem['status'] | null>(null)
@@ -407,7 +439,11 @@ export default function SuprimentosPage() {
   // 1. Criar Solicitação de Compra
   async function handleCriarSolicitacao(e: React.FormEvent) {
     e.preventDefault()
-    if (!novoForm.titulo.trim()) return toast('Informe o material ou insumo a ser comprado.', 'error')
+
+    const itensValidos = novoForm.itens.filter(it => it.descricao.trim())
+    if (itensValidos.length === 0 && !novoForm.titulo.trim()) {
+      return toast('Informe ao menos um material ou insumo a ser solicitado.', 'error')
+    }
 
     setSalvandoNovo(true)
     try {
@@ -417,39 +453,66 @@ export default function SuprimentosPage() {
       const cleanValor = novoForm.valor ? parseFloat(novoForm.valor.replace(/\./g, '').replace(',', '.')) : null
 
       const responsavelEscolhido = colaboradores.find(c => c.id === novoForm.responsavel_id)
-      const respNome = responsavelEscolhido?.nome || colaboradorAtivo?.nome || null
-      const respId = responsavelEscolhido?.id || colaboradorAtivo?.id || null
+      const respNome = responsavelEscolhido?.nome || null
+      const respId = responsavelEscolhido?.id || null
+
+      const proximoEscolhido = colaboradores.find(c => c.id === novoForm.proximo_responsavel_id)
+      const proxNome = proximoEscolhido?.nome || null
+      const proxId = proximoEscolhido?.id || null
+
+      const solicitanteNome = colaboradorAtivo?.nome || 'Usuário Atual'
+      const obraDestinoId = novoForm.obra_id === '__outros__' ? null : (novoForm.obra_id || null)
+      const obraNomeManual = novoForm.obra_id === '__outros__' ? (novoForm.obra_nome_manual.trim() || 'Outros (Não cadastrado)') : null
+
+      // Título inteligente
+      let tituloFinal = novoForm.titulo.trim()
+      if (!tituloFinal) {
+        if (novoForm.codigo.trim()) {
+          tituloFinal = `${novoForm.codigo.trim()} - ${itensValidos[0]?.descricao || 'MATERIAIS'}`
+        } else if (itensValidos.length === 1) {
+          tituloFinal = itensValidos[0].descricao.trim()
+        } else {
+          tituloFinal = `${itensValidos[0].descricao.trim()} (+${itensValidos.length - 1} itens)`
+        }
+      }
+
+      const checklistInicial = itensValidos.map((it, idx) => ({
+        id: `chk-${Date.now()}-${idx}`,
+        descricao: it.descricao.trim(),
+        qtd_pedida: parseFloat((it.quantidade || '1').replace(',', '.')) || 1,
+        qtd_entregue: 0,
+        unidade: it.unidade || 'un',
+        status: 'pendente'
+      }))
+
+      const qtdFinal = itensValidos.length > 1 ? `${itensValidos.length} itens` : (itensValidos[0]?.quantidade?.trim() || '1')
+      const unidadeFinal = itensValidos.length > 1 ? 'itens' : (itensValidos[0]?.unidade?.trim() || 'un')
 
       const historicoInicial = [{
         id: 'act-' + Date.now(),
         data: new Date().toISOString(),
-        autor_nome: colaboradorAtivo?.nome || 'Canteiro de Obras',
+        autor_nome: solicitanteNome,
         acao: 'criacao_demanda',
-        detalhe: `Solicitação criada no canteiro.${respNome ? ` Responsável atribuído: ${respNome}.` : ''}`
+        detalhe: `Solicitação criada no sistema por ${solicitanteNome}.${respNome ? ` Responsável da Demanda: ${respNome}.` : ''}${proxNome ? ` Próximo responsável: ${proxNome}.` : ''}`
       }]
 
-      const checklistInicial = novoForm.quantidade ? [{
-        id: 'chk-' + Date.now(),
-        descricao: novoForm.titulo.trim(),
-        qtd_pedida: parseFloat(novoForm.quantidade.replace(',', '.')) || 1,
-        qtd_entregue: 0,
-        unidade: novoForm.unidade || 'un',
-        status: 'pendente'
-      }] : []
-
       const { data, error } = await supabase.from('suprimentos').insert({
-        obra_id: novoForm.obra_id || null,
-        titulo: novoForm.titulo.trim(),
-        quantidade: novoForm.quantidade.trim() || null,
-        unidade: novoForm.unidade.trim() || 'un',
+        codigo: novoForm.codigo.trim() || null,
+        obra_id: obraDestinoId,
+        obra_nome_manual: obraNomeManual,
+        titulo: tituloFinal,
+        quantidade: qtdFinal,
+        unidade: unidadeFinal,
         fornecedor: fornNome || null,
         valor: cleanValor,
         status: novoForm.status || 'Solicitado',
         data_vencimento: novoForm.data_vencimento || null,
-        solicitante: novoForm.solicitante.trim() || colaboradorAtivo?.nome || 'Canteiro de Obras',
+        solicitante: solicitanteNome,
         prioridade: novoForm.prioridade,
         responsavel_id: respId,
         responsavel_nome: respNome,
+        proximo_responsavel_id: proxId,
+        proximo_responsavel_nome: proxNome,
         itens_checklist: checklistInicial,
         historico_atividades: historicoInicial,
         chat_mensagens: [],
@@ -462,10 +525,23 @@ export default function SuprimentosPage() {
         await supabase.from('notificacoes').insert({
           destinatario_id: respId,
           remetente_id: colaboradorAtivo?.id || null,
-          remetente_nome: colaboradorAtivo?.nome || 'Canteiro',
+          remetente_nome: solicitanteNome,
           tipo: 'transferencia_responsavel',
           titulo: 'Nova Demanda de Suprimentos',
-          mensagem: `${colaboradorAtivo?.nome || 'Alguém'} atribuiu a nova demanda "${novoForm.titulo}" para você.`,
+          mensagem: `${solicitanteNome} atribuiu a nova demanda "${tituloFinal}" para você.`,
+          link: `/suprimentos?cardId=${data.id}`,
+          lida: false
+        })
+      }
+
+      if (proxId && proxId !== respId && proxId !== colaboradorAtivo?.id) {
+        await supabase.from('notificacoes').insert({
+          destinatario_id: proxId,
+          remetente_id: colaboradorAtivo?.id || null,
+          remetente_nome: solicitanteNome,
+          tipo: 'transferencia_responsavel',
+          titulo: 'Próximo Passo em Suprimentos',
+          mensagem: `${solicitanteNome} definiu você como próximo responsável pela demanda "${tituloFinal}".`,
           link: `/suprimentos?cardId=${data.id}`,
           lida: false
         })
@@ -474,17 +550,21 @@ export default function SuprimentosPage() {
       toast('Solicitação de compra criada com sucesso!', 'success')
       setModalNovoOpen(false)
       setNovoForm({
+        codigo: '',
         obra_id: '',
+        obra_nome_manual: '',
         titulo: '',
-        quantidade: '',
-        unidade: 'un',
+        itens: [
+          { id: 'item-1', descricao: '', quantidade: '', unidade: 'un' }
+        ],
         fornecedor_id: '',
         valor: '',
         prioridade: 'media',
         data_vencimento: '',
-        solicitante: colaboradorAtivo?.nome || '',
         responsavel_id: '',
         responsavel_nome: '',
+        proximo_responsavel_id: '',
+        proximo_responsavel_nome: '',
         status: 'Solicitado'
       })
       await loadData(true)
@@ -1500,12 +1580,21 @@ export default function SuprimentosPage() {
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
                               <GripVertical size={13} color={C.inkSoft} style={{ opacity: 0.6, cursor: 'grab', marginRight: -2 }} />
-                              <span style={{ fontSize: 9.5, fontWeight: 900, fontFamily: 'monospace', color: C.amber }}>
-                                OC-{item.id.slice(0, 6).toUpperCase()}
+                              <span style={{
+                                fontSize: 9.5,
+                                fontWeight: 900,
+                                fontFamily: 'monospace',
+                                color: C.amber,
+                                background: item.codigo ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
+                                border: item.codigo ? '1px solid rgba(245, 158, 11, 0.3)' : 'none',
+                                padding: item.codigo ? '1px 5px' : '0',
+                                borderRadius: 3
+                              }}>
+                                {item.codigo ? item.codigo : `OC-${item.id.slice(0, 6).toUpperCase()}`}
                               </span>
-                              {obra && (
+                              {(obra || item.obra_nome_manual) && (
                                 <span style={{ fontSize: 9.5, fontWeight: 800, background: 'rgba(245, 158, 11, 0.08)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.25)`, padding: '1px 5px', borderRadius: 3 }}>
-                                  🏢 {obra.nome}
+                                  🏢 {obra ? obra.nome : item.obra_nome_manual}
                                 </span>
                               )}
                             </div>
@@ -1527,45 +1616,76 @@ export default function SuprimentosPage() {
                             )}
                           </div>
 
-                          {/* Responsável da Demanda & Badges de Atividade */}
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10.5, paddingTop: 2 }}>
-                            <div style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              color: item.responsavel_nome ? C.ink : C.inkSoft,
-                              background: item.responsavel_nome ? 'rgba(255,255,255,0.04)' : 'transparent',
-                              padding: item.responsavel_nome ? '2px 6px' : '0',
-                              borderRadius: 4,
-                              border: item.responsavel_nome ? `1px solid ${C.border}` : 'none'
-                            }}>
-                              <User size={11} color={item.responsavel_nome ? C.amber : C.inkSoft} />
-                              <span style={{ fontWeight: item.responsavel_nome ? 700 : 400 }}>
-                                {item.responsavel_nome || 'Sem responsável'}
-                              </span>
+                          {/* Solicitante & Responsáveis da Demanda */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 4 }}>
+                              {/* Solicitante (Login de Origem) */}
+                              {item.solicitante && (
+                                <span style={{ color: C.inkSoft, fontSize: 9.5 }}>
+                                  👤 Solicitante: <strong style={{ color: C.ink }}>{item.solicitante}</strong>
+                                </span>
+                              )}
+
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: C.inkSoft, marginLeft: 'auto' }}>
+                                {totalChecklist > 0 && (
+                                  <span style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 2,
+                                    color: entreguesChecklist === totalChecklist ? '#10B981' : C.amber,
+                                    fontWeight: 700
+                                  }} title={`Checklist: ${entreguesChecklist}/${totalChecklist} entregues`}>
+                                    <CheckSquare size={11} /> {entreguesChecklist}/{totalChecklist}
+                                  </span>
+                                )}
+                                {anexosCount > 0 && (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title={`${anexosCount} arquivo(s) anexado(s)`}>
+                                    <Paperclip size={11} /> {anexosCount}
+                                  </span>
+                                )}
+                                {chatCount > 0 && (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title={`${chatCount} mensagem(ns) no chat`}>
+                                    <MessageSquare size={11} /> {chatCount}
+                                  </span>
+                                )}
+                              </div>
                             </div>
 
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 10, color: C.inkSoft }}>
-                              {totalChecklist > 0 && (
-                                <span style={{
+                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, paddingTop: 2 }}>
+                              {/* Responsável Atual (Engenheiro) */}
+                              <div style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: 3,
+                                color: item.responsavel_nome ? C.ink : C.inkSoft,
+                                background: item.responsavel_nome ? 'rgba(255,255,255,0.04)' : 'transparent',
+                                padding: item.responsavel_nome ? '2px 5px' : '0',
+                                borderRadius: 3,
+                                border: item.responsavel_nome ? `1px solid ${C.border}` : 'none',
+                                fontSize: 9.5
+                              }}>
+                                <User size={10} color={item.responsavel_nome ? C.amber : C.inkSoft} />
+                                <span style={{ fontWeight: item.responsavel_nome ? 700 : 400 }}>
+                                  {item.responsavel_nome || 'Sem resp.'}
+                                </span>
+                              </div>
+
+                              {/* Próximo Responsável */}
+                              {item.proximo_responsavel_nome && (
+                                <div style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: 2,
-                                  color: entreguesChecklist === totalChecklist ? '#10B981' : C.amber,
+                                  gap: 3,
+                                  color: '#3B82F6',
+                                  background: 'rgba(59, 130, 246, 0.1)',
+                                  border: '1px solid rgba(59, 130, 246, 0.25)',
+                                  padding: '2px 5px',
+                                  borderRadius: 3,
+                                  fontSize: 9.5,
                                   fontWeight: 700
-                                }} title={`Checklist: ${entreguesChecklist}/${totalChecklist} entregues`}>
-                                  <CheckSquare size={11} /> {entreguesChecklist}/{totalChecklist}
-                                </span>
-                              )}
-                              {anexosCount > 0 && (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title={`${anexosCount} arquivo(s) anexado(s)`}>
-                                  <Paperclip size={11} /> {anexosCount}
-                                </span>
-                              )}
-                              {chatCount > 0 && (
-                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }} title={`${chatCount} mensagem(ns) no chat`}>
-                                  <MessageSquare size={11} /> {chatCount}
-                                </span>
+                                }}>
+                                  <span>➡️ Próx: {item.proximo_responsavel_nome}</span>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1911,20 +2031,118 @@ export default function SuprimentosPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCriarSolicitacao} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <form onSubmit={handleCriarSolicitacao} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* 1. Código & Título do Cartão */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div style={{ gridColumn: 'span 2' }}>
-                  <span style={labelStyle}>Material ou Insumo Solicitado *</span>
+                <div>
+                  <span style={labelStyle}>Código / Identificador (Estilo Trello)</span>
                   <input
-                    style={inputStyle}
-                    placeholder="Ex: 200 sacos de cimento CP-II, 50 barras de ferro 10mm"
-                    value={novoForm.titulo}
-                    onChange={e => setNovoForm({ ...novoForm, titulo: e.target.value })}
-                    required
+                    style={{ ...inputStyle, fontFamily: 'monospace', fontWeight: 700 }}
+                    placeholder="Ex: SG-BC 0069/26"
+                    value={novoForm.codigo}
+                    onChange={e => setNovoForm({ ...novoForm, codigo: e.target.value })}
                     autoFocus
                   />
+                  <span style={{ fontSize: 9.5, color: C.inkSoft, marginTop: 2, display: 'block' }}>
+                    Identificador único do pedido ou cartão da demanda.
+                  </span>
                 </div>
 
+                <div>
+                  <span style={labelStyle}>Título / Categoria Geral</span>
+                  <input
+                    style={inputStyle}
+                    placeholder="Ex: FERRAMENTAS, CIMENTO, ELÉTRICA (opcional)"
+                    value={novoForm.titulo}
+                    onChange={e => setNovoForm({ ...novoForm, titulo: e.target.value })}
+                  />
+                  <span style={{ fontSize: 9.5, color: C.inkSoft, marginTop: 2, display: 'block' }}>
+                    Se vazio, será gerado automaticamente pelos materiais.
+                  </span>
+                </div>
+              </div>
+
+              {/* 2. Lista Dinâmica de Materiais com Botão "+" */}
+              <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ ...labelStyle, marginBottom: 0, color: C.ink }}>
+                    📦 Materiais ou Insumos Solicitados ({novoForm.itens.length})
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAdicionarItemForm}
+                    style={{
+                      ...btnBase,
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      color: C.amber,
+                      border: `1px solid ${C.amber}44`,
+                      padding: '4px 8px',
+                      fontSize: 10.5
+                    }}
+                  >
+                    <Plus size={12} /> Adicionar Material
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {novoForm.itens.map((it, idx) => (
+                    <div key={it.id} style={{ display: 'grid', gridTemplateColumns: '1fr 90px 110px 32px', gap: 6, alignItems: 'center' }}>
+                      <input
+                        style={inputStyle}
+                        placeholder={`Material ${idx + 1} (Ex: Furadeira de impacto, 20 sacos de cimento)`}
+                        value={it.descricao}
+                        onChange={e => handleAtualizarItemForm(it.id, 'descricao', e.target.value)}
+                        required={idx === 0 && !novoForm.titulo}
+                      />
+                      <input
+                        style={inputStyle}
+                        placeholder="Qtd (Ex: 10)"
+                        value={it.quantidade}
+                        onChange={e => handleAtualizarItemForm(it.id, 'quantidade', e.target.value)}
+                      />
+                      <select
+                        style={inputStyle}
+                        value={it.unidade}
+                        onChange={e => handleAtualizarItemForm(it.id, 'unidade', e.target.value)}
+                      >
+                        <option value="un">un (Unidade)</option>
+                        <option value="saco">saco (Sacos)</option>
+                        <option value="barra">barra (Barras)</option>
+                        <option value="m">m (Metros)</option>
+                        <option value="m²">m² (Metro Quad.)</option>
+                        <option value="m³">m³ (Metro Cúb.)</option>
+                        <option value="kg">kg (Quilograma)</option>
+                        <option value="litro">litro (Litros)</option>
+                        <option value="caixa">caixa (Caixas)</option>
+                        <option value="rolo">rolo (Rolos)</option>
+                        <option value="peça">peça (Peças)</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoverItemForm(it.id)}
+                        disabled={novoForm.itens.length <= 1}
+                        style={{
+                          border: 'none',
+                          background: 'transparent',
+                          color: novoForm.itens.length <= 1 ? C.inkSoft : '#EF4444',
+                          cursor: novoForm.itens.length <= 1 ? 'not-allowed' : 'pointer',
+                          padding: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: novoForm.itens.length <= 1 ? 0.3 : 1
+                        }}
+                        title="Remover item"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Obra Destino com Suporte a "Outros" */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <span style={labelStyle}>Obra Destino</span>
                   <select
@@ -1938,11 +2156,12 @@ export default function SuprimentosPage() {
                         {o.nome}
                       </option>
                     ))}
+                    <option value="__outros__">📍 Outros / Local não cadastrado...</option>
                   </select>
                 </div>
 
                 <div>
-                  <span style={labelStyle}>Etapa da Esteira</span>
+                  <span style={labelStyle}>Etapa Inicial da Esteira</span>
                   <select
                     style={inputStyle}
                     value={novoForm.status}
@@ -1951,6 +2170,95 @@ export default function SuprimentosPage() {
                     {COLUNAS_ESTEIRA.map(col => (
                       <option key={col.id} value={col.id}>
                         {col.nome}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Se selecionou "Outros" na obra, abre campo manual */}
+              {novoForm.obra_id === '__outros__' && (
+                <div style={{ background: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.25)', borderRadius: 6, padding: 10 }}>
+                  <span style={{ ...labelStyle, color: C.amber }}>Nome do Local / Obra Destino (Preenchimento Manual) *</span>
+                  <input
+                    style={inputStyle}
+                    placeholder="Digite o local ou canteiro onde o material será entregue..."
+                    value={novoForm.obra_nome_manual}
+                    onChange={e => setNovoForm({ ...novoForm, obra_nome_manual: e.target.value })}
+                    required
+                  />
+                </div>
+              )}
+
+              {/* 4. Solicitante Automático (Login) & Responsáveis */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                {/* Solicitante: Automático pelo Login */}
+                <div>
+                  <span style={labelStyle}>Solicitante (Registrado pelo Login)</span>
+                  <div style={{
+                    ...inputStyle,
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    color: C.ink,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    cursor: 'default'
+                  }}>
+                    <User size={13} color={C.amber} />
+                    <span style={{ fontWeight: 800 }}>{colaboradorAtivo?.nome || 'Usuário Atual'}</span>
+                    <span style={{ fontSize: 9, color: C.inkSoft, marginLeft: 'auto', background: C.bgCard, padding: '1px 5px', borderRadius: 3 }}>
+                      Sessão Ativa
+                    </span>
+                  </div>
+                </div>
+
+                {/* Responsável da Demanda (Engenheiro) */}
+                <div>
+                  <span style={labelStyle}>Responsável da Demanda (Engenheiro)</span>
+                  <select
+                    style={inputStyle}
+                    value={novoForm.responsavel_id || ''}
+                    onChange={e => {
+                      const colab = colaboradores.find(c => c.id === e.target.value)
+                      setNovoForm({
+                        ...novoForm,
+                        responsavel_id: e.target.value,
+                        responsavel_nome: colab ? colab.nome : ''
+                      })
+                    }}
+                  >
+                    <option value="">Sem responsável inicial</option>
+                    {colaboradores.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome} {c.cargo ? `(${c.cargo})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* 5. Próximo Responsável & Prioridade */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <div>
+                  <span style={{ ...labelStyle, color: '#3B82F6' }}>
+                    ➡️ Próximo Responsável (Direto pelo próximo passo)
+                  </span>
+                  <select
+                    style={{ ...inputStyle, borderColor: 'rgba(59, 130, 246, 0.4)' }}
+                    value={novoForm.proximo_responsavel_id || ''}
+                    onChange={e => {
+                      const colab = colaboradores.find(c => c.id === e.target.value)
+                      setNovoForm({
+                        ...novoForm,
+                        proximo_responsavel_id: e.target.value,
+                        proximo_responsavel_nome: colab ? colab.nome : ''
+                      })
+                    }}
+                  >
+                    <option value="">Selecione o próximo responsável...</option>
+                    {colaboradores.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome} {c.cargo ? `(${c.cargo})` : ''}
                       </option>
                     ))}
                   </select>
@@ -1969,37 +2277,10 @@ export default function SuprimentosPage() {
                     <option value="urgente">Urgente</option>
                   </select>
                 </div>
+              </div>
 
-                <div>
-                  <span style={labelStyle}>Quantidade</span>
-                  <input
-                    style={inputStyle}
-                    placeholder="Ex: 200"
-                    value={novoForm.quantidade}
-                    onChange={e => setNovoForm({ ...novoForm, quantidade: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <span style={labelStyle}>Unidade de Medida</span>
-                  <select
-                    style={inputStyle}
-                    value={novoForm.unidade}
-                    onChange={e => setNovoForm({ ...novoForm, unidade: e.target.value })}
-                  >
-                    <option value="un">un (Unidade)</option>
-                    <option value="saco">saco (Sacos)</option>
-                    <option value="barra">barra (Barras)</option>
-                    <option value="m">m (Metros)</option>
-                    <option value="m²">m² (Metro Quadrado)</option>
-                    <option value="m³">m³ (Metro Cúbico)</option>
-                    <option value="kg">kg (Quilograma)</option>
-                    <option value="litro">litro (Litros)</option>
-                    <option value="caixa">caixa (Caixas)</option>
-                    <option value="rolo">rolo (Rolos)</option>
-                  </select>
-                </div>
-
+              {/* 6. Fornecedor Sugerido & Valor Estimado */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <span style={labelStyle}>Fornecedor Sugerido (Opcional)</span>
                   <select
@@ -2024,39 +2305,6 @@ export default function SuprimentosPage() {
                     value={novoForm.valor}
                     onChange={e => setNovoForm({ ...novoForm, valor: e.target.value })}
                   />
-                </div>
-
-                <div>
-                  <span style={labelStyle}>Solicitante (Origem)</span>
-                  <input
-                    style={inputStyle}
-                    placeholder="Nome do engenheiro, mestre ou comprador"
-                    value={novoForm.solicitante}
-                    onChange={e => setNovoForm({ ...novoForm, solicitante: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <span style={labelStyle}>Responsável da Demanda</span>
-                  <select
-                    style={inputStyle}
-                    value={novoForm.responsavel_id || ''}
-                    onChange={e => {
-                      const colab = colaboradores.find(c => c.id === e.target.value)
-                      setNovoForm({
-                        ...novoForm,
-                        responsavel_id: e.target.value,
-                        responsavel_nome: colab ? colab.nome : ''
-                      })
-                    }}
-                  >
-                    <option value="">Sem responsável inicial</option>
-                    {colaboradores.map(c => (
-                      <option key={c.id} value={c.id}>
-                        {c.nome} {c.cargo ? `(${c.cargo})` : ''}
-                      </option>
-                    ))}
-                  </select>
                 </div>
               </div>
 

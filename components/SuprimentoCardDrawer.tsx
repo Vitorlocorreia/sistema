@@ -105,6 +105,8 @@ export function SuprimentoCardDrawer({
   // Estados de edição inline
   const [editandoTitulo, setEditandoTitulo] = useState(false)
   const [novoTitulo, setNovoTitulo] = useState('')
+  const [editandoCodigo, setEditandoCodigo] = useState(false)
+  const [novoCodigo, setNovoCodigo] = useState('')
   const [salvando, setSalvando] = useState(false)
 
   // Chat
@@ -124,6 +126,8 @@ export function SuprimentoCardDrawer({
     if (item) {
       setNovoTitulo(item.titulo || '')
       setEditandoTitulo(false)
+      setNovoCodigo(item.codigo || '')
+      setEditandoCodigo(false)
     }
   }, [item])
 
@@ -210,6 +214,78 @@ export function SuprimentoCardDrawer({
       }
     } catch (err: any) {
       toast('Erro ao transferir: ' + err.message, 'error')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  // 1.1 ATUALIZAR PRÓXIMO RESPONSÁVEL
+  async function handleTransferirProximoResponsavel(novoColabId: string) {
+    const novoColab = colaboradores.find(c => c.id === novoColabId)
+    const novoNome = novoColab ? novoColab.nome : null
+    const antigoNome = item.proximo_responsavel_nome || 'Nenhum'
+    if (novoNome === antigoNome) return
+
+    setSalvando(true)
+    try {
+      const detalhe = novoColab
+        ? `Definiu o próximo responsável como ${novoColab.nome}`
+        : `Removeu o próximo responsável (era ${antigoNome})`
+
+      const ok = await registrarMexida(
+        'proximo_responsavel',
+        detalhe,
+        antigoNome,
+        novoNome || 'Nenhum',
+        {
+          proximo_responsavel_id: novoColab?.id || null,
+          proximo_responsavel_nome: novoNome
+        }
+      )
+
+      if (ok && novoColab) {
+        await supabase.from('notificacoes').insert({
+          destinatario_id: novoColab.id,
+          remetente_id: colaboradorAtivo?.id || null,
+          remetente_nome: autorAtual,
+          tipo: 'transferencia_responsavel',
+          titulo: 'Próximo Passo em Suprimentos',
+          mensagem: `${autorAtual} definiu você como próximo responsável pela demanda "${item.titulo}".`,
+          link: `/suprimentos?cardId=${item.id}`,
+          lida: false
+        })
+
+        toast(`Próximo responsável definido como ${novoColab.nome}!`, 'success')
+      }
+    } catch (err: any) {
+      toast('Erro ao atualizar próximo responsável: ' + err.message, 'error')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  // 1.2 ATUALIZAR CÓDIGO DO CARTÃO
+  async function handleSalvarCodigo() {
+    if (novoCodigo.trim() === (item.codigo || '')) {
+      setEditandoCodigo(false)
+      return
+    }
+
+    setSalvando(true)
+    try {
+      const antigo = item.codigo || 'Sem código'
+      const novo = novoCodigo.trim()
+      const ok = await registrarMexida(
+        'edicao_codigo',
+        `Alterou o código do cartão de "${antigo}" para "${novo}"`,
+        antigo,
+        novo,
+        { codigo: novo || null }
+      )
+      if (ok) {
+        setEditandoCodigo(false)
+        toast('Código do cartão atualizado com sucesso.', 'success')
+      }
     } finally {
       setSalvando(false)
     }
@@ -496,20 +572,68 @@ export function SuprimentoCardDrawer({
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 800,
-                    textTransform: 'uppercase',
-                    letterSpacing: 1,
-                    background: 'rgba(245, 158, 11, 0.15)',
-                    color: C.amber,
-                    padding: '2px 8px',
-                    borderRadius: 4
-                  }}
-                >
-                  OC-{item.id.slice(0, 6).toUpperCase()}
-                </span>
+                {editandoCodigo ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <input
+                      value={novoCodigo}
+                      onChange={e => setNovoCodigo(e.target.value)}
+                      placeholder="Ex: SG-BC 0069/26"
+                      autoFocus
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 800,
+                        fontFamily: 'monospace',
+                        background: C.bgPanel,
+                        border: `1px solid ${C.amber}`,
+                        color: C.ink,
+                        padding: '2px 6px',
+                        borderRadius: 4,
+                        outline: 'none'
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSalvarCodigo()
+                        if (e.key === 'Escape') setEditandoCodigo(false)
+                      }}
+                    />
+                    <button
+                      onClick={handleSalvarCodigo}
+                      disabled={salvando}
+                      style={{ background: C.amber, color: '#0A0A0A', border: 'none', borderRadius: 3, padding: '2px 6px', cursor: 'pointer', fontWeight: 800, fontSize: 10 }}
+                    >
+                      <Check size={11} />
+                    </button>
+                    <button
+                      onClick={() => setEditandoCodigo(false)}
+                      style={{ background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 3, padding: '2px 4px', cursor: 'pointer' }}
+                    >
+                      <X size={11} />
+                    </button>
+                  </div>
+                ) : (
+                  <span
+                    onClick={() => { setNovoCodigo(item.codigo || ''); setEditandoCodigo(true); }}
+                    title="Clique para editar o código / identificador"
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 800,
+                      fontFamily: 'monospace',
+                      textTransform: 'uppercase',
+                      letterSpacing: 1,
+                      background: 'rgba(245, 158, 11, 0.15)',
+                      color: C.amber,
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      padding: '2px 8px',
+                      borderRadius: 4,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    {item.codigo ? item.codigo : `OC-${item.id.slice(0, 6).toUpperCase()}`}
+                    <Edit2 size={9} style={{ opacity: 0.7 }} />
+                  </span>
+                )}
 
                 <select
                   value={item.status}
@@ -603,7 +727,7 @@ export function SuprimentoCardDrawer({
             </button>
           </div>
 
-          {/* ─── BARRA DE TRANSFERÊNCIA DE RESPONSÁVEL ──────────────────────── */}
+          {/* ─── BARRA DE TRANSFERÊNCIA DE RESPONSÁVEL (ENGENHEIRO) ──────────── */}
           <div
             style={{
               display: 'flex',
@@ -635,7 +759,7 @@ export function SuprimentoCardDrawer({
               </div>
               <div>
                 <span style={{ fontSize: 9.5, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>
-                  Responsável pela Demanda
+                  Responsável pela Demanda (Engenheiro)
                 </span>
                 <strong style={{ fontSize: 12, color: C.ink }}>
                   {item.responsavel_nome || 'Nenhum responsável atribuído'}
@@ -674,19 +798,102 @@ export function SuprimentoCardDrawer({
             </div>
           </div>
 
-          {/* ─── GRID DE PROPRIEDADES RÁPIDAS ─────────────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, fontSize: 11 }}>
-            {/* Obra */}
-            <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px' }}>
-              <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Obra</span>
-              <select
-                value={item.obra_id || ''}
-                onChange={e => handleAtualizarPropriedade('obra_id', e.target.value, 'Obra')}
-                style={{ width: '100%', background: 'transparent', border: 'none', color: C.ink, fontSize: 11, fontWeight: 600, outline: 'none', cursor: 'pointer', padding: 0 }}
+          {/* ─── BARRA DO PRÓXIMO RESPONSÁVEL (QUEM EXECUTARÁ O PRÓXIMO PASSO) ── */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'rgba(59, 130, 246, 0.05)',
+              border: '1px solid rgba(59, 130, 246, 0.25)',
+              borderRadius: 6,
+              padding: '8px 12px',
+              gap: 12
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
+                  background: item.proximo_responsavel_nome ? '#3B82F6' : 'rgba(59, 130, 246, 0.2)',
+                  color: item.proximo_responsavel_nome ? '#FFFFFF' : '#3B82F6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 900,
+                  fontSize: 11
+                }}
               >
-                <option value="">Sem Obra</option>
-                {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                {item.proximo_responsavel_nome ? item.proximo_responsavel_nome.charAt(0).toUpperCase() : '➡️'}
+              </div>
+              <div>
+                <span style={{ fontSize: 9.5, color: '#3B82F6', textTransform: 'uppercase', fontWeight: 800, display: 'block' }}>
+                  Próximo Responsável (Próximo Passo)
+                </span>
+                <strong style={{ fontSize: 12, color: C.ink }}>
+                  {item.proximo_responsavel_nome || 'Nenhum definido'}
+                </strong>
+              </div>
+            </div>
+
+            {/* Dropdown de Próximo Responsável */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <select
+                aria-label="Definir próximo responsável"
+                value={item.proximo_responsavel_id || ''}
+                onChange={e => handleTransferirProximoResponsavel(e.target.value)}
+                disabled={salvando}
+                style={{
+                  background: C.bgWhite,
+                  color: C.ink,
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  fontSize: 11,
+                  outline: 'none',
+                  cursor: 'pointer',
+                  maxWidth: 180
+                }}
+              >
+                <option value="">Definir próximo...</option>
+                {colaboradores.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome} ({c.cargo})
+                  </option>
+                ))}
               </select>
+            </div>
+          </div>
+
+          {/* ─── GRID DE PROPRIEDADES RÁPIDAS ─────────────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 8, fontSize: 11 }}>
+            {/* Obra ou Obra Manual */}
+            <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px' }}>
+              <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Obra / Destino</span>
+              {item.obra_nome_manual ? (
+                <div style={{ color: C.amber, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.obra_nome_manual}>
+                  📍 {item.obra_nome_manual}
+                </div>
+              ) : (
+                <select
+                  value={item.obra_id || ''}
+                  onChange={e => handleAtualizarPropriedade('obra_id', e.target.value, 'Obra')}
+                  style={{ width: '100%', background: 'transparent', border: 'none', color: C.ink, fontSize: 11, fontWeight: 600, outline: 'none', cursor: 'pointer', padding: 0 }}
+                >
+                  <option value="">Sem Obra</option>
+                  {obras.map(o => <option key={o.id} value={o.id}>{o.nome}</option>)}
+                </select>
+              )}
+            </div>
+
+            {/* Solicitante (Login de Origem) */}
+            <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px' }}>
+              <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700, display: 'block' }}>Solicitante</span>
+              <div style={{ color: C.ink, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.solicitante || 'Não informado'}>
+                👤 {item.solicitante || 'Não informado'}
+              </div>
             </div>
 
             {/* Prioridade */}

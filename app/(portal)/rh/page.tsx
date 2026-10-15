@@ -132,6 +132,7 @@ type Convite = {
   created_at: string
   revogado_em: string | null
   aprovado_em: string | null
+  apto_em?: string | null
   funcionario_id: string | null
   criado_por?: string | null
   documentos: DocumentoCadastro[]
@@ -141,6 +142,29 @@ function isInviteApto(invite: Convite | null | undefined): boolean {
   if (!invite) return false
   if (invite.status === 'aprovado') return false
   return invite.status === 'apto' || (invite.documentos?.some(d => d.item_id === 'status_apto') ?? false)
+}
+
+function getDataApto(invite: Convite | null | undefined): string | null {
+  if (!invite) return null
+  if (invite.apto_em) return invite.apto_em
+  const docApto = invite.documentos?.find(d => d.item_id === 'status_apto')
+  if (docApto?.created_at) return docApto.created_at
+  if (invite.status === 'apto') return (invite as any).updated_at || invite.created_at
+  return null
+}
+
+function formatarDataHora(val?: string | null, apenasData = false): string {
+  if (!val) return '—'
+  try {
+    const d = new Date(val.includes('T') ? val : val + 'T00:00:00')
+    if (isNaN(d.getTime())) return '—'
+    if (apenasData) {
+      return d.toLocaleDateString('pt-BR')
+    }
+    return `${d.toLocaleDateString('pt-BR')} ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`
+  } catch {
+    return '—'
+  }
 }
 
 const emptyDetails: Details = { historico: [], documentos: [], exames: [], etapas: [] }
@@ -578,6 +602,65 @@ function ArchivePanel({
             <Trash2 size={12} />
             Excluir
           </button>
+        </div>
+      </div>
+
+      {/* LINHA DO TEMPO DE MARCOS DO COLABORADOR REGISTRADO */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+        gap: 8,
+        background: C.bgPanel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 6,
+        padding: '10px 12px'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: C.inkSoft }}>
+            1. Entrada em Admissão
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>
+            {formatarDataHora((person as any).created_at, true)}
+          </span>
+          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+            Admissão no sistema
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: '#10B981' }}>
+            2. Apto p/ Registro
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: '#10B981' }}>
+            {formatarDataHora(person.dados_registro?.registrado_em || (person as any).created_at, true)}
+          </span>
+          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+            Aprovado pelo RH
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: '#10B981' }}>
+            3. Registro em Carteira
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>
+            {person.dados_registro?.registrado_em ? formatarDataHora(person.dados_registro.registrado_em, true) : 'Formalizado'}
+          </span>
+          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+            Colaborador Ativo
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: C.amber }}>
+            4. Início de Atividades
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: C.amber }}>
+            {person.data_admissao ? formatarDataHora(person.data_admissao, true) : 'A definir'}
+          </span>
+          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+            No canteiro / sede
+          </span>
         </div>
       </div>
 
@@ -1293,6 +1376,65 @@ function CadastroTable({
               )}
             </>
           )}
+        </div>
+      </div>
+
+      {/* LINHA DO TEMPO DE MARCOS DO RH (RESOLUÇÃO DEFINITIVA DE DATAS) */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+        gap: 8,
+        background: C.bgPanel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 6,
+        padding: '10px 12px'
+      }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: C.inkSoft }}>
+            1. Entrada em Admissão
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>
+            {formatarDataHora(invite.created_at)}
+          </span>
+          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+            Criado por: {resolveNomeCriador(invite.criado_por, colaboradores || [])}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: '#10B981' }}>
+            2. Apto p/ Registro
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: getDataApto(invite) ? '#10B981' : C.inkSoft }}>
+            {getDataApto(invite) ? formatarDataHora(getDataApto(invite)) : 'Aguardando validação'}
+          </span>
+          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+            {getDataApto(invite) ? 'Validado pelo RH' : 'Em triagem'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: invite.aprovado_em ? '#10B981' : C.amber }}>
+            3. Registro / Efetivação
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: invite.aprovado_em ? C.ink : C.inkSoft }}>
+            {invite.aprovado_em ? formatarDataHora(invite.aprovado_em) : 'Pendente (Aguardando Carteira)'}
+          </span>
+          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+            {invite.aprovado_em ? 'Formalizado no sistema' : 'Na esteira'}
+          </span>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: C.amber }}>
+            4. Início de Atividades
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: invite.data_inicio_efetivo ? C.amber : C.inkSoft }}>
+            {invite.data_inicio_efetivo ? formatarDataHora(invite.data_inicio_efetivo, true) : 'A definir'}
+          </span>
+          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+            {invite.inicio_efetivo ? 'Confirmado no canteiro' : 'Previsão'}
+          </span>
         </div>
       </div>
 
@@ -2463,7 +2605,7 @@ export default function RhPage() {
       const now = new Date().toISOString()
       const { error } = await supabase
         .from('rh_admissao_convites')
-        .update({ status: 'apto', updated_at: now })
+        .update({ status: 'apto', apto_em: now, updated_at: now })
         .in('id', ids)
 
       if (error) throw error
@@ -2684,14 +2826,16 @@ export default function RhPage() {
           if (convByCpf && convByCpf.length > 0) conviteEncontrado = convByCpf[0]
         }
 
+        const nowApto = new Date().toISOString()
         if (conviteEncontrado) {
           await supabase
             .from('rh_admissao_convites')
             .update({
               status: 'apto',
+              apto_em: conviteEncontrado.apto_em || nowApto,
               funcionario_id: null,
               aprovado_em: null,
-              updated_at: new Date().toISOString()
+              updated_at: nowApto
             })
             .eq('id', conviteEncontrado.id)
         } else {
@@ -2709,6 +2853,7 @@ export default function RhPage() {
             obra: person.obra,
             email_destinatario: person.email || `${person.nome.toLowerCase().replace(/[^a-z0-9]/g, '.')}@sistema.com`,
             status: 'apto',
+            apto_em: nowApto,
             token_code: token,
             token_hash: tokenHash,
             expires_at: new Date(Date.now() + 365 * 86400000).toISOString(),
@@ -3006,12 +3151,14 @@ export default function RhPage() {
       { confirmLabel: 'Sim, Declarar Apto', confirmColor: '#10B981' }
     ))) return
 
+    const now = new Date().toISOString()
     // 1. Tenta atualizar diretamente o status para 'apto' na tabela de convites
     const { error } = await supabase
       .from('rh_admissao_convites')
       .update({
         status: 'apto',
-        updated_at: new Date().toISOString()
+        apto_em: now,
+        updated_at: now
       })
       .eq('id', invite.id)
 
@@ -3504,15 +3651,17 @@ export default function RhPage() {
         if (convByNome && convByNome.length > 0) conviteEncontrado = convByNome[0]
       }
 
+      const nowApto = new Date().toISOString()
       if (conviteEncontrado) {
         // Atualiza convite para apto
         await supabase
           .from('rh_admissao_convites')
           .update({
             status: 'apto',
+            apto_em: conviteEncontrado.apto_em || nowApto,
             funcionario_id: null,
             aprovado_em: null,
-            updated_at: new Date().toISOString()
+            updated_at: nowApto
           })
           .eq('id', conviteEncontrado.id)
         targetConviteId = conviteEncontrado.id
@@ -3557,6 +3706,7 @@ export default function RhPage() {
             obra: person.obra,
             email_destinatario: person.email || `${person.nome.toLowerCase().replace(/[^a-z0-9]/g, '.')}@sistema.com`,
             status: 'apto',
+            apto_em: nowApto,
             token_code: token,
             token_hash: tokenHash,
             expires_at: new Date(Date.now() + 365 * 86400000).toISOString(),
@@ -3704,20 +3854,31 @@ export default function RhPage() {
 
   const exportarExcel = () => {
     const listToExport = activeTab === 'admissao' ? convitesFiltrados : activeTab === 'aptos' ? aptosFiltrados : pessoasFiltradas
-    const data = listToExport.map((item: any) => ({
-      Nome: item.nome_destinatario || item.nome,
-      CPF: item.cpf || '',
-      Cargo: item.cargo || '',
-      Obra: item.obra || '',
-      Email: item.email_destinatario || item.email || '',
-      Status: item.status || 'Ativo',
-      Data: item.data_admissao || item.data_inicio_efetivo || item.created_at || ''
-    }))
+    const data = listToExport.map((item: any) => {
+      const entradaAdmissao = item.created_at ? formatarDataHora(item.created_at) : ''
+      const aptoEm = item.apto_em ? formatarDataHora(item.apto_em) : (getDataApto(item) ? formatarDataHora(getDataApto(item)) : '')
+      const registradoEm = item.dados_registro?.registrado_em ? formatarDataHora(item.dados_registro.registrado_em, true) : (item.aprovado_em ? formatarDataHora(item.aprovado_em, true) : '')
+      const inicioAtividades = item.data_admissao ? formatarDataHora(item.data_admissao, true) : (item.data_inicio_efetivo ? formatarDataHora(item.data_inicio_efetivo, true) : '')
+
+      return {
+        Nome: item.nome_destinatario || item.nome,
+        CPF: item.cpf || '',
+        Cargo: item.cargo || '',
+        Obra: item.obra || '',
+        Email: item.email_destinatario || item.email || '',
+        Status: item.status || 'Ativo',
+        'Data Entrada Admissão': entradaAdmissao,
+        'Data Apto p/ Registro': aptoEm,
+        'Data Registro / Efetivação': registradoEm,
+        'Início das Atividades': inicioAtividades,
+        'Salário': item.dados_registro?.salario || (item.documentos?.find((d: any) => d.item_id === 'salario_registro')?.observacao_rh ? `R$ ${item.documentos?.find((d: any) => d.item_id === 'salario_registro')?.observacao_rh}` : '')
+      }
+    })
     const ws = XLSX.utils.json_to_sheet(data)
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'RH')
     XLSX.writeFile(wb, `relatorio_rh_${activeTab}_${new Date().toISOString().slice(0, 10)}.xlsx`)
-    toast('Relatório exportado com sucesso!', 'success')
+    toast('Relatório exportado com sucesso com datas discriminadas!', 'success')
   }
 
   return (
@@ -4421,6 +4582,17 @@ export default function RhPage() {
                         )
                       })()}
 
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
+                        <span style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '2px 6px', borderRadius: 3, border: `1px solid ${C.border}` }}>
+                          📅 Entrada: <strong style={{ color: C.ink }}>{formatarDataHora(invite.created_at)}</strong>
+                        </span>
+                        {invite.data_inicio_efetivo && (
+                          <span style={{ background: 'rgba(245, 158, 11, 0.1)', color: C.amber, padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(245, 158, 11, 0.25)', fontWeight: 700 }}>
+                            🚀 Previsão Início: {formatarDataHora(invite.data_inicio_efetivo, true)}
+                          </span>
+                        )}
+                      </div>
+
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
                         <span>👤 Por: {resolveNomeCriador(invite.criado_por, colaboradores)}</span>
                         {invite.inicio_efetivo && (
@@ -4628,6 +4800,20 @@ export default function RhPage() {
                           </div>
                         )
                       })()}
+
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
+                        <span style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '2px 6px', borderRadius: 3, border: `1px solid ${C.border}` }}>
+                          📅 Entrada: <strong style={{ color: C.ink }}>{formatarDataHora(invite.created_at, true)}</strong>
+                        </span>
+                        <span style={{ background: 'rgba(16, 185, 129, 0.12)', color: '#10B981', padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.3)', fontWeight: 800 }}>
+                          🎯 Apto em: {formatarDataHora(getDataApto(invite))}
+                        </span>
+                        {invite.data_inicio_efetivo && (
+                          <span style={{ background: 'rgba(245, 158, 11, 0.1)', color: C.amber, padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(245, 158, 11, 0.25)', fontWeight: 700 }}>
+                            🚀 Previsão Início: {formatarDataHora(invite.data_inicio_efetivo, true)}
+                          </span>
+                        )}
+                      </div>
 
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
                         <span>👤 Por: {resolveNomeCriador(invite.criado_por, colaboradores)}</span>
@@ -4868,6 +5054,20 @@ export default function RhPage() {
                           </div>
                         )
                       })()}
+
+                      {/* Datas do Colaborador Ativo */}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
+                        {person.data_admissao && (
+                          <span style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10B981', padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.25)', fontWeight: 700 }}>
+                            🚀 Início das Atividades: {formatarDataHora(person.data_admissao, true)}
+                          </span>
+                        )}
+                        {person.dados_registro?.registrado_em && (
+                          <span style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '2px 6px', borderRadius: 3, border: `1px solid ${C.border}` }}>
+                            💼 Registrado em: <strong style={{ color: C.ink }}>{formatarDataHora(person.dados_registro.registrado_em, true)}</strong>
+                          </span>
+                        )}
+                      </div>
                     </motion.div>
                   )
                 })
