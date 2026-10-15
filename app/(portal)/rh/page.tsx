@@ -693,8 +693,26 @@ function ArchivePanel({
         {[1, 2, 3, 4].map(order => {
           const etapa = details.etapas.find(item => item.modelo?.ordem === order)
           const docs = documents.filter(doc => {
-            if (doc.etapa_id) return etapa?.id ? doc.etapa_id === etapa.id : false
             if (doc.ordem_pasta) return String(doc.ordem_pasta) === String(order)
+            if (doc.etapa_id && etapa?.id) return doc.etapa_id === etapa.id
+            if (doc.storage_path) {
+              const m = doc.storage_path.match(/archive-(\d)/) || doc.storage_path.match(/etapa-(\d)/)
+              if (m) return parseInt(m[1], 10) === order
+              if (doc.storage_path.includes('documentos-admissionais')) return order === 3
+              if (doc.storage_path.includes('laudos')) return order === 4
+            }
+            if (doc.tipo) {
+              const t = doc.tipo.toLowerCase()
+              if (t.includes('admiss')) return order === 3
+              if (t.includes('saude') || t.includes('aso') || t.includes('exame')) return order === 4
+              if (t.includes('cadastr') || t.includes('etnico')) return order === 2
+            }
+            if (doc.nome) {
+              const n = doc.nome.toLowerCase()
+              if (n.includes('contrato') || n.includes('termo de responsabilidade') || n.includes('vale-transporte') || n.includes('encargos')) return order === 3
+              if (n.includes('aso') || n.includes('exame') || n.includes('laudo')) return order === 4
+              if (n.includes('autodeclaracao') || n.includes('etnico')) return order === 2
+            }
             return order === 1
           })
 
@@ -1171,34 +1189,34 @@ function CadastroTable({
     }
   }
 
-  async function uploadDocAdmissional(file: File | undefined) {
-    if (!file) return
+  async function uploadDocAdmissional(files: FileList | File | undefined) {
+    if (!files) return
     const modeloEtapa3 = modelos.find(m => m.ordem === 3)
     if (!modeloEtapa3) return
     setUploadingDocAdmissional(true)
     try {
-      const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
-      const path = `documentos-admissionais/${invite.id}-${Date.now()}-${safeName}`
-      const { error: uploadError } = await supabase.storage.from('rh-documentos').upload(path, file, { contentType: file.type || 'application/pdf', upsert: true })
-      if (uploadError) throw uploadError
-
+      const fileList = files instanceof FileList ? Array.from(files) : [files]
       const itemId = modeloEtapa3.checklist?.[0]?.id || 'documentos_admissionais'
-      const existing = docsList.find(d => d.modelo_id === modeloEtapa3.id)
-      if (existing) {
-        await supabase.from('rh_admissao_documentos').delete().eq('id', existing.id)
-      }
 
-      const { error: rowError } = await supabase.from('rh_admissao_documentos').insert({
-        convite_id: invite.id,
-        modelo_id: modeloEtapa3.id,
-        item_id: itemId,
-        nome: file.name,
-        storage_path: path,
-        tamanho_bytes: file.size,
-        mime_type: file.type || 'application/pdf',
-        status: 'aprovado'
-      })
-      if (rowError) throw rowError
+      for (const file of fileList) {
+        if (!file || file.size > 15 * 1024 * 1024) continue
+        const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
+        const path = `documentos-admissionais/${invite.id}-${Date.now()}-${safeName}`
+        const { error: uploadError } = await supabase.storage.from('rh-documentos').upload(path, file, { contentType: file.type || 'application/pdf', upsert: true })
+        if (uploadError) throw uploadError
+
+        const { error: rowError } = await supabase.from('rh_admissao_documentos').insert({
+          convite_id: invite.id,
+          modelo_id: modeloEtapa3.id,
+          item_id: itemId,
+          nome: file.name,
+          storage_path: path,
+          tamanho_bytes: file.size,
+          mime_type: file.type || 'application/pdf',
+          status: 'aprovado'
+        })
+        if (rowError) throw rowError
+      }
 
       toast('Documentos admissionais anexados com sucesso!', 'success')
       await onRefresh?.()
@@ -1616,7 +1634,6 @@ function CadastroTable({
               {/* Etapa 3 (Documentos Admissionais - Alimentado internamente pelo DP / RH) */}
               {modelo.ordem === 3 && (() => {
                 const docs = docsList.filter(d => d.modelo_id === modelo.id)
-                const doc = docs[docs.length - 1]
                 return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                     <div style={{ padding: '10px 12px', background: 'rgba(245, 158, 11, 0.05)', border: `1px solid ${C.amber}44`, borderRadius: 5 }}>
@@ -1628,54 +1645,67 @@ function CadastroTable({
                       </p>
                     </div>
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: C.bgWhite, border: `1px solid ${doc ? '#10B98155' : C.border}`, borderRadius: 5, flexWrap: 'wrap', gap: 10 }}>
-                      <div>
+                    <div style={{ padding: '12px 14px', background: C.bgWhite, border: `1px solid ${docs.length > 0 ? '#10B98155' : C.border}`, borderRadius: 5, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                           <span style={{ fontSize: 11.5, fontWeight: 800, color: C.ink }}>{modelo.nome}</span>
-                          <span style={{ fontSize: 8.5, background: doc ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)', color: doc ? '#10B981' : C.amber, padding: '1px 6px', borderRadius: 3, fontWeight: 800 }}>
-                            {doc ? '✓ Alimentado pelo DP' : 'Aguardando Anexo'}
+                          <span style={{ fontSize: 8.5, background: docs.length > 0 ? 'rgba(16, 185, 129, 0.12)' : 'rgba(245, 158, 11, 0.12)', color: docs.length > 0 ? '#10B981' : C.amber, padding: '1px 6px', borderRadius: 3, fontWeight: 800 }}>
+                            {docs.length > 0 ? `✓ ${docs.length} ${docs.length === 1 ? 'arquivo anexado' : 'arquivos anexados'}` : 'Aguardando Anexo'}
                           </span>
                         </div>
-                        {doc ? (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                            <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10.5, fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                              <ExternalLink size={11} /> 📄 {doc.nome}
-                            </button>
-                            {doc.tamanho_bytes ? (
-                              <span style={{ fontSize: 9, color: C.inkSoft }}>
-                                ({(doc.tamanho_bytes / 1024).toFixed(0)} KB)
-                              </span>
-                            ) : null}
-                          </div>
-                        ) : (
-                          <p style={{ fontSize: 10, color: C.inkSoft, margin: '3px 0 0' }}>
-                            Nenhum documento admissional anexado ainda. Faça o upload do arquivo para formalizar a pasta do colaborador.
-                          </p>
-                        )}
-                      </div>
 
-                      <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                        {doc && (
-                          <button
-                            type="button"
-                            onClick={() => void removerDocAdmissional(doc.id)}
-                            style={{ ...btnBase, padding: '5px 8px', fontSize: 9.5, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
-                            title="Remover documento"
-                          >
-                            <Trash2 size={11} /> Remover
-                          </button>
-                        )}
                         <label style={{ ...btnBase, padding: '6px 12px', fontSize: 10, background: C.amber, color: '#0A0A0A', fontWeight: 800, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                          <FileUp size={12} /> {uploadingDocAdmissional ? 'Enviando...' : doc ? 'Substituir Documento' : 'Anexar Documentos Admissionais'}
+                          <FileUp size={12} /> {uploadingDocAdmissional ? 'Enviando...' : docs.length > 0 ? '+ Adicionar Documento' : 'Anexar Documentos Admissionais'}
                           <input
                             hidden
                             type="file"
+                            multiple
                             accept=".pdf,.doc,.docx,.xls,.xlsx"
                             disabled={uploadingDocAdmissional}
-                            onChange={e => void uploadDocAdmissional(e.target.files?.[0])}
+                            onChange={e => {
+                              if (e.target.files?.length) {
+                                void uploadDocAdmissional(e.target.files)
+                                e.target.value = ''
+                              }
+                            }}
                           />
                         </label>
                       </div>
+
+                      {docs.length > 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${C.border}`, paddingTop: 8 }}>
+                          {docs.map(doc => (
+                            <div
+                              key={doc.id}
+                              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 10px', background: C.bgPanel, borderRadius: 4, border: `1px solid ${C.border}` }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                                <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10.5, fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4, textAlign: 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  <ExternalLink size={11} /> 📄 {doc.nome}
+                                </button>
+                                {doc.tamanho_bytes ? (
+                                  <span style={{ fontSize: 9, color: C.inkSoft, flexShrink: 0 }}>
+                                    ({(doc.tamanho_bytes / 1024).toFixed(0)} KB)
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => void removerDocAdmissional(doc.id)}
+                                style={{ ...btnBase, padding: '4px 7px', fontSize: 9, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)', flexShrink: 0 }}
+                                title="Remover este documento"
+                              >
+                                <Trash2 size={11} /> Remover
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: 10, color: C.inkSoft, margin: 0 }}>
+                          Nenhum documento admissional anexado ainda. Faça o upload do arquivo para formalizar a pasta do colaborador.
+                        </p>
+                      )}
                     </div>
                   </div>
                 )
@@ -2450,6 +2480,40 @@ export default function RhPage() {
       supabase.from('rh_admissao_convites').select('id, documentos:rh_admissao_documentos(*)').eq('funcionario_id', person.id),
     ])
 
+    const docsFuncionario = (documentos ?? []).map((d: any) => {
+      let ordemDoc: number | null = null
+      if (d.etapa_id && etapas) {
+        const et = etapas.find((e: any) => e.id === d.etapa_id)
+        if (et?.modelo?.ordem) ordemDoc = et.modelo.ordem
+      }
+      if (!ordemDoc && d.storage_path) {
+        const m = d.storage_path.match(/archive-(\d)/) || d.storage_path.match(/etapa-(\d)/)
+        if (m) ordemDoc = parseInt(m[1], 10)
+        else if (d.storage_path.includes('documentos-admissionais')) ordemDoc = 3
+        else if (d.storage_path.includes('laudos') || d.storage_path.includes('exame') || d.storage_path.includes('aso')) ordemDoc = 4
+      }
+      if (!ordemDoc && d.tipo) {
+        const t = d.tipo.toLowerCase()
+        if (t.includes('admiss')) ordemDoc = 3
+        else if (t.includes('saude') || t.includes('aso') || t.includes('exame')) ordemDoc = 4
+        else if (t.includes('cadastr') || t.includes('etnico')) ordemDoc = 2
+      }
+      if (!ordemDoc && d.nome) {
+        const n = d.nome.toLowerCase()
+        if (n.includes('contrato') || n.includes('termo de responsabilidade') || n.includes('vale-transporte') || n.includes('encargos') || n.includes('admiss')) {
+          ordemDoc = 3
+        } else if (n.includes('aso') || n.includes('exame') || n.includes('laudo') || n.includes('saude')) {
+          ordemDoc = 4
+        } else if (n.includes('autodeclaracao') || n.includes('etnico')) {
+          ordemDoc = 2
+        }
+      }
+      return {
+        ...d,
+        ordem_pasta: ordemDoc ? ordemDoc.toString() : null
+      }
+    })
+
     const docsAdmissao: Array<Record<string, string | null>> = []
     if (convitesRelacionados) {
       convitesRelacionados.forEach((c: any) => {
@@ -2462,6 +2526,13 @@ export default function RhPage() {
               if (mod) ordemDoc = mod.ordem
             } else if (d.item_id === '__guia_rh__' || (d.nome || '').toLowerCase().includes('guia') || (d.nome || '').toLowerCase().includes('pix')) {
               ordemDoc = 1
+            }
+
+            if (!ordemDoc && d.storage_path) {
+              const m = d.storage_path.match(/archive-(\d)/) || d.storage_path.match(/etapa-(\d)/)
+              if (m) ordemDoc = parseInt(m[1], 10)
+              else if (d.storage_path.includes('documentos-admissionais')) ordemDoc = 3
+              else if (d.storage_path.includes('laudos')) ordemDoc = 4
             }
 
             docsAdmissao.push({
@@ -2481,7 +2552,7 @@ export default function RhPage() {
 
     setDetails({
       historico: historico ?? [],
-      documentos: [...(documentos ?? []), ...docsAdmissao],
+      documentos: [...docsFuncionario, ...docsAdmissao],
       exames: exames ?? [],
       etapas: ((etapas ?? []) as unknown as EtapaAdmissao[]).sort((a, b) => a.modelo.ordem - b.modelo.ordem)
     })
@@ -3827,6 +3898,29 @@ export default function RhPage() {
   async function uploadToArchiveFolder(order: number, files: FileList) {
     if (!selected || !files.length) return
     let uploaded = 0
+
+    let etapa = details.etapas.find(item => item.modelo?.ordem === order)
+    if (!etapa) {
+      const modelo = modelos.find(m => m.ordem === order)
+      if (modelo) {
+        const { data: novaEtapa } = await supabase.from('funcionario_admissao_etapas').insert({
+          funcionario_id: selected.id,
+          modelo_id: modelo.id,
+          status: 'Concluída'
+        }).select('id, modelo_id').maybeSingle()
+        if (novaEtapa) {
+          etapa = { id: novaEtapa.id, funcionario_id: selected.id, modelo_id: modelo.id, status: 'Concluída', observacoes: null, iniciado_em: null, concluido_em: null, modelo } as any
+        }
+      }
+    }
+
+    const pastaTipos: Record<number, string> = {
+      1: 'Identificação & Pessoal',
+      2: 'Ficha Cadastral',
+      3: 'Documentos Admissionais',
+      4: 'Saúde & ASO'
+    }
+
     for (const file of Array.from(files)) {
       if (file.size > 15 * 1024 * 1024) continue
       const safeName = file.name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9._-]/g, '-').toLowerCase()
@@ -3835,7 +3929,8 @@ export default function RhPage() {
       if (!uploadError) {
         await supabase.from('funcionario_documentos').insert({
           funcionario_id: selected.id,
-          tipo: 'Documento Adicional',
+          etapa_id: etapa?.id || null,
+          tipo: pastaTipos[order] || 'Documento Adicional',
           nome: file.name,
           arquivo_url: path,
           storage_path: path,
