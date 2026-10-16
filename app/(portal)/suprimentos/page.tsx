@@ -666,11 +666,30 @@ export default function SuprimentosPage() {
     }
 
     const statusAntigo = item.status
+    if (statusAntigo === novoStatus) return
+
     // Atualização otimista imediata na UI
     setSuprimentos(prev => prev.map(s => s.id === item.id ? { ...s, status: novoStatus } : s))
 
     try {
-      const { error } = await supabase.from('suprimentos').update({ status: novoStatus }).eq('id', item.id)
+      const autorAtual = colaboradorAtivo?.nome || 'Usuário do Sistema'
+      const novaAtividade = {
+        id: 'act-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        data: new Date().toISOString(),
+        autor_nome: autorAtual,
+        acao: 'mudanca_etapa',
+        detalhe: `Moveu o pedido da etapa "${statusAntigo}" para "${novoStatus}"`,
+        de: statusAntigo,
+        para: novoStatus
+      }
+      const historicoAtual = Array.isArray(item.historico_atividades) ? item.historico_atividades : []
+      const novoHistorico = [novaAtividade, ...historicoAtual]
+
+      const { error } = await supabase.from('suprimentos').update({
+        status: novoStatus,
+        historico_atividades: novoHistorico
+      }).eq('id', item.id)
+
       if (error) {
         setSuprimentos(prev => prev.map(s => s.id === item.id ? { ...s, status: statusAntigo } : s))
         throw error
@@ -761,12 +780,26 @@ export default function SuprimentosPage() {
 
       if (contaErr) throw contaErr
 
-      // 3. Atualizar item em 'suprimentos' para 'Em Trânsito'
+      // 3. Atualizar item em 'suprimentos' para 'Em Trânsito' com log de auditoria
+      const autorAtualAprov = colaboradorAtivo?.nome || 'Usuário do Sistema'
+      const novaAtividadeAprov = {
+        id: 'act-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        data: new Date().toISOString(),
+        autor_nome: autorAtualAprov,
+        acao: 'aprovacao_compra',
+        detalhe: `Aprovou a compra com "${fornNome}", valor R$ ${valorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, vencimento: ${aprovForm.data_vencimento}. Lançamento financeiro gerado (#${novaConta.codigo_sequencial || novaConta.id.slice(0, 6)}).`,
+        de: 'Aprovação',
+        para: 'Em Trânsito'
+      }
+      const historicoAprov = Array.isArray(itemSelecionado.historico_atividades) ? itemSelecionado.historico_atividades : []
+      const novoHistoricoAprov = [novaAtividadeAprov, ...historicoAprov]
+
       const { error: supUpdateErr } = await supabase.from('suprimentos').update({
         status: 'Em Trânsito',
         fornecedor: fornNome,
         valor: valorNum,
-        data_vencimento: aprovForm.data_vencimento
+        data_vencimento: aprovForm.data_vencimento,
+        historico_atividades: novoHistoricoAprov
       }).eq('id', itemSelecionado.id)
 
       if (supUpdateErr) throw supUpdateErr
@@ -811,9 +844,23 @@ export default function SuprimentosPage() {
         }
       }
 
-      // 1. Atualizar suprimentos para 'Entregue'
+      // 1. Atualizar suprimentos para 'Entregue' com log de auditoria
+      const autorAtualRec = colaboradorAtivo?.nome || 'Usuário do Sistema'
+      const novaAtividadeRec = {
+        id: 'act-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        data: new Date().toISOString(),
+        autor_nome: autorAtualRec,
+        acao: 'entrega_recebida',
+        detalhe: `Recebido e conferido no canteiro. Qtd conferida: ${recebForm.quantidade_recebida || itemSelecionado.quantidade} ${itemSelecionado.unidade || ''}. Obs: ${recebForm.observacao}`,
+        de: 'Em Trânsito',
+        para: 'Entregue'
+      }
+      const historicoRec = Array.isArray(itemSelecionado.historico_atividades) ? itemSelecionado.historico_atividades : []
+      const novoHistoricoRec = [novaAtividadeRec, ...historicoRec]
+
       const { error: supErr } = await supabase.from('suprimentos').update({
-        status: 'Entregue'
+        status: 'Entregue',
+        historico_atividades: novoHistoricoRec
       }).eq('id', itemSelecionado.id)
 
       if (supErr) throw supErr
