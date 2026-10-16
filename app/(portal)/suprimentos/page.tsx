@@ -197,6 +197,16 @@ export default function SuprimentosPage() {
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
   const [dragOverCol, setDragOverCol] = useState<SuprimentoItem['status'] | null>(null)
   const justDraggedRef = useRef(false)
+  const cardPointerDownRef = useRef<{ id: string; x: number; y: number; time: number } | null>(null)
+  const lastDrawerOpenedTimeRef = useRef<number>(0)
+
+  const handleAbrirCardDrawer = useCallback((item: SuprimentoItem) => {
+    const now = Date.now()
+    if (now - lastDrawerOpenedTimeRef.current < 250) return
+    lastDrawerOpenedTimeRef.current = now
+    setDrawerItem(item)
+    setDrawerOpen(true)
+  }, [])
 
   // Modais
   const [modalNovoOpen, setModalNovoOpen] = useState(false)
@@ -1547,12 +1557,33 @@ export default function SuprimentosPage() {
                             setDragOverCol(null)
                             setTimeout(() => {
                               justDraggedRef.current = false
-                            }, 150)
+                            }, 200)
+                          }}
+                          onPointerDown={(e) => {
+                            if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) {
+                              return
+                            }
+                            cardPointerDownRef.current = {
+                              id: item.id,
+                              x: e.clientX,
+                              y: e.clientY,
+                              time: Date.now()
+                            }
+                          }}
+                          onPointerUp={(e) => {
+                            if (!cardPointerDownRef.current || cardPointerDownRef.current.id !== item.id) return
+                            const dx = Math.abs(e.clientX - cardPointerDownRef.current.x)
+                            const dy = Math.abs(e.clientY - cardPointerDownRef.current.y)
+                            const dt = Date.now() - cardPointerDownRef.current.time
+                            cardPointerDownRef.current = null
+
+                            if (dx < 8 && dy < 8 && dt < 450 && !justDraggedRef.current) {
+                              handleAbrirCardDrawer(item)
+                            }
                           }}
                           onClick={() => {
                             if (justDraggedRef.current) return
-                            setDrawerItem(item)
-                            setDrawerOpen(true)
+                            handleAbrirCardDrawer(item)
                           }}
                           style={{
                             background: C.bgCard,
@@ -1566,7 +1597,8 @@ export default function SuprimentosPage() {
                             opacity: isDraggingThis ? 0.35 : 1,
                             transform: isDraggingThis ? 'scale(0.97)' : 'none',
                             transition: 'transform 0.15s ease, opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
-                            cursor: isDraggingThis ? 'grabbing' : 'grab',
+                            cursor: isDraggingThis ? 'grabbing' : 'pointer',
+                            touchAction: 'pan-y',
                             userSelect: 'none'
                           }}
                           onMouseEnter={(e) => {
@@ -1579,7 +1611,21 @@ export default function SuprimentosPage() {
                           {/* Topo do Card */}
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
                             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, alignItems: 'center' }}>
-                              <GripVertical size={13} color={C.inkSoft} style={{ opacity: 0.6, cursor: 'grab', marginRight: -2 }} />
+                              <div
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  padding: '2px 4px',
+                                  borderRadius: 4,
+                                  background: 'rgba(255, 255, 255, 0.05)',
+                                  cursor: 'grab',
+                                  marginRight: 2
+                                }}
+                                title="Segure e arraste para mover entre etapas"
+                              >
+                                <GripVertical size={13} color={C.inkSoft} style={{ opacity: 0.8 }} />
+                              </div>
                               <span style={{
                                 fontSize: 9.5,
                                 fontWeight: 900,
@@ -1599,9 +1645,46 @@ export default function SuprimentosPage() {
                               )}
                             </div>
 
-                            <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', background: prioridadeBg, color: prioridadeCor, padding: '1px 5px', borderRadius: 3 }}>
-                              {item.prioridade}
-                            </span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <button
+                                type="button"
+                                draggable={false}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleAbrirCardDrawer(item)
+                                }}
+                                style={{
+                                  border: `1px solid ${C.border}`,
+                                  background: 'rgba(255, 255, 255, 0.04)',
+                                  color: C.inkSoft,
+                                  padding: '2px 6px',
+                                  borderRadius: 4,
+                                  fontSize: 9,
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = C.amber
+                                  e.currentTarget.style.color = C.amber
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = C.border
+                                  e.currentTarget.style.color = C.inkSoft
+                                }}
+                                title="Abrir demanda para ver detalhes e editar"
+                              >
+                                <Edit3 size={10} />
+                                <span>Editar</span>
+                              </button>
+
+                              <span style={{ fontSize: 9, fontWeight: 900, textTransform: 'uppercase', background: prioridadeBg, color: prioridadeCor, padding: '2px 5px', borderRadius: 3 }}>
+                                {item.prioridade}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Título & Detalhes */}
@@ -1773,9 +1856,45 @@ export default function SuprimentosPage() {
                             onClick={(e) => e.stopPropagation()}
                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2 }}
                           >
-                            <div style={{ display: 'flex', gap: 4 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <button
                                 type="button"
+                                draggable={false}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleAbrirCardDrawer(item)
+                                }}
+                                style={{
+                                  border: `1px solid ${C.border}`,
+                                  background: 'rgba(255, 255, 255, 0.04)',
+                                  color: C.inkSoft,
+                                  padding: '3px 7px',
+                                  borderRadius: 4,
+                                  fontSize: 9.5,
+                                  fontWeight: 700,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.borderColor = C.amber
+                                  e.currentTarget.style.color = C.amber
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.borderColor = C.border
+                                  e.currentTarget.style.color = C.inkSoft
+                                }}
+                                title="Ver detalhes completos e editar"
+                              >
+                                <ExternalLink size={10} />
+                                <span>Detalhes</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                draggable={false}
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   handleExcluirSuprimento(item)
