@@ -406,15 +406,20 @@ export default function SuprimentosPage() {
         }
       }
 
-      // 2. Filtro de Texto (busca)
+      // 2. Filtro de Texto (busca completa)
       if (busca.trim()) {
         const q = busca.toLowerCase().trim()
         const obraNome = obras.find(o => o.id === item.obra_id)?.nome?.toLowerCase() || ''
         const matchTitle = item.titulo?.toLowerCase().includes(q)
+        const matchCodigo = item.codigo?.toLowerCase().includes(q)
+        const matchId = item.id?.toLowerCase().includes(q)
         const matchForn = item.fornecedor?.toLowerCase().includes(q)
         const matchSol = item.solicitante?.toLowerCase().includes(q)
-        const matchObra = obraNome.includes(q)
-        if (!matchTitle && !matchForn && !matchSol && !matchObra) return false
+        const matchResp = item.responsavel_nome?.toLowerCase().includes(q)
+        const matchProxResp = item.proximo_responsavel_nome?.toLowerCase().includes(q)
+        const matchObra = obraNome.includes(q) || (item.obra_nome_manual && item.obra_nome_manual.toLowerCase().includes(q))
+        const matchChecklist = Array.isArray(item.itens_checklist) && item.itens_checklist.some((c: any) => c.descricao?.toLowerCase().includes(q))
+        if (!matchTitle && !matchCodigo && !matchId && !matchForn && !matchSol && !matchResp && !matchProxResp && !matchObra && !matchChecklist) return false
       }
 
       // 3. Filtro de Prioridade
@@ -1739,11 +1744,15 @@ export default function SuprimentosPage() {
                             <h5 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: C.ink, lineHeight: 1.3 }}>
                               {item.titulo}
                             </h5>
-                            {(item.quantidade || item.unidade) && (
+                            {totalChecklist > 0 ? (
+                              <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
+                                Materiais: <strong style={{ color: C.ink }}>{totalChecklist} item(ns) no pedido</strong>
+                              </div>
+                            ) : (item.quantidade || item.unidade) ? (
                               <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
                                 Quantidade: <strong style={{ color: C.ink }}>{item.quantidade} {item.unidade}</strong>
                               </div>
-                            )}
+                            ) : null}
                           </div>
 
                           {/* Solicitante & Responsáveis da Demanda */}
@@ -1838,6 +1847,28 @@ export default function SuprimentosPage() {
 
                           {/* BADGES SÍNCRONOS DA INTEGRAÇÃO */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            {/* Alerta de Divergência de Valor Financeiro vs Suprimentos */}
+                            {contaVinculada && item.valor && Math.abs(contaVinculada.valor - item.valor) > 0.01 && (
+                              <div
+                                style={{
+                                  fontSize: 9.5,
+                                  fontWeight: 800,
+                                  color: '#EF4444',
+                                  background: 'rgba(239, 68, 68, 0.12)',
+                                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                                  padding: '3px 6px',
+                                  borderRadius: 4,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4
+                                }}
+                                title={`Valor no Financeiro (R$ ${contaVinculada.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}) difere do Suprimentos`}
+                              >
+                                <AlertTriangle size={11} color="#EF4444" />
+                                <span>Valor divergente: Fin. R$ {contaVinculada.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                              </div>
+                            )}
+
                             {/* 1. Badge Financeiro Vivo */}
                             {contaVinculada ? (
                               <div style={{

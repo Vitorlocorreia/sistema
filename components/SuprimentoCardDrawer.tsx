@@ -25,7 +25,10 @@ import {
   PackageCheck,
   ShieldCheck,
   Share2,
-  Bot
+  Bot,
+  Printer,
+  Copy,
+  CheckCheck
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
@@ -38,7 +41,7 @@ export interface ItemChecklist {
   qtd_pedida: number
   qtd_entregue: number
   unidade: string
-  status: 'pendente' | 'parcial' | 'entregue'
+  status: 'pendente' | 'comprado' | 'parcial' | 'entregue'
 }
 
 export interface MensagemChat {
@@ -163,6 +166,10 @@ export function SuprimentoCardDrawer({
 
   // Upload anexo
   const [fazendoUpload, setFazendoUpload] = useState(false)
+
+  // Exportação Ordem de Compra (OC)
+  const [modalExportarOC, setModalExportarOC] = useState(false)
+  const [copiadoWhats, setCopiadoWhats] = useState(false)
 
   useEffect(() => {
     if (item) {
@@ -815,6 +822,102 @@ export function SuprimentoCardDrawer({
     )
   }
 
+  // 5.1 CHECKLIST: ALTERAR STATUS DO ITEM (Pendente, Comprado, Parcial, Entregue)
+  async function handleMudarStatusItemChecklist(itemId: string, novoStatus: ItemChecklist['status']) {
+    const listaAtual: ItemChecklist[] = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
+    const itemTarget = listaAtual.find(i => i.id === itemId)
+    if (!itemTarget || itemTarget.status === novoStatus) return
+
+    let novaQtdEntregue = itemTarget.qtd_entregue
+    if (novoStatus === 'entregue') {
+      novaQtdEntregue = itemTarget.qtd_pedida
+    } else if (novoStatus === 'pendente' || novoStatus === 'comprado') {
+      if (itemTarget.status === 'entregue') {
+        novaQtdEntregue = 0
+      }
+    }
+
+    const novaLista = listaAtual.map(i => {
+      if (i.id === itemId) {
+        return { ...i, status: novoStatus, qtd_entregue: novaQtdEntregue }
+      }
+      return i
+    })
+
+    const ok = await registrarMexida(
+      'checklist_status',
+      `Alterou status de "${itemTarget.descricao}" de ${itemTarget.status.toUpperCase()} para ${novoStatus.toUpperCase()}`,
+      itemTarget.status,
+      novoStatus,
+      { itens_checklist: novaLista }
+    )
+    if (ok) {
+      toast(`Status do item alterado para ${novoStatus.toUpperCase()}.`, 'success')
+    }
+  }
+
+  // 5.2 CHECKLIST: MARCAR TODOS OS ITENS COMO COMPRADOS
+  async function handleMarcarTodosComprados() {
+    const listaAtual: ItemChecklist[] = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
+    if (listaAtual.length === 0) return
+
+    const novaLista = listaAtual.map(i => {
+      if (i.status === 'entregue') return i
+      return { ...i, status: 'comprado' as const }
+    })
+
+    const ok = await registrarMexida(
+      'checklist_status_lote',
+      'Marcou todos os itens do pedido como COMPRADOS',
+      undefined,
+      'Todos comprados',
+      { itens_checklist: novaLista }
+    )
+    if (ok) {
+      toast('Todos os itens foram marcados como COMPRADOS.', 'success')
+    }
+  }
+
+  // 5.3 EXPORTAÇÃO: FORMATAR E COPIAR ORDEM DE COMPRA PARA WHATSAPP
+  function handleCopiarOCWhatsApp() {
+    const numOC = item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())
+    const obraNomeFinal = item.obra_nome_manual || obras.find(o => o.id === item.obra_id)?.nome || 'Não informada'
+    const previsao = item.data_previsao_entrega ? new Date(item.data_previsao_entrega + 'T00:00:00').toLocaleDateString('pt-BR') : 'A combinar'
+    const vencimento = item.data_vencimento ? new Date(item.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'A combinar'
+    const listaAtual: ItemChecklist[] = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
+
+    let texto = `*ORDEM DE COMPRA: ${numOC}*\n`
+    texto += `Data de Emissao: ${new Date().toLocaleDateString('pt-BR')}\n`
+    texto += `Obra / Destino: ${obraNomeFinal}\n`
+    if (item.fornecedor) texto += `Fornecedor: ${item.fornecedor}\n`
+    texto += `Previsao de Entrega: ${previsao}\n`
+    texto += `Condicao / Vencimento: ${vencimento}\n`
+    if (item.solicitante) texto += `Solicitante: ${item.solicitante}\n`
+    if (item.responsavel_nome) texto += `Responsavel: ${item.responsavel_nome}\n`
+    texto += `\n*ITENS SOLICITADOS:*\n`
+
+    if (listaAtual.length > 0) {
+      listaAtual.forEach((chk, idx) => {
+        texto += `${idx + 1}. ${chk.descricao} - ${chk.qtd_pedida} ${chk.unidade} [Status: ${chk.status.toUpperCase()}]\n`
+      })
+    } else {
+      texto += `1. ${item.titulo} - ${item.quantidade || '1'} ${item.unidade || 'un'}\n`
+    }
+
+    if (item.valor) {
+      texto += `\n*Valor Total:* R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`
+    }
+
+    texto += `\nJWA Engenharia & Construcao`
+
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(texto)
+      setCopiadoWhats(true)
+      toast('Ordem de Compra copiada para envio via WhatsApp.', 'success')
+      setTimeout(() => setCopiadoWhats(false), 3000)
+    }
+  }
+
   // 6. CHECKLIST: REMOVER ITEM
   async function handleRemoverItemChecklist(itemId: string) {
     const listaAtual: ItemChecklist[] = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
@@ -944,13 +1047,17 @@ export function SuprimentoCardDrawer({
   const itensChecklist: ItemChecklist[] = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
   const totalItens = itensChecklist.length
   const itensConcluidos = itensChecklist.filter(i => i.status === 'entregue').length
+  const itensComprados = itensChecklist.filter(i => i.status === 'comprado').length
+  const itensParciais = itensChecklist.filter(i => i.status === 'parcial').length
+  const itensPendentes = itensChecklist.filter(i => i.status === 'pendente').length
   const historicoList: AtividadeHistorico[] = Array.isArray(item.historico_atividades) ? item.historico_atividades : []
   const anexosList: AnexoItem[] = Array.isArray(item.anexos) ? item.anexos : []
   const chatList: MensagemChat[] = Array.isArray(item.chat_mensagens) ? item.chat_mensagens : []
 
   return (
-    <div
-      style={{
+    <>
+      <div
+        style={{
         position: 'fixed',
         inset: 0,
         zIndex: 9999,
@@ -1130,6 +1237,29 @@ export function SuprimentoCardDrawer({
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => setModalExportarOC(true)}
+                style={{
+                  border: `1px solid ${C.border}`,
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  color: C.ink,
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  padding: '4px 9px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  transition: 'all 0.15s ease'
+                }}
+                title="Visualizar e exportar Ordem de Compra oficial (PDF / WhatsApp)"
+              >
+                <Printer size={11} />
+                <span>Exportar OC</span>
+              </button>
+
               <button
                 type="button"
                 onClick={() => setModoEdicaoCompleta(!modoEdicaoCompleta)}
@@ -1779,20 +1909,33 @@ export function SuprimentoCardDrawer({
                   )}
                 </div>
 
-                {/* 5. Quantidade e Unidade Geral */}
+                {/* 5. Quantidade e Materiais do Pedido */}
                 <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                    <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>Quantidade Geral</span>
-                    <button
-                      type="button"
-                      onClick={() => { setNovaQtd(item.quantidade || ''); setNovaUnidade(item.unidade || 'un'); setEditandoQtd(!editandoQtd); }}
-                      title="Editar quantidade e unidade"
-                      style={{ border: 'none', background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 0 }}
-                    >
-                      <Edit2 size={9} />
-                    </button>
+                    <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700 }}>
+                      {itensChecklist.length > 0 ? 'Materiais no Pedido' : 'Quantidade Geral'}
+                    </span>
+                    {itensChecklist.length === 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setNovaQtd(item.quantidade || ''); setNovaUnidade(item.unidade || 'un'); setEditandoQtd(!editandoQtd); }}
+                        title="Editar quantidade e unidade avulsa"
+                        style={{ border: 'none', background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 0 }}
+                      >
+                        <Edit2 size={9} />
+                      </button>
+                    )}
                   </div>
-                  {editandoQtd ? (
+                  {itensChecklist.length > 0 ? (
+                    <div
+                      onClick={() => setTabAtiva('checklist')}
+                      style={{ color: C.amber, fontSize: 11, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                      title="Ver lista de materiais na aba de itens"
+                    >
+                      <CheckSquare size={12} />
+                      <span>{itensChecklist.length} material(is) no pedido</span>
+                    </div>
+                  ) : editandoQtd ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                       <input
                         value={novaQtd}
@@ -1819,7 +1962,7 @@ export function SuprimentoCardDrawer({
                       style={{ color: C.ink, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
                       title="Clique para editar quantidade"
                     >
-                      📦 {item.quantidade || item.unidade ? `${item.quantidade || ''} ${item.unidade || ''}` : 'Clique p/ definir'}
+                      {item.quantidade || item.unidade ? `${item.quantidade || ''} ${item.unidade || ''}` : 'Clique p/ definir'}
                     </div>
                   )}
                 </div>
@@ -1861,6 +2004,49 @@ export function SuprimentoCardDrawer({
                   />
                 </div>
               </div>
+
+              {/* Alerta e Sincronização de Valor com Financeiro */}
+              {contaVinculada && item.valor && Math.abs(contaVinculada.valor - item.valor) > 0.01 && (
+                <div style={{
+                  marginTop: 10,
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  borderRadius: 6,
+                  padding: '8px 12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: '#EF4444' }}>
+                    <AlertTriangle size={15} />
+                    <div>
+                      <span style={{ fontWeight: 800, display: 'block' }}>Divergência com Financeiro Detectada</span>
+                      <span style={{ color: C.inkSoft }}>
+                        Financeiro: <strong>R$ {contaVinculada.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong> | Suprimentos: <strong>R$ {item.valor?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleSalvarValor(String(contaVinculada.valor))}
+                    style={{
+                      background: '#EF4444',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: 4,
+                      padding: '5px 10px',
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap'
+                    }}
+                    title="Atualizar valor no Suprimentos para igualar ao Financeiro"
+                  >
+                    Sincronizar Valor
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1984,13 +2170,43 @@ export function SuprimentoCardDrawer({
           {/* ════ ABA 1: CHECKLIST DE ITENS & CONFERÊNCIA PARCIAL ═══════════════ */}
           {tabAtiva === 'checklist' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase' }}>
-                  Itens do Pedido & Quantidades Entregues
-                </span>
-                <span style={{ fontSize: 11, color: C.inkSoft }}>
-                  {totalItens === 0 ? 'Nenhum item avulso' : `${itensConcluidos} de ${totalItens} entregues`}
-                </span>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                <div>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase', display: 'block' }}>
+                    Itens do Pedido & Quantidades Entregues
+                  </span>
+                  <div style={{ fontSize: 10.5, color: C.inkSoft, marginTop: 2 }}>
+                    {totalItens === 0 ? 'Nenhum item cadastrado' : (
+                      <>
+                        <strong style={{ color: '#10B981' }}>{itensConcluidos}</strong> entregues · <strong style={{ color: '#3B82F6' }}>{itensComprados}</strong> comprados · <strong style={{ color: C.inkSoft }}>{itensPendentes}</strong> pendentes
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {itensChecklist.length > 0 && itensPendentes > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleMarcarTodosComprados}
+                    style={{
+                      background: 'rgba(59, 130, 246, 0.12)',
+                      border: '1px solid rgba(59, 130, 246, 0.3)',
+                      color: '#3B82F6',
+                      borderRadius: 4,
+                      padding: '4px 8px',
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                    title="Marcar todos os itens pendentes deste pedido como comprados"
+                  >
+                    <CheckCheck size={12} />
+                    <span>Marcar todos como Comprados</span>
+                  </button>
+                )}
               </div>
 
               {/* Lista de Itens */}
@@ -2005,7 +2221,15 @@ export function SuprimentoCardDrawer({
                       key={chk.id}
                       style={{
                         background: C.bgCard,
-                        border: `1px solid ${chk.status === 'entregue' ? 'rgba(16, 185, 129, 0.4)' : chk.status === 'parcial' ? 'rgba(245, 158, 11, 0.4)' : C.border}`,
+                        border: `1px solid ${
+                          chk.status === 'entregue'
+                            ? 'rgba(16, 185, 129, 0.4)'
+                            : chk.status === 'comprado'
+                            ? 'rgba(59, 130, 246, 0.4)'
+                            : chk.status === 'parcial'
+                            ? 'rgba(245, 158, 11, 0.4)'
+                            : C.border
+                        }`,
                         borderRadius: 6,
                         padding: '10px 12px',
                         display: 'flex',
@@ -2073,8 +2297,8 @@ export function SuprimentoCardDrawer({
                               width: 20,
                               height: 20,
                               borderRadius: 4,
-                              border: `1.5px solid ${chk.status === 'entregue' ? '#10B981' : chk.status === 'parcial' ? C.amber : C.inkSoft}`,
-                              background: chk.status === 'entregue' ? '#10B981' : chk.status === 'parcial' ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+                              border: `1.5px solid ${chk.status === 'entregue' ? '#10B981' : chk.status === 'comprado' ? '#3B82F6' : chk.status === 'parcial' ? C.amber : C.inkSoft}`,
+                              background: chk.status === 'entregue' ? '#10B981' : chk.status === 'comprado' ? 'rgba(59, 130, 246, 0.15)' : chk.status === 'parcial' ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
                               color: '#0A0A0A',
                               display: 'flex',
                               alignItems: 'center',
@@ -2084,6 +2308,7 @@ export function SuprimentoCardDrawer({
                             }}
                           >
                             {chk.status === 'entregue' && <Check size={13} color="#FFF" />}
+                            {chk.status === 'comprado' && <div style={{ width: 6, height: 6, background: '#3B82F6', borderRadius: 1 }} />}
                             {chk.status === 'parcial' && <div style={{ width: 6, height: 6, background: C.amber, borderRadius: 1 }} />}
                           </button>
 
@@ -2119,20 +2344,51 @@ export function SuprimentoCardDrawer({
                             <span style={{ fontSize: 11, color: C.inkSoft }}>{chk.unidade}</span>
                           </div>
 
-                          {/* Badge de Status */}
-                          <span
+                          {/* Seletor Rápido de Status */}
+                          <select
+                            value={chk.status}
+                            onChange={e => handleMudarStatusItemChecklist(chk.id, e.target.value as any)}
                             style={{
-                              fontSize: 9.5,
+                              fontSize: 10,
                               fontWeight: 800,
                               textTransform: 'uppercase',
-                              padding: '2px 6px',
+                              padding: '3px 6px',
                               borderRadius: 4,
-                              background: chk.status === 'entregue' ? 'rgba(16, 185, 129, 0.15)' : chk.status === 'parcial' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(156, 163, 175, 0.15)',
-                              color: chk.status === 'entregue' ? '#10B981' : chk.status === 'parcial' ? C.amber : C.inkSoft
+                              border: `1px solid ${
+                                chk.status === 'entregue'
+                                  ? 'rgba(16, 185, 129, 0.5)'
+                                  : chk.status === 'comprado'
+                                  ? 'rgba(59, 130, 246, 0.5)'
+                                  : chk.status === 'parcial'
+                                  ? 'rgba(245, 158, 11, 0.5)'
+                                  : C.border
+                              }`,
+                              background:
+                                chk.status === 'entregue'
+                                  ? 'rgba(16, 185, 129, 0.15)'
+                                  : chk.status === 'comprado'
+                                  ? 'rgba(59, 130, 246, 0.15)'
+                                  : chk.status === 'parcial'
+                                  ? 'rgba(245, 158, 11, 0.15)'
+                                  : 'rgba(255, 255, 255, 0.05)',
+                              color:
+                                chk.status === 'entregue'
+                                  ? '#10B981'
+                                  : chk.status === 'comprado'
+                                  ? '#3B82F6'
+                                  : chk.status === 'parcial'
+                                  ? C.amber
+                                  : C.inkSoft,
+                              outline: 'none',
+                              cursor: 'pointer'
                             }}
+                            title="Alterar status do material (Pendente, Comprado, Parcial, Entregue)"
                           >
-                            {chk.status}
-                          </span>
+                            <option value="pendente">Pendente</option>
+                            <option value="comprado">Comprado</option>
+                            <option value="parcial">Parcial</option>
+                            <option value="entregue">Entregue</option>
+                          </select>
 
                           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                             {/* Editar Item */}
@@ -2516,5 +2772,282 @@ export function SuprimentoCardDrawer({
         </div>
       </div>
     </div>
+
+    {/* ════ MODAL DE EXPORTAÇÃO: ORDEM DE COMPRA (OC) OFICIAL ════ */}
+    {modalExportarOC && (
+      <div
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 100000,
+          background: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16
+        }}
+        onClick={() => setModalExportarOC(false)}
+      >
+        <div
+          style={{
+            background: '#FFFFFF',
+            color: '#111827',
+            width: '100%',
+            maxWidth: 780,
+            maxHeight: '92vh',
+            overflowY: 'auto',
+            borderRadius: 8,
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Barra de Ações Superior (Não sai na impressão) */}
+          <div
+            className="no-print"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 18px',
+              borderBottom: '1px solid #E5E7EB',
+              background: '#F9FAFB'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Printer size={16} color="#374151" />
+              <strong style={{ fontSize: 13, color: '#111827' }}>Ordem de Compra Oficial</strong>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                type="button"
+                onClick={handleCopiarOCWhatsApp}
+                style={{
+                  background: copiadoWhats ? '#10B981' : '#2563EB',
+                  color: '#FFF',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                title="Copiar texto pronto para envio via WhatsApp"
+              >
+                {copiadoWhats ? <Check size={13} /> : <Copy size={13} />}
+                <span>{copiadoWhats ? 'Copiado p/ WhatsApp' : 'Copiar p/ WhatsApp'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => window.print()}
+                style={{
+                  background: '#111827',
+                  color: '#FFF',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '6px 12px',
+                  fontSize: 12,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+                title="Imprimir ou Salvar em PDF"
+              >
+                <Printer size={13} />
+                <span>Imprimir / Salvar PDF</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModalExportarOC(false)}
+                style={{
+                  background: 'transparent',
+                  border: '1px solid #D1D5DB',
+                  color: '#4B5563',
+                  borderRadius: 4,
+                  padding: '6px 10px',
+                  fontSize: 12,
+                  cursor: 'pointer'
+                }}
+                title="Fechar visualização"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          </div>
+
+          {/* Folha de Impressão (id="area-ordem-compra") */}
+          <div id="area-ordem-compra" style={{ padding: '32px 36px', background: '#FFFFFF', color: '#111827', fontFamily: 'Arial, sans-serif' }}>
+            <style>{`
+              @media print {
+                body * { visibility: hidden !important; }
+                #area-ordem-compra, #area-ordem-compra * { visibility: visible !important; }
+                #area-ordem-compra {
+                  position: absolute !important;
+                  left: 0 !important;
+                  top: 0 !important;
+                  width: 100% !important;
+                  padding: 20mm !important;
+                  margin: 0 !important;
+                  background: #FFF !important;
+                  color: #000 !important;
+                }
+                .no-print { display: none !important; }
+              }
+            `}</style>
+
+            {/* Cabeçalho Oficial */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111827', paddingBottom: 14, marginBottom: 16 }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: -0.5, color: '#111827' }}>
+                  JWA ENGENHARIA & CONSTRUÇÃO
+                </h2>
+                <div style={{ fontSize: 11, color: '#4B5563', marginTop: 2 }}>
+                  Departamento de Suprimentos & Compras
+                </div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 13, fontWeight: 900, color: '#111827' }}>
+                  ORDEM DE COMPRA
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#2563EB', fontFamily: 'monospace' }}>
+                  {item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())}
+                </div>
+                <div style={{ fontSize: 10.5, color: '#6B7280', marginTop: 2 }}>
+                  Emissão: {new Date().toLocaleDateString('pt-BR')}
+                </div>
+              </div>
+            </div>
+
+            {/* Grid de Informações da Compra */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, marginBottom: 18, fontSize: 11.5 }}>
+              <div>
+                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Obra / Destino:</div>
+                <strong style={{ color: '#111827', fontSize: 12 }}>
+                  {item.obra_nome_manual || obras.find(o => o.id === item.obra_id)?.nome || 'Não informada'}
+                </strong>
+              </div>
+              <div>
+                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Fornecedor:</div>
+                <strong style={{ color: '#111827', fontSize: 12 }}>
+                  {item.fornecedor || 'A definir'}
+                </strong>
+              </div>
+              <div>
+                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Solicitante / Origem:</div>
+                <span style={{ color: '#111827' }}>{item.solicitante || 'Não informado'}</span>
+              </div>
+              <div>
+                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Engenheiro / Responsável:</div>
+                <span style={{ color: '#111827' }}>{item.responsavel_nome || 'Não informado'}</span>
+              </div>
+              <div>
+                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Previsão de Entrega:</div>
+                <span style={{ color: '#111827', fontWeight: 700 }}>
+                  {item.data_previsao_entrega ? new Date(item.data_previsao_entrega + 'T00:00:00').toLocaleDateString('pt-BR') : 'A combinar'}
+                </span>
+              </div>
+              <div>
+                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Vencimento / Pagamento:</div>
+                <span style={{ color: '#111827', fontWeight: 700 }}>
+                  {item.data_vencimento ? new Date(item.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'A combinar'}
+                </span>
+              </div>
+            </div>
+
+            {/* Tabela de Itens e Materiais Solicitados */}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#374151', marginBottom: 6 }}>
+                Materiais Solicitados
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                <thead>
+                  <tr style={{ background: '#F3F4F6', borderBottom: '1px solid #D1D5DB', textAlign: 'left' }}>
+                    <th style={{ padding: '6px 8px', width: 35 }}>#</th>
+                    <th style={{ padding: '6px 8px' }}>Descrição do Material</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', width: 80 }}>Qtd Pedida</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', width: 60 }}>Unidade</th>
+                    <th style={{ padding: '6px 8px', textAlign: 'center', width: 80 }}>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {itensChecklist.length > 0 ? (
+                    itensChecklist.map((chk, idx) => (
+                      <tr key={chk.id} style={{ borderBottom: '1px solid #E5E7EB' }}>
+                        <td style={{ padding: '6px 8px', color: '#6B7280' }}>{idx + 1}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 700, color: '#111827' }}>{chk.descricao}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 800 }}>{chk.qtd_pedida}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center', color: '#4B5563' }}>{chk.unidade}</td>
+                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                          <span style={{
+                            fontSize: 9,
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            padding: '2px 5px',
+                            borderRadius: 3,
+                            background: chk.status === 'entregue' ? '#D1FAE5' : chk.status === 'comprado' ? '#DBEAFE' : chk.status === 'parcial' ? '#FEF3C7' : '#F3F4F6',
+                            color: chk.status === 'entregue' ? '#065F46' : chk.status === 'comprado' ? '#1E40AF' : chk.status === 'parcial' ? '#92400E' : '#4B5563'
+                          }}>
+                            {chk.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
+                      <td style={{ padding: '6px 8px', color: '#6B7280' }}>1</td>
+                      <td style={{ padding: '6px 8px', fontWeight: 700, color: '#111827' }}>{item.titulo}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 800 }}>{item.quantidade || '1'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center', color: '#4B5563' }}>{item.unidade || 'un'}</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', padding: '2px 5px', borderRadius: 3, background: '#DBEAFE', color: '#1E40AF' }}>
+                          {item.status}
+                        </span>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Total Financeiro */}
+            {item.valor ? (
+              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, borderTop: '2px solid #E5E7EB', paddingTop: 10, marginBottom: 20 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#4B5563' }}>Valor Total da Compra:</span>
+                <span style={{ fontSize: 15, fontWeight: 900, color: '#065F46', fontFamily: 'monospace' }}>
+                  R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            ) : null}
+
+            {/* Instruções / Observações */}
+            <div style={{ fontSize: 10.5, color: '#4B5563', border: '1px dashed #D1D5DB', borderRadius: 4, padding: '8px 12px', marginBottom: 30 }}>
+              <strong>Instruções de Entrega:</strong> O material deve ser entregue acompanhado de Nota Fiscal com indicação do número desta Ordem de Compra ({item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())}). Horário de recebimento em canteiro das 07:30 às 17:00.
+            </div>
+
+            {/* Assinaturas */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginTop: 30 }}>
+              <div style={{ textAlign: 'center', borderTop: '1px solid #9CA3AF', paddingTop: 6, fontSize: 10.5, color: '#374151' }}>
+                <strong>Suprimentos / Compras</strong>
+                <div>JWA Engenharia</div>
+              </div>
+              <div style={{ textAlign: 'center', borderTop: '1px solid #9CA3AF', paddingTop: 6, fontSize: 10.5, color: '#374151' }}>
+                <strong>Recebimento / Canteiro de Obras</strong>
+                <div>Nome e Data da Entrega</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   )
 }
