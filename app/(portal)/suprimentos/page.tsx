@@ -2098,75 +2098,79 @@ export default function SuprimentosPage() {
                             )}
                           </div>
 
-                          {/* AÇÕES NO CARD */}
+                          {/* AÇÕES NO CARD (Organizadas para nunca ultrapassar a borda do cartão) */}
                           <div
                             onClick={(e) => e.stopPropagation()}
-                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2 }}
+                            style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2 }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                              <button
-                                type="button"
-                                draggable={false}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleAbrirCardDrawer(item)
-                                }}
-                                style={{
-                                  border: `1px solid ${C.border}`,
-                                  background: 'rgba(255, 255, 255, 0.04)',
-                                  color: C.inkSoft,
-                                  padding: '3px 7px',
-                                  borderRadius: 4,
-                                  fontSize: 9.5,
-                                  fontWeight: 700,
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  gap: 4,
-                                  cursor: 'pointer',
-                                  transition: 'all 0.15s ease'
-                                }}
-                                onMouseEnter={(e) => {
-                                  e.currentTarget.style.borderColor = C.amber
-                                  e.currentTarget.style.color = C.amber
-                                }}
-                                onMouseLeave={(e) => {
-                                  e.currentTarget.style.borderColor = C.border
-                                  e.currentTarget.style.color = C.inkSoft
-                                }}
-                                title="Ver detalhes completos e editar"
-                              >
-                                <ExternalLink size={10} />
-                                <span>Detalhes</span>
-                              </button>
-
-                              {(item.status === 'Solicitado' || item.status === 'Em Cotação') && (
+                            {/* Linha 1: Ações secundárias (Detalhes, Cotar IA e Excluir) */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
                                 <button
                                   type="button"
                                   draggable={false}
                                   onClick={(e) => {
                                     e.stopPropagation()
-                                    handleAbrirCardDrawer(item, 'dgenny')
+                                    handleAbrirCardDrawer(item)
                                   }}
                                   style={{
-                                    border: '1px solid rgba(139, 92, 246, 0.35)',
-                                    background: 'rgba(139, 92, 246, 0.12)',
-                                    color: '#A78BFA',
+                                    border: `1px solid ${C.border}`,
+                                    background: 'rgba(255, 255, 255, 0.04)',
+                                    color: C.inkSoft,
                                     padding: '3px 7px',
                                     borderRadius: 4,
                                     fontSize: 9.5,
-                                    fontWeight: 800,
+                                    fontWeight: 700,
                                     display: 'inline-flex',
                                     alignItems: 'center',
-                                    gap: 3,
+                                    gap: 4,
                                     cursor: 'pointer',
                                     transition: 'all 0.15s ease'
                                   }}
-                                  title="Abrir agente IA dgenny para cotar no WhatsApp"
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = C.amber
+                                    e.currentTarget.style.color = C.amber
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = C.border
+                                    e.currentTarget.style.color = C.inkSoft
+                                  }}
+                                  title="Ver detalhes completos e editar"
                                 >
-                                  <Bot size={10} />
-                                  <span>Cotar IA</span>
+                                  <ExternalLink size={10} />
+                                  <span>Detalhes</span>
                                 </button>
-                              )}
+
+                                {(item.status === 'Solicitado' || item.status === 'Em Cotação') && (
+                                  <button
+                                    type="button"
+                                    draggable={false}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleAbrirCardDrawer(item, 'dgenny')
+                                    }}
+                                    style={{
+                                      border: '1px solid rgba(139, 92, 246, 0.35)',
+                                      background: 'rgba(139, 92, 246, 0.12)',
+                                      color: '#A78BFA',
+                                      padding: '3px 7px',
+                                      borderRadius: 4,
+                                      fontSize: 9.5,
+                                      fontWeight: 800,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 3,
+                                      cursor: 'pointer',
+                                      transition: 'all 0.15s ease',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                    title="Abrir agente IA dgenny para cotar no WhatsApp"
+                                  >
+                                    <Bot size={10} />
+                                    <span>Cotar IA</span>
+                                  </button>
+                                )}
+                              </div>
 
                               <button
                                 type="button"
@@ -2175,22 +2179,22 @@ export default function SuprimentosPage() {
                                   e.stopPropagation()
                                   handleExcluirSuprimento(item)
                                 }}
-                                style={{ border: 'none', background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 4, borderRadius: 3 }}
+                                style={{ border: 'none', background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 4, borderRadius: 3, flexShrink: 0 }}
                                 title="Excluir pedido"
                               >
                                 <Trash2 size={12} />
                               </button>
                             </div>
 
-                            {/* Botão de Ação Primária dependendo da etapa */}
+                            {/* Linha 2: Botões de Ação Primária da etapa (100% contidos dentro do card) */}
                             {item.status === 'Solicitado' && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.35fr', gap: 5, width: '100%' }}>
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleMoverEtapa(item, 'Em Cotação')
                                   }}
-                                  style={{ ...btnBase, padding: '4px 7px', fontSize: 9.5, background: 'rgba(245, 158, 11, 0.15)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.3)` }}
+                                  style={{ ...btnBase, width: '100%', padding: '5px 6px', fontSize: 9.5, background: 'rgba(245, 158, 11, 0.15)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.3)`, whiteSpace: 'nowrap' }}
                                   title="Enviar para cotação com fornecedores"
                                 >
                                   Cotar <ArrowRight size={10} />
@@ -2200,7 +2204,7 @@ export default function SuprimentosPage() {
                                     e.stopPropagation()
                                     handleMoverEtapa(item, 'Aprovação')
                                   }}
-                                  style={{ ...btnBase, padding: '4px 7px', fontSize: 9.5, background: 'rgba(139, 92, 246, 0.15)', color: '#A78BFA', border: '1px solid rgba(139, 92, 246, 0.35)' }}
+                                  style={{ ...btnBase, width: '100%', padding: '5px 6px', fontSize: 9.5, background: 'rgba(139, 92, 246, 0.15)', color: '#A78BFA', border: '1px solid rgba(139, 92, 246, 0.35)', whiteSpace: 'nowrap' }}
                                   title="Pular cotação e enviar direto para Aprovação (compra direta)"
                                 >
                                   Direto p/ Aprovação
@@ -2214,7 +2218,7 @@ export default function SuprimentosPage() {
                                   e.stopPropagation()
                                   handleMoverEtapa(item, 'Aprovação')
                                 }}
-                                style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: 'rgba(139, 92, 246, 0.15)', color: '#8B5CF6', border: `1px solid rgba(139, 92, 246, 0.3)` }}
+                                style={{ ...btnBase, width: '100%', padding: '5px 8px', fontSize: 10, background: 'rgba(139, 92, 246, 0.15)', color: '#8B5CF6', border: `1px solid rgba(139, 92, 246, 0.3)` }}
                               >
                                 Enviar p/ Aprovação <ArrowRight size={11} />
                               </button>
@@ -2226,14 +2230,14 @@ export default function SuprimentosPage() {
                                   e.stopPropagation()
                                   abrirModalAprovacao(item)
                                 }}
-                                style={{ ...btnBase, padding: '5px 9px', fontSize: 10.5, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
+                                style={{ ...btnBase, width: '100%', padding: '6px 9px', fontSize: 10.5, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
                               >
                                 <ShieldCheck size={12} /> Aprovar Compra
                               </button>
                             )}
 
                             {item.status === 'Em Trânsito' && (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, width: '100%' }}>
                                 <button
                                   type="button"
                                   onClick={async (e) => {
@@ -2244,7 +2248,7 @@ export default function SuprimentosPage() {
                                       toast('Ordem de Compra (OC) copiada para colar no WhatsApp do fornecedor!', 'success')
                                     }
                                   }}
-                                  style={{ ...btnBase, padding: '4px 7px', fontSize: 9.5, background: 'rgba(6, 182, 212, 0.14)', color: '#06B6D4', border: '1px solid rgba(6, 182, 212, 0.3)' }}
+                                  style={{ ...btnBase, width: '100%', padding: '5px 6px', fontSize: 9.5, background: 'rgba(6, 182, 212, 0.14)', color: '#06B6D4', border: '1px solid rgba(6, 182, 212, 0.3)', whiteSpace: 'nowrap' }}
                                   title="Copiar Ordem de Compra (OC) para enviar ao fornecedor no WhatsApp"
                                 >
                                   📋 Copiar OC
@@ -2254,7 +2258,7 @@ export default function SuprimentosPage() {
                                     e.stopPropagation()
                                     abrirModalRecebimento(item)
                                   }}
-                                  style={{ ...btnBase, padding: '5px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A', fontWeight: 900 }}
+                                  style={{ ...btnBase, width: '100%', padding: '5px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A', fontWeight: 900, whiteSpace: 'nowrap' }}
                                 >
                                   <CheckSquare size={11} /> Receber
                                 </button>
@@ -2262,9 +2266,11 @@ export default function SuprimentosPage() {
                             )}
 
                             {item.status === 'Entregue' && (
-                              <span style={{ fontSize: 10, color: '#10B981', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                <Check size={12} /> Concluído
-                              </span>
+                              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                                <span style={{ fontSize: 10, color: '#10B981', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                  <Check size={12} /> Concluído
+                                </span>
+                              </div>
                             )}
                           </div>
                         </div>

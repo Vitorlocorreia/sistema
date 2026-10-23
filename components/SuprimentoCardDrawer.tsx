@@ -924,6 +924,11 @@ export function SuprimentoCardDrawer({
       texto += `\n*Valor Total:* R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`
     }
 
+    const aprovAct = (Array.isArray(item.historico_atividades) ? item.historico_atividades : []).find(
+      (a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro' || a.acao === 'assinatura_exportacao_oc'
+    )
+    const nomeAssinante = aprovAct?.autor_nome || autorAtual
+    texto += `\n✍️ *Assinado/Emitido digitalmente por:* ${nomeAssinante} (Emitido por: ${autorAtual} em ${new Date().toLocaleString('pt-BR')})`
     texto += `\nJWA Engenharia & Construcao`
 
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -1255,7 +1260,16 @@ export function SuprimentoCardDrawer({
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <button
                 type="button"
-                onClick={() => setModalExportarOC(true)}
+                onClick={async () => {
+                  setModalExportarOC(true)
+                  // Registra automaticamente no histórico quem exportou/assinou digitalmente a OC pelo login
+                  const numOC = item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())
+                  const emailOuCargo = colaboradorAtivo?.email || colaboradorAtivo?.cargo || 'Login autenticado'
+                  await registrarMexida(
+                    'assinatura_exportacao_oc',
+                    `Emitiu e assinou digitalmente a Ordem de Compra (${numOC}) pelo login ${autorAtual} (${emailOuCargo})`
+                  )
+                }}
                 style={{
                   border: `1px solid ${C.border}`,
                   background: 'rgba(255, 255, 255, 0.05)',
@@ -3068,17 +3082,74 @@ export function SuprimentoCardDrawer({
               <strong>Instruções de Entrega:</strong> O material deve ser entregue acompanhado de Nota Fiscal com indicação do número desta Ordem de Compra ({item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())}). Horário de recebimento em canteiro das 07:30 às 17:00.
             </div>
 
-            {/* Assinaturas */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 40, marginTop: 30 }}>
-              <div style={{ textAlign: 'center', borderTop: '1px solid #9CA3AF', paddingTop: 6, fontSize: 10.5, color: '#374151' }}>
-                <strong>Suprimentos / Compras</strong>
-                <div>JWA Engenharia</div>
-              </div>
-              <div style={{ textAlign: 'center', borderTop: '1px solid #9CA3AF', paddingTop: 6, fontSize: 10.5, color: '#374151' }}>
-                <strong>Recebimento / Canteiro de Obras</strong>
-                <div>Nome e Data da Entrega</div>
-              </div>
-            </div>
+            {/* Assinatura Eletrônica & Autenticação por Login (Dispensa assinatura manual) */}
+            {(() => {
+              const hist = Array.isArray(item.historico_atividades) ? item.historico_atividades : []
+              const aprovAct = hist.find((a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro')
+              const recebAct = hist.find((a: any) => a.acao === 'recebimento_obra' || (a.acao === 'mudanca_etapa' && a.para === 'Entregue'))
+              const assinanteCompra = aprovAct?.autor_nome || autorAtual
+              const dataAssinaturaCompra = aprovAct?.data ? new Date(aprovAct.data).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')
+              const hashAutenticacao = `JWA-${item.id.slice(0, 6).toUpperCase()}-${(colaboradorAtivo?.id || 'AUTH').slice(0, 4).toUpperCase()}`
+
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 24 }}>
+                  {/* Coluna 1: Assinatura Digital de Emissão / Aprovação pelo Login */}
+                  <div style={{ background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: 6, padding: '10px 14px', color: '#111827' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 9.5, fontWeight: 900, color: '#15803D', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                        ✔ Assinado Digitalmente (Login JWA)
+                      </span>
+                      <span style={{ fontSize: 8.5, fontFamily: 'monospace', fontWeight: 800, color: '#166534', background: '#DCFCE7', padding: '1px 5px', borderRadius: 3 }}>
+                        {hashAutenticacao}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 11.5, fontWeight: 900, color: '#111827' }}>
+                      {assinanteCompra}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#374151', marginTop: 2 }}>
+                      <strong>Exportado / Emitido por:</strong> {autorAtual} {colaboradorAtivo?.email ? `(${colaboradorAtivo.email})` : ''}
+                    </div>
+                    <div style={{ fontSize: 9.5, color: '#4B5563', marginTop: 2 }}>
+                      Data/Hora da Autenticação: <strong>{dataAssinaturaCompra}</strong>
+                    </div>
+                    <div style={{ fontSize: 8.5, color: '#15803D', marginTop: 4, fontWeight: 700 }}>
+                      Documento validado eletronicamente via sessão autenticada no Sistema JWA Engenharia. Dispensa assinatura física.
+                    </div>
+                  </div>
+
+                  {/* Coluna 2: Conferência / Recebimento no Canteiro */}
+                  <div style={{ background: '#F9FAFB', border: '1px solid #D1D5DB', borderRadius: 6, padding: '10px 14px', color: '#111827', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <span style={{ fontSize: 9.5, fontWeight: 900, color: '#374151', textTransform: 'uppercase', display: 'block', marginBottom: 4 }}>
+                        Conferência & Recebimento no Canteiro
+                      </span>
+                      {recebAct ? (
+                        <>
+                          <div style={{ fontSize: 11.5, fontWeight: 900, color: '#111827' }}>
+                            ✔ Recebido por: {recebAct.autor_nome}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#374151', marginTop: 2 }}>
+                            Conferido digitalmente em: <strong>{new Date(recebAct.data).toLocaleString('pt-BR')}</strong>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>
+                            Responsável Obra: {item.responsavel_nome || 'Engenheiro / Almoxarifado'}
+                          </div>
+                          <div style={{ fontSize: 10, color: '#4B5563', marginTop: 2 }}>
+                            Status atual na esteira: <strong>{item.status}</strong>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <div style={{ borderTop: '1px dashed #D1D5DB', paddingTop: 6, marginTop: 8, fontSize: 9, color: '#6B7280' }}>
+                      Conferência vinculada ao pedido {item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())} — JWA Engenharia
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </div>
       </div>
