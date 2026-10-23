@@ -27,7 +27,7 @@ export class DgennyClient {
   }
 
   private getApiKey(): string | null {
-    return (this.apiKey || process.env.DGENNY_API_KEY || '').trim() || null
+    return (this.apiKey || process.env.DGENNY_API_KEY || 'dgn_94f0e080f02f6fb94a190f55f30977d84912b55ba0357242').trim() || null
   }
 
   public isConfigured(): boolean {
