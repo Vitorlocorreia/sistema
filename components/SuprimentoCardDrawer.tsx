@@ -2944,36 +2944,55 @@ export function SuprimentoCardDrawer({
             </div>
 
             {/* Grid de Informações da Compra */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, marginBottom: 18, fontSize: 11.5 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: '#F9FAFB', border: '1px solid #E5E7EB', borderRadius: 6, padding: 12, marginBottom: 18, fontSize: 11.5, color: '#111827' }}>
               <div>
-                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Obra / Destino:</div>
-                <strong style={{ color: '#111827', fontSize: 12 }}>
+                <div style={{ color: '#4B5563', fontSize: 10, textTransform: 'uppercase', fontWeight: 800 }}>Obra / Destino:</div>
+                <strong style={{ color: '#111827', fontSize: 12, display: 'block' }}>
                   {item.obra_nome_manual || obras.find(o => o.id === item.obra_id)?.nome || 'Não informada'}
                 </strong>
+                {obras.find(o => o.id === item.obra_id)?.endereco && (
+                  <div style={{ color: '#374151', fontSize: 10.5, marginTop: 2 }}>
+                    📍 {obras.find(o => o.id === item.obra_id)?.endereco}
+                  </div>
+                )}
               </div>
               <div>
-                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Fornecedor:</div>
-                <strong style={{ color: '#111827', fontSize: 12 }}>
+                <div style={{ color: '#4B5563', fontSize: 10, textTransform: 'uppercase', fontWeight: 800 }}>Fornecedor:</div>
+                <strong style={{ color: '#111827', fontSize: 12, display: 'block' }}>
                   {item.fornecedor || 'A definir'}
                 </strong>
+                {(() => {
+                  const fornMatch = fornecedores.find(
+                    f =>
+                      (f.nome_fantasia && f.nome_fantasia.toLowerCase() === item.fornecedor?.toLowerCase()) ||
+                      (f.razao_social && f.razao_social.toLowerCase() === item.fornecedor?.toLowerCase())
+                  )
+                  if (!fornMatch) return null
+                  return (
+                    <div style={{ color: '#374151', fontSize: 10.5, marginTop: 2 }}>
+                      {fornMatch.cnpj ? `CNPJ: ${fornMatch.cnpj}` : ''}
+                      {fornMatch.telefone ? ` · Tel: ${fornMatch.telefone}` : ''}
+                    </div>
+                  )
+                })()}
               </div>
               <div>
-                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Solicitante / Origem:</div>
-                <span style={{ color: '#111827' }}>{item.solicitante || 'Não informado'}</span>
+                <div style={{ color: '#4B5563', fontSize: 10, textTransform: 'uppercase', fontWeight: 800 }}>Solicitante / Origem:</div>
+                <span style={{ color: '#111827', fontWeight: 700 }}>{item.solicitante || 'Não informado'}</span>
               </div>
               <div>
-                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Engenheiro / Responsável:</div>
-                <span style={{ color: '#111827' }}>{item.responsavel_nome || 'Não informado'}</span>
+                <div style={{ color: '#4B5563', fontSize: 10, textTransform: 'uppercase', fontWeight: 800 }}>Engenheiro / Responsável:</div>
+                <span style={{ color: '#111827', fontWeight: 700 }}>{item.responsavel_nome || 'Não informado'}</span>
               </div>
               <div>
-                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Previsão de Entrega:</div>
-                <span style={{ color: '#111827', fontWeight: 700 }}>
+                <div style={{ color: '#4B5563', fontSize: 10, textTransform: 'uppercase', fontWeight: 800 }}>Previsão de Entrega:</div>
+                <span style={{ color: '#111827', fontWeight: 800 }}>
                   {item.data_previsao_entrega ? new Date(item.data_previsao_entrega + 'T00:00:00').toLocaleDateString('pt-BR') : 'A combinar'}
                 </span>
               </div>
               <div>
-                <div style={{ color: '#6B7280', fontSize: 10, textTransform: 'uppercase', fontWeight: 700 }}>Vencimento / Pagamento:</div>
-                <span style={{ color: '#111827', fontWeight: 700 }}>
+                <div style={{ color: '#4B5563', fontSize: 10, textTransform: 'uppercase', fontWeight: 800 }}>Vencimento / Pagamento:</div>
+                <span style={{ color: '#111827', fontWeight: 800 }}>
                   {item.data_vencimento ? new Date(item.data_vencimento + 'T00:00:00').toLocaleDateString('pt-BR') : 'A combinar'}
                 </span>
               </div>
@@ -2981,36 +3000,36 @@ export function SuprimentoCardDrawer({
 
             {/* Tabela de Itens e Materiais Solicitados */}
             <div style={{ marginBottom: 18 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#374151', marginBottom: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: '#111827', marginBottom: 6 }}>
                 Materiais Solicitados
               </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, color: '#111827', background: '#FFFFFF' }}>
                 <thead>
-                  <tr style={{ background: '#F3F4F6', borderBottom: '1px solid #D1D5DB', textAlign: 'left' }}>
-                    <th style={{ padding: '6px 8px', width: 35 }}>#</th>
-                    <th style={{ padding: '6px 8px' }}>Descrição do Material</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', width: 80 }}>Qtd Pedida</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', width: 60 }}>Unidade</th>
-                    <th style={{ padding: '6px 8px', textAlign: 'center', width: 80 }}>Status</th>
+                  <tr style={{ background: '#F3F4F6', borderBottom: '1px solid #D1D5DB', textAlign: 'left', color: '#111827' }}>
+                    <th style={{ padding: '7px 8px', width: 35, color: '#111827', fontWeight: 800 }}>#</th>
+                    <th style={{ padding: '7px 8px', color: '#111827', fontWeight: 800 }}>Descrição do Material</th>
+                    <th style={{ padding: '7px 8px', textAlign: 'center', width: 90, color: '#111827', fontWeight: 800 }}>Qtd Pedida</th>
+                    <th style={{ padding: '7px 8px', textAlign: 'center', width: 70, color: '#111827', fontWeight: 800 }}>Unidade</th>
+                    <th style={{ padding: '7px 8px', textAlign: 'center', width: 90, color: '#111827', fontWeight: 800 }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {itensChecklist.length > 0 ? (
                     itensChecklist.map((chk, idx) => (
-                      <tr key={chk.id} style={{ borderBottom: '1px solid #E5E7EB' }}>
-                        <td style={{ padding: '6px 8px', color: '#6B7280' }}>{idx + 1}</td>
-                        <td style={{ padding: '6px 8px', fontWeight: 700, color: '#111827' }}>{chk.descricao}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 800 }}>{chk.qtd_pedida}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center', color: '#4B5563' }}>{chk.unidade}</td>
-                        <td style={{ padding: '6px 8px', textAlign: 'center' }}>
+                      <tr key={chk.id} style={{ borderBottom: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>
+                        <td style={{ padding: '7px 8px', color: '#374151', fontWeight: 700 }}>{idx + 1}</td>
+                        <td style={{ padding: '7px 8px', fontWeight: 800, color: '#111827' }}>{chk.descricao}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 900, color: '#111827' }}>{chk.qtd_pedida}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 700, color: '#374151' }}>{chk.unidade}</td>
+                        <td style={{ padding: '7px 8px', textAlign: 'center', color: '#111827' }}>
                           <span style={{
                             fontSize: 9,
                             fontWeight: 800,
                             textTransform: 'uppercase',
-                            padding: '2px 5px',
+                            padding: '2px 6px',
                             borderRadius: 3,
-                            background: chk.status === 'entregue' ? '#D1FAE5' : chk.status === 'comprado' ? '#DBEAFE' : chk.status === 'parcial' ? '#FEF3C7' : '#F3F4F6',
-                            color: chk.status === 'entregue' ? '#065F46' : chk.status === 'comprado' ? '#1E40AF' : chk.status === 'parcial' ? '#92400E' : '#4B5563'
+                            background: chk.status === 'entregue' ? '#D1FAE5' : chk.status === 'comprado' ? '#DBEAFE' : chk.status === 'parcial' ? '#FEF3C7' : '#E5E7EB',
+                            color: chk.status === 'entregue' ? '#065F46' : chk.status === 'comprado' ? '#1E40AF' : chk.status === 'parcial' ? '#92400E' : '#1F2937'
                           }}>
                             {chk.status}
                           </span>
@@ -3018,13 +3037,13 @@ export function SuprimentoCardDrawer({
                       </tr>
                     ))
                   ) : (
-                    <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
-                      <td style={{ padding: '6px 8px', color: '#6B7280' }}>1</td>
-                      <td style={{ padding: '6px 8px', fontWeight: 700, color: '#111827' }}>{item.titulo}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', fontWeight: 800 }}>{item.quantidade || '1'}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center', color: '#4B5563' }}>{item.unidade || 'un'}</td>
-                      <td style={{ padding: '6px 8px', textAlign: 'center' }}>
-                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', padding: '2px 5px', borderRadius: 3, background: '#DBEAFE', color: '#1E40AF' }}>
+                    <tr style={{ borderBottom: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>
+                      <td style={{ padding: '7px 8px', color: '#374151', fontWeight: 700 }}>1</td>
+                      <td style={{ padding: '7px 8px', fontWeight: 800, color: '#111827' }}>{item.titulo}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 900, color: '#111827' }}>{item.quantidade || '1'}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 700, color: '#374151' }}>{item.unidade || 'un'}</td>
+                      <td style={{ padding: '7px 8px', textAlign: 'center', color: '#111827' }}>
+                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 3, background: '#DBEAFE', color: '#1E40AF' }}>
                           {item.status}
                         </span>
                       </td>
@@ -3034,15 +3053,15 @@ export function SuprimentoCardDrawer({
               </table>
             </div>
 
-            {/* Total Financeiro */}
-            {item.valor ? (
-              <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, borderTop: '2px solid #E5E7EB', paddingTop: 10, marginBottom: 20 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#4B5563' }}>Valor Total da Compra:</span>
-                <span style={{ fontSize: 15, fontWeight: 900, color: '#065F46', fontFamily: 'monospace' }}>
-                  R$ {item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              </div>
-            ) : null}
+            {/* Total Financeiro Sempre Visível */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 6, padding: '10px 14px', marginBottom: 20 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>Valor Total da Ordem de Compra:</span>
+              <span style={{ fontSize: 15, fontWeight: 900, color: '#047857', fontFamily: 'monospace' }}>
+                {item.valor
+                  ? `R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                  : 'Em cotação / A definir'}
+              </span>
+            </div>
 
             {/* Instruções / Observações */}
             <div style={{ fontSize: 10.5, color: '#4B5563', border: '1px dashed #D1D5DB', borderRadius: 4, padding: '8px 12px', marginBottom: 30 }}>

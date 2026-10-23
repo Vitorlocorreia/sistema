@@ -135,13 +135,36 @@ body {
   color: #A1A1AA !important;
 }
 
-[data-theme="dark"] td {
-  border-color: #383838 !important;
-  color: #FFFFFF !important;
+[data-theme="dark"] td:not(#area-ordem-compra td) {
+  border-color: #383838;
 }
 
-[data-theme="dark"] tr:hover {
+[data-theme="dark"] tr:not(#area-ordem-compra tr):hover {
   background-color: #2A2A2A !important;
+}
+
+/* Garantir contraste total na folha da Ordem de Compra (OC) em qualquer tema */
+#area-ordem-compra,
+#area-ordem-compra table,
+#area-ordem-compra thead,
+#area-ordem-compra tbody,
+#area-ordem-compra tr,
+#area-ordem-compra th,
+#area-ordem-compra td {
+  color: #111827 !important;
+  border-color: #E5E7EB !important;
+}
+
+#area-ordem-compra thead tr {
+  background-color: #F3F4F6 !important;
+}
+
+#area-ordem-compra tbody tr {
+  background-color: #FFFFFF !important;
+}
+
+#area-ordem-compra tbody tr:hover {
+  background-color: #F9FAFB !important;
 }
 
 /* Status Badges high-contrast color scheme */
