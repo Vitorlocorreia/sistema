@@ -83,6 +83,39 @@ export interface DgennyWhatsAppNumber {
   isDefault: boolean
 }
 
+export interface DgennyUser {
+  id: string
+  name: string
+  email: string
+  assistantName: string | null
+}
+
+export interface DgennyCatalogItem {
+  id: string
+  externalId: string | null
+  name: string
+  description: string | null
+  address: string | null
+  observation: string | null
+  personType: string | null
+  cnpj: string | null
+  legalName: string | null
+  tradeName: string | null
+  stateTaxId: string | null
+  isDefault: boolean
+}
+
+export interface DgennySavedSupplier {
+  supplierId: string
+  name: string
+  contactName: string | null
+  phone: string
+  email: string | null
+  cnpj: string | null
+  address: string | null
+  source: string
+}
+
 // ─── COTAÇÕES ───────────────────────────────────────────────────────────────
 
 export type DgennyFreight = 'CIF' | 'FOB' | 'INSTALLED' | 'PICKUP' | 'NO_FREIGHT' | 'NEGOTIABLE'
@@ -107,6 +140,7 @@ export interface DgennyQuotationSupplierInput {
 
 export interface DgennyCreateQuotationRequest {
   externalId: string
+  resend?: boolean
   name: string
   observation?: string
   freight: DgennyFreight
@@ -136,12 +170,17 @@ export interface DgennyCreateQuotationRequest {
     description?: string
     observation?: string
   }
-  buyer?: {
+  buyer: {
     email: string
   }
   whatsappNumber?: string
   items: DgennyQuotationItemInput[]
   suppliers: DgennyQuotationSupplierInput[]
+  documents?: Array<{
+    url: string
+    description: string
+    filename?: string
+  }>
   start?: {
     at?: string // ISO 8601 com timezone
   }
@@ -259,17 +298,25 @@ export interface DgennyMessage {
   id: string
   direction: 'in' | 'out'
   author: 'supplier' | 'ai' | 'operator' | 'system'
-  kind: 'text' | 'template' | 'document' | 'card'
-  text: string
+  kind: 'text' | 'image' | 'audio' | 'document' | 'template' | 'card'
+  text: string | null
   media?: {
-    mime: string
-    fileName: string
+    mime: string | null
+    fileName: string | null
     hasContent: boolean
   } | null
-  sentAt: string
-  status: 'sent' | 'delivered' | 'read' | null
+  sentAt: string | null
+  status: 'sent' | 'delivered' | 'read' | 'failed' | null
   isFirstMessage: boolean
   truncated: boolean
+}
+
+export interface DgennyMessageMediaResponse {
+  ok: boolean
+  url: string
+  expiresAt: string
+  mime: string | null
+  fileName: string | null
 }
 
 // ─── ORÇAMENTOS & COMPARATIVO ───────────────────────────────────────────────

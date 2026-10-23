@@ -50,7 +50,7 @@ const parseCurrency = (val: string | number | undefined | null): number => {
 export const CATEGORIAS = ['Material de Construção', 'Serviço Terceirizado', 'Equipamento', 'Locação', 'Imposto', 'Mão de Obra / CLT', 'Energia / Água', 'Escritório', 'Reembolso', 'Medição Recebida', 'Outros']
 
 const isVencido = (d: string, status: string) => {
-  if (status === 'Pago' || status === 'Pago sem Nota Fiscal') return false;
+  if (status === 'Pago' || status === 'Pago sem Nota Fiscal' || status === 'Negado' || status === 'Estornado') return false;
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   const vencimento = new Date(d + 'T00:00:00');
@@ -2262,12 +2262,12 @@ function DashboardTab({ colaboradorAtivo, permissaoAtiva }: TabProps) {
 
     const v = filtered.filter(c => isVencido(c.data_previsao || c.data_vencimento, c.status))
     const v7 = filtered.filter(c => {
-      if (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') return false
+      if (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado' || c.status === 'Estornado') return false
       const d = new Date((c.data_previsao || c.data_vencimento) + 'T00:00:00')
       return d >= hoje && d <= mais7
     })
     const v30 = filtered.filter(c => {
-      if (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') return false
+      if (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado' || c.status === 'Estornado') return false
       const d = new Date((c.data_previsao || c.data_vencimento) + 'T00:00:00')
       return d >= hoje && d <= mais30
     })
@@ -3479,7 +3479,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
         item.totalPago += Number(c.valor || 0)
         item.totalPagasCount += 1
       } else {
-        item.totalEmAberto += Number(c.valor || 0)
+        item.totalEmAberto += (c.status !== 'Negado' && c.status !== 'Estornado') ? Number(c.valor || 0) : 0
       }
       if (isVencido(c.data_previsao || c.data_vencimento, c.status)) {
         item.temVencidas = true
@@ -4946,7 +4946,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtObra, setFiltObra] = useState('')
   const [filtFornecedor, setFiltFornecedor] = useState(initialFornecedorId || '')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
-  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Atenção'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Pago sem Nota Fiscal'|'Negado'>('todos')
+  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Atenção'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Pago sem Nota Fiscal'|'Negado'|'Estornado'>('todos')
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [filtTipoData, setFiltTipoData] = useState<'previsao_vencimento' | 'vencimento' | 'previsao' | 'pago_em' | 'created_at'>('previsao_vencimento')
@@ -5863,7 +5863,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   // Somatória A Pagar do Dia (Hoje) - Pendente respeitando o filtro contextual ativo
   const totalAPagarHoje = useMemo(() => {
     return contasFiltradasContexto.filter(c => {
-      const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado'
+      const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado' || c.status === 'Estornado'
       if (isLiquidado || c.tipo !== 'pagar') return false
       const dataRef = (c.data_vencimento || c.data_previsao || '').slice(0, 10)
       return dataRef === hojeLocalStr
@@ -5892,7 +5892,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       else label = `Em +${offset} dias`
 
       const contasDoDia = contasFiltradasContexto.filter(c => {
-        const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado'
+        const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal' || c.status === 'Negado' || c.status === 'Estornado'
         if (isLiquidado || c.tipo !== 'pagar') return false
         const dataRef = (c.data_vencimento || c.data_previsao || '').slice(0, 10)
         return dataRef === dataStr
@@ -5916,8 +5916,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
 
   // Somatórias do resultado filtrado
   const totalValorFiltrado = useMemo(() => filtered.reduce((s, c) => s + (c.valor || 0), 0), [filtered])
-  const totalAPagarFiltrado = useMemo(() => filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
-  const totalReceberFiltrado = useMemo(() => filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
+  const totalAPagarFiltrado = useMemo(() => filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.status !== 'Estornado' && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
+  const totalReceberFiltrado = useMemo(() => filtered.filter(c => c.status !== 'Pago' && c.status !== 'Pago sem Nota Fiscal' && c.status !== 'Negado' && c.status !== 'Estornado' && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
   const totalPagoFiltrado   = useMemo(() => filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'pagar').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
   const totalRecebidoFiltrado = useMemo(() => filtered.filter(c => (c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal') && c.tipo === 'receber').reduce((s, c) => s + (c.valor || 0), 0), [filtered])
   const saldoLiquidoFiltrado = (totalReceberFiltrado + totalRecebidoFiltrado) - (totalAPagarFiltrado + totalPagoFiltrado)
@@ -5934,6 +5934,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     { value: 'Pago', label: 'Pago' },
     { value: 'Pago sem Nota Fiscal', label: 'Paga S/NF' },
     { value: 'Negado', label: 'Negado' },
+    { value: 'Estornado', label: 'Estornado' },
   ]
 
   // Projeção Mensal de Fluxo de Caixa agrupada por mês
@@ -5953,10 +5954,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       const isLiquidado = c.status === 'Pago' || c.status === 'Pago sem Nota Fiscal'
       if (c.tipo === 'pagar') {
         if (isLiquidado) item.pago += (c.valor || 0)
-        else if (c.status !== 'Negado') item.aPagar += (c.valor || 0)
+        else if (c.status !== 'Negado' && c.status !== 'Estornado') item.aPagar += (c.valor || 0)
       } else {
         if (isLiquidado) item.recebido += (c.valor || 0)
-        else if (c.status !== 'Negado') item.aReceber += (c.valor || 0)
+        else if (c.status !== 'Negado' && c.status !== 'Estornado') item.aReceber += (c.valor || 0)
       }
       item.saldo = (item.recebido + item.aReceber) - (item.pago + item.aPagar)
     })
@@ -7042,12 +7043,12 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                           <span style={{
                             fontSize: 9, fontWeight: 900, padding: '3px 8px', borderRadius: 4, whiteSpace: 'nowrap',
                             letterSpacing: 0.4,
-                            background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Atenção' ? '#F59E0B25' : c.status === 'Aguardando aprovação' ? '#F59E0B20' : c.status === 'Negado' ? '#F8717120' : pago ? '#34D39920' : pagoParcial ? '#F59E0B20' : venc ? '#F8717120' : C.amber + '20',
-                            color: c.status === 'Bloqueado' ? '#FB923C' : c.status === 'Atenção' ? '#F59E0B' : c.status === 'Aguardando aprovação' ? '#F59E0B' : c.status === 'Negado' ? '#F87171' : pago ? '#34D399' : pagoParcial ? '#F59E0B' : venc ? '#F87171' : C.amber,
-                            border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Atenção' ? '1px solid #F59E0B66' : c.status === 'Aguardando aprovação' ? '1px solid #F59E0B44' : 'none',
+                            background: c.status === 'Bloqueado' ? '#F9731622' : c.status === 'Atenção' ? '#F59E0B25' : c.status === 'Aguardando aprovação' ? '#F59E0B20' : c.status === 'Negado' ? '#F8717120' : c.status === 'Estornado' ? '#A855F720' : pago ? '#34D39920' : pagoParcial ? '#F59E0B20' : venc ? '#F8717120' : C.amber + '20',
+                            color: c.status === 'Bloqueado' ? '#FB923C' : c.status === 'Atenção' ? '#F59E0B' : c.status === 'Aguardando aprovação' ? '#F59E0B' : c.status === 'Negado' ? '#F87171' : c.status === 'Estornado' ? '#C084FC' : pago ? '#34D399' : pagoParcial ? '#F59E0B' : venc ? '#F87171' : C.amber,
+                            border: c.status === 'Bloqueado' ? '1px solid #F9731666' : c.status === 'Atenção' ? '1px solid #F59E0B66' : c.status === 'Aguardando aprovação' ? '1px solid #F59E0B44' : c.status === 'Estornado' ? '1px solid #A855F744' : 'none',
                             boxShadow: c.status === 'Bloqueado' ? '0 0 8px #F9731633' : c.status === 'Atenção' ? '0 0 8px #F59E0B33' : 'none'
                           }}>
-                            {c.status === 'Bloqueado' ? 'BLOQUEADO' : c.status === 'Atenção' ? '⚠️ ATENÇÃO' : c.status === 'Aguardando aprovação' ? 'AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : (c.status || 'LANÇADO').toUpperCase()}
+                            {c.status === 'Bloqueado' ? 'BLOQUEADO' : c.status === 'Atenção' ? '⚠️ ATENÇÃO' : c.status === 'Aguardando aprovação' ? 'AGUARDANDO APROVAÇÃO' : c.status === 'Pago sem Nota Fiscal' ? 'PAGA S/NF' : c.status === 'Estornado' ? 'ESTORNADO' : (c.status || 'LANÇADO').toUpperCase()}
                           </span>
                           {c.criado_por && (
                             <div style={{ fontSize: 9, color: C.inkSoft, marginTop: 4 }}>
@@ -7081,6 +7082,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                 <option value="Pago">Pago</option>
                                 <option value="Pago sem Nota Fiscal">Paga S/NF</option>
                                 <option value="Negado">Negado</option>
+                                <option value="Estornado">Estornado</option>
                               </select>
                             )}
 
@@ -7593,7 +7595,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                     <option value="A pagar">A pagar</option>
                     <option value="Pago Parcial">Pago Parcial</option>
                     <option value="Pago">Pago</option>
+                    <option value="Pago sem Nota Fiscal">Paga S/NF</option>
                     <option value="Negado">Negado</option>
+                    <option value="Estornado">Estornado</option>
                   </select>
                 </div>
               </div>

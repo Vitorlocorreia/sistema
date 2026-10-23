@@ -10,9 +10,15 @@ export async function GET(
     const searchParams = req.nextUrl.searchParams
     const supplierId = searchParams.get('supplierId')
     const since = searchParams.get('since') || undefined
+    const messageId = searchParams.get('messageId') || undefined
 
     if (!id || !supplierId) {
       return NextResponse.json({ ok: false, message: 'Parâmetros "id" e "supplierId" são obrigatórios.' }, { status: 400 })
+    }
+
+    if (messageId) {
+      const media = await dgenny.getMessageMedia(id, supplierId, messageId)
+      return NextResponse.json(media)
     }
 
     const messages = await dgenny.getMessages(id, supplierId, since)

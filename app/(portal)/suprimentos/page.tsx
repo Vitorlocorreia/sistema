@@ -80,6 +80,7 @@ export interface ObraItem {
   id: string
   nome: string
   cliente?: string | null
+  endereco?: string | null
 }
 
 export interface FornecedorItem {
@@ -92,6 +93,8 @@ export interface FornecedorItem {
   agencia?: string | null
   conta?: string | null
   telefone?: string | null
+  responsavel?: string | null
+  endereco?: string | null
   prazo_pagamento?: string | null
 }
 
@@ -184,6 +187,7 @@ export default function SuprimentosPage() {
   // Drawer 360 do Card
   const [drawerItem, setDrawerItem] = useState<SuprimentoItem | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [drawerInitialTab, setDrawerInitialTab] = useState<'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'>('checklist')
 
   // Mesas e Filtros
   const [mesaAtiva, setMesaAtiva] = useState<string>('todas')
@@ -200,10 +204,11 @@ export default function SuprimentosPage() {
   const cardPointerDownRef = useRef<{ id: string; x: number; y: number; time: number } | null>(null)
   const lastDrawerOpenedTimeRef = useRef<number>(0)
 
-  const handleAbrirCardDrawer = useCallback((item: SuprimentoItem) => {
+  const handleAbrirCardDrawer = useCallback((item: SuprimentoItem, tab: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico' = 'checklist') => {
     const now = Date.now()
     if (now - lastDrawerOpenedTimeRef.current < 250) return
     lastDrawerOpenedTimeRef.current = now
+    setDrawerInitialTab(tab)
     setDrawerItem(item)
     setDrawerOpen(true)
   }, [])
@@ -274,7 +279,10 @@ export default function SuprimentosPage() {
     data_vencimento: '',
     condicao_pagamento: '28 dias',
     anexo_file: null as File | null,
-    anexo_url: ''
+    anexo_url: '',
+    lancar_financeiro: true,
+    copiar_oc_ao_aprovar: true,
+    enviar_oc_dgenny: true
   })
   const [salvandoAprovacao, setSalvandoAprovacao] = useState(false)
 
@@ -306,8 +314,8 @@ export default function SuprimentosPage() {
         { data: cols, error: colErr }
       ] = await Promise.all([
         supabase.from('suprimentos').select('*').order('created_at', { ascending: false }).limit(2000),
-        supabase.from('obras').select('id, nome, cliente').order('nome'),
-        supabase.from('fornecedores').select('id, razao_social, nome_fantasia, cnpj, pix, banco, agencia, conta, telefone, prazo_pagamento').order('razao_social').limit(1000),
+        supabase.from('obras').select('id, nome, cliente, endereco').order('nome'),
+        supabase.from('fornecedores').select('id, razao_social, nome_fantasia, cnpj, pix, banco, agencia, conta, telefone, responsavel, endereco, prazo_pagamento').order('razao_social').limit(1000),
         supabase.from('contas').select('id, status, valor, data_vencimento, pago_em, comprovante_url, observacoes, codigo_sequencial').ilike('observacoes', '%Suprimentos ID:%').limit(2000),
         supabase.from('colaboradores').select('id, nome, cargo, email').order('nome')
       ])
@@ -430,6 +438,7 @@ export default function SuprimentosPage() {
         const conta = contasVinculadas[item.id]
         if (filtroStatusFinanceiro === 'lancado' && conta?.status !== 'Lançado') return false
         if (filtroStatusFinanceiro === 'pago' && conta?.status !== 'Pago') return false
+        if (filtroStatusFinanceiro === 'pendente_financeiro' && (conta || (item.status !== 'Em Trânsito' && item.status !== 'Entregue'))) return false
         if (filtroStatusFinanceiro === 'sem_conta' && conta) return false
       }
 
@@ -706,8 +715,63 @@ export default function SuprimentosPage() {
     }
   }
 
+  // Helper para gerar o texto formatado da Ordem de Compra (OC) para WhatsApp
+  function gerarTextoOrdemCompra(
+    item: SuprimentoItem,
+    fornId?: string,
+    valorStr?: string,
+    vencimentoStr?: string,
+    condicaoStr?: string
+  ) {
+    const ocCodigo = item.codigo || `OC-${item.id.slice(0, 6).toUpperCase()}`
+    const obra = obras.find(o => o.id === item.obra_id)
+    const nomeObra = obra?.nome || item.obra_nome_manual || 'Geral / Sede'
+    const enderecoObra = obra?.endereco ? `\n📍 *Endereço de Entrega:* ${obra.endereco}` : ''
+    const selectedForn = fornId
+      ? fornecedores.find(f => f.id === fornId)
+      : fornecedores.find(f =>
+          (f.nome_fantasia && f.nome_fantasia.toLowerCase() === item.fornecedor?.toLowerCase()) ||
+          (f.razao_social && f.razao_social.toLowerCase() === item.fornecedor?.toLowerCase())
+        )
+    const fornNome = selectedForn?.nome_fantasia || selectedForn?.razao_social || item.fornecedor || 'Fornecedor'
+    const cnpjForn = selectedForn?.cnpj ? ` (CNPJ: ${selectedForn.cnpj})` : ''
+
+    const checklist = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
+    const listaMateriais = checklist.length > 0
+      ? checklist.map((c: any, idx: number) => `  ${idx + 1}. ${c.descricao} — *${c.quantidade || '1'} ${c.unidade || 'un'}*`).join('\n')
+      : `  • ${item.titulo} — *${item.quantidade || '1'} ${item.unidade || 'un'}*`
+
+    const valNum = valorStr
+      ? parseFloat(String(valorStr).replace(/\./g, '').replace(',', '.'))
+      : (item.valor || 0)
+    const valFormatado = valNum > 0
+      ? `R$ ${valNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      : 'Conforme proposta aprovada'
+
+    const vencData = vencimentoStr || item.data_vencimento
+    const vencFormatado = vencData ? new Date(vencData + 'T00:00:00').toLocaleDateString('pt-BR') : 'A combinar'
+    const condicao = condicaoStr || 'Conforme negociado'
+
+    return [
+      `✅ *ORDEM DE COMPRA OFICIAL — ${ocCodigo}*`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `🏢 *Fornecedor:* ${fornNome}${cnpjForn}`,
+      `🏗️ *Obra / Destino:* ${nomeObra}${enderecoObra}`,
+      ``,
+      `📦 *Itens Aprovados:*`,
+      listaMateriais,
+      ``,
+      `💰 *Valor Total Aprovado:* ${valFormatado}`,
+      `💳 *Condição de Pagamento:* ${condicao}`,
+      `📅 *Previsão / Vencimento:* ${vencFormatado}`,
+      `👤 *Aprovado por:* ${colaboradorAtivo?.nome || 'Diretoria / Suprimentos'}`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `Favor confirmar o recebimento desta Ordem de Compra e a previsão de entrega no canteiro.`
+    ].join('\n')
+  }
+
   // 3. Abrir Modal de Aprovação
-  function abrirModalAprovacao(item: SuprimentoItem) {
+  function abrirModalAprovacao(item: SuprimentoItem, forcarLancamentoFinanceiro = true) {
     setItemSelecionado(item)
     // Tenta casar fornecedor existente
     const matchForn = fornecedores.find(f =>
@@ -719,28 +783,79 @@ export default function SuprimentosPage() {
       fornecedor_id: matchForn?.id || '',
       valor_final: item.valor ? String(item.valor) : '',
       data_vencimento: item.data_vencimento || new Date(Date.now() + 28 * 86400000).toISOString().split('T')[0],
-      condicao_pagamento: matchForn?.prazo_pagamento || '28 dias',
+      condicao_pagamento: matchForn?.prazo_pagamento ? `${matchForn.prazo_pagamento} dias` : '28 dias',
       anexo_file: null,
-      anexo_url: ''
+      anexo_url: '',
+      lancar_financeiro: forcarLancamentoFinanceiro,
+      copiar_oc_ao_aprovar: true,
+      enviar_oc_dgenny: true
     })
     setModalAprovarOpen(true)
   }
 
-  // 4. Executar Aprovação & Disparo para o Financeiro
+  // 4. Executar Aprovação & Disparo para o Financeiro (ou Aprovação sem Financeiro Automático)
   async function handleAprovarEEnviarFinanceiro(e: React.FormEvent) {
     e.preventDefault()
     if (!itemSelecionado) return
-    if (!aprovForm.fornecedor_id) return toast('Selecione o fornecedor vencedor da cotação.', 'error')
 
-    const valorNum = parseFloat(aprovForm.valor_final.replace(/\./g, '').replace(',', '.'))
-    if (!valorNum || valorNum <= 0) return toast('Informe o valor final aprovado da compra.', 'error')
+    const valorNum = aprovForm.valor_final
+      ? parseFloat(aprovForm.valor_final.replace(/\./g, '').replace(',', '.'))
+      : (itemSelecionado.valor || 0)
+
+    if (aprovForm.lancar_financeiro) {
+      if (!aprovForm.fornecedor_id) return toast('Selecione o fornecedor vencedor da cotação para lançar no Financeiro.', 'error')
+      if (!valorNum || valorNum <= 0) return toast('Informe o valor final aprovado da compra para lançar no Financeiro.', 'error')
+    }
 
     setSalvandoAprovacao(true)
     try {
       const selectedForn = fornecedores.find(f => f.id === aprovForm.fornecedor_id)
-      const fornNome = selectedForn?.nome_fantasia || selectedForn?.razao_social || 'Fornecedor'
+      const fornNome = selectedForn?.nome_fantasia || selectedForn?.razao_social || itemSelecionado.fornecedor || 'Compra Direta / A definir'
       const obra = obras.find(o => o.id === itemSelecionado.obra_id)
-      const nomeObra = obra?.nome || 'Geral / Sede'
+      const nomeObra = obra?.nome || itemSelecionado.obra_nome_manual || 'Geral / Sede'
+      const jaEstavaAprovado = itemSelecionado.status === 'Em Trânsito' || itemSelecionado.status === 'Entregue'
+      const novoStatusDestino: SuprimentoItem['status'] = itemSelecionado.status === 'Entregue' ? 'Entregue' : 'Em Trânsito'
+
+      // Copiar OC formatada para a área de transferência se marcado
+      const textoOC = gerarTextoOrdemCompra(
+        itemSelecionado,
+        aprovForm.fornecedor_id,
+        aprovForm.valor_final,
+        aprovForm.data_vencimento,
+        aprovForm.condicao_pagamento
+      )
+      if (aprovForm.copiar_oc_ao_aprovar && typeof navigator !== 'undefined' && navigator.clipboard) {
+        try {
+          await navigator.clipboard.writeText(textoOC)
+        } catch {}
+      }
+
+      // Se houver cotação dgenny vinculada e enviar_oc_dgenny estiver ativo, tenta enviar a OC no chat do fornecedor
+      const dgennyAct = Array.isArray(itemSelecionado.historico_atividades)
+        ? itemSelecionado.historico_atividades.find((a: any) => a.dgenny_quotation_id)
+        : null
+      if (aprovForm.enviar_oc_dgenny && dgennyAct?.dgenny_quotation_id) {
+        try {
+          const qRes = await fetch(`/api/dgenny/quotations/${dgennyAct.dgenny_quotation_id}`)
+          if (qRes.ok) {
+            const qData = await qRes.json()
+            const proposals = Array.isArray(qData?.proposals) ? qData.proposals : []
+            const matchProp = proposals.find((p: any) => {
+              const supName = (p.supplier?.name || p.supplier_name || '').toLowerCase()
+              return supName && fornNome.toLowerCase().includes(supName)
+            }) || proposals[0]
+            if (matchProp?.id) {
+              await fetch(`/api/dgenny/quotations/${dgennyAct.dgenny_quotation_id}/proposals/${matchProp.id}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content: textoOC })
+              })
+            }
+          }
+        } catch (errDgenny) {
+          console.warn('Aviso ao enviar OC via dgenny:', errDgenny)
+        }
+      }
 
       // 1. Upload do Anexo se houver
       let anexoUrl = ''
@@ -754,62 +869,76 @@ export default function SuprimentosPage() {
         }
       }
 
-      // 2. Criar Lançamento na tabela 'contas' com status 'Lançado'
-      const observacaoTexto = `Suprimentos ID: ${itemSelecionado.id} | Solicitante: ${itemSelecionado.solicitante || 'Canteiro'} | Prioridade: ${itemSelecionado.prioridade.toUpperCase()} | Condição: ${aprovForm.condicao_pagamento}`
-      const descricaoTexto = `[OC-${itemSelecionado.id.slice(0, 6).toUpperCase()}] ${itemSelecionado.titulo} (${itemSelecionado.quantidade || ''} ${itemSelecionado.unidade || ''}) - Obra: ${nomeObra}`
+      let novaConta: any = null
 
-      const historicoInicial = [{
-        id: String(Date.now()),
-        data: new Date().toISOString(),
-        tipo: 'aprovacao_suprimentos',
-        autor: colaboradorAtivo?.nome || 'Suprimentos',
-        descricao: `Compra aprovada na esteira de Suprimentos (OC-${itemSelecionado.id.slice(0, 6).toUpperCase()}). Lançamento gerado automaticamente para conferência e liquidação.`
-      }]
+      // 2. Criar Lançamento na tabela 'contas' se lancar_financeiro === true
+      if (aprovForm.lancar_financeiro) {
+        const observacaoTexto = `Suprimentos ID: ${itemSelecionado.id} | Solicitante: ${itemSelecionado.solicitante || 'Canteiro'} | Prioridade: ${itemSelecionado.prioridade.toUpperCase()} | Condição: ${aprovForm.condicao_pagamento}`
+        const descricaoTexto = `[OC-${itemSelecionado.id.slice(0, 6).toUpperCase()}] ${itemSelecionado.titulo} (${itemSelecionado.quantidade || ''} ${itemSelecionado.unidade || ''}) - Obra: ${nomeObra}`
 
-      const { data: novaConta, error: contaErr } = await supabase.from('contas').insert({
-        obra_id: itemSelecionado.obra_id || null,
-        fornecedor_id: selectedForn?.id || null,
-        tipo: 'pagar',
-        status: 'Lançado',
-        descricao: descricaoTexto,
-        valor: valorNum,
-        data_vencimento: aprovForm.data_vencimento,
-        data_previsao: aprovForm.data_vencimento,
-        categoria: 'Materiais de Construção',
-        observacoes: observacaoTexto,
-        comprovante_url: anexoUrl || null,
-        criado_por: `Suprimentos (${colaboradorAtivo?.nome || 'Automático'})`,
-        historico_negociacao: historicoInicial,
-        possui_fornecedor: true
-      }).select().single()
+        const historicoInicial = [{
+          id: String(Date.now()),
+          data: new Date().toISOString(),
+          tipo: 'aprovacao_suprimentos',
+          autor: colaboradorAtivo?.nome || 'Suprimentos',
+          descricao: `Compra aprovada na esteira de Suprimentos (OC-${itemSelecionado.id.slice(0, 6).toUpperCase()}). Lançamento gerado automaticamente para conferência e liquidação.`
+        }]
 
-      if (contaErr) throw contaErr
+        const { data: contaInserida, error: contaErr } = await supabase.from('contas').insert({
+          obra_id: itemSelecionado.obra_id || null,
+          fornecedor_id: selectedForn?.id || null,
+          tipo: 'pagar',
+          status: 'Lançado',
+          descricao: descricaoTexto,
+          valor: valorNum,
+          data_vencimento: aprovForm.data_vencimento,
+          data_previsao: aprovForm.data_vencimento,
+          categoria: 'Materiais de Construção',
+          observacoes: observacaoTexto,
+          comprovante_url: anexoUrl || null,
+          criado_por: `Suprimentos (${colaboradorAtivo?.nome || 'Automático'})`,
+          historico_negociacao: historicoInicial,
+          possui_fornecedor: true
+        }).select().single()
+
+        if (contaErr) throw contaErr
+        novaConta = contaInserida
+      }
 
       // 3. Atualizar item em 'suprimentos' para 'Em Trânsito' com log de auditoria
       const autorAtualAprov = colaboradorAtivo?.nome || 'Usuário do Sistema'
+      const detalheAprov = aprovForm.lancar_financeiro && novaConta
+        ? `${jaEstavaAprovado ? 'Lançou no Financeiro a compra' : 'Aprovou a compra'} com "${fornNome}", valor R$ ${valorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, vencimento: ${aprovForm.data_vencimento}. Lançamento financeiro gerado (#${novaConta.codigo_sequencial || novaConta.id.slice(0, 6)}).`
+        : `Aprovou a compra (${fornNome})${valorNum > 0 ? `, valor R$ ${valorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : ''} SEM lançamento automático no Financeiro (pendente lançamento manual pelo engenheiro/responsável).`
+
       const novaAtividadeAprov = {
         id: 'act-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
         data: new Date().toISOString(),
         autor_nome: autorAtualAprov,
-        acao: 'aprovacao_compra',
-        detalhe: `Aprovou a compra com "${fornNome}", valor R$ ${valorNum.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}, vencimento: ${aprovForm.data_vencimento}. Lançamento financeiro gerado (#${novaConta.codigo_sequencial || novaConta.id.slice(0, 6)}).`,
-        de: 'Aprovação',
-        para: 'Em Trânsito'
+        acao: aprovForm.lancar_financeiro ? 'aprovacao_compra' : 'aprovacao_sem_financeiro',
+        sem_financeiro: !aprovForm.lancar_financeiro,
+        detalhe: detalheAprov,
+        de: itemSelecionado.status,
+        para: novoStatusDestino
       }
       const historicoAprov = Array.isArray(itemSelecionado.historico_atividades) ? itemSelecionado.historico_atividades : []
       const novoHistoricoAprov = [novaAtividadeAprov, ...historicoAprov]
 
       const { error: supUpdateErr } = await supabase.from('suprimentos').update({
-        status: 'Em Trânsito',
-        fornecedor: fornNome,
-        valor: valorNum,
-        data_vencimento: aprovForm.data_vencimento,
+        status: novoStatusDestino,
+        fornecedor: fornNome !== 'Compra Direta / A definir' ? fornNome : itemSelecionado.fornecedor,
+        valor: valorNum > 0 ? valorNum : itemSelecionado.valor,
+        data_vencimento: aprovForm.data_vencimento || itemSelecionado.data_vencimento,
         historico_atividades: novoHistoricoAprov
       }).eq('id', itemSelecionado.id)
 
       if (supUpdateErr) throw supUpdateErr
 
-      toast(`Compra aprovada! Lançamento gerado no Financeiro (#${novaConta.codigo_sequencial || novaConta.id.slice(0, 6)}) como 'Lançado'.`, 'success')
+      if (aprovForm.lancar_financeiro && novaConta) {
+        toast(`Compra aprovada e lançada no Financeiro (#${novaConta.codigo_sequencial || novaConta.id.slice(0, 6)})!${aprovForm.copiar_oc_ao_aprovar ? ' OC copiada p/ WhatsApp!' : ''}`, 'success')
+      } else {
+        toast(`Compra aprovada e movida para Em Trânsito (Marcada p/ Lançamento Manual no Financeiro).${aprovForm.copiar_oc_ao_aprovar ? ' OC copiada p/ WhatsApp!' : ''}`, 'success')
+      }
       setModalAprovarOpen(false)
       setItemSelecionado(null)
       await loadData(true)
@@ -1282,6 +1411,7 @@ export default function SuprimentosPage() {
               <option value="todos">Todos</option>
               <option value="lancado">Lançado (Pendente)</option>
               <option value="pago">Pago</option>
+              <option value="pendente_financeiro">⚠️ Aprovado s/ Financeiro (Manual)</option>
               <option value="sem_conta">Ainda não Aprovado</option>
             </select>
           </div>
@@ -1902,11 +2032,43 @@ export default function SuprimentosPage() {
                                 )}
                               </div>
                             ) : (
-                              item.status === 'Aprovação' && (
-                                <div style={{ fontSize: 9.5, color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                  <Clock size={10} /> Aguardando aprovação p/ gerar financeiro
-                                </div>
-                              )
+                              <>
+                                {item.status === 'Aprovação' && (
+                                  <div style={{ fontSize: 9.5, color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.1)', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                    <Clock size={10} /> Aguardando aprovação da compra
+                                  </div>
+                                )}
+                                {(item.status === 'Em Trânsito' || item.status === 'Entregue') && (
+                                  <div
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      abrirModalAprovacao(item, true)
+                                    }}
+                                    style={{
+                                      fontSize: 9.5,
+                                      fontWeight: 800,
+                                      color: '#F97316',
+                                      background: 'rgba(249, 115, 22, 0.14)',
+                                      border: '1px solid rgba(249, 115, 22, 0.4)',
+                                      padding: '4px 7px',
+                                      borderRadius: 4,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: 6,
+                                      cursor: 'pointer'
+                                    }}
+                                    title="Clique para lançar manualmente esta compra no Financeiro"
+                                  >
+                                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                      <AlertTriangle size={11} /> ⚠️ Sem Financeiro (Lançamento Manual)
+                                    </span>
+                                    <span style={{ background: '#F97316', color: '#0A0A0A', padding: '1px 5px', borderRadius: 3, fontSize: 8.5, fontWeight: 900 }}>
+                                      + Lançar
+                                    </span>
+                                  </div>
+                                )}
+                              </>
                             )}
 
                             {/* 2. Badge Canteiro Vivo */}
@@ -1923,7 +2085,14 @@ export default function SuprimentosPage() {
                             )}
 
                             {Array.isArray(item.historico_atividades) && item.historico_atividades.some((a: any) => a.dgenny_quotation_id || a.acao === 'dgenny_cotacao_iniciada') && (
-                              <div style={{ fontSize: 9.5, color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700 }}>
+                              <div
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleAbrirCardDrawer(item, 'dgenny')
+                                }}
+                                style={{ fontSize: 9.5, color: '#8B5CF6', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', padding: '2px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 700, cursor: 'pointer' }}
+                                title="Abrir mapa de cotação IA dgenny"
+                              >
                                 <Bot size={11} /> Cotação IA dgenny no WhatsApp
                               </div>
                             )}
@@ -1934,7 +2103,7 @@ export default function SuprimentosPage() {
                             onClick={(e) => e.stopPropagation()}
                             style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2 }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                               <button
                                 type="button"
                                 draggable={false}
@@ -1970,6 +2139,35 @@ export default function SuprimentosPage() {
                                 <span>Detalhes</span>
                               </button>
 
+                              {(item.status === 'Solicitado' || item.status === 'Em Cotação') && (
+                                <button
+                                  type="button"
+                                  draggable={false}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleAbrirCardDrawer(item, 'dgenny')
+                                  }}
+                                  style={{
+                                    border: '1px solid rgba(139, 92, 246, 0.35)',
+                                    background: 'rgba(139, 92, 246, 0.12)',
+                                    color: '#A78BFA',
+                                    padding: '3px 7px',
+                                    borderRadius: 4,
+                                    fontSize: 9.5,
+                                    fontWeight: 800,
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  title="Abrir agente IA dgenny para cotar no WhatsApp"
+                                >
+                                  <Bot size={10} />
+                                  <span>Cotar IA</span>
+                                </button>
+                              )}
+
                               <button
                                 type="button"
                                 draggable={false}
@@ -1986,15 +2184,28 @@ export default function SuprimentosPage() {
 
                             {/* Botão de Ação Primária dependendo da etapa */}
                             {item.status === 'Solicitado' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleMoverEtapa(item, 'Em Cotação')
-                                }}
-                                style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: 'rgba(245, 158, 11, 0.15)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.3)` }}
-                              >
-                                Cotar Fornecedores <ArrowRight size={11} />
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleMoverEtapa(item, 'Em Cotação')
+                                  }}
+                                  style={{ ...btnBase, padding: '4px 7px', fontSize: 9.5, background: 'rgba(245, 158, 11, 0.15)', color: C.amber, border: `1px solid rgba(245, 158, 11, 0.3)` }}
+                                  title="Enviar para cotação com fornecedores"
+                                >
+                                  Cotar <ArrowRight size={10} />
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleMoverEtapa(item, 'Aprovação')
+                                  }}
+                                  style={{ ...btnBase, padding: '4px 7px', fontSize: 9.5, background: 'rgba(139, 92, 246, 0.15)', color: '#A78BFA', border: '1px solid rgba(139, 92, 246, 0.35)' }}
+                                  title="Pular cotação e enviar direto para Aprovação (compra direta)"
+                                >
+                                  Direto p/ Aprovação
+                                </button>
+                              </div>
                             )}
 
                             {item.status === 'Em Cotação' && (
@@ -2022,15 +2233,32 @@ export default function SuprimentosPage() {
                             )}
 
                             {item.status === 'Em Trânsito' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  abrirModalRecebimento(item)
-                                }}
-                                style={{ ...btnBase, padding: '5px 9px', fontSize: 10.5, background: '#10B981', color: '#0A0A0A', fontWeight: 900 }}
-                              >
-                                <CheckSquare size={12} /> Confirmar Entrega
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <button
+                                  type="button"
+                                  onClick={async (e) => {
+                                    e.stopPropagation()
+                                    const txt = gerarTextoOrdemCompra(item)
+                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                      await navigator.clipboard.writeText(txt)
+                                      toast('Ordem de Compra (OC) copiada para colar no WhatsApp do fornecedor!', 'success')
+                                    }
+                                  }}
+                                  style={{ ...btnBase, padding: '4px 7px', fontSize: 9.5, background: 'rgba(6, 182, 212, 0.14)', color: '#06B6D4', border: '1px solid rgba(6, 182, 212, 0.3)' }}
+                                  title="Copiar Ordem de Compra (OC) para enviar ao fornecedor no WhatsApp"
+                                >
+                                  📋 Copiar OC
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    abrirModalRecebimento(item)
+                                  }}
+                                  style={{ ...btnBase, padding: '5px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A', fontWeight: 900 }}
+                                >
+                                  <CheckSquare size={11} /> Receber
+                                </button>
+                              </div>
                             )}
 
                             {item.status === 'Entregue' && (
@@ -2160,6 +2388,26 @@ export default function SuprimentosPage() {
                           }}>
                             {conta.status === 'Pago' ? 'Pago' : `Lançado (#${conta.codigo_sequencial || conta.id.slice(0, 5)})`}
                           </span>
+                        ) : (item.status === 'Em Trânsito' || item.status === 'Entregue') ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              abrirModalAprovacao(item, true)
+                            }}
+                            style={{
+                              fontSize: 9.5,
+                              fontWeight: 800,
+                              color: '#F97316',
+                              background: 'rgba(249, 115, 22, 0.14)',
+                              border: '1px solid rgba(249, 115, 22, 0.4)',
+                              padding: '3px 7px',
+                              borderRadius: 4,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ⚠️ Pendente Financeiro (+ Lançar)
+                          </button>
                         ) : (
                           <span style={{ fontSize: 10, color: C.inkSoft }}>Aguardando Aprovação</span>
                         )}
@@ -2526,18 +2774,20 @@ export default function SuprimentosPage() {
         </div>
       )}
 
-      {/* ─── MODAL 2: APROVAÇÃO & DISPARO PARA O FINANCEIRO ──────────────────── */}
+      {/* ─── MODAL 2: APROVAÇÃO, ENVIO DE OC & LANÇAMENTO FINANCEIRO ─────────── */}
       {modalAprovarOpen && itemSelecionado && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
-          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 22, maxWidth: 540, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.4)', maxHeight: '90vh', overflowY: 'auto' }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 22, maxWidth: 580, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.4)', maxHeight: '92vh', overflowY: 'auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <ShieldCheck size={16} color={C.amber} />
-                  Aprovação de Compra & Lançamento Financeiro
+                  {itemSelecionado.status === 'Em Trânsito' || itemSelecionado.status === 'Entregue'
+                    ? 'Lançar Compra Aprovada no Financeiro'
+                    : 'Aprovação de Compra, Ordem de Compra (OC) & Financeiro'}
                 </h3>
                 <p style={{ fontSize: 11, color: C.inkSoft, margin: '2px 0 0' }}>
-                  Ao aprovar, esta compra será <strong>lançada automaticamente no Financeiro</strong> com status <code>Lançado</code>.
+                  Gere/envie a Ordem de Compra ao fornecedor e escolha se deseja lançar no Financeiro agora ou deixar para lançamento manual posterior.
                 </p>
               </div>
               <button onClick={() => setModalAprovarOpen(false)} style={{ border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
@@ -2546,22 +2796,92 @@ export default function SuprimentosPage() {
             </div>
 
             {/* Resumo do Pedido */}
-            <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 12px', marginBottom: 14 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>Item a ser Aprovado:</div>
+            <div style={{ background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 12px', marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>
+                  Pedido {itemSelecionado.codigo || `OC-${itemSelecionado.id.slice(0, 6).toUpperCase()}`}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 800, color: C.amber }}>
+                  Obra: {obras.find(o => o.id === itemSelecionado.obra_id)?.nome || itemSelecionado.obra_nome_manual || 'Geral'}
+                </span>
+              </div>
               <div style={{ fontSize: 13, fontWeight: 800, color: C.ink, marginTop: 2 }}>{itemSelecionado.titulo}</div>
               <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
-                Obra: <strong>{obras.find(o => o.id === itemSelecionado.obra_id)?.nome || 'Geral'}</strong> · Quantidade: <strong>{itemSelecionado.quantidade} {itemSelecionado.unidade}</strong>
+                Quantidade: <strong>{itemSelecionado.quantidade} {itemSelecionado.unidade}</strong>
+                {itemSelecionado.fornecedor && <> · Fornecedor sugerido/cotado: <strong>{itemSelecionado.fornecedor}</strong></>}
               </div>
             </div>
 
             <form onSubmit={handleAprovarEEnviarFinanceiro} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* Chave seletora: Lançar no Financeiro Automático vs Lançamento Manual Posterior */}
+              {itemSelecionado.status !== 'Em Trânsito' && itemSelecionado.status !== 'Entregue' && (
+                <div style={{
+                  background: aprovForm.lancar_financeiro ? 'rgba(16, 185, 129, 0.08)' : 'rgba(249, 115, 22, 0.1)',
+                  border: `1px solid ${aprovForm.lancar_financeiro ? 'rgba(16, 185, 129, 0.3)' : 'rgba(249, 115, 22, 0.35)'}`,
+                  borderRadius: 6,
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8
+                }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 900, textTransform: 'uppercase', color: C.ink }}>
+                    Modo de Integração com o Financeiro:
+                  </span>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => setAprovForm(prev => ({ ...prev, lancar_financeiro: true }))}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: 5,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        border: `1.5px solid ${aprovForm.lancar_financeiro ? '#10B981' : C.border}`,
+                        background: aprovForm.lancar_financeiro ? 'rgba(16, 185, 129, 0.15)' : C.bgCard,
+                        color: C.ink
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 900, color: aprovForm.lancar_financeiro ? '#10B981' : C.ink }}>
+                        ✅ Lançar no Financeiro Agora
+                      </div>
+                      <div style={{ fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
+                        Cria a conta a pagar automaticamente ao aprovar.
+                      </div>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setAprovForm(prev => ({ ...prev, lancar_financeiro: false }))}
+                      style={{
+                        padding: '8px 10px',
+                        borderRadius: 5,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        border: `1.5px solid ${!aprovForm.lancar_financeiro ? '#F97316' : C.border}`,
+                        background: !aprovForm.lancar_financeiro ? 'rgba(249, 115, 22, 0.15)' : C.bgCard,
+                        color: C.ink
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 900, color: !aprovForm.lancar_financeiro ? '#F97316' : C.ink }}>
+                        ⚠️ Sem Financeiro (Manual Depois)
+                      </div>
+                      <div style={{ fontSize: 9.5, color: C.inkSoft, marginTop: 2 }}>
+                        Aprova e move p/ Em Trânsito com tarja p/ engenheiro lançar depois.
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
-                <span style={labelStyle}>Fornecedor Vencedor da Cotação *</span>
+                <span style={labelStyle}>
+                  Fornecedor Vencedor / Compra {aprovForm.lancar_financeiro ? '*' : '(Opcional se definir depois)'}
+                </span>
                 <select
                   style={inputStyle}
                   value={aprovForm.fornecedor_id}
                   onChange={e => setAprovForm({ ...aprovForm, fornecedor_id: e.target.value })}
-                  required
+                  required={aprovForm.lancar_financeiro}
                 >
                   <option value="">Selecione o Fornecedor...</option>
                   {fornecedores.map(f => (
@@ -2577,6 +2897,7 @@ export default function SuprimentosPage() {
                   return (
                     <div style={{ fontSize: 10, color: '#10B981', background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.2)', padding: '5px 8px', borderRadius: 4, marginTop: 4 }}>
                       {forn.cnpj && <span><strong>CNPJ:</strong> {forn.cnpj} </span>}
+                      {forn.telefone && <span>· <strong>WhatsApp:</strong> {forn.telefone} </span>}
                       {forn.pix && <span>· <strong>PIX:</strong> {forn.pix} </span>}
                       {forn.banco && <span>· <strong>Banco:</strong> {forn.banco} (Ag: {forn.agencia} / Cc: {forn.conta})</span>}
                     </div>
@@ -2586,24 +2907,24 @@ export default function SuprimentosPage() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <span style={labelStyle}>Valor Final Aprovado (R$) *</span>
+                  <span style={labelStyle}>Valor Final Aprovado (R$) {aprovForm.lancar_financeiro ? '*' : '(Opcional)'}</span>
                   <input
                     style={inputStyle}
                     placeholder="Ex: 6.400,00"
                     value={aprovForm.valor_final}
                     onChange={e => setAprovForm({ ...aprovForm, valor_final: e.target.value })}
-                    required
+                    required={aprovForm.lancar_financeiro}
                   />
                 </div>
 
                 <div>
-                  <span style={labelStyle}>Data de Vencimento do Pagamento *</span>
+                  <span style={labelStyle}>Data de Vencimento / Previsão {aprovForm.lancar_financeiro ? '*' : ''}</span>
                   <input
                     type="date"
                     style={inputStyle}
                     value={aprovForm.data_vencimento}
                     onChange={e => setAprovForm({ ...aprovForm, data_vencimento: e.target.value })}
-                    required
+                    required={aprovForm.lancar_financeiro}
                   />
                 </div>
               </div>
@@ -2616,6 +2937,86 @@ export default function SuprimentosPage() {
                   value={aprovForm.condicao_pagamento}
                   onChange={e => setAprovForm({ ...aprovForm, condicao_pagamento: e.target.value })}
                 />
+              </div>
+
+              {/* Bloco de Envio da Ordem de Compra (OC) antes/junto do Financeiro */}
+              <div style={{
+                background: 'rgba(6, 182, 212, 0.08)',
+                border: '1px solid rgba(6, 182, 212, 0.3)',
+                borderRadius: 6,
+                padding: '10px 12px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 8
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 900, color: '#06B6D4', textTransform: 'uppercase' }}>
+                    📄 Envio da Ordem de Compra (OC) ao Fornecedor
+                  </span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const txt = gerarTextoOrdemCompra(
+                          itemSelecionado,
+                          aprovForm.fornecedor_id,
+                          aprovForm.valor_final,
+                          aprovForm.data_vencimento,
+                          aprovForm.condicao_pagamento
+                        )
+                        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                          await navigator.clipboard.writeText(txt)
+                          toast('Ordem de Compra (OC) copiada! Cole no WhatsApp do fornecedor.', 'success')
+                        }
+                      }}
+                      style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: C.bgCard, color: '#06B6D4', border: '1px solid rgba(6, 182, 212, 0.4)' }}
+                    >
+                      📋 Copiar OC Agora
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const txt = gerarTextoOrdemCompra(
+                          itemSelecionado,
+                          aprovForm.fornecedor_id,
+                          aprovForm.valor_final,
+                          aprovForm.data_vencimento,
+                          aprovForm.condicao_pagamento
+                        )
+                        const forn = fornecedores.find(f => f.id === aprovForm.fornecedor_id)
+                        const foneLimpo = (forn?.telefone || '').replace(/\D/g, '')
+                        const foneUrl = foneLimpo ? (foneLimpo.startsWith('55') ? foneLimpo : `55${foneLimpo}`) : ''
+                        const waUrl = foneUrl
+                          ? `https://wa.me/${foneUrl}?text=${encodeURIComponent(txt)}`
+                          : `https://wa.me/?text=${encodeURIComponent(txt)}`
+                        window.open(waUrl, '_blank')
+                      }}
+                      style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A', fontWeight: 900 }}
+                    >
+                      📲 Enviar OC no WhatsApp
+                    </button>
+                  </div>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.ink, cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={aprovForm.copiar_oc_ao_aprovar}
+                    onChange={e => setAprovForm(prev => ({ ...prev, copiar_oc_ao_aprovar: e.target.checked }))}
+                  />
+                  <span>Copiar Ordem de Compra (OC) automaticamente ao confirmar aprovação</span>
+                </label>
+
+                {Array.isArray(itemSelecionado.historico_atividades) && itemSelecionado.historico_atividades.some((a: any) => a.dgenny_quotation_id) && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#A78BFA', cursor: 'pointer', fontWeight: 700 }}>
+                    <input
+                      type="checkbox"
+                      checked={aprovForm.enviar_oc_dgenny}
+                      onChange={e => setAprovForm(prev => ({ ...prev, enviar_oc_dgenny: e.target.checked }))}
+                    />
+                    <span>🤖 Disparar OC automaticamente via dgenny IA no WhatsApp do fornecedor cotado</span>
+                  </label>
+                )}
               </div>
 
               <div>
@@ -2645,9 +3046,13 @@ export default function SuprimentosPage() {
                 <button
                   type="submit"
                   disabled={salvandoAprovacao}
-                  style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
+                  style={{ ...btnBase, background: aprovForm.lancar_financeiro ? C.amber : '#F97316', color: '#0A0A0A', fontWeight: 900 }}
                 >
-                  {salvandoAprovacao ? 'Lançando no Financeiro...' : 'Confirmar Aprovação & Lançar no Financeiro'}
+                  {salvandoAprovacao
+                    ? 'Processando...'
+                    : aprovForm.lancar_financeiro
+                      ? 'Confirmar Aprovação & Lançar no Financeiro'
+                      : 'Aprovar Compra (Lançar no Financeiro Depois)'}
                 </button>
               </div>
             </form>
@@ -2836,6 +3241,7 @@ export default function SuprimentosPage() {
         fornecedores={fornecedores}
         colaboradorAtivo={colaboradorAtivo}
         contaVinculada={drawerItem ? contasVinculadas[drawerItem.id] : undefined}
+        initialTab={drawerInitialTab}
       />
 
       {ConfirmDialog}

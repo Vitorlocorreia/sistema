@@ -8,9 +8,13 @@ import {
   DgennyQuotationDetail,
   DgennyNegotiationItem,
   DgennyMessage,
+  DgennyMessageMediaResponse,
   DgennyComparisonResponse,
   DgennyBudgetItem,
-  DgennyWhatsAppNumber
+  DgennyWhatsAppNumber,
+  DgennyUser,
+  DgennyCatalogItem,
+  DgennySavedSupplier
 } from './types'
 
 export class DgennyClient {
@@ -18,22 +22,28 @@ export class DgennyClient {
   private apiKey: string | null
 
   constructor(apiKey?: string, baseUrl?: string) {
-    this.apiKey = apiKey || process.env.DGENNY_API_KEY || null
+    this.apiKey = apiKey || null
     this.baseUrl = (baseUrl || process.env.DGENNY_BASE_URL || 'https://api.dgenny.com').replace(/\/+$/, '')
   }
 
+  private getApiKey(): string | null {
+    return (this.apiKey || process.env.DGENNY_API_KEY || '').trim() || null
+  }
+
   public isConfigured(): boolean {
-    return Boolean(this.apiKey && this.apiKey.trim().length > 0)
+    const key = this.getApiKey()
+    return Boolean(key && key.length > 0)
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
-    if (!this.apiKey) {
+    const key = this.getApiKey()
+    if (!key) {
       throw new Error('DGENNY_API_KEY não configurada no ambiente (.env.local). Obtenha a chave junto ao comercial da dgenny.')
     }
 
     const url = `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`
     const headers: Record<string, string> = {
-      'Authorization': `Bearer ${this.apiKey.trim()}`,
+      'Authorization': `Bearer ${key}`,
       'Accept': 'application/json',
       ...(options.headers as Record<string, string> || {})
     }
@@ -44,7 +54,8 @@ export class DgennyClient {
 
     const response = await fetch(url, {
       ...options,
-      headers
+      headers,
+      cache: 'no-store'
     })
 
     const data = await response.json().catch(() => null)
@@ -55,6 +66,7 @@ export class DgennyClient {
       error.status = response.status
       error.field = data?.field
       error.dgennyError = data?.error
+      error.quotationId = data?.quotationId
       throw error
     }
 
@@ -73,6 +85,37 @@ export class DgennyClient {
    */
   async getWhatsAppNumbers(): Promise<{ ok: boolean; items: DgennyWhatsAppNumber[] }> {
     return this.request<{ ok: boolean; items: DgennyWhatsAppNumber[] }>('/api/partner/v1/whatsapp/numbers')
+  }
+
+  /**
+   * Lista os usuários (compradores) autorizados na conta da empresa
+   */
+  async getUsers(): Promise<{ ok: boolean; items: DgennyUser[] }> {
+    return this.request<{ ok: boolean; items: DgennyUser[] }>('/api/partner/v1/users')
+  }
+
+  /**
+   * Lista registros de catálogo (delivery-locations, billing-locations, payment-methods)
+   */
+  async getCatalog(type: 'delivery-locations' | 'billing-locations' | 'payment-methods'): Promise<{ ok: boolean; items: DgennyCatalogItem[] }> {
+    return this.request<{ ok: boolean; items: DgennyCatalogItem[] }>(`/api/partner/v1/catalogs/${type}`)
+  }
+
+  /**
+   * Lista fornecedores já cadastrados na base da dgenny da empresa
+   */
+  async getSuppliers(): Promise<{ ok: boolean; items: DgennySavedSupplier[] }> {
+    return this.request<{ ok: boolean; items: DgennySavedSupplier[] }>('/api/partner/v1/suppliers')
+  }
+
+  /**
+   * Cadastra ou atualiza um fornecedor na base da dgenny
+   */
+  async upsertSupplier(supplier: { name: string; phone: string; contactName?: string; email?: string; cnpj?: string }): Promise<any> {
+    return this.request('/api/partner/v1/suppliers', {
+      method: 'POST',
+      body: JSON.stringify(supplier)
+    })
   }
 
   /**
@@ -183,6 +226,45 @@ export class DgennyClient {
   async resumeAi(quotationId: string, supplierId: string): Promise<{ ok: boolean; aiPaused: boolean }> {
     return this.request<{ ok: boolean; aiPaused: boolean }>(
       `/api/partner/v1/quotations/${quotationId}/negotiations/${supplierId}/ai/resume`,
+      { method: 'POST' }
+    )
+  }
+
+  /**
+   * Obtém a URL temporária para download de um anexo enviado na conversa do WhatsApp
+   */
+  async getMessageMedia(quotationId: string, supplierId: string, messageId: string): Promise<DgennyMessageMediaResponse> {
+    return this.request<DgennyMessageMediaResponse>(
+      `/api/partner/v1/quotations/${quotationId}/negotiations/${supplierId}/messages/${messageId}/media`
+    )
+  }
+
+  /**
+   * Interrompe a negociação com um fornecedor específico
+   */
+  async interruptNegotiation(quotationId: string, supplierId: string): Promise<{ ok: boolean; status: string }> {
+    return this.request<{ ok: boolean; status: string }>(
+      `/api/partner/v1/quotations/${quotationId}/negotiations/${supplierId}/interrupt`,
+      { method: 'POST' }
+    )
+  }
+
+  /**
+   * Reabre uma negociação encerrada ou interrompida com um fornecedor
+   */
+  async reopenNegotiation(quotationId: string, supplierId: string): Promise<{ ok: boolean; status: string }> {
+    return this.request<{ ok: boolean; status: string }>(
+      `/api/partner/v1/quotations/${quotationId}/negotiations/${supplierId}/reopen`,
+      { method: 'POST' }
+    )
+  }
+
+  /**
+   * Pede para a IA reler a conversa com o fornecedor e regravar o orçamento
+   */
+  async reprocessBudget(quotationId: string, supplierId: string): Promise<{ ok: boolean; jobId?: string }> {
+    return this.request<{ ok: boolean; jobId?: string }>(
+      `/api/partner/v1/quotations/${quotationId}/budgets/${supplierId}/reprocess`,
       { method: 'POST' }
     )
   }

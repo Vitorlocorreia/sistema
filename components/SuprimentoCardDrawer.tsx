@@ -85,10 +85,19 @@ interface SuprimentoCardDrawerProps {
   onClose: () => void
   onUpdateItem: (updated: any) => void
   colaboradores: ColaboradorOption[]
-  obras: Array<{ id: string; nome: string }>
-  fornecedores: Array<{ id: string; razao_social: string; nome_fantasia?: string | null }>
+  obras: Array<{ id: string; nome: string; endereco?: string | null; cliente?: string | null }>
+  fornecedores: Array<{
+    id: string
+    razao_social: string
+    nome_fantasia?: string | null
+    telefone?: string | null
+    cnpj?: string | null
+    responsavel?: string | null
+    endereco?: string | null
+  }>
   colaboradorAtivo: any
   contaVinculada?: any
+  initialTab?: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'
 }
 
 export function SuprimentoCardDrawer({
@@ -100,10 +109,17 @@ export function SuprimentoCardDrawer({
   obras,
   fornecedores,
   colaboradorAtivo,
-  contaVinculada
+  contaVinculada,
+  initialTab
 }: SuprimentoCardDrawerProps) {
   // Aba ativa: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'
-  const [tabAtiva, setTabAtiva] = useState<'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'>('checklist')
+  const [tabAtiva, setTabAtiva] = useState<'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'>(initialTab || 'checklist')
+
+  useEffect(() => {
+    if (isOpen && initialTab) {
+      setTabAtiva(initialTab)
+    }
+  }, [isOpen, initialTab, item?.id])
 
   // Modo de Edição Completa da Ficha
   const [modoEdicaoCompleta, setModoEdicaoCompleta] = useState(false)
