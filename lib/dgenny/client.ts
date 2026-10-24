@@ -139,6 +139,13 @@ export class DgennyClient {
   }
 
   /**
+   * Lista as cotações existentes na conta da empresa na dgenny
+   */
+  async listQuotations(): Promise<{ ok: boolean; items: any[]; nextCursor?: string | null }> {
+    return this.request<{ ok: boolean; items: any[]; nextCursor?: string | null }>('/api/partner/v1/quotations')
+  }
+
+  /**
    * Cria uma cotação na dgenny a partir do suprimento
    */
   async createQuotation(data: DgennyCreateQuotationRequest): Promise<DgennyCreateQuotationResponse> {

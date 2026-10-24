@@ -1092,8 +1092,9 @@ export function SuprimentoCardDrawer({
     >
       <div
         style={{
-          width: 620,
+          width: tabAtiva === 'dgenny' ? 920 : 620,
           maxWidth: '96vw',
+          transition: 'width 0.2s ease',
           height: '100%',
           background: C.bgPanel,
           borderLeft: `1px solid ${C.border}`,

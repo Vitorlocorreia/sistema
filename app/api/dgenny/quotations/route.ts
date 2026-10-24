@@ -18,6 +18,25 @@ function sanitizeExternalId(raw: string): string {
   return (cleaned || `ID-${Date.now()}`).slice(0, 120)
 }
 
+export async function GET() {
+  try {
+    const res = await dgenny.listQuotations()
+    return NextResponse.json({
+      ok: true,
+      items: res?.items || []
+    })
+  } catch (error: any) {
+    return NextResponse.json(
+      {
+        ok: false,
+        items: [],
+        message: error.message || 'Erro ao listar cotações da dgenny'
+      },
+      { status: 200 }
+    )
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()

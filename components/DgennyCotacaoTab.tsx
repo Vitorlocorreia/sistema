@@ -81,13 +81,14 @@ export function DgennyCotacaoTab({
     loading: true
   })
 
-  // Cotação ativa vinculada
+  // Cotação ativa vinculada e lista de cotações existentes na conta dgenny
   const [quotationId, setQuotationId] = useState<string | null>(null)
   const [quotationData, setQuotationData] = useState<any | null>(null)
   const [loadingData, setLoadingData] = useState(false)
+  const [cotacoesExistentes, setCotacoesExistentes] = useState<any[]>([])
 
   // Seletor de sub-aba quando há cotação ativa: 'comparativo' | 'conversas'
-  const [subTabAtiva, setSubTabAtiva] = useState<'comparativo' | 'conversas'>('comparativo')
+  const [subTabAtiva, setSubTabAtiva] = useState<'comparativo' | 'conversas'>('conversas')
 
   // Criação de nova cotação
   const [selectedPhones, setSelectedPhones] = useState<string[]>([])
@@ -259,9 +260,17 @@ export function DgennyCotacaoTab({
       }
     }
     checkStatus()
+    fetch('/api/dgenny/quotations')
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok && Array.isArray(d.items)) {
+          setCotacoesExistentes(d.items)
+        }
+      })
+      .catch(() => {})
   }, [])
 
-  // 2. Identifica se o suprimento já possui cotação dgenny no histórico e sincroniza endereço/anexos
+  // 2. Identifica se o suprimento já possui cotação dgenny no histórico (ou casamento automático pelo código/título) e sincroniza endereço/anexos
   useEffect(() => {
     if (!suprimento) return
     setEnderecoEntregaObra(obra?.endereco || suprimento?.obra_nome_manual || obra?.nome || '')
@@ -274,11 +283,26 @@ export function DgennyCotacaoTab({
     )
     if (atividadeDgenny?.dgenny_quotation_id) {
       setQuotationId(atividadeDgenny.dgenny_quotation_id)
+      return
+    }
+
+    // Tenta casar pelo código ou título do card nas cotações já abertas na dgenny
+    const cod = (suprimento.codigo || '').trim().toLowerCase()
+    const tit = (suprimento.titulo || '').trim().toLowerCase()
+    const matchExistente = cotacoesExistentes.find((q: any) => {
+      const qName = (q.name || '').toLowerCase()
+      if (cod && cod.length >= 4 && qName.includes(cod)) return true
+      if (tit && tit.length >= 6 && (qName.includes(tit) || tit.includes(qName))) return true
+      return false
+    })
+
+    if (matchExistente?.id) {
+      setQuotationId(matchExistente.id)
     } else {
       setQuotationId(null)
       setQuotationData(null)
     }
-  }, [suprimento, obra])
+  }, [suprimento, obra, cotacoesExistentes])
 
   // 3. Carrega os dados da cotação se houver ID
   const carregarDadosCotacao = useCallback(async (id: string, silent = false) => {
@@ -875,6 +899,32 @@ export function DgennyCotacaoTab({
               {defaultWhatsApp ? ` · WhatsApp ${defaultWhatsApp.displayName || ''} (+${defaultWhatsApp.phone})` : ''}
             </span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {cotacoesExistentes.length > 1 && (
+              <select
+                aria-label="Trocar cotação ativa"
+                value={quotationId || ''}
+                onChange={e => {
+                  if (e.target.value) setQuotationId(e.target.value)
+                }}
+                style={{
+                  background: C.bgCard,
+                  color: C.ink,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 4,
+                  padding: '3px 8px',
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                {cotacoesExistentes.map((q: any) => (
+                  <option key={q.id} value={q.id}>
+                    📲 {q.name} ({q.selectedSuppliersCount || q.suppliersCount || 0} forn.)
+                  </option>
+                ))}
+              </select>
+            )}
           <button
             type="button"
             onClick={() => {
@@ -896,8 +946,9 @@ export function DgennyCotacaoTab({
             }}
             title="Iniciar uma nova rodada de cotação para este pedido"
           >
-            <RotateCcw size={10} /> Nova Cotação
+            <RotateCcw size={10} /> + Criar Nova Cotação
           </button>
+          </div>
         </div>
 
         {/* Banner do Status da Cotação */}
@@ -2096,6 +2147,65 @@ export function DgennyCotacaoTab({
   // ─── RENDER: FORMULÁRIO DE NOVA COTAÇÃO ─────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Central Rápida: Cotações & Conversas no WhatsApp já em andamento na dgenny */}
+      {cotacoesExistentes.length > 0 && (
+        <div
+          style={{
+            padding: '12px 14px',
+            background: 'rgba(6, 182, 212, 0.08)',
+            border: '1px solid rgba(6, 182, 212, 0.3)',
+            borderRadius: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 900, color: '#06B6D4', textTransform: 'uppercase' }}>
+              <MessageSquare size={14} />
+              <span>💬 Negociações no WhatsApp em Andamento ({cotacoesExistentes.length})</span>
+            </div>
+            <span style={{ fontSize: 10.5, color: C.inkSoft }}>
+              Clique em uma cotação abaixo para acompanhar as conversas no WhatsApp ao vivo:
+            </span>
+          </div>
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {cotacoesExistentes.slice(0, 8).map((q: any) => (
+              <button
+                key={q.id}
+                type="button"
+                onClick={() => {
+                  setSubTabAtiva('conversas')
+                  setQuotationId(q.id)
+                }}
+                style={{
+                  background: C.bgCard,
+                  border: '1px solid rgba(6, 182, 212, 0.35)',
+                  borderRadius: 6,
+                  padding: '6px 10px',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  color: C.ink,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  transition: 'all 0.15s ease'
+                }}
+                title="Abrir tela de conversas no WhatsApp e mapa comparativo desta cotação"
+              >
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: q.status === 'active' ? '#10B981' : C.amber }} />
+                <span>{q.name}</span>
+                <span style={{ fontSize: 9.5, color: '#06B6D4', background: 'rgba(6, 182, 212, 0.14)', padding: '1px 5px', borderRadius: 4 }}>
+                  {q.selectedSuppliersCount || q.suppliersCount || 0} forn. no WhatsApp
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Barra de Status da Conta JWA Conectada */}
       <div
         style={{
