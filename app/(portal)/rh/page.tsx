@@ -2006,9 +2006,14 @@ function CadastroTable({
               </p>
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                 {guiaRH && (
-                  <button onClick={() => onOpen(guiaRH)} style={{ ...btnBase, padding: '4px 8px', fontSize: 9.5, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}>
-                    <ExternalLink size={10} color={C.amber} /> Ver Guia
-                  </button>
+                  <>
+                    <button onClick={() => onOpen(guiaRH)} style={{ ...btnBase, padding: '4px 8px', fontSize: 9.5, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}>
+                      <ExternalLink size={10} color={C.amber} /> Ver Guia
+                    </button>
+                    <button onClick={() => void baixarDocumentoIndividual(guiaRH)} style={{ ...btnBase, padding: '4px 8px', fontSize: 9.5, background: 'rgba(16, 185, 129, 0.14)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.35)' }}>
+                      <Download size={10} /> Baixar
+                    </button>
+                  </>
                 )}
                 <label style={{ ...btnBase, padding: '4px 10px', fontSize: 9.5, background: C.amber, color: '#0A0A0A', cursor: 'pointer' }}>
                   <FileUp size={11} /> {uploadingGuia ? 'Enviando...' : guiaRH ? 'Substituir Guia' : 'Enviar Guia'}
@@ -2025,10 +2030,15 @@ function CadastroTable({
               </div>
               {laudoCandidato ? (
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0 8px' }}>
-                    <button onClick={() => onOpen(laudoCandidato)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, fontWeight: 800, cursor: 'pointer', padding: 0 }}>
-                      📄 {laudoCandidato.nome}
-                    </button>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0 8px', gap: 6, flexWrap: 'wrap' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button onClick={() => onOpen(laudoCandidato)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, fontWeight: 800, cursor: 'pointer', padding: 0 }}>
+                        📄 {laudoCandidato.nome}
+                      </button>
+                      <button onClick={() => void baixarDocumentoIndividual(laudoCandidato)} style={{ ...btnBase, padding: '2px 6px', fontSize: 8.5, background: 'rgba(16, 185, 129, 0.14)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.35)' }}>
+                        <Download size={9} /> Baixar
+                      </button>
+                    </div>
                     <span style={{ fontSize: 9, fontWeight: 800, color: laudoCandidato.status === 'aprovado' ? '#10B981' : '#F59E0B' }}>
                       {laudoCandidato.status === 'aprovado' ? '✓ Aprovado' : 'Aguardando Análise'}
                     </span>
@@ -2130,9 +2140,14 @@ function CadastroTable({
                       <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>{modelo.nome}</span>
                       <p style={{ fontSize: 10, color: C.inkSoft, margin: '2px 0 0' }}>{modelo.descricao}</p>
                       {doc && (
-                        <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                          <ExternalLink size={10} /> 📄 {doc.nome}
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                          <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <ExternalLink size={10} /> 📄 {doc.nome}
+                          </button>
+                          <button onClick={() => void baixarDocumentoIndividual(doc)} style={{ ...btnBase, padding: '2px 7px', fontSize: 8.5, background: 'rgba(16, 185, 129, 0.14)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.35)' }}>
+                            <Download size={9} /> Baixar
+                          </button>
+                        </div>
                       )}
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -2213,14 +2228,24 @@ function CadastroTable({
                                 ) : null}
                               </div>
 
-                              <button
-                                type="button"
-                                onClick={() => void removerDocAdmissional(doc.id)}
-                                style={{ ...btnBase, padding: '4px 7px', fontSize: 9, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)', flexShrink: 0 }}
-                                title="Remover este documento"
-                              >
-                                <Trash2 size={11} /> Remover
-                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => void baixarDocumentoIndividual(doc)}
+                                  style={{ ...btnBase, padding: '4px 7px', fontSize: 9, background: 'rgba(16, 185, 129, 0.14)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.35)' }}
+                                  title="Baixar este documento"
+                                >
+                                  <Download size={10} /> Baixar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => void removerDocAdmissional(doc.id)}
+                                  style={{ ...btnBase, padding: '4px 7px', fontSize: 9, background: 'rgba(239, 68, 68, 0.08)', color: '#F87171', border: '1px solid rgba(239, 68, 68, 0.25)' }}
+                                  title="Remover este documento"
+                                >
+                                  <Trash2 size={11} /> Remover
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -2305,9 +2330,14 @@ function CadastroTable({
                             <span style={{ fontSize: 11, fontWeight: 700, color: C.ink }}>
                               {item.label} {item.obrigatorio && <strong style={{ color: '#EF4444' }}>*</strong>}
                             </span>
-                            <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, cursor: 'pointer', padding: 0, display: 'block', marginTop: 2, fontWeight: 700 }}>
-                              ↗ {doc.nome}
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                              <button onClick={() => onOpen(doc)} style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, cursor: 'pointer', padding: 0, fontWeight: 700 }}>
+                                ↗ {doc.nome}
+                              </button>
+                              <button onClick={() => void baixarDocumentoIndividual(doc)} style={{ ...btnBase, padding: '2px 6px', fontSize: 8.5, background: 'rgba(16, 185, 129, 0.14)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.35)' }}>
+                                <Download size={9} /> Baixar
+                              </button>
+                            </div>
                             {doc.status === 'devolvido' && doc.observacao_rh && (
                               <span style={{ fontSize: 8.5, color: '#F87171', display: 'block', marginTop: 2 }}>{doc.observacao_rh}</span>
                             )}
@@ -2372,12 +2402,20 @@ function CadastroTable({
                               }}
                             >
                               <div style={{ minWidth: 0, flex: 1 }}>
-                                <button
-                                  onClick={() => onOpen(doc)}
-                                  style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, cursor: 'pointer', padding: 0, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, textAlign: 'left' }}
-                                >
-                                  ↗ {doc.nome}
-                                </button>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                  <button
+                                    onClick={() => onOpen(doc)}
+                                    style={{ border: 'none', background: 'none', color: C.amber, fontSize: 10, cursor: 'pointer', padding: 0, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 4, textAlign: 'left' }}
+                                  >
+                                    ↗ {doc.nome}
+                                  </button>
+                                  <button
+                                    onClick={() => void baixarDocumentoIndividual(doc)}
+                                    style={{ ...btnBase, padding: '2px 6px', fontSize: 8, background: 'rgba(16, 185, 129, 0.14)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.35)' }}
+                                  >
+                                    <Download size={8.5} /> Baixar
+                                  </button>
+                                </div>
                                 {doc.status === 'devolvido' && doc.observacao_rh && (
                                   <div style={{ fontSize: 8.5, color: '#F87171', marginTop: 2 }}>{doc.observacao_rh}</div>
                                 )}
