@@ -980,6 +980,12 @@ export function SuprimentoCardDrawer({
       texto += `\n*Valor Total:* R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`
     }
 
+    texto += `\n🏢 *DADOS PARA FATURAMENTO (NF / BOLETO):*\n`
+    texto += `RAZÃO SOCIAL: JWA S.A.\n`
+    texto += `CNPJ: 37.995.880/0001-93\n`
+    texto += `INSCRIÇÃO ESTADUAL: 129.424.849.110\n`
+    texto += `ENDEREÇO: RUA SERRA DE BOTUCATU Nº 878 – SALA 1503 - VLA GOMES CARDIM – SÃO PAULO – SP – CEP: 03.317-000\n`
+
     const aprovAct = (Array.isArray(item.historico_atividades) ? item.historico_atividades : []).find(
       (a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro' || a.acao === 'assinatura_exportacao_oc'
     )
@@ -3196,13 +3202,16 @@ export function SuprimentoCardDrawer({
             `}</style>
 
             {/* Cabeçalho Oficial */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111827', paddingBottom: 14, marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '2px solid #111827', paddingBottom: 14, marginBottom: 14 }}>
               <div>
                 <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, letterSpacing: -0.5, color: '#111827' }}>
-                  JWA ENGENHARIA & CONSTRUÇÃO
+                  JWA S.A. — ENGENHARIA & CONSTRUÇÃO
                 </h2>
-                <div style={{ fontSize: 11, color: '#4B5563', marginTop: 2 }}>
-                  Departamento de Suprimentos & Compras
+                <div style={{ fontSize: 11, color: '#374151', marginTop: 2, fontWeight: 700 }}>
+                  CNPJ: 37.995.880/0001-93 · IE: 129.424.849.110
+                </div>
+                <div style={{ fontSize: 10, color: '#4B5563', marginTop: 1 }}>
+                  Rua Serra de Botucatu nº 878 – Sala 1503 - Vla Gomes Cardim – São Paulo – SP – CEP: 03.317-000
                 </div>
               </div>
               <div style={{ textAlign: 'right' }}>
@@ -3215,6 +3224,21 @@ export function SuprimentoCardDrawer({
                 <div style={{ fontSize: 10.5, color: '#6B7280', marginTop: 2 }}>
                   Emissão: {new Date().toLocaleDateString('pt-BR')}
                 </div>
+              </div>
+            </div>
+
+            {/* Quadro Oficial de Dados de Faturamento (JWA S.A.) */}
+            <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 6, padding: '8px 12px', marginBottom: 14, fontSize: 10.5, color: '#1E3A8A' }}>
+              <div style={{ fontWeight: 900, textTransform: 'uppercase', fontSize: 10, marginBottom: 3, color: '#1D4ED8' }}>
+                🏢 Dados para Faturamento (Emissão de Nota Fiscal e Boleto)
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, color: '#111827' }}>
+                <div><strong>RAZÃO SOCIAL:</strong> JWA S.A.</div>
+                <div><strong>CNPJ:</strong> 37.995.880/0001-93</div>
+                <div><strong>INSCRIÇÃO ESTADUAL:</strong> 129.424.849.110</div>
+              </div>
+              <div style={{ marginTop: 3, color: '#111827' }}>
+                <strong>ENDEREÇO:</strong> RUA SERRA DE BOTUCATU Nº 878 – SALA 1503 - VLA GOMES CARDIM – SÃO PAULO – SP – CEP: 03.317-000
               </div>
             </div>
 

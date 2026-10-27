@@ -797,6 +797,13 @@ export default function SuprimentosPage() {
       ...(frete ? [`🚚 *Frete / Entrega:* ${frete}`] : []),
       `📅 *Previsão / Vencimento:* ${vencFormatado}`,
       ...(obsOc ? [`📋 *Observações / Acordo:* ${obsOc}`] : []),
+      ``,
+      `🏢 *DADOS PARA FATURAMENTO (NF / BOLETO):*`,
+      `  • *RAZÃO SOCIAL:* JWA S.A.`,
+      `  • *CNPJ:* 37.995.880/0001-93`,
+      `  • *INSCRIÇÃO ESTADUAL:* 129.424.849.110`,
+      `  • *ENDEREÇO:* RUA SERRA DE BOTUCATU Nº 878 – SALA 1503 - VLA GOMES CARDIM – SÃO PAULO – SP – CEP: 03.317-000`,
+      ``,
       `👤 *Aprovado por:* ${colaboradorAtivo?.nome || 'Diretoria / Suprimentos'}`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
       `Favor confirmar o recebimento desta Ordem de Compra e a previsão de entrega no canteiro.`
@@ -3026,9 +3033,15 @@ export default function SuprimentosPage() {
                       </option>
                     ))
                   ) : (
-                    <option value="eaeedfef-3488-4d74-938f-11a21a5e570a">JWA (JWA SA)</option>
+                    <option value="eaeedfef-3488-4d74-938f-11a21a5e570a">JWA (JWA S.A.)</option>
                   )}
                 </select>
+                {aprovForm.empresa_id === 'eaeedfef-3488-4d74-938f-11a21a5e570a' && (
+                  <div style={{ fontSize: 10, color: C.inkSoft, background: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', padding: '6px 8px', borderRadius: 4, marginTop: 4, lineHeight: 1.4 }}>
+                    <strong style={{ color: C.ink }}>RAZÃO SOCIAL:</strong> JWA S.A. · <strong style={{ color: C.ink }}>CNPJ:</strong> 37.995.880/0001-93 · <strong style={{ color: C.ink }}>IE:</strong> 129.424.849.110<br />
+                    <strong style={{ color: C.ink }}>ENDEREÇO:</strong> RUA SERRA DE BOTUCATU Nº 878 – SALA 1503 - VLA GOMES CARDIM – SÃO PAULO – SP – CEP: 03.317-000
+                  </div>
+                )}
               </div>
 
               <div>
