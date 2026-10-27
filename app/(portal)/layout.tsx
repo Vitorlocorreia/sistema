@@ -475,6 +475,17 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         localStorage.setItem(SESSION_KEY, JSON.stringify(c))
         localStorage.setItem('perfil_ativo', c.cargo)
 
+        // Se o token do Supabase Auth expirou mas o usuário segue logado no portal, renova silenciosamente
+        try {
+          const { data: sessionCheck } = await supabase.auth.getSession()
+          if (!sessionCheck?.session && c.email && c.senha) {
+            await supabase.auth.signInWithPassword({
+              email: String(c.email).trim().toLowerCase(),
+              password: String(c.senha)
+            })
+          }
+        } catch {}
+
         let listaApps: string[]
         if (c.override_permissoes) {
           listaApps = c.apps ? c.apps.split(',').map((a: string) => a.trim()).filter(Boolean) : ['rh']

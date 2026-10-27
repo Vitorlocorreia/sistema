@@ -353,11 +353,94 @@ function gerarZipBytes(arquivos: Array<{ name: string; data: Uint8Array }>): Uin
   return out
 }
 
+async function ensurePortalSession() {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    if (sessionData?.session) return
+    if (typeof window === 'undefined') return
+    const raw = localStorage.getItem('colaborador_sessao')
+    if (!raw) return
+    const colab = JSON.parse(raw)
+    if (colab?.email && colab?.senha) {
+      await supabase.auth.signInWithPassword({
+        email: String(colab.email).trim().toLowerCase(),
+        password: String(colab.senha)
+      })
+    }
+  } catch {}
+}
+
+async function baixarDocumentoIndividual(documento: Record<string, any>) {
+  const rawPath = documento.storage_path || documento.arquivo_url
+  if (!rawPath) return toast('Documento sem arquivo vinculado.', 'error')
+  const path = String(rawPath).replace(/^\/+/, '')
+
+  if (path.startsWith('salarios/') || documento.item_id === 'salario_registro' || path === 'salario-registro-confidencial') {
+    return toast('Este registro é informativo de salário e não possui arquivo anexado.', 'info')
+  }
+  if (documento.status === 'aguardando_upload') {
+    return toast('O arquivo ainda não foi enviado pelo candidato.', 'warning')
+  }
+  const nomeDoc = String(documento.nome || 'Documento').trim()
+  if (nomeDoc.startsWith('Dados Bancários:') || nomeDoc.startsWith('Chave PIX:') || nomeDoc.includes('declarou que não possui VEM') || nomeDoc.includes('Solicitação de 1ª via do cartão VEM')) {
+    return toast(nomeDoc, 'info')
+  }
+
+  await ensurePortalSession()
+
+  try {
+    let blob: Blob | null = null
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      const resp = await fetch(path)
+      if (resp.ok) blob = await resp.blob()
+    } else {
+      const { data: dlData, error: dlErr } = await supabase.storage.from('rh-documentos').download(path)
+      if (!dlErr && dlData) {
+        blob = dlData
+      } else {
+        const { data: signed } = await supabase.storage.from('rh-documentos').createSignedUrl(path, 3600)
+        if (signed?.signedUrl) {
+          const resp = await fetch(signed.signedUrl)
+          if (resp.ok) blob = await resp.blob()
+        }
+      }
+    }
+
+    if (!blob) {
+      return toast('Não foi possível baixar o arquivo.', 'error')
+    }
+
+    const pathFileName = path.split('/').pop() || ''
+    const extMatchPath = pathFileName.match(/\.[a-zA-Z0-9]{2,5}$/)
+    const extMatchNome = nomeDoc.match(/\.[a-zA-Z0-9]{2,5}$/)
+    let ext = extMatchNome ? '' : (extMatchPath ? extMatchPath[0].toLowerCase() : '')
+    if (!ext && !extMatchNome) {
+      if (blob.type.includes('pdf')) ext = '.pdf'
+      else if (blob.type.includes('png')) ext = '.png'
+      else if (blob.type.includes('jpeg') || blob.type.includes('jpg')) ext = '.jpg'
+    }
+
+    const safeFileName = nomeDoc.replace(/[\\/:*?"<>|]/g, '_') + ext
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = safeFileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 5000)
+    toast(`Download iniciado: ${safeFileName}`, 'success')
+  } catch {
+    toast('Erro ao baixar documento.', 'error')
+  }
+}
+
 async function baixarTodosDocumentosZip(params: {
   nomeColaborador: string
   resumoTexto: string
   documentos: Array<Record<string, any>>
 }) {
+  await ensurePortalSession()
   const { nomeColaborador, resumoTexto, documentos } = params
   const docsValidos = (documentos || []).filter(d => {
     const rawPath = d.storage_path || d.arquivo_url || ''
@@ -366,7 +449,7 @@ async function baixarTodosDocumentosZip(params: {
     if (rawPath === 'salario-registro-confidencial' || rawPath === 'dados-bancarios-inline') return false
     if (rawPath.startsWith('salarios/') || rawPath.startsWith('status-apto/')) return false
     if (d.status === 'aguardando_upload') return false
-    if ((d.nome || '').startsWith('Dados Bancários:') || (d.nome || '').startsWith('Chave PIX:')) return false
+    if ((d.nome || '').startsWith('Dados Bancários:') || (d.nome || '').startsWith('Chave PIX:') || (d.nome || '').includes('declarou que não possui VEM') || (d.nome || '').includes('Solicitação de 1ª via do cartão VEM')) return false
     return true
   })
 
@@ -1105,31 +1188,82 @@ function ArchivePanel({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 4, maxHeight: 180, overflowY: 'auto' }}>
                 {docs.length > 0 ? (
                   docs.map(doc => (
-                    <button
+                    <div
                       key={doc.id}
-                      onClick={() => onOpen(doc)}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
+                        gap: 4,
                         width: '100%',
-                        textAlign: 'left',
                         border: `1px solid ${C.border}`,
                         borderRadius: 4,
-                        padding: '6px 8px',
+                        padding: '5px 7px',
                         background: C.bgPanel,
-                        color: C.ink,
-                        fontSize: 10,
-                        cursor: 'pointer',
-                        transition: 'border-color 0.15s ease'
                       }}
-                      className="hover:border-amber-500"
                     >
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '80%' }}>
-                        📄 {doc.nome || 'Documento'}
-                      </span>
-                      <ExternalLink size={11} color={C.amber} />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => onOpen(doc)}
+                        title="Abrir documento em nova guia"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          flex: 1,
+                          minWidth: 0,
+                          textAlign: 'left',
+                          border: 'none',
+                          background: 'transparent',
+                          color: C.ink,
+                          fontSize: 10,
+                          cursor: 'pointer',
+                          padding: 0
+                        }}
+                      >
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          📄 {doc.nome || 'Documento'}
+                        </span>
+                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <button
+                          type="button"
+                          onClick={() => void baixarDocumentoIndividual(doc)}
+                          title="Baixar este documento direto no computador"
+                          style={{
+                            border: '1px solid rgba(16, 185, 129, 0.35)',
+                            background: 'rgba(16, 185, 129, 0.12)',
+                            color: '#10B981',
+                            borderRadius: 3,
+                            padding: '2px 5px',
+                            fontSize: 9,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 2
+                          }}
+                        >
+                          <Download size={10} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onOpen(doc)}
+                          title="Visualizar em nova guia"
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            color: C.amber,
+                            padding: 2,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <ExternalLink size={11} color={C.amber} />
+                        </button>
+                      </div>
+                    </div>
                   ))
                 ) : (
                   <p style={{ color: C.inkSoft, fontSize: 10, fontStyle: 'italic', margin: '4px 0' }}>
@@ -3530,6 +3664,10 @@ export default function RhPage() {
     if ((documento as any).status === 'aguardando_upload') {
       return toast('O arquivo ainda não foi enviado pelo candidato.', 'warning')
     }
+    const nomeDoc = String(documento.nome || '').trim()
+    if (nomeDoc.startsWith('Dados Bancários:') || nomeDoc.startsWith('Chave PIX:') || nomeDoc.includes('declarou que não possui VEM') || nomeDoc.includes('Solicitação de 1ª via do cartão VEM')) {
+      return toast(nomeDoc, 'info')
+    }
 
     if (path.startsWith('http://') || path.startsWith('https://')) {
       window.open(path, '_blank')
@@ -3541,17 +3679,21 @@ export default function RhPage() {
       w = window.open('', '_blank')
     } catch {}
 
+    await ensurePortalSession()
+
     const { data, error } = await supabase.storage.from('rh-documentos').createSignedUrl(path, 3600)
     if (error || !data?.signedUrl) {
       if (w && !w.closed) w.close()
       console.warn('Erro ao abrir documento:', error, 'Path:', path)
-      return toast('Não foi possível abrir o documento.', 'error')
+      await baixarDocumentoIndividual(documento as any)
+      return
     }
     if (w && !w.closed) {
       w.location.href = data.signedUrl
       w.focus()
     } else {
-      window.open(data.signedUrl, '_blank')
+      // Caso o bloqueador de pop-ups impeça a nova guia, baixa o arquivo diretamente
+      await baixarDocumentoIndividual(documento as any)
     }
   }
 
