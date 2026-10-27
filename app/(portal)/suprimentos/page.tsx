@@ -74,6 +74,10 @@ export interface SuprimentoItem {
   historico_atividades?: any[]
   anexos?: any[]
   data_previsao_entrega?: string | null
+  condicao_pagamento?: string | null
+  forma_pagamento?: string | null
+  tipo_frete?: string | null
+  observacoes_oc?: string | null
 }
 
 export interface ObraItem {
@@ -237,7 +241,11 @@ export default function SuprimentosPage() {
     responsavel_nome: '',
     proximo_responsavel_id: '',
     proximo_responsavel_nome: '',
-    status: 'Solicitado' as SuprimentoItem['status']
+    status: 'Solicitado' as SuprimentoItem['status'],
+    condicao_pagamento: '',
+    forma_pagamento: '',
+    tipo_frete: '',
+    observacoes_oc: ''
   })
   const [salvandoNovo, setSalvandoNovo] = useState(false)
 
@@ -278,6 +286,9 @@ export default function SuprimentosPage() {
     valor_final: '',
     data_vencimento: '',
     condicao_pagamento: '28 dias',
+    forma_pagamento: '',
+    tipo_frete: 'CIF (Entrega na Obra)',
+    observacoes_oc: '',
     anexo_file: null as File | null,
     anexo_url: '',
     lancar_financeiro: true,
@@ -540,7 +551,11 @@ export default function SuprimentosPage() {
         itens_checklist: checklistInicial,
         historico_atividades: historicoInicial,
         chat_mensagens: [],
-        anexos: []
+        anexos: [],
+        condicao_pagamento: novoForm.condicao_pagamento.trim() || null,
+        forma_pagamento: novoForm.forma_pagamento.trim() || null,
+        tipo_frete: novoForm.tipo_frete.trim() || null,
+        observacoes_oc: novoForm.observacoes_oc.trim() || null
       }).select().single()
 
       if (error) throw error
@@ -589,7 +604,11 @@ export default function SuprimentosPage() {
         responsavel_nome: '',
         proximo_responsavel_id: '',
         proximo_responsavel_nome: '',
-        status: 'Solicitado'
+        status: 'Solicitado',
+        condicao_pagamento: '',
+        forma_pagamento: '',
+        tipo_frete: '',
+        observacoes_oc: ''
       })
       await loadData(true)
     } catch (err: any) {
@@ -721,7 +740,10 @@ export default function SuprimentosPage() {
     fornId?: string,
     valorStr?: string,
     vencimentoStr?: string,
-    condicaoStr?: string
+    condicaoStr?: string,
+    formaPagStr?: string,
+    freteStr?: string,
+    obsOcStr?: string
   ) {
     const ocCodigo = item.codigo || `OC-${item.id.slice(0, 6).toUpperCase()}`
     const obra = obras.find(o => o.id === item.obra_id)
@@ -750,7 +772,10 @@ export default function SuprimentosPage() {
 
     const vencData = vencimentoStr || item.data_vencimento
     const vencFormatado = vencData ? new Date(vencData + 'T00:00:00').toLocaleDateString('pt-BR') : 'A combinar'
-    const condicao = condicaoStr || 'Conforme negociado'
+    const condicao = condicaoStr || item.condicao_pagamento || 'Conforme negociado'
+    const formaPag = formaPagStr || item.forma_pagamento || ''
+    const frete = freteStr || item.tipo_frete || ''
+    const obsOc = obsOcStr || item.observacoes_oc || ''
 
     return [
       `✅ *ORDEM DE COMPRA OFICIAL — ${ocCodigo}*`,
@@ -763,7 +788,10 @@ export default function SuprimentosPage() {
       ``,
       `💰 *Valor Total Aprovado:* ${valFormatado}`,
       `💳 *Condição de Pagamento:* ${condicao}`,
+      ...(formaPag ? [`🏦 *Forma de Pagamento:* ${formaPag}`] : []),
+      ...(frete ? [`🚚 *Frete / Entrega:* ${frete}`] : []),
       `📅 *Previsão / Vencimento:* ${vencFormatado}`,
+      ...(obsOc ? [`📋 *Observações / Acordo:* ${obsOc}`] : []),
       `👤 *Aprovado por:* ${colaboradorAtivo?.nome || 'Diretoria / Suprimentos'}`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
       `Favor confirmar o recebimento desta Ordem de Compra e a previsão de entrega no canteiro.`
@@ -779,11 +807,21 @@ export default function SuprimentosPage() {
       (f.razao_social && f.razao_social.toLowerCase() === item.fornecedor?.toLowerCase())
     )
 
+    const contaVinc = contasVinculadas[item.id]
+    const condicaoSalvaConta = (() => {
+      if (!contaVinc?.observacoes) return ''
+      const m = contaVinc.observacoes.match(/Condi[çc][ãa]o:\s*([^\n|]+)/i)
+      return m && m[1] ? m[1].trim() : ''
+    })()
+
     setAprovForm({
       fornecedor_id: matchForn?.id || '',
       valor_final: item.valor ? String(item.valor) : '',
       data_vencimento: item.data_vencimento || new Date(Date.now() + 28 * 86400000).toISOString().split('T')[0],
-      condicao_pagamento: matchForn?.prazo_pagamento ? `${matchForn.prazo_pagamento} dias` : '28 dias',
+      condicao_pagamento: item.condicao_pagamento || condicaoSalvaConta || (matchForn?.prazo_pagamento ? `${matchForn.prazo_pagamento} dias` : '28 dias'),
+      forma_pagamento: item.forma_pagamento || (matchForn?.pix ? 'PIX' : 'Boleto Faturado'),
+      tipo_frete: item.tipo_frete || 'CIF (Entrega na Obra)',
+      observacoes_oc: item.observacoes_oc || '',
       anexo_file: null,
       anexo_url: '',
       lancar_financeiro: forcarLancamentoFinanceiro,
@@ -822,7 +860,10 @@ export default function SuprimentosPage() {
         aprovForm.fornecedor_id,
         aprovForm.valor_final,
         aprovForm.data_vencimento,
-        aprovForm.condicao_pagamento
+        aprovForm.condicao_pagamento,
+        aprovForm.forma_pagamento,
+        aprovForm.tipo_frete,
+        aprovForm.observacoes_oc
       )
       if (aprovForm.copiar_oc_ao_aprovar && typeof navigator !== 'undefined' && navigator.clipboard) {
         try {
@@ -873,7 +914,7 @@ export default function SuprimentosPage() {
 
       // 2. Criar Lançamento na tabela 'contas' se lancar_financeiro === true
       if (aprovForm.lancar_financeiro) {
-        const observacaoTexto = `Suprimentos ID: ${itemSelecionado.id} | Solicitante: ${itemSelecionado.solicitante || 'Canteiro'} | Prioridade: ${itemSelecionado.prioridade.toUpperCase()} | Condição: ${aprovForm.condicao_pagamento}`
+        const observacaoTexto = `Suprimentos ID: ${itemSelecionado.id} | Solicitante: ${itemSelecionado.solicitante || 'Canteiro'} | Prioridade: ${itemSelecionado.prioridade.toUpperCase()} | Condição: ${aprovForm.condicao_pagamento}${aprovForm.forma_pagamento ? ' | Forma: ' + aprovForm.forma_pagamento : ''}${aprovForm.tipo_frete ? ' | Frete: ' + aprovForm.tipo_frete : ''}${aprovForm.observacoes_oc ? ' | Obs OC: ' + aprovForm.observacoes_oc : ''}`
         const descricaoTexto = `[OC-${itemSelecionado.id.slice(0, 6).toUpperCase()}] ${itemSelecionado.titulo} (${itemSelecionado.quantidade || ''} ${itemSelecionado.unidade || ''}) - Obra: ${nomeObra}`
 
         const historicoInicial = [{
@@ -929,6 +970,10 @@ export default function SuprimentosPage() {
         fornecedor: fornNome !== 'Compra Direta / A definir' ? fornNome : itemSelecionado.fornecedor,
         valor: valorNum > 0 ? valorNum : itemSelecionado.valor,
         data_vencimento: aprovForm.data_vencimento || itemSelecionado.data_vencimento,
+        condicao_pagamento: aprovForm.condicao_pagamento.trim() || itemSelecionado.condicao_pagamento || null,
+        forma_pagamento: aprovForm.forma_pagamento.trim() || itemSelecionado.forma_pagamento || null,
+        tipo_frete: aprovForm.tipo_frete.trim() || itemSelecionado.tipo_frete || null,
+        observacoes_oc: aprovForm.observacoes_oc.trim() || itemSelecionado.observacoes_oc || null,
         historico_atividades: novoHistoricoAprov
       }).eq('id', itemSelecionado.id)
 
@@ -1959,7 +2004,7 @@ export default function SuprimentosPage() {
                             </div>
                           </div>
 
-                          {/* Fornecedor & Valor */}
+                          {/* Fornecedor, Valor & Condições de Compra */}
                           <div style={{ fontSize: 11, background: C.bgWhite, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px', display: 'flex', flexDirection: 'column', gap: 3 }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                               <span style={{ color: C.inkSoft }}>Fornecedor:</span>
@@ -1973,6 +2018,28 @@ export default function SuprimentosPage() {
                                 {item.valor ? `R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'Em cotação'}
                               </strong>
                             </div>
+                            {(() => {
+                              const condConta = contaVinculada?.observacoes?.match(/Condi[çc][ãa]o:\s*([^\n|]+)/i)?.[1]?.trim() || ''
+                              const condCard = item.condicao_pagamento || condConta
+                              if (!condCard && !item.forma_pagamento && !item.tipo_frete && !item.observacoes_oc) return null
+                              return (
+                                <div style={{ borderTop: `1px dashed ${C.border}`, paddingTop: 4, marginTop: 2, fontSize: 10, color: C.ink, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                  {(condCard || item.forma_pagamento || item.tipo_frete) && (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+                                      <span style={{ color: C.amber, fontWeight: 800, fontSize: 9.5 }}>💳 Condição:</span>
+                                      <span style={{ fontWeight: 700, textAlign: 'right', color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 165 }} title={[condCard, item.forma_pagamento, item.tipo_frete].filter(Boolean).join(' · ')}>
+                                        {[condCard, item.forma_pagamento, item.tipo_frete].filter(Boolean).join(' · ')}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {item.observacoes_oc && (
+                                    <div style={{ fontSize: 9.5, color: C.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.observacoes_oc}>
+                                      📋 {item.observacoes_oc}
+                                    </div>
+                                  )}
+                                </div>
+                              )
+                            })()}
                           </div>
 
                           {/* BADGES SÍNCRONOS DA INTEGRAÇÃO */}
@@ -2759,6 +2826,61 @@ export default function SuprimentosPage() {
                 </div>
               </div>
 
+              {/* 7. Condições de Compra & Observações para a OC (Opcional) */}
+              <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <span style={{ fontSize: 10, fontWeight: 900, color: C.amber, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                  💳 Condições de Compra & Ordem de Compra (Opcional)
+                </span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: 8 }}>
+                  <div>
+                    <span style={labelStyle}>Condição / Prazo</span>
+                    <input
+                      style={inputStyle}
+                      placeholder="Ex: 28 dias, 50% sinal..."
+                      value={novoForm.condicao_pagamento}
+                      onChange={e => setNovoForm({ ...novoForm, condicao_pagamento: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <span style={labelStyle}>Forma de Pagamento</span>
+                    <select
+                      style={inputStyle}
+                      value={novoForm.forma_pagamento}
+                      onChange={e => setNovoForm({ ...novoForm, forma_pagamento: e.target.value })}
+                    >
+                      <option value="">A definir</option>
+                      <option value="Boleto Faturado">Boleto Faturado</option>
+                      <option value="PIX">PIX</option>
+                      <option value="Transferência / TED">Transferência / TED</option>
+                      <option value="Cartão Corporativo">Cartão Corporativo</option>
+                      <option value="Dinheiro / Espécie">Dinheiro / Espécie</option>
+                    </select>
+                  </div>
+                  <div>
+                    <span style={labelStyle}>Frete</span>
+                    <select
+                      style={inputStyle}
+                      value={novoForm.tipo_frete}
+                      onChange={e => setNovoForm({ ...novoForm, tipo_frete: e.target.value })}
+                    >
+                      <option value="">A combinar</option>
+                      <option value="CIF (Entrega na Obra)">CIF (Entrega na Obra)</option>
+                      <option value="FOB (Retira / Obra paga)">FOB (Retira / Obra paga)</option>
+                      <option value="Incluso no Valor">Incluso no Valor</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <span style={labelStyle}>Observações / Condições Comerciais para a OC</span>
+                  <input
+                    style={inputStyle}
+                    placeholder="Ex: Entregar c/ NF; Faturar p/ CNPJ Matriz; Negociado com vendedor João..."
+                    value={novoForm.observacoes_oc}
+                    onChange={e => setNovoForm({ ...novoForm, observacoes_oc: e.target.value })}
+                  />
+                </div>
+              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
                 <button
                   type="button"
@@ -2935,14 +3057,60 @@ export default function SuprimentosPage() {
                 </div>
               </div>
 
-              <div>
-                <span style={labelStyle}>Condição de Pagamento Acordada</span>
-                <input
-                  style={inputStyle}
-                  placeholder="Ex: 28 dias após entrega, 30/60 dias, À vista no PIX..."
-                  value={aprovForm.condicao_pagamento}
-                  onChange={e => setAprovForm({ ...aprovForm, condicao_pagamento: e.target.value })}
-                />
+              {/* Bloco Completo de Condições Comerciais da Compra (Salvo no Card e Impresso na OC) */}
+              <div style={{ background: C.bgCard, border: `1px solid ${C.amber}44`, borderRadius: 6, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 900, color: C.amber, textTransform: 'uppercase' }}>
+                  💳 Condições de Compra (Ficam gravadas no Cartão e saem na OC)
+                </span>
+                <div>
+                  <span style={labelStyle}>Condição / Prazo de Pagamento Acordado *</span>
+                  <input
+                    style={inputStyle}
+                    placeholder="Ex: 28 dias após entrega, 25% sinal + 50% instalação + 25% 30dd, À vista..."
+                    value={aprovForm.condicao_pagamento}
+                    onChange={e => setAprovForm({ ...aprovForm, condicao_pagamento: e.target.value })}
+                  />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <span style={labelStyle}>Forma de Pagamento</span>
+                    <select
+                      style={inputStyle}
+                      value={aprovForm.forma_pagamento}
+                      onChange={e => setAprovForm({ ...aprovForm, forma_pagamento: e.target.value })}
+                    >
+                      <option value="">A definir</option>
+                      <option value="Boleto Faturado">Boleto Faturado</option>
+                      <option value="PIX">PIX</option>
+                      <option value="Transferência / TED">Transferência / TED</option>
+                      <option value="Cartão Corporativo">Cartão Corporativo</option>
+                      <option value="Dinheiro / Espécie">Dinheiro / Espécie</option>
+                      <option value="Depósito Bancário">Depósito Bancário</option>
+                    </select>
+                  </div>
+                  <div>
+                    <span style={labelStyle}>Modalidade de Frete</span>
+                    <select
+                      style={inputStyle}
+                      value={aprovForm.tipo_frete}
+                      onChange={e => setAprovForm({ ...aprovForm, tipo_frete: e.target.value })}
+                    >
+                      <option value="CIF (Entrega na Obra)">CIF (Entrega na Obra pelo Fornecedor)</option>
+                      <option value="FOB (Retira / Obra paga)">FOB (Retira / Frete por conta da Obra)</option>
+                      <option value="Incluso no Valor">Incluso no Valor</option>
+                      <option value="A combinar">A combinar</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <span style={labelStyle}>Observações / Condições Especiais na Ordem de Compra (OC)</span>
+                  <input
+                    style={inputStyle}
+                    placeholder="Ex: Dados de faturamento, desconto acordado, contato para entrega no canteiro..."
+                    value={aprovForm.observacoes_oc}
+                    onChange={e => setAprovForm({ ...aprovForm, observacoes_oc: e.target.value })}
+                  />
+                </div>
               </div>
 
               {/* Bloco de Envio da Ordem de Compra (OC) antes/junto do Financeiro */}

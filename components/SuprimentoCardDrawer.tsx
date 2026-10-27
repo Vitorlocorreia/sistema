@@ -141,7 +141,11 @@ export function SuprimentoCardDrawer({
     unidade: 'un',
     prioridade: 'media',
     data_previsao_entrega: '',
-    data_vencimento: ''
+    data_vencimento: '',
+    condicao_pagamento: '',
+    forma_pagamento: '',
+    tipo_frete: '',
+    observacoes_oc: ''
   })
 
   // Estados de edição inline
@@ -160,6 +164,10 @@ export function SuprimentoCardDrawer({
   const [novoFornecedor, setNovoFornecedor] = useState('')
   const [editandoObraManual, setEditandoObraManual] = useState(false)
   const [novaObraManual, setNovaObraManual] = useState('')
+  const [editandoCondicao, setEditandoCondicao] = useState(false)
+  const [novaCondicao, setNovaCondicao] = useState('')
+  const [editandoObsOC, setEditandoObsOC] = useState(false)
+  const [novaObsOC, setNovaObsOC] = useState('')
   const [salvando, setSalvando] = useState(false)
 
   // Chat
@@ -204,6 +212,10 @@ export function SuprimentoCardDrawer({
       setEditandoFornecedor(false)
       setNovaObraManual(item.obra_nome_manual || '')
       setEditandoObraManual(false)
+      setNovaCondicao(item.condicao_pagamento || '')
+      setEditandoCondicao(false)
+      setNovaObsOC(item.observacoes_oc || '')
+      setEditandoObsOC(false)
       setEditandoChecklistId(null)
 
       setFormEdicao({
@@ -224,7 +236,11 @@ export function SuprimentoCardDrawer({
         unidade: item.unidade || 'un',
         prioridade: item.prioridade || 'media',
         data_previsao_entrega: item.data_previsao_entrega || '',
-        data_vencimento: item.data_vencimento || ''
+        data_vencimento: item.data_vencimento || '',
+        condicao_pagamento: item.condicao_pagamento || '',
+        forma_pagamento: item.forma_pagamento || '',
+        tipo_frete: item.tipo_frete || '',
+        observacoes_oc: item.observacoes_oc || ''
       })
     }
   }, [item])
@@ -673,6 +689,30 @@ export function SuprimentoCardDrawer({
         mudancas.push(`Vencimento: "${item.data_vencimento || 'Não definido'}" ➔ "${limpoVencimento || 'Não definido'}"`)
       }
 
+      // 14. Condição de Pagamento
+      const limpaCondicao = formEdicao.condicao_pagamento.trim() || null
+      if (limpaCondicao !== (item.condicao_pagamento || null)) {
+        mudancas.push(`Condição de Pagamento: "${item.condicao_pagamento || 'Não informada'}" ➔ "${limpaCondicao || 'Não informada'}"`)
+      }
+
+      // 15. Forma de Pagamento
+      const limpaForma = formEdicao.forma_pagamento.trim() || null
+      if (limpaForma !== (item.forma_pagamento || null)) {
+        mudancas.push(`Forma de Pagamento: "${item.forma_pagamento || 'Não informada'}" ➔ "${limpaForma || 'Não informada'}"`)
+      }
+
+      // 16. Tipo de Frete
+      const limpoFrete = formEdicao.tipo_frete.trim() || null
+      if (limpoFrete !== (item.tipo_frete || null)) {
+        mudancas.push(`Frete: "${item.tipo_frete || 'Não informado'}" ➔ "${limpoFrete || 'Não informado'}"`)
+      }
+
+      // 17. Observações / Condições na OC
+      const limpaObsOC = formEdicao.observacoes_oc.trim() || null
+      if (limpaObsOC !== (item.observacoes_oc || null)) {
+        mudancas.push(`Observações da OC: "${item.observacoes_oc || 'Vazio'}" ➔ "${limpaObsOC || 'Vazio'}"`)
+      }
+
       if (mudancas.length === 0) {
         setModoEdicaoCompleta(false)
         toast('Nenhuma alteração detectada.', 'info')
@@ -697,7 +737,11 @@ export function SuprimentoCardDrawer({
         unidade: limpoUn,
         prioridade: formEdicao.prioridade,
         data_previsao_entrega: limpaPrevisao,
-        data_vencimento: limpoVencimento
+        data_vencimento: limpoVencimento,
+        condicao_pagamento: limpaCondicao,
+        forma_pagamento: limpaForma,
+        tipo_frete: limpoFrete,
+        observacoes_oc: limpaObsOC
       }
 
       const ok = await registrarMexida('edicao_geral_ficha', detalheAuditoria, undefined, undefined, updatePayload)
@@ -894,6 +938,14 @@ export function SuprimentoCardDrawer({
     }
   }
 
+  // Helper para extrair condição de pagamento efetiva (do card ou da conta vinculada)
+  const condicaoExtraidaDaConta = (() => {
+    if (!contaVinculada?.observacoes) return ''
+    const m = contaVinculada.observacoes.match(/Condi[çc][ãa]o:\s*([^\n|]+)/i)
+    return m && m[1] ? m[1].trim() : ''
+  })()
+  const condicaoCompraEfetiva = item.condicao_pagamento || condicaoExtraidaDaConta || ''
+
   // 5.3 EXPORTAÇÃO: FORMATAR E COPIAR ORDEM DE COMPRA PARA WHATSAPP
   function handleCopiarOCWhatsApp() {
     const numOC = item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())
@@ -907,7 +959,11 @@ export function SuprimentoCardDrawer({
     texto += `Obra / Destino: ${obraNomeFinal}\n`
     if (item.fornecedor) texto += `Fornecedor: ${item.fornecedor}\n`
     texto += `Previsao de Entrega: ${previsao}\n`
-    texto += `Condicao / Vencimento: ${vencimento}\n`
+    texto += `Condicao de Pagamento: ${condicaoCompraEfetiva || 'Conforme negociado'}\n`
+    if (item.forma_pagamento) texto += `Forma de Pagamento: ${item.forma_pagamento}\n`
+    if (item.tipo_frete) texto += `Frete / Entrega: ${item.tipo_frete}\n`
+    texto += `Vencimento Previsto: ${vencimento}\n`
+    if (item.observacoes_oc) texto += `Observacoes da Compra: ${item.observacoes_oc}\n`
     if (item.solicitante) texto += `Solicitante: ${item.solicitante}\n`
     if (item.responsavel_nome) texto += `Responsavel: ${item.responsavel_nome}\n`
     texto += `\n*ITENS SOLICITADOS:*\n`
@@ -1576,6 +1632,65 @@ export function SuprimentoCardDrawer({
                     style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 11, padding: '6px 8px', borderRadius: 4, outline: 'none' }}
                   />
                 </div>
+
+                {/* Condição de Pagamento / Compra */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ fontSize: 9.5, fontWeight: 800, color: C.amber, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>
+                    💳 Condição de Pagamento / Prazo Acordado (Sai na OC)
+                  </label>
+                  <input
+                    value={formEdicao.condicao_pagamento}
+                    onChange={e => setFormEdicao(prev => ({ ...prev, condicao_pagamento: e.target.value }))}
+                    placeholder="Ex: 28 dias, 50% sinal + 50% na entrega, 30/60/90 dias, À vista..."
+                    style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.amber}66`, color: C.ink, fontSize: 11.5, fontWeight: 700, padding: '6px 8px', borderRadius: 4, outline: 'none' }}
+                  />
+                </div>
+
+                {/* Forma de Pagamento & Frete */}
+                <div>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Forma de Pagamento</label>
+                  <select
+                    value={formEdicao.forma_pagamento}
+                    onChange={e => setFormEdicao(prev => ({ ...prev, forma_pagamento: e.target.value }))}
+                    style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 11.5, padding: '6px 8px', borderRadius: 4, outline: 'none' }}
+                  >
+                    <option value="">A definir</option>
+                    <option value="Boleto Faturado">Boleto Faturado</option>
+                    <option value="PIX">PIX</option>
+                    <option value="Transferência / TED">Transferência / TED</option>
+                    <option value="Cartão Corporativo">Cartão Corporativo</option>
+                    <option value="Dinheiro / Espécie">Dinheiro / Espécie</option>
+                    <option value="Depósito Bancário">Depósito Bancário</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Modalidade de Frete</label>
+                  <select
+                    value={formEdicao.tipo_frete}
+                    onChange={e => setFormEdicao(prev => ({ ...prev, tipo_frete: e.target.value }))}
+                    style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 11.5, padding: '6px 8px', borderRadius: 4, outline: 'none' }}
+                  >
+                    <option value="">A combinar</option>
+                    <option value="CIF (Entrega na Obra pelo Fornecedor)">CIF (Entrega na Obra pelo Fornecedor)</option>
+                    <option value="FOB (Retira / Frete por conta da Obra)">FOB (Retira / Frete por conta da Obra)</option>
+                    <option value="Incluso no Valor">Incluso no Valor</option>
+                    <option value="Sem Frete">Sem Frete</option>
+                  </select>
+                </div>
+
+                {/* Observações / Condições Especiais para a OC */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>
+                    Observações / Condições Comerciais Específicas (Impresso na OC)
+                  </label>
+                  <input
+                    value={formEdicao.observacoes_oc}
+                    onChange={e => setFormEdicao(prev => ({ ...prev, observacoes_oc: e.target.value }))}
+                    placeholder="Ex: Entregar aos cuidados do Eng. Felipe; Faturar para CNPJ da Matriz; Desconto de 5% negociado..."
+                    style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 11.5, padding: '6px 8px', borderRadius: 4, outline: 'none' }}
+                  />
+                </div>
               </div>
 
               {/* Botões do Formulário Completo */}
@@ -2034,6 +2149,151 @@ export function SuprimentoCardDrawer({
                     style={{ width: '100%', background: 'transparent', border: 'none', color: C.ink, fontSize: 10.5, outline: 'none', cursor: 'pointer', padding: 0 }}
                   />
                 </div>
+
+                {/* 9. Condição de Pagamento / Compra */}
+                <div style={{ background: C.bgPanel, border: `1px solid ${condicaoCompraEfetiva ? 'rgba(245, 158, 11, 0.35)' : C.border}`, borderRadius: 4, padding: '6px 8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                    <span style={{ fontSize: 9, color: C.amber, textTransform: 'uppercase', fontWeight: 800 }}>Condição Pagto</span>
+                    <button
+                      type="button"
+                      onClick={() => { setNovaCondicao(condicaoCompraEfetiva); setEditandoCondicao(!editandoCondicao); }}
+                      title="Editar condição de pagamento"
+                      style={{ border: 'none', background: 'transparent', color: C.inkSoft, cursor: 'pointer', padding: 0 }}
+                    >
+                      <Edit2 size={9} />
+                    </button>
+                  </div>
+                  {editandoCondicao ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <input
+                        value={novaCondicao}
+                        onChange={e => setNovaCondicao(e.target.value)}
+                        placeholder="Ex: 28 dias, PIX..."
+                        autoFocus
+                        style={{ width: '100%', background: C.bgWhite, border: `1px solid ${C.amber}`, color: C.ink, fontSize: 10.5, padding: '2px 4px', borderRadius: 3 }}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            handleAtualizarPropriedade('condicao_pagamento', novaCondicao.trim() || null, 'Condição de Pagamento')
+                            setEditandoCondicao(false)
+                          }
+                          if (e.key === 'Escape') setEditandoCondicao(false)
+                        }}
+                      />
+                      <button
+                        onClick={() => {
+                          handleAtualizarPropriedade('condicao_pagamento', novaCondicao.trim() || null, 'Condição de Pagamento')
+                          setEditandoCondicao(false)
+                        }}
+                        style={{ background: C.amber, border: 'none', borderRadius: 3, padding: '2px 4px', cursor: 'pointer' }}
+                      >
+                        <Check size={10} color="#000" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      onClick={() => { setNovaCondicao(condicaoCompraEfetiva); setEditandoCondicao(true); }}
+                      style={{ color: condicaoCompraEfetiva ? C.ink : C.inkSoft, fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}
+                      title={condicaoCompraEfetiva || 'Clique para informar a condição de pagamento (Ex: 28 dias, Sinal + 30dd)'}
+                    >
+                      💳 {condicaoCompraEfetiva || 'Clique p/ definir'}
+                    </div>
+                  )}
+                </div>
+
+                {/* 10. Forma de Pagamento */}
+                <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px' }}>
+                  <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: 2 }}>Forma Pagto</span>
+                  <select
+                    value={item.forma_pagamento || ''}
+                    onChange={e => handleAtualizarPropriedade('forma_pagamento', e.target.value || null, 'Forma de Pagamento')}
+                    style={{ width: '100%', background: 'transparent', border: 'none', color: item.forma_pagamento ? C.ink : C.inkSoft, fontSize: 10.5, fontWeight: 700, outline: 'none', cursor: 'pointer', padding: 0 }}
+                  >
+                    <option value="">A definir</option>
+                    <option value="Boleto Faturado">Boleto Faturado</option>
+                    <option value="PIX">PIX</option>
+                    <option value="Transferência / TED">Transferência / TED</option>
+                    <option value="Cartão Corporativo">Cartão Corporativo</option>
+                    <option value="Dinheiro / Espécie">Dinheiro / Espécie</option>
+                    <option value="Depósito Bancário">Depósito Bancário</option>
+                  </select>
+                </div>
+
+                {/* 11. Modalidade de Frete */}
+                <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px' }}>
+                  <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: 2 }}>Frete / Entrega</span>
+                  <select
+                    value={item.tipo_frete || ''}
+                    onChange={e => handleAtualizarPropriedade('tipo_frete', e.target.value || null, 'Modalidade de Frete')}
+                    style={{ width: '100%', background: 'transparent', border: 'none', color: item.tipo_frete ? C.ink : C.inkSoft, fontSize: 10.5, fontWeight: 700, outline: 'none', cursor: 'pointer', padding: 0 }}
+                  >
+                    <option value="">A combinar</option>
+                    <option value="CIF (Entrega na Obra)">CIF (Entrega na Obra)</option>
+                    <option value="FOB (Retira / Obra paga)">FOB (Retira / Obra paga)</option>
+                    <option value="Incluso no Valor">Incluso no Valor</option>
+                    <option value="Sem Frete">Sem Frete</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Barra Rápida de Condições Comerciais / Observações que saem na OC */}
+              <div style={{
+                background: C.bgPanel,
+                border: `1px solid ${item.observacoes_oc || condicaoCompraEfetiva ? 'rgba(245, 158, 11, 0.3)' : C.border}`,
+                borderRadius: 5,
+                padding: '6px 10px',
+                fontSize: 11
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, color: C.amber, textTransform: 'uppercase' }}>
+                    📋 Condições de Compra / Observações p/ Ordem de Compra (OC):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => { setNovaObsOC(item.observacoes_oc || ''); setEditandoObsOC(!editandoObsOC); }}
+                    style={{ border: 'none', background: 'transparent', color: C.amber, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                  >
+                    <Edit2 size={10} /> {editandoObsOC ? 'Fechar' : 'Editar Condições OC'}
+                  </button>
+                </div>
+                {editandoObsOC ? (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                    <input
+                      value={novaObsOC}
+                      onChange={e => setNovaObsOC(e.target.value)}
+                      placeholder="Ex: 25% sinal + 50% entrega + 25% 30 dias; Faturar p/ CNPJ Matriz; Entregar c/ NF..."
+                      autoFocus
+                      style={{ flex: 1, background: C.bgWhite, border: `1px solid ${C.amber}`, color: C.ink, fontSize: 11, padding: '4px 8px', borderRadius: 4, outline: 'none' }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          handleAtualizarPropriedade('observacoes_oc', novaObsOC.trim() || null, 'Condições / Observações da OC')
+                          setEditandoObsOC(false)
+                        }
+                        if (e.key === 'Escape') setEditandoObsOC(false)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleAtualizarPropriedade('observacoes_oc', novaObsOC.trim() || null, 'Condições / Observações da OC')
+                        setEditandoObsOC(false)
+                      }}
+                      style={{ background: C.amber, color: '#0A0A0A', border: 'none', borderRadius: 4, padding: '4px 10px', fontSize: 10.5, fontWeight: 900, cursor: 'pointer' }}
+                    >
+                      Salvar
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => { setNovaObsOC(item.observacoes_oc || ''); setEditandoObsOC(true); }}
+                    style={{ marginTop: 2, color: item.observacoes_oc ? C.ink : C.inkSoft, fontSize: 11, cursor: 'pointer' }}
+                  >
+                    {item.observacoes_oc
+                      ? item.observacoes_oc
+                      : condicaoCompraEfetiva
+                        ? `Condição: ${condicaoCompraEfetiva}${item.forma_pagamento ? ' · Forma: ' + item.forma_pagamento : ''}${item.tipo_frete ? ' · Frete: ' + item.tipo_frete : ''} (Clique para detalhar observações da OC)`
+                        : 'Clique para adicionar condições comerciais, parcelamento, dados de faturamento ou instruções para a Ordem de Compra...'}
+                  </div>
+                )}
               </div>
 
               {/* Alerta e Sincronização de Valor com Financeiro */}
@@ -3069,13 +3329,40 @@ export function SuprimentoCardDrawer({
             </div>
 
             {/* Total Financeiro Sempre Visível */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 6, padding: '10px 14px', marginBottom: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
               <span style={{ fontSize: 12, fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>Valor Total da Ordem de Compra:</span>
               <span style={{ fontSize: 15, fontWeight: 900, color: '#047857', fontFamily: 'monospace' }}>
                 {item.valor
                   ? `R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                   : 'Em cotação / A definir'}
               </span>
+            </div>
+
+            {/* Quadro Oficial de Condições de Compra e Pagamento na OC */}
+            <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: 6, padding: '10px 14px', marginBottom: 14, color: '#111827' }}>
+              <div style={{ fontSize: 10.5, fontWeight: 900, textTransform: 'uppercase', color: '#1E293B', borderBottom: '1px solid #E2E8F0', paddingBottom: 4, marginBottom: 8, letterSpacing: 0.3 }}>
+                💳 Condições Comerciais, Pagamento e Frete
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr', gap: 10, fontSize: 11 }}>
+                <div>
+                  <span style={{ color: '#475569', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', display: 'block' }}>Condição / Prazo de Pagamento:</span>
+                  <strong style={{ color: '#0F172A', fontSize: 11.5 }}>{condicaoCompraEfetiva || 'Conforme negociado'}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#475569', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', display: 'block' }}>Forma de Pagamento:</span>
+                  <strong style={{ color: '#0F172A', fontSize: 11.5 }}>{item.forma_pagamento || 'PIX / Boleto'}</strong>
+                </div>
+                <div>
+                  <span style={{ color: '#475569', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase', display: 'block' }}>Modalidade de Frete:</span>
+                  <strong style={{ color: '#0F172A', fontSize: 11.5 }}>{item.tipo_frete || 'CIF (Entrega na Obra)'}</strong>
+                </div>
+              </div>
+              {item.observacoes_oc && (
+                <div style={{ marginTop: 8, paddingTop: 6, borderTop: '1px dashed #CBD5E1', fontSize: 11, color: '#1E293B' }}>
+                  <strong style={{ textTransform: 'uppercase', fontSize: 9.5, color: '#475569' }}>Observações / Acordo Comercial: </strong>
+                  <span style={{ fontWeight: 700 }}>{item.observacoes_oc}</span>
+                </div>
+              )}
             </div>
 
             {/* Instruções / Observações */}

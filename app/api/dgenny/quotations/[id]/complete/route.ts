@@ -9,7 +9,7 @@ export async function POST(
   try {
     const { id } = await context.params
     const body = await req.json()
-    const { suprimentoId, winnerSupplierId, winnerSupplierName, finalPrice } = body
+    const { suprimentoId, winnerSupplierId, winnerSupplierName, finalPrice, paymentMethod, freight, deliveryTerm } = body
 
     if (!id || !winnerSupplierId) {
       return NextResponse.json(
@@ -48,6 +48,15 @@ export async function POST(
       }
       if (finalPrice) {
         updateData.valor = Number(finalPrice)
+      }
+      if (paymentMethod) {
+        updateData.condicao_pagamento = String(paymentMethod)
+      }
+      if (freight !== undefined) {
+        updateData.tipo_frete = parseFloat(String(freight)) > 0 ? `Frete R$ ${freight}` : 'CIF (Incluso)'
+      }
+      if (deliveryTerm) {
+        updateData.observacoes_oc = `Prazo de entrega cotado: ${deliveryTerm}`
       }
 
       await supabase

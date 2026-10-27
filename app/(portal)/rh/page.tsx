@@ -31,7 +31,8 @@ import {
   ShieldCheck,
   FileCheck,
   FileText,
-  Check
+  Check,
+  Download
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { PageTitle } from '@/components/PageTitle'
@@ -247,6 +248,269 @@ function parseDadosBancarios(nome?: string | null) {
   return { pix: nome, banco: '', agenciaConta: '' }
 }
 
+// ─── GERADOR DE ARQUIVO .ZIP (ZERO DEPENDÊNCIAS) P/ DOWNLOAD EM LOTE ────────
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256)
+  for (let i = 0; i < 256; i++) {
+    let c = i
+    for (let k = 0; k < 8; k++) {
+      c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1
+    }
+    table[i] = c >>> 0
+  }
+  return table
+})()
+
+function calcularCrc32(bytes: Uint8Array): number {
+  let crc = 0xffffffff
+  for (let i = 0; i < bytes.length; i++) {
+    crc = CRC32_TABLE[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8)
+  }
+  return (crc ^ 0xffffffff) >>> 0
+}
+
+function gerarZipBytes(arquivos: Array<{ name: string; data: Uint8Array }>): Uint8Array {
+  const encoder = new TextEncoder()
+  const localParts: Uint8Array[] = []
+  const centralParts: Uint8Array[] = []
+  let offset = 0
+
+  const now = new Date()
+  const dosTime = ((now.getHours() & 0x1f) << 11) | ((now.getMinutes() & 0x3f) << 5) | ((now.getSeconds() >> 1) & 0x1f)
+  const dosDate = (((now.getFullYear() - 1980) & 0x7f) << 9) | (((now.getMonth() + 1) & 0x0f) << 5) | (now.getDate() & 0x1f)
+
+  for (const file of arquivos) {
+    const nameBytes = encoder.encode(file.name)
+    const crc = calcularCrc32(file.data)
+    const size = file.data.length
+
+    const localHeader = new Uint8Array(30 + nameBytes.length)
+    const lv = new DataView(localHeader.buffer)
+    lv.setUint32(0, 0x04034b50, true)
+    lv.setUint16(4, 20, true)
+    lv.setUint16(6, 0x0800, true) // UTF-8 filename flag
+    lv.setUint16(8, 0, true) // STORE
+    lv.setUint16(10, dosTime, true)
+    lv.setUint16(12, dosDate, true)
+    lv.setUint32(14, crc, true)
+    lv.setUint32(18, size, true)
+    lv.setUint32(22, size, true)
+    lv.setUint16(26, nameBytes.length, true)
+    lv.setUint16(28, 0, true)
+    localHeader.set(nameBytes, 30)
+
+    localParts.push(localHeader, file.data)
+
+    const centralHeader = new Uint8Array(46 + nameBytes.length)
+    const cv = new DataView(centralHeader.buffer)
+    cv.setUint32(0, 0x02014b50, true)
+    cv.setUint16(4, 20, true)
+    cv.setUint16(6, 20, true)
+    cv.setUint16(8, 0x0800, true) // UTF-8
+    cv.setUint16(10, 0, true) // STORE
+    cv.setUint16(12, dosTime, true)
+    cv.setUint16(14, dosDate, true)
+    cv.setUint32(16, crc, true)
+    cv.setUint32(20, size, true)
+    cv.setUint32(24, size, true)
+    cv.setUint16(28, nameBytes.length, true)
+    cv.setUint16(30, 0, true)
+    cv.setUint16(32, 0, true)
+    cv.setUint16(34, 0, true)
+    cv.setUint16(36, 0, true)
+    cv.setUint32(38, 0, true)
+    cv.setUint32(42, offset, true)
+    centralHeader.set(nameBytes, 46)
+
+    centralParts.push(centralHeader)
+    offset += localHeader.length + size
+  }
+
+  const centralSize = centralParts.reduce((acc, arr) => acc + arr.length, 0)
+  const eocd = new Uint8Array(22)
+  const ev = new DataView(eocd.buffer)
+  ev.setUint32(0, 0x06054b50, true)
+  ev.setUint16(4, 0, true)
+  ev.setUint16(6, 0, true)
+  ev.setUint16(8, arquivos.length, true)
+  ev.setUint16(10, arquivos.length, true)
+  ev.setUint32(12, centralSize, true)
+  ev.setUint32(16, offset, true)
+  ev.setUint16(20, 0, true)
+
+  const totalLength = offset + centralSize + 22
+  const out = new Uint8Array(totalLength)
+  let pos = 0
+  for (const p of localParts) {
+    out.set(p, pos)
+    pos += p.length
+  }
+  for (const p of centralParts) {
+    out.set(p, pos)
+    pos += p.length
+  }
+  out.set(eocd, pos)
+  return out
+}
+
+async function baixarTodosDocumentosZip(params: {
+  nomeColaborador: string
+  resumoTexto: string
+  documentos: Array<Record<string, any>>
+}) {
+  const { nomeColaborador, resumoTexto, documentos } = params
+  const docsValidos = (documentos || []).filter(d => {
+    const rawPath = d.storage_path || d.arquivo_url || ''
+    if (!rawPath) return false
+    if (d.item_id === 'salario_registro' || d.item_id === 'status_apto' || d.item_id === 'dados_bancarios') return false
+    if (rawPath === 'salario-registro-confidencial' || rawPath === 'dados-bancarios-inline') return false
+    if (rawPath.startsWith('salarios/') || rawPath.startsWith('status-apto/')) return false
+    if (d.status === 'aguardando_upload') return false
+    if ((d.nome || '').startsWith('Dados Bancários:') || (d.nome || '').startsWith('Chave PIX:')) return false
+    return true
+  })
+
+  // Deduplica por storage_path
+  const seenPaths = new Set<string>()
+  const docsUnicos: Array<Record<string, any>> = []
+  for (const d of docsValidos) {
+    const rawPath = String(d.storage_path || d.arquivo_url || '').replace(/^\/+/, '')
+    if (!rawPath || seenPaths.has(rawPath)) continue
+    seenPaths.add(rawPath)
+    docsUnicos.push({ ...d, _cleanPath: rawPath })
+  }
+
+  if (docsUnicos.length === 0) {
+    toast('Nenhum arquivo anexado encontrado para este colaborador.', 'warning')
+    return
+  }
+
+  toast(`Preparando pacote .ZIP com ${docsUnicos.length} documento(s) de ${nomeColaborador}...`, 'info')
+
+  const arquivosZip: Array<{ name: string; data: Uint8Array }> = []
+  const encoder = new TextEncoder()
+  arquivosZip.push({
+    name: '00_Ficha_Resumo_Colaborador.txt',
+    data: encoder.encode(resumoTexto)
+  })
+
+  const nomesUsados = new Set<string>(['00_Ficha_Resumo_Colaborador.txt'])
+  let baixados = 0
+
+  const pastaPrefixos: Record<string, string> = {
+    '1': '01_Identificacao_e_Pessoal/',
+    '2': '02_Ficha_Cadastral/',
+    '3': '03_Documentos_Admissionais/',
+    '4': '04_Saude_e_ASO/'
+  }
+
+  await Promise.all(
+    docsUnicos.map(async (doc, idx) => {
+      const path = doc._cleanPath as string
+      try {
+        let fileBytes: Uint8Array | null = null
+        let mimeType = doc.mime_type || ''
+
+        if (path.startsWith('http://') || path.startsWith('https://')) {
+          const resp = await fetch(path)
+          if (resp.ok) {
+            const buf = await resp.arrayBuffer()
+            fileBytes = new Uint8Array(buf)
+            mimeType = resp.headers.get('content-type') || mimeType
+          }
+        } else {
+          const { data: blobData, error: dlErr } = await supabase.storage.from('rh-documentos').download(path)
+          if (!dlErr && blobData) {
+            const buf = await blobData.arrayBuffer()
+            fileBytes = new Uint8Array(buf)
+            mimeType = blobData.type || mimeType
+          } else {
+            const { data: signed } = await supabase.storage.from('rh-documentos').createSignedUrl(path, 300)
+            if (signed?.signedUrl) {
+              const resp = await fetch(signed.signedUrl)
+              if (resp.ok) {
+                const buf = await resp.arrayBuffer()
+                fileBytes = new Uint8Array(buf)
+                mimeType = resp.headers.get('content-type') || mimeType
+              }
+            }
+          }
+        }
+
+        if (!fileBytes) return
+
+        // Determina extensão do arquivo
+        const pathFileName = path.split('/').pop() || ''
+        const extMatchPath = pathFileName.match(/\.[a-zA-Z0-9]{2,5}$/)
+        const rawLabel = String(doc.nome || doc.tipo || `Documento_${idx + 1}`).trim()
+        const extMatchNome = rawLabel.match(/\.[a-zA-Z0-9]{2,5}$/)
+
+        let ext = extMatchNome ? extMatchNome[0].toLowerCase() : (extMatchPath ? extMatchPath[0].toLowerCase() : '')
+        if (!ext) {
+          if (mimeType.includes('pdf')) ext = '.pdf'
+          else if (mimeType.includes('png')) ext = '.png'
+          else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = '.jpg'
+          else if (mimeType.includes('webp')) ext = '.webp'
+          else ext = '.pdf'
+        }
+
+        const baseSemExt = rawLabel
+          .replace(/\.[a-zA-Z0-9]{2,5}$/, '')
+          .replace(/[\\/:*?"<>|]/g, '_')
+          .replace(/\s+/g, '_')
+          .slice(0, 80) || `Documento_${idx + 1}`
+
+        // Descobre pasta se houver
+        let pastaKey = String(doc.ordem_pasta || '')
+        if (!pastaKey) {
+          const m = path.match(/archive-(\d)/) || path.match(/etapa-(\d)/)
+          if (m) pastaKey = m[1]
+          else if (path.includes('documentos-admissionais')) pastaKey = '3'
+          else if (path.includes('laudos') || path.includes('aso')) pastaKey = '4'
+        }
+        const subFolder = pastaPrefixos[pastaKey] || ''
+
+        let finalName = `${subFolder}${baseSemExt}${ext}`
+        let counter = 2
+        while (nomesUsados.has(finalName.toLowerCase())) {
+          finalName = `${subFolder}${baseSemExt}_${counter}${ext}`
+          counter++
+        }
+        nomesUsados.add(finalName.toLowerCase())
+
+        arquivosZip.push({ name: finalName, data: fileBytes })
+        baixados++
+      } catch (err) {
+        console.warn('Falha ao baixar documento p/ ZIP:', path, err)
+      }
+    })
+  )
+
+  if (baixados === 0) {
+    toast('Não foi possível baixar os arquivos do servidor.', 'error')
+    return
+  }
+
+  const zipBytes = gerarZipBytes(arquivosZip)
+  const blob = new Blob([zipBytes as any], { type: 'application/zip' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const safeColaborador = nomeColaborador
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+  a.href = url
+  a.download = `Documentos_${safeColaborador || 'Colaborador'}.zip`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  setTimeout(() => URL.revokeObjectURL(url), 5000)
+
+  toast(`Download concluído! ${baixados} documento(s) baixados no arquivo .ZIP.`, 'success')
+}
+
 // ─── COMPONENTE: PAINEL DE ARQUIVO DOCUMENTAL DO FUNCIONÁRIO ────────────────
 function ArchivePanel({
   person,
@@ -278,11 +542,56 @@ function ArchivePanel({
   onEditEmail?: () => void
 }) {
   const [filter, setFilter] = useState('')
+  const [baixandoZip, setBaixandoZip] = useState(false)
   const documents = details.documentos.filter(doc =>
     `${doc.nome || ''} ${doc.tipo || ''}`.toLowerCase().includes(filter.toLowerCase())
   )
 
   const emailExibicao = email || person.email || ''
+
+  async function handleDownloadAllZip() {
+    if (baixandoZip) return
+    setBaixandoZip(true)
+    try {
+      const resumoLinhas = [
+        '==========================================================',
+        'FICHA RESUMO DO COLABORADOR REGISTRADO',
+        '==========================================================',
+        `Nome: ${person.nome || '-'}`,
+        `CPF: ${person.cpf || '-'}`,
+        `Cargo: ${person.cargo || '-'}`,
+        `Obra: ${person.obra || 'Geral / Não vinculada'}`,
+        `E-mail: ${emailExibicao || '-'}`,
+        `Telefone: ${(person as any).telefone || '-'}`,
+        `Endereço: ${(person as any).endereco || '-'}`,
+        `Data de Admissão: ${person.data_admissao || '-'}`,
+        dadosBanco?.pix ? `PIX: ${dadosBanco.pix}` : '',
+        dadosBanco?.banco ? `Banco: ${dadosBanco.banco}` : '',
+        dadosBanco?.agenciaConta ? `Agência/Conta: ${dadosBanco.agenciaConta}` : '',
+        `Exportado em: ${new Date().toLocaleString('pt-BR')}`,
+        '=========================================================='
+      ].filter(Boolean).join('\r\n')
+
+      const todosDocs = [...(details.documentos || [])]
+      if (person.dados_registro?.ficha_resumo_path) {
+        todosDocs.push({
+          id: 'ficha_resumo_registro',
+          nome: person.dados_registro.ficha_resumo_nome || 'Ficha_Resumo_Assinada.pdf',
+          tipo: 'Ficha Cadastral',
+          storage_path: person.dados_registro.ficha_resumo_path,
+          ordem_pasta: '2'
+        })
+      }
+
+      await baixarTodosDocumentosZip({
+        nomeColaborador: person.nome,
+        resumoTexto: resumoLinhas,
+        documentos: todosDocs
+      })
+    } finally {
+      setBaixandoZip(false)
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -514,6 +823,31 @@ function ArchivePanel({
         </div>
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => void handleDownloadAllZip()}
+            disabled={baixandoZip}
+            title="Baixar todos os documentos do funcionário de uma vez em um arquivo .ZIP"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '7px 12px',
+              borderRadius: 6,
+              background: 'rgba(16, 185, 129, 0.14)',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              color: '#10B981',
+              fontSize: 11,
+              fontWeight: 900,
+              cursor: baixandoZip ? 'wait' : 'pointer',
+              transition: 'all 0.15s ease',
+              opacity: baixandoZip ? 0.7 : 1
+            }}
+          >
+            <Download size={13} />
+            {baixandoZip ? 'Gerando .ZIP...' : `Baixar Todos os Docs (${details.documentos.length})`}
+          </button>
+
           {onVoltarAptos && (
             <button
               type="button"
@@ -677,14 +1011,34 @@ function ArchivePanel({
             Arquivo definitivo do funcionário distribuído nas 4 pastas de admissão.
           </p>
         </div>
-        <div style={{ width: 220, position: 'relative' }}>
-          <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
-          <input
-            style={{ ...inputStyle, paddingLeft: 26, fontSize: 11, padding: '6px 10px 6px 26px' }}
-            placeholder="Filtrar documento..."
-            value={filter}
-            onChange={e => setFilter(e.target.value)}
-          />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => void handleDownloadAllZip()}
+            disabled={baixandoZip}
+            style={{
+              ...btnBase,
+              padding: '6px 12px',
+              fontSize: 10.5,
+              background: '#10B981',
+              color: '#0A0A0A',
+              fontWeight: 900,
+              opacity: baixandoZip ? 0.7 : 1,
+              cursor: baixandoZip ? 'wait' : 'pointer'
+            }}
+          >
+            <Download size={12} strokeWidth={2.5} />
+            {baixandoZip ? 'Baixando .ZIP...' : 'Baixar Todos (.ZIP)'}
+          </button>
+          <div style={{ width: 200, position: 'relative' }}>
+            <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              style={{ ...inputStyle, paddingLeft: 26, fontSize: 11, padding: '6px 10px 6px 26px' }}
+              placeholder="Filtrar documento..."
+              value={filter}
+              onChange={e => setFilter(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 
@@ -1278,6 +1632,41 @@ function CadastroTable({
         </div>
 
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => {
+              const resumoLinhas = [
+                '==========================================================',
+                'FICHA RESUMO DO CANDIDATO / COLABORADOR (RH)',
+                '==========================================================',
+                `Nome: ${invite.nome_destinatario || '-'}`,
+                `CPF: ${invite.cpf || '-'}`,
+                `Cargo: ${invite.cargo || '-'}`,
+                `Obra: ${invite.obra || 'Geral / Não vinculada'}`,
+                `E-mail: ${invite.email_destinatario || '-'}`,
+                `Telefone: ${invite.telefone_destinatario || '-'}`,
+                `Endereço: ${invite.endereco || '-'}`,
+                `Início Efetivo: ${invite.data_inicio_efetivo || '-'}`,
+                `Exportado em: ${new Date().toLocaleString('pt-BR')}`,
+                '=========================================================='
+              ].join('\r\n')
+              void baixarTodosDocumentosZip({
+                nomeColaborador: invite.nome_destinatario,
+                resumoTexto: resumoLinhas,
+                documentos: (invite.documentos || []) as any
+              })
+            }}
+            style={{
+              ...btnBase,
+              background: 'rgba(16, 185, 129, 0.14)',
+              color: '#10B981',
+              border: '1px solid rgba(16, 185, 129, 0.4)',
+              fontWeight: 900
+            }}
+            title="Baixar todos os documentos enviados por este colaborador em um arquivo .ZIP"
+          >
+            <Download size={12} /> Baixar Todos os Docs (.ZIP)
+          </button>
           {isInviteApto(invite) ? (
             <>
               {onVoltarAdmissao && (
@@ -2514,9 +2903,22 @@ export default function RhPage() {
       }
     })
 
+    let listaConvitesRel = convitesRelacionados || []
+    if (listaConvitesRel.length === 0 && (person.cpf || person.nome)) {
+      const cpfClean = (person.cpf || '').replace(/\D/g, '')
+      const fallbackConvites = todosConvites.filter(c =>
+        c.funcionario_id === person.id ||
+        (cpfClean && c.cpf && c.cpf.replace(/\D/g, '') === cpfClean) ||
+        (c.nome_destinatario && person.nome && c.nome_destinatario.trim().toLowerCase() === person.nome.trim().toLowerCase())
+      )
+      if (fallbackConvites.length > 0) {
+        listaConvitesRel = fallbackConvites as any
+      }
+    }
+
     const docsAdmissao: Array<Record<string, string | null>> = []
-    if (convitesRelacionados) {
-      convitesRelacionados.forEach((c: any) => {
+    if (listaConvitesRel) {
+      listaConvitesRel.forEach((c: any) => {
         if (c.documentos && Array.isArray(c.documentos)) {
           c.documentos.forEach((d: any) => {
             if (d.item_id === 'salario_registro' || d.item_id === 'status_apto') return
@@ -2556,7 +2958,7 @@ export default function RhPage() {
       exames: exames ?? [],
       etapas: ((etapas ?? []) as unknown as EtapaAdmissao[]).sort((a, b) => a.modelo.ordem - b.modelo.ordem)
     })
-  }, [modelos])
+  }, [modelos, todosConvites])
 
   useEffect(() => {
     if (selected && activeTab === 'ativos') {

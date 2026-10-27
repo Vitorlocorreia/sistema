@@ -770,7 +770,7 @@ export function DgennyCotacaoTab({
   }
 
   // Fechar cotação com vencedor
-  const handleConcluirVencedor = async (supplierId: string, supplierName: string, total: string) => {
+  const handleConcluirVencedor = async (supplierId: string, supplierName: string, total: string, paymentMethod?: string, freight?: string, deliveryTerm?: string) => {
     if (!quotationId) return
     setConcluindo(true)
     try {
@@ -781,7 +781,10 @@ export function DgennyCotacaoTab({
           suprimentoId: suprimento.id,
           winnerSupplierId: supplierId,
           winnerSupplierName: supplierName,
-          finalPrice: parseFloat(total)
+          finalPrice: parseFloat(total),
+          paymentMethod,
+          freight,
+          deliveryTerm
         })
       })
       const data = await res.json()
@@ -791,7 +794,9 @@ export function DgennyCotacaoTab({
           ...suprimento,
           status: 'Aprovação',
           fornecedor: supplierName,
-          valor: parseFloat(total)
+          valor: parseFloat(total),
+          condicao_pagamento: paymentMethod || suprimento.condicao_pagamento,
+          tipo_frete: freight && parseFloat(freight) > 0 ? `Frete R$ ${freight}` : (suprimento.tipo_frete || 'CIF (Incluso)')
         })
         carregarDadosCotacao(quotationId)
       } else {
@@ -2001,7 +2006,7 @@ export function DgennyCotacaoTab({
                               {statusCotacao !== 'completed' ? (
                                 <button
                                   type="button"
-                                  onClick={() => handleConcluirVencedor(s.supplierId, s.name, s.total)}
+                                  onClick={() => handleConcluirVencedor(s.supplierId, s.name, s.total, s.paymentMethod, s.freight, s.deliveryTerm)}
                                   disabled={concluindo}
                                   style={{
                                     background: isBest ? C.green : C.bgWhite,
