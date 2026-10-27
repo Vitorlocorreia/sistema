@@ -182,6 +182,7 @@ export default function SuprimentosPage() {
   // Estados principais
   const [suprimentos, setSuprimentos] = useState<SuprimentoItem[]>([])
   const [obras, setObras] = useState<ObraItem[]>([])
+  const [empresas, setEmpresas] = useState<Array<{ id: string; razao_social: string; nome_fantasia?: string | null }>>([])
   const [fornecedores, setFornecedores] = useState<FornecedorItem[]>([])
   const [colaboradores, setColaboradores] = useState<ColaboradorOption[]>([])
   const [contasVinculadas, setContasVinculadas] = useState<Record<string, ContaVinculada>>({})
@@ -282,6 +283,7 @@ export default function SuprimentosPage() {
 
   // Formulário Aprovação Financeira
   const [aprovForm, setAprovForm] = useState({
+    empresa_id: 'eaeedfef-3488-4d74-938f-11a21a5e570a',
     fornecedor_id: '',
     valor_final: '',
     data_vencimento: '',
@@ -322,13 +324,15 @@ export default function SuprimentosPage() {
         { data: obs, error: obErr },
         { data: forns, error: fornErr },
         { data: contas, error: contasErr },
-        { data: cols, error: colErr }
+        { data: cols, error: colErr },
+        { data: emps }
       ] = await Promise.all([
         supabase.from('suprimentos').select('*').order('created_at', { ascending: false }).limit(2000),
         supabase.from('obras').select('id, nome, cliente, endereco').order('nome'),
         supabase.from('fornecedores').select('id, razao_social, nome_fantasia, cnpj, pix, banco, agencia, conta, telefone, responsavel, endereco, prazo_pagamento').order('razao_social').limit(1000),
         supabase.from('contas').select('id, status, valor, data_vencimento, pago_em, comprovante_url, observacoes, codigo_sequencial').ilike('observacoes', '%Suprimentos ID:%').limit(2000),
-        supabase.from('colaboradores').select('id, nome, cargo, email').order('nome')
+        supabase.from('colaboradores').select('id, nome, cargo, email').order('nome'),
+        supabase.from('empresas').select('id, razao_social, nome_fantasia').order('razao_social')
       ])
 
       if (supErr) console.error('Erro suprimentos:', supErr)
@@ -359,6 +363,7 @@ export default function SuprimentosPage() {
       if (obs) setObras(obs as ObraItem[])
       if (forns) setFornecedores(forns as FornecedorItem[])
       if (cols) setColaboradores(cols as ColaboradorOption[])
+      if (emps) setEmpresas(emps as any[])
 
       // Mapear contas pelo suprimento_id salvo em observacoes
       const cMap: Record<string, ContaVinculada> = {}
@@ -814,7 +819,9 @@ export default function SuprimentosPage() {
       return m && m[1] ? m[1].trim() : ''
     })()
 
+    const defaultEmpresaId = empresas.find(e => (e.nome_fantasia || '').toUpperCase() === 'JWA' || (e.razao_social || '').toUpperCase().includes('JWA SA'))?.id || colaboradorAtivo?.empresa_id || 'eaeedfef-3488-4d74-938f-11a21a5e570a'
     setAprovForm({
+      empresa_id: defaultEmpresaId,
       fornecedor_id: matchForn?.id || '',
       valor_final: item.valor ? String(item.valor) : '',
       data_vencimento: item.data_vencimento || new Date(Date.now() + 28 * 86400000).toISOString().split('T')[0],
@@ -925,7 +932,9 @@ export default function SuprimentosPage() {
           descricao: `Compra aprovada na esteira de Suprimentos (OC-${itemSelecionado.id.slice(0, 6).toUpperCase()}). Lançamento gerado automaticamente para conferência e liquidação.`
         }]
 
+        const empresaIdFinal = aprovForm.empresa_id || colaboradorAtivo?.empresa_id || 'eaeedfef-3488-4d74-938f-11a21a5e570a'
         const { data: contaInserida, error: contaErr } = await supabase.from('contas').insert({
+          empresa_id: empresaIdFinal,
           obra_id: itemSelecionado.obra_id || null,
           fornecedor_id: selectedForn?.id || null,
           tipo: 'pagar',
@@ -3000,6 +3009,27 @@ export default function SuprimentosPage() {
                   </div>
                 </div>
               )}
+
+              <div>
+                <span style={labelStyle}>
+                  🏢 Empresa Pagadora / Faturamento (Financeiro) *
+                </span>
+                <select
+                  style={inputStyle}
+                  value={aprovForm.empresa_id}
+                  onChange={e => setAprovForm({ ...aprovForm, empresa_id: e.target.value })}
+                >
+                  {empresas.length > 0 ? (
+                    empresas.map(emp => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.nome_fantasia ? `${emp.nome_fantasia} (${emp.razao_social})` : emp.razao_social}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="eaeedfef-3488-4d74-938f-11a21a5e570a">JWA (JWA SA)</option>
+                  )}
+                </select>
+              </div>
 
               <div>
                 <span style={labelStyle}>
