@@ -208,6 +208,7 @@ export default function SuprimentosPage() {
   const justDraggedRef = useRef(false)
   const cardPointerDownRef = useRef<{ id: string; x: number; y: number; time: number } | null>(null)
   const lastDrawerOpenedTimeRef = useRef<number>(0)
+  const initialCardOpenedRef = useRef(false)
 
   const handleAbrirCardDrawer = useCallback((item: SuprimentoItem, tab: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico' = 'checklist') => {
     const now = Date.now()
@@ -216,6 +217,23 @@ export default function SuprimentosPage() {
     setDrawerInitialTab(tab)
     setDrawerItem(item)
     setDrawerOpen(true)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('cardId', item.id)
+      window.history.replaceState({}, '', url.pathname + url.search)
+    }
+  }, [])
+
+  const handleFecharDrawer = useCallback(() => {
+    setDrawerOpen(false)
+    setDrawerItem(null)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      if (url.searchParams.has('cardId')) {
+        url.searchParams.delete('cardId')
+        window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''))
+      }
+    }
   }, [])
 
   // Modais
@@ -348,7 +366,9 @@ export default function SuprimentosPage() {
           return found || prev
         })
 
-        if (typeof window !== 'undefined') {
+        // Apenas no primeiro carregamento abre o card se veio cardId na URL
+        if (!initialCardOpenedRef.current && typeof window !== 'undefined') {
+          initialCardOpenedRef.current = true
           const urlParams = new URLSearchParams(window.location.search)
           const cardId = urlParams.get('cardId')
           if (cardId) {
@@ -2415,10 +2435,7 @@ export default function SuprimentosPage() {
                   return (
                     <tr
                       key={item.id}
-                      onClick={() => {
-                        setDrawerItem(item)
-                        setDrawerOpen(true)
-                      }}
+                      onClick={() => handleAbrirCardDrawer(item)}
                       style={{ borderBottom: `1px solid ${C.border}`, cursor: 'pointer', transition: 'background 0.1s ease' }}
                     >
                       <td style={{ padding: '10px 12px' }}>
@@ -3448,7 +3465,7 @@ export default function SuprimentosPage() {
       <SuprimentoCardDrawer
         item={drawerItem}
         isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={handleFecharDrawer}
         onUpdateItem={(updatedItem) => {
           setSuprimentos(prev => prev.map(s => s.id === updatedItem.id ? updatedItem : s))
           setDrawerItem(updatedItem)

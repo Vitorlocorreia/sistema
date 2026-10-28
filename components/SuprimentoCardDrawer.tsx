@@ -195,55 +195,123 @@ export function SuprimentoCardDrawer({
   const [modalExportarOC, setModalExportarOC] = useState(false)
   const [copiadoWhats, setCopiadoWhats] = useState(false)
 
-  useEffect(() => {
-    if (item) {
-      setNovoTitulo(item.titulo || '')
-      setEditandoTitulo(false)
-      setNovoCodigo(item.codigo || '')
-      setEditandoCodigo(false)
-      setNovoSolicitante(item.solicitante || '')
-      setEditandoSolicitante(false)
-      setNovoValor(item.valor !== null && item.valor !== undefined ? String(item.valor) : '')
-      setEditandoValor(false)
-      setNovaQtd(item.quantidade || '')
-      setNovaUnidade(item.unidade || 'un')
-      setEditandoQtd(false)
-      setNovoFornecedor(item.fornecedor || '')
-      setEditandoFornecedor(false)
-      setNovaObraManual(item.obra_nome_manual || '')
-      setEditandoObraManual(false)
-      setNovaCondicao(item.condicao_pagamento || '')
-      setEditandoCondicao(false)
-      setNovaObsOC(item.observacoes_oc || '')
-      setEditandoObsOC(false)
-      setEditandoChecklistId(null)
+  const prevItemIdRef = useRef<string | null>(null)
 
-      setFormEdicao({
-        codigo: item.codigo || '',
-        titulo: item.titulo || '',
-        status: item.status || 'Solicitado',
-        solicitante: item.solicitante || '',
-        responsavel_id: item.responsavel_id || '',
-        responsavel_nome: item.responsavel_nome || '',
-        proximo_responsavel_id: item.proximo_responsavel_id || '',
-        proximo_responsavel_nome: item.proximo_responsavel_nome || '',
-        obra_id: item.obra_id || '',
-        obra_nome_manual: item.obra_nome_manual || '',
-        usar_obra_manual: Boolean(item.obra_nome_manual),
-        fornecedor: item.fornecedor || '',
-        valor: item.valor !== null && item.valor !== undefined ? String(item.valor) : '',
-        quantidade: item.quantidade || '',
-        unidade: item.unidade || 'un',
-        prioridade: item.prioridade || 'media',
-        data_previsao_entrega: item.data_previsao_entrega || '',
-        data_vencimento: item.data_vencimento || '',
-        condicao_pagamento: item.condicao_pagamento || '',
-        forma_pagamento: item.forma_pagamento || '',
-        tipo_frete: item.tipo_frete || '',
-        observacoes_oc: item.observacoes_oc || ''
-      })
+  useEffect(() => {
+    if (!isOpen) {
+      prevItemIdRef.current = null
+      return
     }
-  }, [item])
+
+    if (item) {
+      const isDifferentCard = item.id !== prevItemIdRef.current
+      prevItemIdRef.current = item.id
+
+      if (isDifferentCard) {
+        // Novo card aberto: redefine estados de edição e sincroniza dados
+        setNovoTitulo(item.titulo || '')
+        setEditandoTitulo(false)
+        setNovoCodigo(item.codigo || '')
+        setEditandoCodigo(false)
+        setNovoSolicitante(item.solicitante || '')
+        setEditandoSolicitante(false)
+        setNovoValor(item.valor !== null && item.valor !== undefined ? String(item.valor) : '')
+        setEditandoValor(false)
+        setNovaQtd(item.quantidade || '')
+        setNovaUnidade(item.unidade || 'un')
+        setEditandoQtd(false)
+        setNovoFornecedor(item.fornecedor || '')
+        setEditandoFornecedor(false)
+        setNovaObraManual(item.obra_nome_manual || '')
+        setEditandoObraManual(false)
+        setNovaCondicao(item.condicao_pagamento || '')
+        setEditandoCondicao(false)
+        setNovaObsOC(item.observacoes_oc || '')
+        setEditandoObsOC(false)
+        setEditandoChecklistId(null)
+        setModoEdicaoCompleta(false)
+
+        setFormEdicao({
+          codigo: item.codigo || '',
+          titulo: item.titulo || '',
+          status: item.status || 'Solicitado',
+          solicitante: item.solicitante || '',
+          responsavel_id: item.responsavel_id || '',
+          responsavel_nome: item.responsavel_nome || '',
+          proximo_responsavel_id: item.proximo_responsavel_id || '',
+          proximo_responsavel_nome: item.proximo_responsavel_nome || '',
+          obra_id: item.obra_id || '',
+          obra_nome_manual: item.obra_nome_manual || '',
+          usar_obra_manual: Boolean(item.obra_nome_manual),
+          fornecedor: item.fornecedor || '',
+          valor: item.valor !== null && item.valor !== undefined ? String(item.valor) : '',
+          quantidade: item.quantidade || '',
+          unidade: item.unidade || 'un',
+          prioridade: item.prioridade || 'media',
+          data_previsao_entrega: item.data_previsao_entrega || '',
+          data_vencimento: item.data_vencimento || '',
+          condicao_pagamento: item.condicao_pagamento || '',
+          forma_pagamento: item.forma_pagamento || '',
+          tipo_frete: item.tipo_frete || '',
+          observacoes_oc: item.observacoes_oc || ''
+        })
+      } else {
+        // Mesmo card sendo atualizado em segundo plano (background sync / salvamento)
+        // Não fecha nem reseta campos que o usuário está digitando ativamente
+        if (!editandoTitulo) setNovoTitulo(item.titulo || '')
+        if (!editandoCodigo) setNovoCodigo(item.codigo || '')
+        if (!editandoSolicitante) setNovoSolicitante(item.solicitante || '')
+        if (!editandoValor) setNovoValor(item.valor !== null && item.valor !== undefined ? String(item.valor) : '')
+        if (!editandoQtd) {
+          setNovaQtd(item.quantidade || '')
+          setNovaUnidade(item.unidade || 'un')
+        }
+        if (!editandoFornecedor) setNovoFornecedor(item.fornecedor || '')
+        if (!editandoObraManual) setNovaObraManual(item.obra_nome_manual || '')
+        if (!editandoCondicao) setNovaCondicao(item.condicao_pagamento || '')
+        if (!editandoObsOC) setNovaObsOC(item.observacoes_oc || '')
+        if (!modoEdicaoCompleta) {
+          setFormEdicao({
+            codigo: item.codigo || '',
+            titulo: item.titulo || '',
+            status: item.status || 'Solicitado',
+            solicitante: item.solicitante || '',
+            responsavel_id: item.responsavel_id || '',
+            responsavel_nome: item.responsavel_nome || '',
+            proximo_responsavel_id: item.proximo_responsavel_id || '',
+            proximo_responsavel_nome: item.proximo_responsavel_nome || '',
+            obra_id: item.obra_id || '',
+            obra_nome_manual: item.obra_nome_manual || '',
+            usar_obra_manual: Boolean(item.obra_nome_manual),
+            fornecedor: item.fornecedor || '',
+            valor: item.valor !== null && item.valor !== undefined ? String(item.valor) : '',
+            quantidade: item.quantidade || '',
+            unidade: item.unidade || 'un',
+            prioridade: item.prioridade || 'media',
+            data_previsao_entrega: item.data_previsao_entrega || '',
+            data_vencimento: item.data_vencimento || '',
+            condicao_pagamento: item.condicao_pagamento || '',
+            forma_pagamento: item.forma_pagamento || '',
+            tipo_frete: item.tipo_frete || '',
+            observacoes_oc: item.observacoes_oc || ''
+          })
+        }
+      }
+    }
+  }, [
+    item,
+    isOpen,
+    editandoTitulo,
+    editandoCodigo,
+    editandoSolicitante,
+    editandoValor,
+    editandoQtd,
+    editandoFornecedor,
+    editandoObraManual,
+    editandoCondicao,
+    editandoObsOC,
+    modoEdicaoCompleta
+  ])
 
   useEffect(() => {
     if (tabAtiva === 'chat') {
