@@ -98,6 +98,7 @@ interface SuprimentoCardDrawerProps {
   colaboradorAtivo: any
   contaVinculada?: any
   initialTab?: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'
+  onAbrirLancamentoFinanceiro?: (item: any) => void
 }
 
 export function SuprimentoCardDrawer({
@@ -110,7 +111,8 @@ export function SuprimentoCardDrawer({
   fornecedores,
   colaboradorAtivo,
   contaVinculada,
-  initialTab
+  initialTab,
+  onAbrirLancamentoFinanceiro
 }: SuprimentoCardDrawerProps) {
   // Aba ativa: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'
   const [tabAtiva, setTabAtiva] = useState<'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'>(initialTab || 'checklist')
@@ -1055,7 +1057,7 @@ export function SuprimentoCardDrawer({
     texto += `ENDEREÇO: RUA SERRA DE BOTUCATU Nº 878 – SALA 1503 - VLA GOMES CARDIM – SÃO PAULO – SP – CEP: 03.317-000\n`
 
     const aprovAct = (Array.isArray(item.historico_atividades) ? item.historico_atividades : []).find(
-      (a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro' || a.acao === 'assinatura_exportacao_oc'
+      (a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro' || a.acao === 'aprovacao_compra_diretoria' || a.acao === 'assinatura_exportacao_oc'
     )
     const nomeAssinante = aprovAct?.autor_nome || autorAtual
     texto += `\n✍️ *Assinado/Emitido digitalmente por:* ${nomeAssinante} (Emitido por: ${autorAtual} em ${new Date().toLocaleString('pt-BR')})`
@@ -2416,6 +2418,44 @@ export function SuprimentoCardDrawer({
           )}
         </div>
 
+        {/* Alerta de Lançamento Financeiro Pendente (Em Trânsito) */}
+        {!contaVinculada && (item.status === 'Em Trânsito' || item.status === 'Entregue') && onAbrirLancamentoFinanceiro && (
+          <div style={{
+            background: 'rgba(245, 158, 11, 0.08)',
+            borderBottom: `1px solid ${C.amber}44`,
+            padding: '8px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10
+          }}>
+            <div style={{ fontSize: 11, color: C.ink }}>
+              <strong style={{ color: C.amber }}>💳 Programação Financeira Pendente:</strong>
+              <span style={{ color: C.inkSoft, marginLeft: 6 }}>Este pedido ainda não possui conta a pagar no Financeiro.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => onAbrirLancamentoFinanceiro(item)}
+              style={{
+                background: C.amber,
+                color: '#0A0A0A',
+                border: 'none',
+                borderRadius: 4,
+                padding: '4px 10px',
+                fontSize: 10.5,
+                fontWeight: 900,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              <DollarSign size={11} />
+              <span>Lançamento</span>
+            </button>
+          </div>
+        )}
+
         {/* ─── 2. ABAS DE NAVEGAÇÃO DA GAVETA ─────────────────────────────────── */}
         <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.bgCard, padding: '0 16px' }}>
           <button
@@ -3465,7 +3505,7 @@ export function SuprimentoCardDrawer({
             {/* Assinatura Eletrônica & Autenticação por Login (Dispensa assinatura manual) */}
             {(() => {
               const hist = Array.isArray(item.historico_atividades) ? item.historico_atividades : []
-              const aprovAct = hist.find((a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro')
+              const aprovAct = hist.find((a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro' || a.acao === 'aprovacao_compra_diretoria')
               const recebAct = hist.find((a: any) => a.acao === 'recebimento_obra' || (a.acao === 'mudanca_etapa' && a.para === 'Entregue'))
               const assinanteCompra = aprovAct?.autor_nome || autorAtual
               const dataAssinaturaCompra = aprovAct?.data ? new Date(aprovAct.data).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')

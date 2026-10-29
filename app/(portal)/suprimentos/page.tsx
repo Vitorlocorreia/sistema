@@ -715,14 +715,8 @@ export default function SuprimentosPage() {
     setModalNovoOpen(true)
   }
 
-  // 2. Mover Card de Etapa Manualmente / Arrastando
+  // 2. Mover Card de Etapa Manualmente / Arrastando (Sem travar por conta financeira)
   async function handleMoverEtapa(item: SuprimentoItem, novoStatus: SuprimentoItem['status']) {
-    if (novoStatus === 'Em Trânsito' && !contasVinculadas[item.id]) {
-      // Se tentar mover para Em Trânsito sem ter gerado conta, abre o modal de aprovação
-      abrirModalAprovacao(item)
-      return
-    }
-
     const statusAntigo = item.status
     if (statusAntigo === novoStatus) return
 
@@ -731,12 +725,15 @@ export default function SuprimentosPage() {
 
     try {
       const autorAtual = colaboradorAtivo?.nome || 'Usuário do Sistema'
+      const isAprovacaoDiretoria = statusAntigo === 'Aprovação' && novoStatus === 'Em Trânsito'
       const novaAtividade = {
         id: 'act-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
         data: new Date().toISOString(),
         autor_nome: autorAtual,
-        acao: 'mudanca_etapa',
-        detalhe: `Moveu o pedido da etapa "${statusAntigo}" para "${novoStatus}"`,
+        acao: isAprovacaoDiretoria ? 'aprovacao_compra_diretoria' : 'mudanca_etapa',
+        detalhe: isAprovacaoDiretoria
+          ? `Compra aprovada e liberada pela Diretoria (${autorAtual}). Pedido movido para "Em Trânsito" para programação financeira e entrega pelo time de Suprimentos/Obra.`
+          : `Moveu o pedido da etapa "${statusAntigo}" para "${novoStatus}"`,
         de: statusAntigo,
         para: novoStatus
       }
@@ -757,6 +754,57 @@ export default function SuprimentosPage() {
     } catch (err: any) {
       toast('Erro ao atualizar etapa: ' + err.message, 'error')
     }
+  }
+
+  // 2.1 Liberação da Compra pela Diretoria (Coluna 3 -> Coluna 4 direto, sem exigir lançamento financeiro)
+  async function handleAprovarCompraDiretoria(item: SuprimentoItem) {
+    const ok = await confirm(
+      'Aprovação de Compra (Diretoria)',
+      `Deseja aprovar e liberar o pedido "${item.titulo}"? Ele será movido para a Coluna 4 (Em Trânsito) para programação financeira e entrega pelo time de Suprimentos / Obra.`,
+      {
+        confirmLabel: 'Sim, Liberar Compra',
+        confirmColor: C.amber
+      }
+    )
+    if (!ok) return
+
+    try {
+      const autorAtual = colaboradorAtivo?.nome || 'Diretoria'
+      const novaAtividade = {
+        id: 'act-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+        data: new Date().toISOString(),
+        autor_nome: autorAtual,
+        acao: 'aprovacao_compra_diretoria',
+        detalhe: `Compra aprovada e liberada pela Diretoria (${autorAtual}). Pedido movido para "Em Trânsito" para programação financeira e entrega pelo time de Suprimentos/Obra.`,
+        de: 'Aprovação',
+        para: 'Em Trânsito'
+      }
+
+      const historicoAtual = Array.isArray(item.historico_atividades) ? item.historico_atividades : []
+      const novoHistorico = [novaAtividade, ...historicoAtual]
+
+      // Atualização otimista
+      setSuprimentos(prev => prev.map(s => s.id === item.id ? { ...s, status: 'Em Trânsito', historico_atividades: novoHistorico } : s))
+
+      const { error } = await supabase
+        .from('suprimentos')
+        .update({
+          status: 'Em Trânsito',
+          historico_atividades: novoHistorico
+        })
+        .eq('id', item.id)
+
+      if (error) throw error
+
+      toast(`Pedido "${item.titulo}" aprovado e liberado para Em Trânsito!`, 'success')
+      await loadData(true)
+    } catch (err: any) {
+      toast('Erro ao aprovar pedido: ' + err.message, 'error')
+    }
+  }
+
+  function abrirModalLancamentoFinanceiro(item: SuprimentoItem) {
+    abrirModalAprovacao(item, true)
   }
 
   // Helper para gerar o texto formatado da Ordem de Compra (OC) para WhatsApp
@@ -2329,42 +2377,101 @@ export default function SuprimentosPage() {
 
                             {item.status === 'Aprovação' && (
                               <button
+                                type="button"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  abrirModalAprovacao(item)
+                                  handleAprovarCompraDiretoria(item)
                                 }}
                                 style={{ ...btnBase, width: '100%', padding: '6px 9px', fontSize: 10.5, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
+                                title="Aprovar e liberar pedido para Em Trânsito (programação financeira por Suprimentos / Obra)"
                               >
                                 <ShieldCheck size={12} /> Aprovar Compra
                               </button>
                             )}
 
                             {item.status === 'Em Trânsito' && (
-                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, width: '100%' }}>
-                                <button
-                                  type="button"
-                                  onClick={async (e) => {
-                                    e.stopPropagation()
-                                    const txt = gerarTextoOrdemCompra(item)
-                                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                                      await navigator.clipboard.writeText(txt)
-                                      toast('Ordem de Compra (OC) copiada para colar no WhatsApp do fornecedor!', 'success')
-                                    }
-                                  }}
-                                  style={{ ...btnBase, width: '100%', padding: '5px 6px', fontSize: 9.5, background: 'rgba(6, 182, 212, 0.14)', color: '#06B6D4', border: '1px solid rgba(6, 182, 212, 0.3)', whiteSpace: 'nowrap' }}
-                                  title="Copiar Ordem de Compra (OC) para enviar ao fornecedor no WhatsApp"
-                                >
-                                  📋 Copiar OC
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    abrirModalRecebimento(item)
-                                  }}
-                                  style={{ ...btnBase, width: '100%', padding: '5px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A', fontWeight: 900, whiteSpace: 'nowrap' }}
-                                >
-                                  <CheckSquare size={11} /> Receber
-                                </button>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
+                                {/* Botão de Programação / Lançamento Financeiro (Suprimentos / Obra) */}
+                                {!contaVinculada ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      abrirModalLancamentoFinanceiro(item)
+                                    }}
+                                    style={{
+                                      ...btnBase,
+                                      width: '100%',
+                                      padding: '6px 8px',
+                                      fontSize: 10.5,
+                                      background: C.amber,
+                                      color: '#0A0A0A',
+                                      fontWeight: 900,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: 5,
+                                      boxShadow: '0 2px 6px rgba(245, 158, 11, 0.25)'
+                                    }}
+                                    title="Programar e lançar este pedido no Financeiro (Automático ou Manual)"
+                                  >
+                                    <DollarSign size={12} />
+                                    <span>💳 Lançamento Financeiro</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      abrirModalLancamentoFinanceiro(item)
+                                    }}
+                                    style={{
+                                      ...btnBase,
+                                      width: '100%',
+                                      padding: '4px 7px',
+                                      fontSize: 9.5,
+                                      background: 'rgba(16, 185, 129, 0.12)',
+                                      color: '#10B981',
+                                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      gap: 4
+                                    }}
+                                    title="Ver ou reabrir detalhes do lançamento financeiro"
+                                  >
+                                    <Check size={11} />
+                                    <span>Lançado (#${contaVinculada.codigo_sequencial || contaVinculada.id.slice(0, 5)})</span>
+                                  </button>
+                                )}
+
+                                {/* Linha Secundária: Copiar OC & Receber no Canteiro */}
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5, width: '100%' }}>
+                                  <button
+                                    type="button"
+                                    onClick={async (e) => {
+                                      e.stopPropagation()
+                                      const txt = gerarTextoOrdemCompra(item)
+                                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                                        await navigator.clipboard.writeText(txt)
+                                        toast('Ordem de Compra (OC) copiada para colar no WhatsApp do fornecedor!', 'success')
+                                      }
+                                    }}
+                                    style={{ ...btnBase, width: '100%', padding: '5px 6px', fontSize: 9.5, background: 'rgba(6, 182, 212, 0.14)', color: '#06B6D4', border: '1px solid rgba(6, 182, 212, 0.3)', whiteSpace: 'nowrap' }}
+                                    title="Copiar Ordem de Compra (OC) para enviar ao fornecedor no WhatsApp"
+                                  >
+                                    📋 Copiar OC
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      abrirModalRecebimento(item)
+                                    }}
+                                    style={{ ...btnBase, width: '100%', padding: '5px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A', fontWeight: 900, whiteSpace: 'nowrap' }}
+                                  >
+                                    <CheckSquare size={11} /> Receber
+                                  </button>
+                                </div>
                               </div>
                             )}
 
@@ -2522,25 +2629,41 @@ export default function SuprimentosPage() {
                         <div style={{ display: 'inline-flex', gap: 6 }}>
                           {item.status === 'Aprovação' && (
                             <button
+                              type="button"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                abrirModalAprovacao(item)
+                                handleAprovarCompraDiretoria(item)
                               }}
-                              style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: C.amber, color: '#0A0A0A' }}
+                              style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: C.amber, color: '#0A0A0A', fontWeight: 800 }}
                             >
-                              Aprovar
+                              <ShieldCheck size={11} /> Aprovar Compra
                             </button>
                           )}
                           {item.status === 'Em Trânsito' && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                abrirModalRecebimento(item)
-                              }}
-                              style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A' }}
-                            >
-                              Receber
-                            </button>
+                            <div style={{ display: 'inline-flex', gap: 6 }}>
+                              {!conta && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    abrirModalLancamentoFinanceiro(item)
+                                  }}
+                                  style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: C.amber, color: '#0A0A0A', fontWeight: 800 }}
+                                >
+                                  <DollarSign size={11} /> Lançamento
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  abrirModalRecebimento(item)
+                                }}
+                                style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: '#10B981', color: '#0A0A0A', fontWeight: 800 }}
+                              >
+                                <CheckSquare size={11} /> Receber
+                              </button>
+                            </div>
                           )}
                           <button
                             onClick={(e) => {
@@ -2942,13 +3065,13 @@ export default function SuprimentosPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <ShieldCheck size={16} color={C.amber} />
+                  <DollarSign size={16} color={C.amber} />
                   {itemSelecionado.status === 'Em Trânsito' || itemSelecionado.status === 'Entregue'
-                    ? 'Lançar Compra Aprovada no Financeiro'
+                    ? 'Programação & Lançamento no Financeiro'
                     : 'Aprovação de Compra, Ordem de Compra (OC) & Financeiro'}
                 </h3>
                 <p style={{ fontSize: 11, color: C.inkSoft, margin: '2px 0 0' }}>
-                  Gere/envie a Ordem de Compra ao fornecedor e escolha se deseja lançar no Financeiro agora ou deixar para lançamento manual posterior.
+                  Escolha se deseja gerar o lançamento automático no Financeiro agora ou registrar como lançamento manual posterior pelo canteiro/obra.
                 </p>
               </div>
               <button onClick={() => setModalAprovarOpen(false)} style={{ border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
@@ -3285,8 +3408,8 @@ export default function SuprimentosPage() {
                   {salvandoAprovacao
                     ? 'Processando...'
                     : aprovForm.lancar_financeiro
-                      ? 'Confirmar Aprovação & Lançar no Financeiro'
-                      : 'Aprovar Compra (Lançar no Financeiro Depois)'}
+                      ? 'Confirmar Lançamento no Financeiro'
+                      : 'Salvar (Lançamento Manual da Obra)'}
                 </button>
               </div>
             </form>
@@ -3476,6 +3599,7 @@ export default function SuprimentosPage() {
         colaboradorAtivo={colaboradorAtivo}
         contaVinculada={drawerItem ? contasVinculadas[drawerItem.id] : undefined}
         initialTab={drawerInitialTab}
+        onAbrirLancamentoFinanceiro={abrirModalLancamentoFinanceiro}
       />
 
       {ConfirmDialog}
