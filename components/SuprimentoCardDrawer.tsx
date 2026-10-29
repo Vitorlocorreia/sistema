@@ -1016,7 +1016,96 @@ export function SuprimentoCardDrawer({
   })()
   const condicaoCompraEfetiva = item.condicao_pagamento || condicaoExtraidaDaConta || ''
 
-    // 5.3 EXPORTAÇÃO: FORMATAR E COPIAR ORDEM DE COMPRA PARA WHATSAPP
+    // 5.2.1 IMPRESSÃO / SALVAR EM PDF (Gera janela limpa A4 independente de tema escuro ou layout)
+  function handleImprimirOC() {
+    const el = document.getElementById('area-ordem-compra')
+    if (!el) {
+      window.print()
+      return
+    }
+
+    const clone = el.cloneNode(true) as HTMLElement
+    clone.querySelectorAll('style, script, .no-print').forEach(s => s.remove())
+
+    const numOC = item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())
+    const win = window.open('', '_blank')
+
+    if (!win) {
+      window.print()
+      return
+    }
+
+    win.document.open()
+    win.document.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Ordem de Compra - ${numOC} - JWA S.A.</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm 12mm 10mm 12mm;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0;
+              padding: 0;
+              background: #FFFFFF !important;
+              color: #111827 !important;
+              font-family: Arial, Helvetica, sans-serif;
+              font-size: 11px;
+              width: 100%;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            .no-print {
+              display: none !important;
+            }
+            .bloco-assinatura-oc {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="no-print" style="padding: 10px 18px; background: #0F172A; color: #F8FAFC; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #334155; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <span style="font-size: 12px; font-weight: 700;">📄 Ordem de Compra — ${numOC} (JWA Engenharia & Construção)</span>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="window.print()" style="background: #16A34A; color: #FFF; border: none; border-radius: 4px; padding: 6px 14px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                🖨️ Imprimir / Salvar PDF
+              </button>
+              <button onclick="window.close()" style="background: #334155; color: #FFF; border: none; border-radius: 4px; padding: 6px 12px; font-size: 12px; cursor: pointer;">
+                Fechar
+              </button>
+            </div>
+          </div>
+
+          <div style="padding: 24px 30px;">
+            ${clone.innerHTML}
+          </div>
+
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.focus();
+                window.print();
+              }, 250);
+            };
+          </script>
+        </body>
+      </html>
+    `)
+    win.document.close()
+  }
+
+  // 5.3 EXPORTAÇÃO: FORMATAR E COPIAR ORDEM DE COMPRA PARA WHATSAPP
   function handleCopiarOCWhatsApp() {
     const numOC = item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())
     const obraNomeFinal = item.obra_nome_manual || obras.find(o => o.id === item.obra_id)?.nome || 'Não informada'
@@ -3253,7 +3342,7 @@ export function SuprimentoCardDrawer({
 
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={handleImprimirOC}
                 style={{
                   background: '#111827',
                   color: '#FFF',
