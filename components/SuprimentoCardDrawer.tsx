@@ -1016,6 +1016,92 @@ export function SuprimentoCardDrawer({
   })()
   const condicaoCompraEfetiva = item.condicao_pagamento || condicaoExtraidaDaConta || ''
 
+  // 5.2.1 IMPRESSÃO / SALVAR EM PDF SEM CLIPPING (Isola em iframe limpo)
+  function handleImprimirOC() {
+    const el = document.getElementById('area-ordem-compra')
+    if (!el) {
+      window.print()
+      return
+    }
+
+    // Cria iframe isolado temporário para impressão direta sem cortes de tela/gaveta
+    const iframe = document.createElement('iframe')
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    iframe.style.visibility = 'hidden'
+    document.body.appendChild(iframe)
+
+    const numOC = item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())
+    const doc = iframe.contentWindow?.document
+    if (!doc) {
+      window.print()
+      return
+    }
+
+    doc.open()
+    doc.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+        <head>
+          <meta charset="utf-8" />
+          <title>Ordem de Compra - ${numOC} - JWA S.A.</title>
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 10mm 12mm 10mm 12mm;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            html, body {
+              margin: 0;
+              padding: 0;
+              background: #FFFFFF !important;
+              color: #111827 !important;
+              font-family: Arial, Helvetica, sans-serif;
+              font-size: 11px;
+              width: 100%;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+            }
+            .no-print {
+              display: none !important;
+            }
+            .bloco-assinatura-oc {
+              page-break-inside: avoid !important;
+              break-inside: avoid !important;
+            }
+          </style>
+        </head>
+        <body>
+          ${el.innerHTML}
+        </body>
+      </html>
+    `)
+    doc.close()
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow?.focus()
+        iframe.contentWindow?.print()
+      } finally {
+        setTimeout(() => {
+          if (document.body.contains(iframe)) {
+            document.body.removeChild(iframe)
+          }
+        }, 3000)
+      }
+    }, 350)
+  }
+
   // 5.3 EXPORTAÇÃO: FORMATAR E COPIAR ORDEM DE COMPRA PARA WHATSAPP
   function handleCopiarOCWhatsApp() {
     const numOC = item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())
@@ -3250,7 +3336,7 @@ export function SuprimentoCardDrawer({
 
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={handleImprimirOC}
                 style={{
                   background: '#111827',
                   color: '#FFF',
@@ -3293,19 +3379,45 @@ export function SuprimentoCardDrawer({
           <div id="area-ordem-compra" style={{ padding: '32px 36px', background: '#FFFFFF', color: '#111827', fontFamily: 'Arial, sans-serif' }}>
             <style>{`
               @media print {
-                body * { visibility: hidden !important; }
-                #area-ordem-compra, #area-ordem-compra * { visibility: visible !important; }
+                @page {
+                  size: A4 portrait;
+                  margin: 10mm 12mm;
+                }
+                html, body {
+                  width: 100% !important;
+                  height: auto !important;
+                  overflow: visible !important;
+                  background: #FFF !important;
+                  color: #000 !important;
+                }
+                body * {
+                  visibility: hidden !important;
+                }
+                #area-ordem-compra, #area-ordem-compra * {
+                  visibility: visible !important;
+                }
                 #area-ordem-compra {
                   position: absolute !important;
                   left: 0 !important;
                   top: 0 !important;
                   width: 100% !important;
-                  padding: 20mm !important;
+                  padding: 0 !important;
                   margin: 0 !important;
                   background: #FFF !important;
                   color: #000 !important;
+                  overflow: visible !important;
                 }
-                .no-print { display: none !important; }
+                .no-print {
+                  display: none !important;
+                }
+                * {
+                  -webkit-print-color-adjust: exact !important;
+                  print-color-adjust: exact !important;
+                }
+                .bloco-assinatura-oc {
+                  page-break-inside: avoid !important;
+                  break-inside: avoid !important;
+                }
               }
             `}</style>
 
@@ -3505,16 +3617,16 @@ export function SuprimentoCardDrawer({
             {/* Assinatura Eletrônica & Autenticação por Login (Dispensa assinatura manual) */}
             {(() => {
               const hist = Array.isArray(item.historico_atividades) ? item.historico_atividades : []
-              const aprovAct = hist.find((a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro' || a.acao === 'aprovacao_compra_diretoria')
+              const aprovAct = hist.find((a: any) => a.acao === 'aprovacao_compra' || a.acao === 'aprovacao_sem_financeiro' || a.acao === 'aprovacao_compra_diretoria' || a.acao === 'assinatura_exportacao_oc')
               const recebAct = hist.find((a: any) => a.acao === 'recebimento_obra' || (a.acao === 'mudanca_etapa' && a.para === 'Entregue'))
               const assinanteCompra = aprovAct?.autor_nome || autorAtual
               const dataAssinaturaCompra = aprovAct?.data ? new Date(aprovAct.data).toLocaleString('pt-BR') : new Date().toLocaleString('pt-BR')
               const hashAutenticacao = `JWA-${item.id.slice(0, 6).toUpperCase()}-${(colaboradorAtivo?.id || 'AUTH').slice(0, 4).toUpperCase()}`
 
               return (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 24 }}>
+                <div id="bloco-assinatura-oc" className="bloco-assinatura-oc" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, marginTop: 22, pageBreakInside: 'avoid', breakInside: 'avoid' }}>
                   {/* Coluna 1: Assinatura Digital de Emissão / Aprovação pelo Login */}
-                  <div style={{ background: '#F0FDF4', border: '1.5px solid #86EFAC', borderRadius: 6, padding: '10px 14px', color: '#111827' }}>
+                  <div style={{ background: '#F0FDF4', border: '2px solid #16A34A', borderRadius: 6, padding: '10px 14px', color: '#111827', WebkitPrintColorAdjust: 'exact', printColorAdjust: 'exact' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                       <span style={{ fontSize: 9.5, fontWeight: 900, color: '#15803D', textTransform: 'uppercase', letterSpacing: 0.4 }}>
                         ✔ Assinado Digitalmente (Login JWA)

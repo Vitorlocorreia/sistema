@@ -872,7 +872,7 @@ export default function SuprimentosPage() {
       `  • *INSCRIÇÃO ESTADUAL:* 129.424.849.110`,
       `  • *ENDEREÇO:* RUA SERRA DE BOTUCATU Nº 878 – SALA 1503 - VLA GOMES CARDIM – SÃO PAULO – SP – CEP: 03.317-000`,
       ``,
-      `👤 *Aprovado por:* ${colaboradorAtivo?.nome || 'Diretoria / Suprimentos'}`,
+      `✍️ *Assinado/Liberado digitalmente por:* ${colaboradorAtivo?.nome || 'Diretoria / Suprimentos'} (JWA Engenharia & Construção em ${new Date().toLocaleDateString('pt-BR')})`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
       `Favor confirmar o recebimento desta Ordem de Compra e a previsão de entrega no canteiro.`
     ].join('\n')
