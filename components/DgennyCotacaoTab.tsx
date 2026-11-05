@@ -811,25 +811,90 @@ export function DgennyCotacaoTab({
 
   const defaultWhatsApp = apiStatus.whatsappNumbers?.[0]
 
-  // Helper de tradução de status da negociação
-  const getNegotiationStatusInfo = (status: string) => {
+  // Helper de tradução de status da negociação idêntico aos badges da dgenny
+  const getNegotiationStatusInfo = (
+    statusOrItem: string | any,
+    maybeOptions?: { hasBudget?: boolean; unansweredFromSupplier?: boolean }
+  ) => {
+    const status = typeof statusOrItem === 'string' ? statusOrItem : statusOrItem?.status || ''
+    const hasBudget = typeof statusOrItem === 'object' ? Boolean(statusOrItem?.hasBudget) : Boolean(maybeOptions?.hasBudget)
+    const unanswered = typeof statusOrItem === 'object' ? Boolean(statusOrItem?.unansweredFromSupplier) : Boolean(maybeOptions?.unansweredFromSupplier)
+
     switch (status) {
       case 'completed':
-        return { label: 'Orçamento Recebido', color: '#10B981', bg: 'rgba(16, 185, 129, 0.14)' }
+        if (hasBudget) {
+          return {
+            label: 'Finalizada',
+            sublabel: 'Orçamento Recebido',
+            color: '#10B981',
+            bg: 'rgba(16, 185, 129, 0.14)',
+            border: 'rgba(16, 185, 129, 0.3)'
+          }
+        }
+        return {
+          label: 'Finalizada',
+          sublabel: 'Sem Resposta (2 Abordagens)',
+          color: '#9CA3AF',
+          bg: 'rgba(156, 163, 175, 0.14)',
+          border: 'rgba(156, 163, 175, 0.28)'
+        }
       case 'active':
-        return { label: 'Em Conversa', color: C.amber, bg: 'rgba(245, 158, 11, 0.14)' }
-      case 'queued':
-        return { label: 'Na Fila de Disparo', color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.14)' }
-      case 'scheduled':
-        return { label: 'Disparo Agendado', color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.14)' }
+        return {
+          label: 'Em Andamento',
+          sublabel: unanswered ? 'Fornecedor Respondeu' : 'Negociando',
+          color: '#F59E0B',
+          bg: 'rgba(245, 158, 11, 0.14)',
+          border: 'rgba(245, 158, 11, 0.3)'
+        }
       case 'on_hold':
-        return { label: 'Aguardando Vez', color: '#F59E0B', bg: 'rgba(245, 158, 11, 0.12)' }
+        return {
+          label: 'Em Espera',
+          sublabel: 'Aguardando Vez',
+          color: '#F59E0B',
+          bg: 'rgba(245, 158, 11, 0.12)',
+          border: 'rgba(245, 158, 11, 0.25)'
+        }
+      case 'queued':
+        return {
+          label: 'Na Fila',
+          sublabel: 'Fila de Disparo',
+          color: '#3B82F6',
+          bg: 'rgba(59, 130, 246, 0.14)',
+          border: 'rgba(59, 130, 246, 0.3)'
+        }
+      case 'scheduled':
+        return {
+          label: 'Agendada',
+          sublabel: 'Disparo Programado',
+          color: '#8B5CF6',
+          bg: 'rgba(139, 92, 246, 0.14)',
+          border: 'rgba(139, 92, 246, 0.3)'
+        }
       case 'interrupted':
-        return { label: 'Interrompida', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.14)' }
+        return {
+          label: 'Interrompida',
+          sublabel: 'Negociação Pausada',
+          color: '#EF4444',
+          bg: 'rgba(239, 68, 68, 0.14)',
+          border: 'rgba(239, 68, 68, 0.3)'
+        }
       case 'failed':
-        return { label: 'Falha no WhatsApp', color: '#EF4444', bg: 'rgba(239, 68, 68, 0.14)' }
+        return {
+          label: 'Falha no Envio',
+          sublabel: 'WhatsApp Indisponível',
+          color: '#EF4444',
+          bg: 'rgba(239, 68, 68, 0.14)',
+          border: 'rgba(239, 68, 68, 0.3)'
+        }
+      case 'not_started':
       default:
-        return { label: 'Não Iniciada', color: '#9CA3AF', bg: 'rgba(156, 163, 175, 0.14)' }
+        return {
+          label: 'Não Iniciada',
+          sublabel: 'Pendente',
+          color: '#9CA3AF',
+          bg: 'rgba(156, 163, 175, 0.14)',
+          border: 'rgba(156, 163, 175, 0.25)'
+        }
     }
   }
 
@@ -1010,12 +1075,14 @@ export function DgennyCotacaoTab({
                   }}
                 >
                   {statusCotacao === 'completed'
-                    ? 'Concluída'
+                    ? 'Finalizada'
                     : statusCotacao === 'draft'
-                    ? 'Rascunho (Aguardando Disparo)'
+                    ? 'Rascunho'
+                    : statusCotacao === 'scheduled'
+                    ? 'Agendada'
                     : statusCotacao === 'cancelled'
                     ? 'Cancelada'
-                    : 'Negociando no WhatsApp'}
+                    : 'Em Andamento'}
                 </span>
               </div>
               <div style={{ fontSize: 11, color: C.inkSoft }}>
@@ -1216,7 +1283,7 @@ export function DgennyCotacaoTab({
                 ) : (
                   negs.map((n: any) => {
                     const isSelected = chatSupplier?.supplierId === n.supplierId
-                    const st = getNegotiationStatusInfo(n.status)
+                    const st = getNegotiationStatusInfo(n)
                     const budgetForn = budgets.find((b: any) => b.supplierId === n.supplierId)
 
                     return (
@@ -1261,6 +1328,7 @@ export function DgennyCotacaoTab({
                         <div style={{ fontSize: 10, color: C.inkSoft }}>+{n.phone}</div>
 
                         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                          {/* Badge de status idêntico à dgenny */}
                           <span
                             style={{
                               fontSize: 8.5,
@@ -1268,11 +1336,45 @@ export function DgennyCotacaoTab({
                               padding: '1px 5px',
                               borderRadius: 3,
                               background: st.bg,
-                              color: st.color
+                              color: st.color,
+                              border: `1px solid ${st.border || 'transparent'}`
                             }}
                           >
                             {st.label}
                           </span>
+
+                          {/* Se finalizada sem resposta (2 abordagens) */}
+                          {n.status === 'completed' && !n.hasBudget && (
+                            <span
+                              style={{
+                                fontSize: 8,
+                                fontWeight: 700,
+                                padding: '1px 4px',
+                                borderRadius: 3,
+                                background: 'rgba(107, 114, 128, 0.12)',
+                                color: '#9CA3AF'
+                              }}
+                              title="O agente realizou 2 abordagens no WhatsApp sem retorno do fornecedor"
+                            >
+                              SEM RESPOSTA (2 ABORDAGENS)
+                            </span>
+                          )}
+
+                          {/* Se tem proposta/orçamento pronto */}
+                          {n.hasBudget && (
+                            <span
+                              style={{
+                                fontSize: 8,
+                                fontWeight: 800,
+                                padding: '1px 4px',
+                                borderRadius: 3,
+                                background: 'rgba(16, 185, 129, 0.15)',
+                                color: '#10B981'
+                              }}
+                            >
+                              ORÇAMENTO RECEBIDO
+                            </span>
+                          )}
 
                           {n.aiPaused && (
                             <span
@@ -1388,7 +1490,9 @@ export function DgennyCotacaoTab({
                         </span>
                       </div>
                       <div style={{ fontSize: 10, opacity: 0.85, marginTop: 1 }}>
-                        WhatsApp +{chatSupplier.phone} · {getNegotiationStatusInfo(chatSupplier.status).label}
+                        WhatsApp +{chatSupplier.phone} · {getNegotiationStatusInfo(chatSupplier).label}
+                        {chatSupplier.status === 'completed' && !chatSupplier.hasBudget && ' · Sem resposta após 2 abordagens'}
+                        {chatSupplier.hasBudget && ' · Orçamento recebido'}
                       </div>
                     </div>
 
@@ -2048,7 +2152,7 @@ export function DgennyCotacaoTab({
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {negs.map((n: any) => {
-                  const st = getNegotiationStatusInfo(n.status)
+                  const st = getNegotiationStatusInfo(n)
 
                   return (
                     <div
@@ -2074,21 +2178,39 @@ export function DgennyCotacaoTab({
                           }}
                         />
                         <div>
-                          <div style={{ fontWeight: 800, fontSize: 12, color: C.ink, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{ fontWeight: 800, fontSize: 12, color: C.ink, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <span>{n.name}</span>
+                            <span
+                              style={{
+                                fontSize: 9,
+                                fontWeight: 800,
+                                background: st.bg,
+                                color: st.color,
+                                padding: '1px 5px',
+                                borderRadius: 3,
+                                border: `1px solid ${st.border || 'transparent'}`
+                              }}
+                            >
+                              {st.label}
+                            </span>
+                            {n.status === 'completed' && !n.hasBudget && (
+                              <span style={{ fontSize: 8.5, background: 'rgba(107, 114, 128, 0.15)', color: '#9CA3AF', padding: '1px 5px', borderRadius: 3, fontWeight: 700 }}>
+                                SEM RESPOSTA (2 ABORDAGENS)
+                              </span>
+                            )}
+                            {n.hasBudget && (
+                              <span style={{ fontSize: 8.5, background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
+                                ORÇAMENTO RECEBIDO
+                              </span>
+                            )}
                             {n.aiPaused && (
                               <span style={{ fontSize: 9, background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
                                 IA PAUSADA
                               </span>
                             )}
-                            {n.hasBudget && (
-                              <span style={{ fontSize: 9, background: 'rgba(16, 185, 129, 0.15)', color: '#10B981', padding: '1px 5px', borderRadius: 3, fontWeight: 800 }}>
-                                PROPOSTA PRONTA
-                              </span>
-                            )}
                           </div>
                           <div style={{ fontSize: 10, color: C.inkSoft }}>
-                            {st.label} · +{n.phone}
+                            {st.label} {n.status === 'completed' && !n.hasBudget ? '· Sem resposta após 2 abordagens' : n.hasBudget ? '· Orçamento disponível no mapa comparativo' : ''} · +{n.phone}
                           </div>
                         </div>
                       </div>
@@ -2200,8 +2322,21 @@ export function DgennyCotacaoTab({
                 }}
                 title="Abrir tela de conversas no WhatsApp e mapa comparativo desta cotação"
               >
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: q.status === 'active' ? '#10B981' : C.amber }} />
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: q.status === 'completed' ? '#10B981' : q.status === 'active' ? '#F59E0B' : '#9CA3AF' }} />
                 <span>{q.name}</span>
+                <span
+                  style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    color: q.status === 'completed' ? '#10B981' : q.status === 'active' ? '#F59E0B' : '#9CA3AF',
+                    background: q.status === 'completed' ? 'rgba(16, 185, 129, 0.14)' : q.status === 'active' ? 'rgba(245, 158, 11, 0.14)' : 'rgba(156, 163, 175, 0.14)',
+                    padding: '1px 5px',
+                    borderRadius: 4
+                  }}
+                >
+                  {q.status === 'completed' ? 'Finalizada' : q.status === 'active' ? 'Em Andamento' : q.status}
+                </span>
                 <span style={{ fontSize: 9.5, color: '#06B6D4', background: 'rgba(6, 182, 212, 0.14)', padding: '1px 5px', borderRadius: 4 }}>
                   {q.selectedSuppliersCount || q.suppliersCount || 0} forn. no WhatsApp
                 </span>
