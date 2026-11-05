@@ -166,6 +166,19 @@ export class DgennyClient {
   }
 
   /**
+   * Adiciona novos fornecedores a uma cotação existente (em andamento)
+   */
+  async addSuppliers(
+    id: string,
+    suppliers: Array<{ name: string; phone: string; contactName?: string; externalId?: string }>
+  ): Promise<{ ok: boolean; suppliers?: any[]; dispatch?: any }> {
+    return this.request<{ ok: boolean; suppliers?: any[]; dispatch?: any }>(`/api/partner/v1/quotations/${id}/suppliers`, {
+      method: 'POST',
+      body: JSON.stringify({ suppliers })
+    })
+  }
+
+  /**
    * Obtém a cotação inteira com itens e status
    */
   async getQuotation(id: string): Promise<DgennyQuotationDetail> {

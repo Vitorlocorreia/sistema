@@ -82,6 +82,23 @@ export async function POST(
       return NextResponse.json(res)
     }
 
+    if (action === 'add_suppliers' && Array.isArray(body.suppliers)) {
+      const formattedSuppliers = body.suppliers.map((s: any) => {
+        let phone = String(s.phone || '').replace(/\D/g, '')
+        if (phone.length === 10 || phone.length === 11) {
+          phone = '55' + phone
+        }
+        return {
+          name: String(s.name || '').trim(),
+          phone,
+          contactName: s.contactName ? String(s.contactName).trim() : undefined,
+          externalId: s.externalId ? String(s.externalId).trim() : undefined
+        }
+      })
+      const res = await dgenny.addSuppliers(id, formattedSuppliers)
+      return NextResponse.json(res)
+    }
+
     return NextResponse.json({ ok: false, message: `Ação desconhecida: ${action}` }, { status: 400 })
   } catch (error: any) {
     return NextResponse.json(

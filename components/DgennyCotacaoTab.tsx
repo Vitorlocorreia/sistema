@@ -28,7 +28,8 @@ import {
   Ban,
   Mic,
   Image as ImageIcon,
-  Layers
+  Layers,
+  UserPlus
 } from 'lucide-react'
 import { C } from '@/lib/tokens'
 import { toast } from '@/components/Toast'
@@ -141,6 +142,19 @@ export function DgennyCotacaoTab({
   // Concluir com vencedor / Ações da cotação
   const [concluindo, setConcluindo] = useState(false)
   const [executandoAcao, setExecutandoAcao] = useState(false)
+
+  // Inclusão de fornecedores em cotação já em andamento
+  const [modalAdicionarFornecedores, setModalAdicionarFornecedores] = useState(false)
+  const [abaNovosFornecedores, setAbaNovosFornecedores] = useState<'cadastrados' | 'manual'>('cadastrados')
+  const [novosFornecedoresSelecionados, setNovosFornecedoresSelecionados] = useState<string[]>([])
+  const [novosFornecedoresManuais, setNovosFornecedoresManuais] = useState<
+    Array<{ name: string; phone: string; contactName?: string }>
+  >([])
+  const [novoManualNome, setNovoManualNome] = useState('')
+  const [novoManualTelefone, setNovoManualTelefone] = useState('')
+  const [novoManualContato, setNovoManualContato] = useState('')
+  const [filtroNovoFornecedor, setFiltroNovoFornecedor] = useState('')
+  const [salvandoNovosFornecedores, setSalvandoNovosFornecedores] = useState(false)
 
   // Normaliza telefone para dígitos com DDI 55
   const normalizePhone = (raw: string) => {
@@ -578,6 +592,127 @@ export function DgennyCotacaoTab({
       toast('Erro ao comunicar com a dgenny', 'error')
     } finally {
       setExecutandoAcao(false)
+    }
+  }
+
+  // Adiciona fornecedor manual na fila temporária da modal de inclusão
+  const handleAddManualNaFila = () => {
+    const phoneNorm = normalizePhone(novoManualTelefone)
+    if (!novoManualNome.trim()) {
+      toast('Informe o nome da empresa ou fornecedor.', 'warning')
+      return
+    }
+    if (phoneNorm.length < 10) {
+      toast('Informe um telefone WhatsApp válido com DDD.', 'warning')
+      return
+    }
+    const jaNaCotacao = (quotationData?.negotiations || []).some(
+      (n: any) => normalizePhone(n.phone) === phoneNorm
+    )
+    if (jaNaCotacao) {
+      toast('Este fornecedor/número já está na cotação ativa.', 'warning')
+      return
+    }
+    if (novosFornecedoresManuais.some(m => normalizePhone(m.phone) === phoneNorm)) {
+      toast('Este número já está na lista a ser incluída.', 'warning')
+      return
+    }
+
+    setNovosFornecedoresManuais(prev => [
+      ...prev,
+      {
+        name: novoManualNome.trim(),
+        phone: phoneNorm,
+        contactName: novoManualContato.trim() || undefined
+      }
+    ])
+    setNovoManualNome('')
+    setNovoManualTelefone('')
+    setNovoManualContato('')
+    toast('Fornecedor adicionado à lista de inclusão.', 'info')
+  }
+
+  // Dispara inclusão dos novos fornecedores na cotação em andamento
+  const handleSalvarNovosFornecedores = async () => {
+    if (!quotationId) return
+
+    const fornecedoresParaAdicionar: Array<{
+      name: string
+      phone: string
+      contactName?: string
+      externalId?: string
+    }> = []
+
+    // 1. Cadastrados selecionados
+    novosFornecedoresSelecionados.forEach(phone => {
+      const f = listaFornecedoresConsolidada.find(item => item.phone === phone)
+      if (f) {
+        fornecedoresParaAdicionar.push({
+          name: f.name,
+          phone: f.phone,
+          contactName: f.contactName || undefined,
+          externalId: `FORN-${f.phone}`
+        })
+      }
+    })
+
+    // 2. Manuais da fila
+    novosFornecedoresManuais.forEach(m => {
+      fornecedoresParaAdicionar.push({
+        name: m.name,
+        phone: normalizePhone(m.phone),
+        contactName: m.contactName || undefined,
+        externalId: `FORN-${normalizePhone(m.phone)}`
+      })
+    })
+
+    // 3. Se preencheu os campos manuais mas não clicou em "Adicionar à Fila"
+    if (novoManualNome.trim() && novoManualTelefone.trim()) {
+      const phoneNorm = normalizePhone(novoManualTelefone)
+      if (phoneNorm.length >= 10 && !fornecedoresParaAdicionar.some(f => f.phone === phoneNorm)) {
+        fornecedoresParaAdicionar.push({
+          name: novoManualNome.trim(),
+          phone: phoneNorm,
+          contactName: novoManualContato.trim() || undefined,
+          externalId: `FORN-${phoneNorm}`
+        })
+      }
+    }
+
+    if (fornecedoresParaAdicionar.length === 0) {
+      toast('Selecione ou informe ao menos um fornecedor para incluir.', 'warning')
+      return
+    }
+
+    setSalvandoNovosFornecedores(true)
+    try {
+      const res = await fetch(`/api/dgenny/quotations/${quotationId}/suppliers`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ suppliers: fornecedoresParaAdicionar })
+      })
+
+      const data = await res.json()
+      if (data.ok) {
+        toast(
+          `${fornecedoresParaAdicionar.length} fornecedor(es) incluído(s) com sucesso! A IA já iniciou a abordagem no WhatsApp.`,
+          'success'
+        )
+        setNovosFornecedoresSelecionados([])
+        setNovosFornecedoresManuais([])
+        setNovoManualNome('')
+        setNovoManualTelefone('')
+        setNovoManualContato('')
+        setFiltroNovoFornecedor('')
+        setModalAdicionarFornecedores(false)
+        await carregarDadosCotacao(quotationId)
+      } else {
+        toast(data.message || 'Erro ao adicionar fornecedores na dgenny', 'error')
+      }
+    } catch {
+      toast('Falha ao comunicar com a dgenny', 'error')
+    } finally {
+      setSalvandoNovosFornecedores(false)
     }
   }
 
@@ -1117,6 +1252,29 @@ export function DgennyCotacaoTab({
 
             <button
               type="button"
+              onClick={() => setModalAdicionarFornecedores(true)}
+              style={{
+                background: 'rgba(16, 185, 129, 0.12)',
+                color: '#10B981',
+                border: '1px solid rgba(16, 185, 129, 0.35)',
+                borderRadius: 6,
+                padding: '6px 12px',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                transition: 'all 0.15s ease'
+              }}
+              title="Adicionar mais fornecedores a esta cotação em andamento"
+            >
+              <UserPlus size={13} />
+              <span>+ Incluir Fornecedores</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => {
                 carregarDadosCotacao(quotationId)
                 if (subTabAtiva === 'conversas' && chatSupplier?.supplierId) {
@@ -1273,6 +1431,26 @@ export function DgennyCotacaoTab({
                 }}
               >
                 <span>Fornecedores ({negs.length})</span>
+                <button
+                  type="button"
+                  onClick={() => setModalAdicionarFornecedores(true)}
+                  title="Incluir mais fornecedores nesta negociação"
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.15)',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    color: '#10B981',
+                    fontSize: 10,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    padding: '3px 7px',
+                    borderRadius: 4
+                  }}
+                >
+                  <UserPlus size={11} /> + Novo
+                </button>
               </div>
 
               <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -2266,6 +2444,563 @@ export function DgennyCotacaoTab({
               </div>
             </div>
           </>
+        )}
+
+        {/* Modal: Incluir novos fornecedores à cotação em andamento */}
+        {modalAdicionarFornecedores && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 6000,
+              background: 'rgba(0, 0, 0, 0.75)',
+              backdropFilter: 'blur(4px)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16
+            }}
+            onClick={() => {
+              if (!salvandoNovosFornecedores) setModalAdicionarFornecedores(false)
+            }}
+          >
+            <div
+              style={{
+                background: C.bgPanel,
+                border: `1px solid ${C.border}`,
+                borderRadius: 12,
+                width: '100%',
+                maxWidth: 620,
+                maxHeight: '90vh',
+                display: 'flex',
+                flexDirection: 'column',
+                boxShadow: '0 20px 45px rgba(0, 0, 0, 0.6)',
+                overflow: 'hidden'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Header da Modal */}
+              <div
+                style={{
+                  padding: '16px 20px',
+                  borderBottom: `1px solid ${C.border}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: C.bgCard
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 8,
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      color: '#10B981',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center'
+                    }}
+                  >
+                    <UserPlus size={18} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink }}>
+                      Incluir Fornecedores na Negociação
+                    </h3>
+                    <p style={{ margin: 0, fontSize: 11, color: C.inkSoft }}>
+                      A IA da DGenny iniciará a abordagem no WhatsApp sem alterar as negociações ativas.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setModalAdicionarFornecedores(false)}
+                  disabled={salvandoNovosFornecedores}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: C.inkSoft,
+                    cursor: 'pointer',
+                    padding: 4,
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Sub-abas: Cadastrados vs Manual */}
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 8,
+                  padding: '12px 20px 0 20px',
+                  background: C.bgCard
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => setAbaNovosFornecedores('cadastrados')}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    border: abaNovosFornecedores === 'cadastrados' ? '1px solid #10B981' : `1px solid ${C.border}`,
+                    background: abaNovosFornecedores === 'cadastrados' ? 'rgba(16, 185, 129, 0.12)' : 'transparent',
+                    color: abaNovosFornecedores === 'cadastrados' ? '#10B981' : C.inkSoft,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Bot size={13} />
+                  <span>Cadastrados / Base ({listaFornecedoresConsolidada.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAbaNovosFornecedores('manual')}
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: 11.5,
+                    fontWeight: 800,
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    border: abaNovosFornecedores === 'manual' ? '1px solid #10B981' : `1px solid ${C.border}`,
+                    background: abaNovosFornecedores === 'manual' ? 'rgba(16, 185, 129, 0.12)' : 'transparent',
+                    color: abaNovosFornecedores === 'manual' ? '#10B981' : C.inkSoft,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6
+                  }}
+                >
+                  <Phone size={13} />
+                  <span>Adicionar Manual (WhatsApp) {novosFornecedoresManuais.length > 0 ? `(${novosFornecedoresManuais.length})` : ''}</span>
+                </button>
+              </div>
+
+              {/* Corpo da Modal */}
+              <div style={{ padding: '16px 20px', flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {abaNovosFornecedores === 'cadastrados' ? (
+                  <>
+                    <div style={{ position: 'relative' }}>
+                      <Search
+                        size={13}
+                        style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: C.inkSoft }}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Buscar por nome, razão social, CNPJ ou telefone..."
+                        value={filtroNovoFornecedor}
+                        onChange={e => setFiltroNovoFornecedor(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '8px 10px 8px 32px',
+                          background: C.bgCard,
+                          border: `1px solid ${C.border}`,
+                          borderRadius: 6,
+                          fontSize: 11.5,
+                          color: C.ink,
+                          outline: 'none'
+                        }}
+                      />
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 6,
+                        maxHeight: 280,
+                        overflowY: 'auto',
+                        paddingRight: 4
+                      }}
+                    >
+                      {(() => {
+                        const phonesNaCotacao = new Set(
+                          (negs || []).map((n: any) => normalizePhone(n.phone))
+                        )
+                        const termo = filtroNovoFornecedor.trim().toLowerCase()
+                        const lista = listaFornecedoresConsolidada.filter(f => {
+                          if (!termo) return true
+                          return (
+                            f.name.toLowerCase().includes(termo) ||
+                            f.phone.includes(termo) ||
+                            (f.cnpj && f.cnpj.includes(termo)) ||
+                            (f.contactName && f.contactName.toLowerCase().includes(termo))
+                          )
+                        })
+
+                        if (lista.length === 0) {
+                          return (
+                            <div style={{ padding: 20, textAlign: 'center', color: C.inkSoft, fontSize: 11 }}>
+                              Nenhum fornecedor encontrado com os termos digitados.
+                            </div>
+                          )
+                        }
+
+                        return lista.map(f => {
+                          const jaEsta = phonesNaCotacao.has(f.phone)
+                          const selecionado = novosFornecedoresSelecionados.includes(f.phone)
+
+                          return (
+                            <label
+                              key={f.phone}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '8px 12px',
+                                borderRadius: 6,
+                                border: `1px solid ${jaEsta ? C.border : selecionado ? '#10B981' : C.border}`,
+                                background: jaEsta
+                                  ? 'rgba(0,0,0,0.1)'
+                                  : selecionado
+                                  ? 'rgba(16, 185, 129, 0.08)'
+                                  : C.bgCard,
+                                opacity: jaEsta ? 0.6 : 1,
+                                cursor: jaEsta ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <input
+                                  type="checkbox"
+                                  disabled={jaEsta}
+                                  checked={jaEsta || selecionado}
+                                  onChange={e => {
+                                    if (jaEsta) return
+                                    if (e.target.checked) {
+                                      setNovosFornecedoresSelecionados(prev => [...prev, f.phone])
+                                    } else {
+                                      setNovosFornecedoresSelecionados(prev => prev.filter(p => p !== f.phone))
+                                    }
+                                  }}
+                                  style={{ cursor: jaEsta ? 'not-allowed' : 'pointer' }}
+                                />
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 800, color: C.ink }}>
+                                    {f.name}
+                                  </div>
+                                  <div style={{ fontSize: 10.5, color: C.inkSoft, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span>+{f.phone}</span>
+                                    {f.contactName && <span>· Contato: {f.contactName}</span>}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div>
+                                {jaEsta ? (
+                                  <span
+                                    style={{
+                                      fontSize: 9.5,
+                                      fontWeight: 800,
+                                      textTransform: 'uppercase',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      background: 'rgba(255,255,255,0.08)',
+                                      color: C.inkSoft
+                                    }}
+                                  >
+                                    Já na Cotação
+                                  </span>
+                                ) : (
+                                  <span
+                                    style={{
+                                      fontSize: 9.5,
+                                      fontWeight: 800,
+                                      textTransform: 'uppercase',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      background:
+                                        f.origem === 'sistema'
+                                          ? 'rgba(16, 185, 129, 0.15)'
+                                          : f.origem === 'dgenny'
+                                          ? 'rgba(139, 92, 246, 0.15)'
+                                          : 'rgba(59, 130, 246, 0.15)',
+                                      color:
+                                        f.origem === 'sistema'
+                                          ? '#10B981'
+                                          : f.origem === 'dgenny'
+                                          ? '#A78BFA'
+                                          : '#60A5FA'
+                                    }}
+                                  >
+                                    {f.origem === 'sistema'
+                                      ? 'Sistema'
+                                      : f.origem === 'dgenny'
+                                      ? 'Base DGenny'
+                                      : 'Manual'}
+                                  </span>
+                                )}
+                              </div>
+                            </label>
+                          )
+                        })
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      style={{
+                        padding: 12,
+                        background: C.bgCard,
+                        border: `1px solid ${C.border}`,
+                        borderRadius: 8,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 10
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>
+                        Novo Fornecedor Avulso
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase' }}>
+                            Nome / Razão Social *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Madeireira Central"
+                            value={novoManualNome}
+                            onChange={e => setNovoManualNome(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '7px 9px',
+                              background: C.bgPanel,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 5,
+                              fontSize: 11,
+                              color: C.ink,
+                              marginTop: 3,
+                              outline: 'none'
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase' }}>
+                            WhatsApp (DDD + Número) *
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: 11999998888"
+                            value={novoManualTelefone}
+                            onChange={e => setNovoManualTelefone(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '7px 9px',
+                              background: C.bgPanel,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 5,
+                              fontSize: 11,
+                              color: C.ink,
+                              marginTop: 3,
+                              outline: 'none'
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 8, alignItems: 'flex-end' }}>
+                        <div>
+                          <label style={{ fontSize: 10, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase' }}>
+                            Nome do Vendedor / Contato (Opcional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="Ex: Carlos Vendas"
+                            value={novoManualContato}
+                            onChange={e => setNovoManualContato(e.target.value)}
+                            style={{
+                              width: '100%',
+                              padding: '7px 9px',
+                              background: C.bgPanel,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 5,
+                              fontSize: 11,
+                              color: C.ink,
+                              marginTop: 3,
+                              outline: 'none'
+                            }}
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleAddManualNaFila}
+                          style={{
+                            background: '#10B981',
+                            color: '#0A0A0A',
+                            border: 'none',
+                            borderRadius: 5,
+                            padding: '8px 12px',
+                            fontSize: 11,
+                            fontWeight: 800,
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 5
+                          }}
+                        >
+                          <Plus size={12} />
+                          Adicionar à Lista
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Fila de fornecedores manuais adicionados */}
+                    {novosFornecedoresManuais.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 10.5, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>
+                          Fornecedores Manuais na Fila ({novosFornecedoresManuais.length}):
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>
+                          {novosFornecedoresManuais.map((m, idx) => (
+                            <div
+                              key={idx}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                padding: '6px 10px',
+                                background: C.bgCard,
+                                border: `1px solid ${C.border}`,
+                                borderRadius: 6,
+                                fontSize: 11
+                              }}
+                            >
+                              <div>
+                                <span style={{ fontWeight: 800, color: C.ink }}>{m.name}</span>
+                                <span style={{ color: C.inkSoft, marginLeft: 6 }}>+{m.phone}</span>
+                                {m.contactName && <span style={{ color: C.inkSoft }}> ({m.contactName})</span>}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => setNovosFornecedoresManuais(prev => prev.filter((_, i) => i !== idx))}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: '#EF4444',
+                                  cursor: 'pointer',
+                                  padding: 2
+                                }}
+                                title="Remover"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Footer da Modal */}
+              <div
+                style={{
+                  padding: '12px 20px',
+                  borderTop: `1px solid ${C.border}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  background: C.bgCard
+                }}
+              >
+                <div style={{ fontSize: 11, fontWeight: 700, color: C.inkSoft }}>
+                  {(() => {
+                    const total =
+                      novosFornecedoresSelecionados.length +
+                      novosFornecedoresManuais.length +
+                      (novoManualNome.trim() && novoManualTelefone.trim() ? 1 : 0)
+                    return `${total} fornecedor(es) pronto(s) para inclusão`
+                  })()}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => setModalAdicionarFornecedores(false)}
+                    disabled={salvandoNovosFornecedores}
+                    style={{
+                      background: 'transparent',
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 6,
+                      padding: '7px 12px',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: C.inkSoft,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancelar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSalvarNovosFornecedores}
+                    disabled={
+                      salvandoNovosFornecedores ||
+                      (novosFornecedoresSelecionados.length === 0 &&
+                        novosFornecedoresManuais.length === 0 &&
+                        (!novoManualNome.trim() || !novoManualTelefone.trim()))
+                    }
+                    style={{
+                      background: '#10B981',
+                      color: '#0A0A0A',
+                      border: 'none',
+                      borderRadius: 6,
+                      padding: '7px 14px',
+                      fontSize: 11,
+                      fontWeight: 800,
+                      cursor:
+                        salvandoNovosFornecedores ||
+                        (novosFornecedoresSelecionados.length === 0 &&
+                          novosFornecedoresManuais.length === 0 &&
+                          (!novoManualNome.trim() || !novoManualTelefone.trim()))
+                          ? 'not-allowed'
+                          : 'pointer',
+                      opacity:
+                        salvandoNovosFornecedores ||
+                        (novosFornecedoresSelecionados.length === 0 &&
+                          novosFornecedoresManuais.length === 0 &&
+                          (!novoManualNome.trim() || !novoManualTelefone.trim()))
+                          ? 0.5
+                          : 1,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 6
+                    }}
+                  >
+                    {salvandoNovosFornecedores ? (
+                      <RefreshCw size={12} className="animate-spin" />
+                    ) : (
+                      <Play size={12} />
+                    )}
+                    <span>
+                      {salvandoNovosFornecedores ? 'Adicionando e Iniciando IA...' : 'Disparar IA para Novos Fornecedores'}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     )
