@@ -32,7 +32,9 @@ import {
   FileCheck,
   FileText,
   Check,
-  Download
+  Download,
+  UserMinus,
+  UserCheck
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { PageTitle } from '@/components/PageTitle'
@@ -54,6 +56,7 @@ type Funcionario = {
   cargo: string | null
   obra?: string | null
   data_admissao: string | null
+  data_demissao?: string | null
   status: string
   email: string | null
   dados_registro?: any
@@ -608,7 +611,11 @@ function ArchivePanel({
   onVoltarAptos,
   onVoltarAdmissao,
   email,
-  onEditEmail
+  onEditEmail,
+  onAtivar,
+  onDesligar,
+  onReativar,
+  onAnexarRescisao
 }: {
   person: Funcionario
   details: Details
@@ -623,6 +630,10 @@ function ArchivePanel({
   onVoltarAdmissao?: () => void
   email?: string | null
   onEditEmail?: () => void
+  onAtivar?: () => void
+  onDesligar?: () => void
+  onReativar?: () => void
+  onAnexarRescisao?: () => void
 }) {
   const [filter, setFilter] = useState('')
   const [baixandoZip, setBaixandoZip] = useState(false)
@@ -685,9 +696,23 @@ function ArchivePanel({
             <h3 style={{ margin: 0, fontSize: 16, fontWeight: 900, color: C.ink, textTransform: 'uppercase' }}>
               {person.nome}
             </h3>
-            <span style={{ fontSize: 9.5, fontWeight: 900, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 8px', borderRadius: 4, border: '1px solid rgba(16, 185, 129, 0.3)' }}>
-              ✓ REGISTRADO (ATIVO)
-            </span>
+            {(() => {
+              const isRegistrado = (person.status || '').toLowerCase() === 'registrado'
+              const isAtivo = (person.status || '').toLowerCase() === 'ativo'
+              return (
+                <span style={{
+                  fontSize: 9.5,
+                  fontWeight: 900,
+                  color: isAtivo ? '#10B981' : isRegistrado ? '#3B82F6' : '#EF4444',
+                  background: isAtivo ? 'rgba(16, 185, 129, 0.1)' : isRegistrado ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                  padding: '2px 8px',
+                  borderRadius: 4,
+                  border: `1px solid ${isAtivo ? 'rgba(16, 185, 129, 0.3)' : isRegistrado ? 'rgba(59, 130, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
+                }}>
+                  {isAtivo ? '✓ ATIVO (EM ATIVIDADE)' : isRegistrado ? '📋 REGISTRADO (AGUARDANDO ATIVAÇÃO)' : '🔴 INATIVO / DESLIGADO'}
+                </span>
+              )
+            })()}
           </div>
           <div style={{ color: C.inkSoft, fontSize: 11, marginTop: 4, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
             <span>Cargo: <strong style={{ color: C.ink }}>{person.cargo || 'Não informado'}</strong></span>
@@ -906,6 +931,103 @@ function ArchivePanel({
         </div>
 
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Botões de Transição de Status */}
+          {(person.status || '').toLowerCase() === 'registrado' && onAtivar && (
+            <button
+              type="button"
+              onClick={onAtivar}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 14px',
+                borderRadius: 6,
+                background: '#10B981',
+                color: '#0A0A0A',
+                fontSize: 11,
+                fontWeight: 900,
+                cursor: 'pointer',
+                border: 'none',
+                boxShadow: '0 2px 8px rgba(16, 185, 129, 0.3)'
+              }}
+            >
+              <CheckCircle2 size={13} />
+              Ativar Funcionário
+            </button>
+          )}
+
+          {(person.status || '').toLowerCase() === 'ativo' && onDesligar && (
+            <button
+              type="button"
+              onClick={onDesligar}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 12px',
+                borderRadius: 6,
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+                color: '#EF4444',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: 'pointer'
+              }}
+            >
+              <UserMinus size={13} />
+              Desligar Funcionário
+            </button>
+          )}
+
+          {(person.status || '').toLowerCase() === 'inativo' && (
+            <>
+              {onAnexarRescisao && (
+                <button
+                  type="button"
+                  onClick={onAnexarRescisao}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '7px 12px',
+                    borderRadius: 6,
+                    background: 'rgba(245, 158, 11, 0.14)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    color: C.amber,
+                    fontSize: 11,
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <FileText size={13} />
+                  + Anexar Rescisão
+                </button>
+              )}
+              {onReativar && (
+                <button
+                  type="button"
+                  onClick={onReativar}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '7px 12px',
+                    borderRadius: 6,
+                    background: 'rgba(16, 185, 129, 0.12)',
+                    border: '1px solid rgba(16, 185, 129, 0.35)',
+                    color: '#10B981',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <RotateCcw size={12} />
+                  Reativar
+                </button>
+              )}
+            </>
+          )}
+
           <button
             type="button"
             onClick={() => void handleDownloadAllZip()}
@@ -1022,6 +1144,55 @@ function ArchivePanel({
         </div>
       </div>
 
+      {/* BANNER DE DESLIGAMENTO / RESCISÃO SE INATIVO */}
+      {(person.status || '').toLowerCase() === 'inativo' && (
+        <div style={{
+          background: 'rgba(239, 68, 68, 0.08)',
+          border: '1px solid rgba(239, 68, 68, 0.35)',
+          borderRadius: 6,
+          padding: '12px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 6
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 13, color: '#EF4444', fontWeight: 900 }}>🔴 COLABORADOR DESLIGADO (INATIVO)</span>
+            </div>
+            {onAnexarRescisao && (
+              <button
+                type="button"
+                onClick={onAnexarRescisao}
+                style={{
+                  ...btnBase,
+                  padding: '5px 10px',
+                  fontSize: 10.5,
+                  fontWeight: 900,
+                  background: '#EF4444',
+                  color: '#FFFFFF'
+                }}
+              >
+                <FileUp size={12} /> + Anexar Documentos de Rescisão
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, fontSize: 11, color: C.ink }}>
+            {person.data_demissao && (
+              <span><strong>Data de Desligamento:</strong> {new Date(person.data_demissao + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+            )}
+            {person.dados_registro?.motivo_desligamento && (
+              <span><strong>Motivo:</strong> {person.dados_registro.motivo_desligamento}</span>
+            )}
+            {person.dados_registro?.obs_desligamento && (
+              <span><strong>Observações:</strong> {person.dados_registro.obs_desligamento}</span>
+            )}
+          </div>
+          <span style={{ fontSize: 9.5, color: C.inkSoft }}>
+            Histórico e dossiê permanente preservados para segurança jurídica e eventuais ações trabalhistas.
+          </span>
+        </div>
+      )}
+
       {/* LINHA DO TEMPO DE MARCOS DO COLABORADOR REGISTRADO */}
       <div style={{
         display: 'grid',
@@ -1127,7 +1298,10 @@ function ArchivePanel({
 
       {/* Grid das 4 Pastas Documentais */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
-        {[1, 2, 3, 4].map(order => {
+        {[1, 2, 3, 4, 5].map(order => {
+          if (order === 5 && (person.status || '').toLowerCase() !== 'inativo' && !documents.some(d => String(d.ordem_pasta) === '5' || (d.tipo || '').toLowerCase().includes('rescis'))) {
+            return null
+          }
           const etapa = details.etapas.find(item => item.modelo?.ordem === order)
           const docs = documents.filter(doc => {
             if (doc.ordem_pasta) return String(doc.ordem_pasta) === String(order)
@@ -1140,6 +1314,7 @@ function ArchivePanel({
             }
             if (doc.tipo) {
               const t = doc.tipo.toLowerCase()
+              if (t.includes('rescis') || t.includes('demiss') || t.includes('trct') || t.includes('homolog')) return order === 5
               if (t.includes('admiss')) return order === 3
               if (t.includes('saude') || t.includes('aso') || t.includes('exame')) return order === 4
               if (t.includes('cadastr') || t.includes('etnico')) return order === 2
@@ -1157,7 +1332,8 @@ function ArchivePanel({
             1: 'Identificação & Pessoal',
             2: 'Ficha Cadastral',
             3: 'Documentos Admissionais',
-            4: 'Saúde & ASO'
+            4: 'Saúde & ASO',
+            5: 'Rescisão & Desligamento'
           }
 
           return (
@@ -2814,7 +2990,7 @@ function CadastroTable({
 export default function RhPage() {
   const { confirm, ConfirmDialog } = useConfirm()
   const { prompt, PromptDialog } = usePrompt()
-  const [activeTab, setActiveTab] = useState<'admissao' | 'aptos' | 'ativos'>('admissao')
+  const [activeTab, setActiveTab] = useState<'admissao' | 'aptos' | 'registrados' | 'ativos' | 'inativos'>('admissao')
   const [pessoas, setPessoas] = useState<Funcionario[]>([])
   const [modelos, setModelos] = useState<ModeloAdmissao[]>([])
   const [convites, setConvites] = useState<Convite[]>([])
@@ -2901,6 +3077,40 @@ export default function RhPage() {
     salvando: false
   })
 
+  // Modal de Desligamento / Rescisão
+  const [modalDesligamento, setModalDesligamento] = useState<{
+    open: boolean
+    person: Funcionario | null
+    dataDemissao: string
+    motivo: string
+    observacoes: string
+    arquivos: File[]
+    salvando: boolean
+  }>({
+    open: false,
+    person: null,
+    dataDemissao: new Date().toISOString().split('T')[0],
+    motivo: 'Demissão sem justa causa',
+    observacoes: '',
+    arquivos: [],
+    salvando: false
+  })
+
+  // Modal para Anexar Documentos de Rescisão a Funcionário Inativo
+  const [modalRescisaoDocs, setModalRescisaoDocs] = useState<{
+    open: boolean
+    person: Funcionario | null
+    tipoDoc: string
+    arquivos: File[]
+    salvando: boolean
+  }>({
+    open: false,
+    person: null,
+    tipoDoc: 'Termo de Rescisão (TRCT)',
+    arquivos: [],
+    salvando: false
+  })
+
   // Seleção Múltipla e Ações em Lote
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [batchProcessing, setBatchProcessing] = useState(false)
@@ -2919,7 +3129,7 @@ export default function RhPage() {
   const abasRhPermitidas = useMemo<string[]>(() => {
     if (!colaboradorAtivo) return ['admissao']
     if (colaboradorAtivo.cargo === 'admin_geral' || colaboradorAtivo.cargo === 'rh_sp') {
-      return ['admissao', 'aptos', 'ativos']
+      return ['admissao', 'aptos', 'registrados', 'ativos', 'inativos']
     }
 
     const rawAbas = colaboradorAtivo.override_permissoes && colaboradorAtivo.abas_rh !== undefined
@@ -2933,7 +3143,7 @@ export default function RhPage() {
 
     // Fallback: se tem permissão de salário, tem acesso integral; caso contrário, restringe a admissão (obra)
     if (colaboradorAtivo.pode_ver_salario === true || cargoPermissao?.pode_ver_salario === true) {
-      return ['admissao', 'aptos', 'ativos']
+      return ['admissao', 'aptos', 'registrados', 'ativos', 'inativos']
     }
 
     return ['admissao']
@@ -2941,11 +3151,13 @@ export default function RhPage() {
 
   const podeVerAbaAdmissao = abasRhPermitidas.includes('admissao')
   const podeVerAbaAptos = abasRhPermitidas.includes('aptos')
+  const podeVerAbaRegistrados = abasRhPermitidas.includes('registrados') || abasRhPermitidas.includes('ativos')
   const podeVerAbaAtivos = abasRhPermitidas.includes('ativos')
+  const podeVerAbaInativos = abasRhPermitidas.includes('inativos') || abasRhPermitidas.includes('ativos')
 
   useEffect(() => {
     if (abasRhPermitidas.length > 0 && !abasRhPermitidas.includes(activeTab)) {
-      const fallbackTab = (abasRhPermitidas[0] as 'admissao' | 'aptos' | 'ativos') || 'admissao'
+      const fallbackTab = (abasRhPermitidas[0] as 'admissao' | 'aptos' | 'registrados' | 'ativos' | 'inativos') || 'admissao'
       setActiveTab(fallbackTab)
     }
   }, [abasRhPermitidas, activeTab])
@@ -3189,8 +3401,27 @@ export default function RhPage() {
     return arr
   }, [convitesAptos, buscaAptos, buscaConvite])
 
+  // Subdivisão dos Funcionários por Status da Esteira
+  const pessoasRegistradas = useMemo(() => {
+    return pessoas.filter(p => (p.status || '').toLowerCase() === 'registrado')
+  }, [pessoas])
+
+  const pessoasAtivas = useMemo(() => {
+    return pessoas.filter(p => (p.status || '').toLowerCase() === 'ativo')
+  }, [pessoas])
+
+  const pessoasInativas = useMemo(() => {
+    return pessoas.filter(p => (p.status || '').toLowerCase() === 'inativo')
+  }, [pessoas])
+
   const pessoasFiltradas = useMemo(() => {
-    let arr = [...pessoas]
+    const base = activeTab === 'registrados'
+      ? pessoasRegistradas
+      : activeTab === 'inativos'
+      ? pessoasInativas
+      : pessoasAtivas
+
+    let arr = [...base]
     if (buscaPessoas.trim()) {
       const q = buscaPessoas.toLowerCase()
       arr = arr.filter(p =>
@@ -3201,7 +3432,7 @@ export default function RhPage() {
       )
     }
     return arr
-  }, [pessoas, buscaPessoas])
+  }, [activeTab, pessoasRegistradas, pessoasAtivas, pessoasInativas, buscaPessoas])
 
   // IDs da lista atual filtrada na aba ativa
   const listaAtualIds = useMemo(() => {
@@ -3395,10 +3626,10 @@ export default function RhPage() {
         }
       }
 
-      toast(`${count} profissional(is) registrado(s) e efetivado(s) com sucesso!`, 'success')
+      toast(`${count} profissional(is) registrado(s) com sucesso! Enviados para a aba Registrados.`, 'success')
       setSelectedIds(new Set())
       await load()
-      setActiveTab('ativos')
+      setActiveTab('registrados')
     } catch (err: any) {
       toast('Erro ao aprovar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
     } finally {
@@ -3603,6 +3834,286 @@ export default function RhPage() {
       toast('Erro ao excluir em lote: ' + (err?.message || 'Erro inesperado'), 'error')
     } finally {
       setBatchProcessing(false)
+    }
+  }
+
+  // ─── AÇÕES DA ESTEIRA: REGISTRADOS ➔ ATIVOS ➔ INATIVOS ──────────────────────
+
+  // Ativação Individual (Recife ativa no ponto e na obra)
+  async function handleAtivarFuncionario(person: Funcionario) {
+    try {
+      const { error } = await supabase.from('funcionarios').update({
+        status: 'Ativo',
+        updated_at: new Date().toISOString()
+      }).eq('id', person.id)
+
+      if (error) throw error
+
+      await supabase.from('funcionario_historico').insert({
+        funcionario_id: person.id,
+        tipo_evento: 'ativacao',
+        descricao: `Colaborador ativado na obra e no controle de ponto por ${colaboradorAtivo?.nome || 'RH Recife'}`,
+        data_evento: new Date().toISOString().split('T')[0]
+      })
+
+      toast(`${person.nome} ativado com sucesso! Agora visível na aba Ativos.`, 'success')
+      await load()
+      setActiveTab('ativos')
+    } catch (err: any) {
+      toast('Erro ao ativar funcionário: ' + (err?.message || 'Erro'), 'error')
+    }
+  }
+
+  // Ativação em Lote (Recife ativa múltiplos registrados de uma vez)
+  async function handleBatchAtivarFuncionarios() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!(await confirm(
+      'Ativar Colaboradores em Lote',
+      `Deseja ativar os ${ids.length} profissionais selecionados? Eles serão transferidos para a aba Ativos.`,
+      { confirmLabel: `Sim, Ativar ${ids.length}`, confirmColor: '#10B981' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      const now = new Date().toISOString()
+      const today = now.split('T')[0]
+      const { error } = await supabase.from('funcionarios').update({
+        status: 'Ativo',
+        updated_at: now
+      }).in('id', ids)
+
+      if (error) throw error
+
+      const historicos = ids.map(id => ({
+        funcionario_id: id,
+        tipo_evento: 'ativacao',
+        descricao: `Ativação em lote por ${colaboradorAtivo?.nome || 'RH Recife'}`,
+        data_evento: today
+      }))
+      await supabase.from('funcionario_historico').insert(historicos)
+
+      toast(`${ids.length} colaborador(es) ativado(s) com sucesso! Movidos para Ativos.`, 'success')
+      setSelectedIds(new Set())
+      await load()
+      setActiveTab('ativos')
+    } catch (err: any) {
+      toast('Erro ao ativar em lote: ' + (err?.message || 'Erro inesperado'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  // Desligamento em Lote (Move para Inativos)
+  async function handleBatchDesligarFuncionarios() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!(await confirm(
+      'Desligar / Inativar em Lote',
+      `Deseja mover os ${ids.length} profissionais selecionados para a aba Inativos? Você poderá anexar as rescisões a qualquer momento.`,
+      { confirmLabel: `Sim, Mover ${ids.length} p/ Inativos`, confirmColor: '#EF4444' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      const today = new Date().toISOString().split('T')[0]
+      const now = new Date().toISOString()
+      await supabase.from('funcionarios').update({
+        status: 'Inativo',
+        data_demissao: today,
+        updated_at: now
+      }).in('id', ids)
+
+      toast(`${ids.length} colaborador(es) movido(s) para Inativos com sucesso!`, 'success')
+      setSelectedIds(new Set())
+      await load()
+      setActiveTab('inativos')
+    } catch (err: any) {
+      toast('Erro ao inativar em lote: ' + (err?.message || 'Erro'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  // Reativação Individual (Inativo ➔ Ativo)
+  async function handleReativarFuncionario(person: Funcionario) {
+    if (!(await confirm(
+      'Reativar Colaborador',
+      `Deseja reativar ${person.nome}? O colaborador voltará para o quadro de Ativos.`,
+      { confirmLabel: 'Sim, Reativar', confirmColor: '#10B981' }
+    ))) return
+
+    try {
+      await supabase.from('funcionarios').update({
+        status: 'Ativo',
+        data_demissao: null,
+        updated_at: new Date().toISOString()
+      }).eq('id', person.id)
+
+      await supabase.from('funcionario_historico').insert({
+        funcionario_id: person.id,
+        tipo_evento: 'reativacao',
+        descricao: `Colaborador reativado por ${colaboradorAtivo?.nome || 'RH'}`,
+        data_evento: new Date().toISOString().split('T')[0]
+      })
+
+      toast(`${person.nome} reativado com sucesso!`, 'success')
+      await load()
+      setActiveTab('ativos')
+    } catch (err: any) {
+      toast('Erro ao reativar: ' + (err?.message || 'Erro'), 'error')
+    }
+  }
+
+  // Reativação em Lote
+  async function handleBatchReativarFuncionarios() {
+    const ids = Array.from(selectedIds)
+    if (ids.length === 0) return
+    if (!(await confirm(
+      'Reativar Colaboradores em Lote',
+      `Deseja reativar os ${ids.length} profissionais selecionados? Eles voltarão para a aba Ativos.`,
+      { confirmLabel: `Sim, Reativar ${ids.length}`, confirmColor: '#10B981' }
+    ))) return
+
+    setBatchProcessing(true)
+    try {
+      await supabase.from('funcionarios').update({
+        status: 'Ativo',
+        data_demissao: null,
+        updated_at: new Date().toISOString()
+      }).in('id', ids)
+
+      toast(`${ids.length} colaborador(es) reativado(s) com sucesso!`, 'success')
+      setSelectedIds(new Set())
+      await load()
+      setActiveTab('ativos')
+    } catch (err: any) {
+      toast('Erro ao reativar em lote: ' + (err?.message || 'Erro'), 'error')
+    } finally {
+      setBatchProcessing(false)
+    }
+  }
+
+  // Submeter Modal de Desligamento com Upload de Rescisão
+  async function handleDesligarFuncionarioSubmit() {
+    const person = modalDesligamento.person
+    if (!person) return
+
+    setModalDesligamento(prev => ({ ...prev, salvando: true }))
+    try {
+      // 1. Upload dos arquivos de rescisão para o storage rh-documentos
+      for (const file of modalDesligamento.arquivos) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `rescisao/${person.id}/${Date.now()}-${safeName}`
+        const { error: upErr } = await supabase.storage.from('rh-documentos').upload(path, file, {
+          contentType: file.type || 'application/pdf',
+          upsert: true
+        })
+
+        if (!upErr) {
+          await supabase.from('funcionario_documentos').insert({
+            funcionario_id: person.id,
+            tipo: 'Rescisão Contratual',
+            nome: file.name,
+            storage_path: path,
+            tamanho_bytes: file.size,
+            mime_type: file.type || 'application/pdf',
+            observacoes: `Rescisão (${modalDesligamento.motivo})`,
+            status: 'aprovado'
+          })
+        }
+      }
+
+      // 2. Atualizar dados do funcionário para Inativo
+      const dadosRegistroAtual = (person.dados_registro || {})
+      await supabase.from('funcionarios').update({
+        status: 'Inativo',
+        data_demissao: modalDesligamento.dataDemissao,
+        dados_registro: {
+          ...dadosRegistroAtual,
+          motivo_demissao: modalDesligamento.motivo,
+          obs_demissao: modalDesligamento.observacoes,
+          desligado_em: new Date().toISOString(),
+          desligado_por: colaboradorAtivo?.nome || 'RH'
+        },
+        updated_at: new Date().toISOString()
+      }).eq('id', person.id)
+
+      // 3. Registrar no histórico
+      await supabase.from('funcionario_historico').insert({
+        funcionario_id: person.id,
+        tipo_evento: 'desligamento',
+        descricao: `Colaborador desligado. Motivo: ${modalDesligamento.motivo}. Registrado por ${colaboradorAtivo?.nome || 'RH'}`,
+        data_evento: modalDesligamento.dataDemissao
+      })
+
+      toast(`${person.nome} desligado e movido para a aba Inativos com documentação salva!`, 'success')
+      setModalDesligamento({
+        open: false,
+        person: null,
+        dataDemissao: new Date().toISOString().split('T')[0],
+        motivo: 'Demissão sem justa causa',
+        observacoes: '',
+        arquivos: [],
+        salvando: false
+      })
+      await load()
+      setActiveTab('inativos')
+    } catch (err: any) {
+      toast('Erro ao registrar desligamento: ' + (err?.message || 'Erro'), 'error')
+    } finally {
+      setModalDesligamento(prev => ({ ...prev, salvando: false }))
+    }
+  }
+
+  // Submeter Anexo de Rescisão Extra para Funcionário Inativo
+  async function handleAnexarRescisaoSubmit() {
+    const person = modalRescisaoDocs.person
+    if (!person) return
+    if (modalRescisaoDocs.arquivos.length === 0) {
+      return toast('Selecione ao menos um arquivo de rescisão.', 'warning')
+    }
+
+    setModalRescisaoDocs(prev => ({ ...prev, salvando: true }))
+    try {
+      for (const file of modalRescisaoDocs.arquivos) {
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `rescisao/${person.id}/${Date.now()}-${safeName}`
+        const { error: upErr } = await supabase.storage.from('rh-documentos').upload(path, file, {
+          contentType: file.type || 'application/pdf',
+          upsert: true
+        })
+
+        if (!upErr) {
+          await supabase.from('funcionario_documentos').insert({
+            funcionario_id: person.id,
+            tipo: modalRescisaoDocs.tipoDoc || 'Rescisão Contratual',
+            nome: file.name,
+            storage_path: path,
+            tamanho_bytes: file.size,
+            mime_type: file.type || 'application/pdf',
+            observacoes: `Documento de Rescisão adicionado por ${colaboradorAtivo?.nome || 'RH'}`,
+            status: 'aprovado'
+          })
+        }
+      }
+
+      toast('Documento(s) de rescisão anexado(s) com sucesso!', 'success')
+      setModalRescisaoDocs({
+        open: false,
+        person: null,
+        tipoDoc: 'Termo de Rescisão (TRCT)',
+        arquivos: [],
+        salvando: false
+      })
+      await load()
+      if (selected?.id === person.id) {
+        await loadDetails(person)
+      }
+    } catch (err: any) {
+      toast('Erro ao anexar documento: ' + (err?.message || 'Erro'), 'error')
+    } finally {
+      setModalRescisaoDocs(prev => ({ ...prev, salvando: false }))
     }
   }
 
@@ -4563,7 +5074,7 @@ export default function RhPage() {
       <PageTitle
         modulo="Pessoas"
         titulo="Gestão de RH & Admissões"
-        subtitle="Fluxo de admissão em 3 camadas: Admissões, Aptos para Registro e Colaboradores Efetivados."
+        subtitle="Esteira de Admissão & Gestão em 5 fases: Admissão, Aptos p/ Registro, Registrados, Ativos e Inativos."
         action={
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
@@ -4773,7 +5284,11 @@ export default function RhPage() {
                 ? `Admissões em Andamento (${convitesFiltrados.length})`
                 : activeTab === 'aptos'
                 ? `Aptos para Registro (${aptosFiltrados.length})`
-                : `Funcionários Registrados (${pessoasFiltradas.length})`
+                : activeTab === 'registrados'
+                ? `Aguardando Ativação (${pessoasFiltradas.length})`
+                : activeTab === 'ativos'
+                ? `Funcionários Ativos (${pessoasFiltradas.length})`
+                : `Funcionários Inativos (${pessoasFiltradas.length})`
             }
             action={
               <div style={{ display: 'flex', gap: 4 }}>
@@ -4798,7 +5313,7 @@ export default function RhPage() {
                       textTransform: 'uppercase'
                     }}
                   >
-                    1. Admissões ({convites.length})
+                    1. Admissão ({convites.length})
                   </button>
                 )}
                 {podeVerAbaAptos && (
@@ -4825,19 +5340,20 @@ export default function RhPage() {
                     2. Aptos p/ Registro ({convitesAptos.length})
                   </button>
                 )}
-                {podeVerAbaAtivos && (
+                {podeVerAbaRegistrados && (
                   <button
                     onClick={() => {
-                      setActiveTab('ativos')
+                      setActiveTab('registrados')
                       setSelectedIds(new Set())
-                      if (!selected && pessoas.length > 0) {
-                        setSelected(pessoas[0])
+                      if (pessoasRegistradas.length > 0 && (!selected || (selected.status || '').toLowerCase() !== 'registrado')) {
+                        setSelected(pessoasRegistradas[0])
+                        loadDetails(pessoasRegistradas[0])
                       }
                     }}
                     style={{
-                      background: activeTab === 'ativos' ? C.amber : C.bgWhite,
-                      color: activeTab === 'ativos' ? '#0A0A0A' : C.inkSoft,
-                      border: `1px solid ${activeTab === 'ativos' ? C.amber : C.border}`,
+                      background: activeTab === 'registrados' ? '#3B82F6' : C.bgWhite,
+                      color: activeTab === 'registrados' ? '#FFFFFF' : C.inkSoft,
+                      border: `1px solid ${activeTab === 'registrados' ? '#3B82F6' : C.border}`,
                       borderRadius: 3,
                       padding: '3px 8px',
                       fontSize: 9.5,
@@ -4846,7 +5362,57 @@ export default function RhPage() {
                       textTransform: 'uppercase'
                     }}
                   >
-                    3. Registrados ({pessoas.length})
+                    3. Registrados ({pessoasRegistradas.length})
+                  </button>
+                )}
+                {podeVerAbaAtivos && (
+                  <button
+                    onClick={() => {
+                      setActiveTab('ativos')
+                      setSelectedIds(new Set())
+                      if (pessoasAtivas.length > 0 && (!selected || (selected.status || '').toLowerCase() !== 'ativo')) {
+                        setSelected(pessoasAtivas[0])
+                        loadDetails(pessoasAtivas[0])
+                      }
+                    }}
+                    style={{
+                      background: activeTab === 'ativos' ? '#10B981' : C.bgWhite,
+                      color: activeTab === 'ativos' ? '#0A0A0A' : C.inkSoft,
+                      border: `1px solid ${activeTab === 'ativos' ? '#10B981' : C.border}`,
+                      borderRadius: 3,
+                      padding: '3px 8px',
+                      fontSize: 9.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      textTransform: 'uppercase'
+                    }}
+                  >
+                    4. Ativos ({pessoasAtivas.length})
+                  </button>
+                )}
+                {podeVerAbaInativos && (
+                  <button
+                    onClick={() => {
+                      setActiveTab('inativos')
+                      setSelectedIds(new Set())
+                      if (pessoasInativas.length > 0 && (!selected || (selected.status || '').toLowerCase() !== 'inativo')) {
+                        setSelected(pessoasInativas[0])
+                        loadDetails(pessoasInativas[0])
+                      }
+                    }}
+                    style={{
+                      background: activeTab === 'inativos' ? '#6B7280' : C.bgWhite,
+                      color: activeTab === 'inativos' ? '#FFFFFF' : C.inkSoft,
+                      border: `1px solid ${activeTab === 'inativos' ? '#6B7280' : C.border}`,
+                      borderRadius: 3,
+                      padding: '3px 8px',
+                      fontSize: 9.5,
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      textTransform: 'uppercase'
+                    }}
+                  >
+                    5. Inativos ({pessoasInativas.length})
                   </button>
                 )}
               </div>
@@ -5067,27 +5633,27 @@ export default function RhPage() {
                     </>
                   )}
 
-                  {activeTab === 'ativos' && (
+                  {activeTab === 'registrados' && (
                     <>
                       <button
                         type="button"
-                        onClick={() => void handleBatchDeslocarAptos()}
+                        onClick={() => void handleBatchAtivarFuncionarios()}
                         disabled={batchProcessing}
                         style={{
                           ...btnBase,
                           padding: '5px 9px',
                           fontSize: 10,
                           fontWeight: 900,
-                          background: C.amber,
+                          background: '#10B981',
                           color: '#0A0A0A',
-                          boxShadow: '0 2px 6px rgba(245, 158, 11, 0.2)'
+                          boxShadow: '0 2px 6px rgba(16, 185, 129, 0.2)'
                         }}
                       >
-                        <RotateCcw size={12} /> Deslocar p/ Aptos ({selectedIds.size})
+                        <CheckCircle2 size={12} /> Ativar ({selectedIds.size})
                       </button>
                       <button
                         type="button"
-                        onClick={() => void handleBatchDeslocarAdmissao()}
+                        onClick={() => void handleBatchDeslocarAptos()}
                         disabled={batchProcessing}
                         style={{
                           ...btnBase,
@@ -5099,7 +5665,81 @@ export default function RhPage() {
                           border: `1px solid rgba(245, 158, 11, 0.35)`
                         }}
                       >
-                        <RotateCcw size={12} /> Deslocar p/ Admissão ({selectedIds.size})
+                        <RotateCcw size={12} /> Voltar p/ Aptos ({selectedIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDeleteFuncionarios()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#EF4444',
+                          border: '1px solid rgba(239, 68, 68, 0.35)'
+                        }}
+                      >
+                        <Trash2 size={12} /> Excluir ({selectedIds.size})
+                      </button>
+                    </>
+                  )}
+
+                  {activeTab === 'ativos' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDesligarFuncionarios()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 900,
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.4)',
+                          color: '#EF4444'
+                        }}
+                      >
+                        <UserMinus size={12} /> Desligar / Inativar ({selectedIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchDeleteFuncionarios()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          color: '#EF4444',
+                          border: '1px solid rgba(239, 68, 68, 0.35)'
+                        }}
+                      >
+                        <Trash2 size={12} /> Excluir ({selectedIds.size})
+                      </button>
+                    </>
+                  )}
+
+                  {activeTab === 'inativos' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleBatchReativarFuncionarios()}
+                        disabled={batchProcessing}
+                        style={{
+                          ...btnBase,
+                          padding: '5px 9px',
+                          fontSize: 10,
+                          fontWeight: 900,
+                          background: '#10B981',
+                          color: '#0A0A0A',
+                          boxShadow: '0 2px 6px rgba(16, 185, 129, 0.2)'
+                        }}
+                      >
+                        <RotateCcw size={12} /> Reativar ({selectedIds.size})
                       </button>
                       <button
                         type="button"
@@ -5546,9 +6186,117 @@ export default function RhPage() {
                           <strong style={{ fontSize: 13, fontWeight: 900, color: C.ink }}>{person.nome}</strong>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 9, fontWeight: 900, color: '#10B981', background: 'rgba(16, 185, 129, 0.1)', padding: '2px 6px', borderRadius: 3, border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                            ✓ ATIVO
-                          </span>
+                          {(() => {
+                            const isReg = (person.status || '').toLowerCase() === 'registrado'
+                            const isAtv = (person.status || '').toLowerCase() === 'ativo'
+                            return (
+                              <>
+                                <span style={{
+                                  fontSize: 9,
+                                  fontWeight: 900,
+                                  color: isAtv ? '#10B981' : isReg ? '#3B82F6' : '#EF4444',
+                                  background: isAtv ? 'rgba(16, 185, 129, 0.1)' : isReg ? 'rgba(59, 130, 246, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+                                  padding: '2px 6px',
+                                  borderRadius: 3,
+                                  border: `1px solid ${isAtv ? 'rgba(16, 185, 129, 0.25)' : isReg ? 'rgba(59, 130, 246, 0.25)' : 'rgba(239, 68, 68, 0.25)'}`
+                                }}>
+                                  {isAtv ? '✓ ATIVO' : isReg ? '📋 REGISTRADO' : '🔴 INATIVO'}
+                                </span>
+
+                                {isReg && (
+                                  <button
+                                    type="button"
+                                    title="Ativar funcionário no ponto e na obra"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      void handleAtivarFuncionario(person)
+                                    }}
+                                    style={{
+                                      background: 'rgba(16, 185, 129, 0.15)',
+                                      border: '1px solid rgba(16, 185, 129, 0.35)',
+                                      color: '#10B981',
+                                      fontSize: 9.5,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 3
+                                    }}
+                                  >
+                                    <Check size={10} /> Ativar
+                                  </button>
+                                )}
+
+                                {isAtv && (
+                                  <button
+                                    type="button"
+                                    title="Desligar / Inativar colaborador"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setModalDesligamento({
+                                        open: true,
+                                        person,
+                                        dataDemissao: new Date().toISOString().split('T')[0],
+                                        motivo: 'Demissão sem justa causa',
+                                        observacoes: '',
+                                        arquivos: [],
+                                        salvando: false
+                                      })
+                                    }}
+                                    style={{
+                                      background: 'rgba(239, 68, 68, 0.12)',
+                                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                                      color: '#EF4444',
+                                      fontSize: 9.5,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 3
+                                    }}
+                                  >
+                                    <UserMinus size={10} /> Desligar
+                                  </button>
+                                )}
+
+                                {!isReg && !isAtv && (
+                                  <button
+                                    type="button"
+                                    title="Anexar documentos de rescisão"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setModalRescisaoDocs({
+                                        open: true,
+                                        person,
+                                        tipoDoc: 'Termo de Rescisão (TRCT)',
+                                        arquivos: [],
+                                        salvando: false
+                                      })
+                                    }}
+                                    style={{
+                                      background: 'rgba(245, 158, 11, 0.12)',
+                                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                                      color: C.amber,
+                                      fontSize: 9.5,
+                                      fontWeight: 800,
+                                      cursor: 'pointer',
+                                      padding: '2px 6px',
+                                      borderRadius: 4,
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: 3
+                                    }}
+                                  >
+                                    <FileText size={10} /> + Rescisão
+                                  </button>
+                                )}
+                              </>
+                            )
+                          })()}
                           <button
                             type="button"
                             title="Deslocar de volta para Aptos p/ Registro"
@@ -5750,7 +6498,7 @@ export default function RhPage() {
                 })
               )}
 
-              {((activeTab === 'admissao' && convitesFiltrados.length === 0) || (activeTab === 'aptos' && aptosFiltrados.length === 0) || (activeTab === 'ativos' && pessoasFiltradas.length === 0)) && (
+              {((activeTab === 'admissao' && convitesFiltrados.length === 0) || (activeTab === 'aptos' && aptosFiltrados.length === 0) || ((activeTab === 'registrados' || activeTab === 'ativos' || activeTab === 'inativos') && pessoasFiltradas.length === 0)) && (
                 <div style={{ padding: '40px 15px', textAlign: 'center', color: C.inkSoft, fontSize: 12, background: C.bgCard, border: `1px dashed ${C.border}`, borderRadius: 6 }}>
                   Nenhum registro encontrado com os filtros selecionados.
                 </div>
@@ -5819,6 +6567,24 @@ export default function RhPage() {
                   onEditObra={() => abrirModalEditarObra(selected)}
                   podeVerSalario={podeVerSalario}
                   onEditSalario={() => abrirModalEditarSalarioFuncionario(selected)}
+                  onAtivar={() => void handleAtivarFuncionario(selected)}
+                  onDesligar={() => setModalDesligamento({
+                    open: true,
+                    person: selected,
+                    dataDemissao: new Date().toISOString().split('T')[0],
+                    motivo: 'Demissão sem justa causa',
+                    observacoes: '',
+                    arquivos: [],
+                    salvando: false
+                  })}
+                  onReativar={() => void handleReativarFuncionario(selected)}
+                  onAnexarRescisao={() => setModalRescisaoDocs({
+                    open: true,
+                    person: selected,
+                    tipoDoc: 'Termo de Rescisão (TRCT)',
+                    arquivos: [],
+                    salvando: false
+                  })}
                 />
               </Panel>
             ) : (
@@ -6028,6 +6794,257 @@ export default function RhPage() {
                   style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
                 >
                   {editEmailFuncionarioModal.salvando ? 'Salvando...' : 'Salvar E-mail'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: DESLIGAMENTO / RESCISÃO DO COLABORADOR */}
+      {modalDesligamento.open && modalDesligamento.person && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 22, maxWidth: 520, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: '#EF4444', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <UserMinus size={16} color="#EF4444" />
+                  Desligamento de Colaborador
+                </h3>
+                <p style={{ fontSize: 11, color: C.inkSoft, margin: '2px 0 0' }}>
+                  Colaborador: <strong style={{ color: C.ink }}>{modalDesligamento.person.nome}</strong> (CPF: {modalDesligamento.person.cpf || 'Não informado'})
+                </p>
+              </div>
+              <button
+                onClick={() => setModalDesligamento(prev => ({ ...prev, open: false }))}
+                style={{ border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div>
+                  <span style={labelStyle}>Data do Desligamento *</span>
+                  <input
+                    type="date"
+                    style={inputStyle}
+                    value={modalDesligamento.dataDemissao}
+                    onChange={e => setModalDesligamento(prev => ({ ...prev, dataDemissao: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <span style={labelStyle}>Motivo do Desligamento *</span>
+                  <select
+                    style={inputStyle}
+                    value={modalDesligamento.motivo}
+                    onChange={e => setModalDesligamento(prev => ({ ...prev, motivo: e.target.value }))}
+                  >
+                    <option value="Demissão sem justa causa">Demissão sem justa causa</option>
+                    <option value="Pedido de demissão">Pedido de demissão</option>
+                    <option value="Término de contrato de experiência">Término de contrato</option>
+                    <option value="Acordo mútuo (Art. 484-A CLT)">Acordo mútuo</option>
+                    <option value="Demissão com justa causa">Demissão com justa causa</option>
+                    <option value="Outro">Outro motivo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <span style={labelStyle}>Observações do Desligamento (Opcional)</span>
+                <textarea
+                  style={{ ...inputStyle, minHeight: 60, resize: 'vertical' }}
+                  placeholder="Detalhes sobre a rescisão, aviso prévio, acerto..."
+                  value={modalDesligamento.observacoes}
+                  onChange={e => setModalDesligamento(prev => ({ ...prev, observacoes: e.target.value }))}
+                />
+              </div>
+
+              <div>
+                <span style={labelStyle}>Anexar Documentos de Rescisão (TRCT, Homologação, Acerto)</span>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '10px 14px',
+                  background: C.bgCard,
+                  border: `1px dashed ${C.border}`,
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: C.inkSoft
+                }}>
+                  <FileUp size={14} color={C.amber} />
+                  <span>Selecionar arquivos (PDF, imagens, comprovantes)...</span>
+                  <input
+                    hidden
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={e => {
+                      if (e.target.files) {
+                        const newFiles = Array.from(e.target.files)
+                        setModalDesligamento(prev => ({ ...prev, arquivos: [...prev.arquivos, ...newFiles] }))
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+
+                {modalDesligamento.arquivos.length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 110, overflowY: 'auto' }}>
+                    {modalDesligamento.arquivos.map((file, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', background: C.bgCard, borderRadius: 4, fontSize: 10.5 }}>
+                        <span style={{ color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          📄 {file.name} ({(file.size / 1024).toFixed(0)} KB)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setModalDesligamento(prev => ({ ...prev, arquivos: prev.arquivos.filter((_, i) => i !== idx) }))}
+                          style={{ border: 'none', background: 'none', color: '#EF4444', cursor: 'pointer', padding: 2 }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                <button
+                  type="button"
+                  onClick={() => setModalDesligamento(prev => ({ ...prev, open: false }))}
+                  disabled={modalDesligamento.salvando}
+                  style={{ ...btnBase, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDesligarFuncionarioSubmit()}
+                  disabled={modalDesligamento.salvando}
+                  style={{ ...btnBase, background: '#EF4444', color: '#FFFFFF', fontWeight: 900 }}
+                >
+                  {modalDesligamento.salvando ? 'Salvando...' : 'Confirmar Desligamento & Arquivar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ANEXAR DOCUMENTOS DE RESCISÃO A COLABORADOR JÁ INATIVO */}
+      {modalRescisaoDocs.open && modalRescisaoDocs.person && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(3px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 8, padding: 22, maxWidth: 480, width: '100%', boxShadow: '0 10px 30px rgba(0,0,0,0.4)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.amber, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FileText size={16} color={C.amber} />
+                  Anexar Documento de Rescisão
+                </h3>
+                <p style={{ fontSize: 11, color: C.inkSoft, margin: '2px 0 0' }}>
+                  Colaborador Inativo: <strong style={{ color: C.ink }}>{modalRescisaoDocs.person.nome}</strong>
+                </p>
+              </div>
+              <button
+                onClick={() => setModalRescisaoDocs(prev => ({ ...prev, open: false }))}
+                style={{ border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <span style={labelStyle}>Tipo do Documento *</span>
+                <select
+                  style={inputStyle}
+                  value={modalRescisaoDocs.tipoDoc}
+                  onChange={e => setModalRescisaoDocs(prev => ({ ...prev, tipoDoc: e.target.value }))}
+                >
+                  <option value="Termo de Rescisão (TRCT)">Termo de Rescisão (TRCT / Termo de Quitação)</option>
+                  <option value="Termo de Homologação">Termo de Homologação Sindical</option>
+                  <option value="Comprovante de Pagamento da Rescisão">Comprovante de Pagamento Bancário</option>
+                  <option value="Guia FGTS / GRRF">Guia FGTS / GRRF / Conectividade Social</option>
+                  <option value="Exame Demissional (ASO)">Exame Médico Demissional (ASO)</option>
+                  <option value="Outros Documentos de Rescisão">Outros Documentos de Rescisão</option>
+                </select>
+              </div>
+
+              <div>
+                <span style={labelStyle}>Selecionar Arquivos *</span>
+                <label style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '10px 14px',
+                  background: C.bgCard,
+                  border: `1px dashed ${C.border}`,
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: C.inkSoft
+                }}>
+                  <FileUp size={14} color={C.amber} />
+                  <span>Escolher arquivo(s) PDF ou imagens...</span>
+                  <input
+                    hidden
+                    type="file"
+                    multiple
+                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                    onChange={e => {
+                      if (e.target.files) {
+                        const newFiles = Array.from(e.target.files)
+                        setModalRescisaoDocs(prev => ({ ...prev, arquivos: [...prev.arquivos, ...newFiles] }))
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+
+                {modalRescisaoDocs.arquivos.length > 0 && (
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 110, overflowY: 'auto' }}>
+                    {modalRescisaoDocs.arquivos.map((file, idx) => (
+                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 8px', background: C.bgCard, borderRadius: 4, fontSize: 10.5 }}>
+                        <span style={{ color: C.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          📄 {file.name} ({(file.size / 1024).toFixed(0)} KB)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setModalRescisaoDocs(prev => ({ ...prev, arquivos: prev.arquivos.filter((_, i) => i !== idx) }))}
+                          style={{ border: 'none', background: 'none', color: '#EF4444', cursor: 'pointer', padding: 2 }}
+                        >
+                          <X size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+                <button
+                  type="button"
+                  onClick={() => setModalRescisaoDocs(prev => ({ ...prev, open: false }))}
+                  disabled={modalRescisaoDocs.salvando}
+                  style={{ ...btnBase, background: C.bgWhite, color: C.ink, border: `1px solid ${C.border}` }}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleAnexarRescisaoSubmit()}
+                  disabled={modalRescisaoDocs.salvando || modalRescisaoDocs.arquivos.length === 0}
+                  style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900 }}
+                >
+                  {modalRescisaoDocs.salvando ? 'Enviando...' : 'Salvar Documentos'}
                 </button>
               </div>
             </div>
