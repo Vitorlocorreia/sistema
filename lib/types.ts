@@ -202,6 +202,7 @@ export interface Fornecedor {
   cnpj: string | null
   tipo: 'PJ' | 'PF'
   telefone: string | null
+  telefone_secundario?: string | null
   email: string | null
   responsavel: string | null
   endereco: string | null

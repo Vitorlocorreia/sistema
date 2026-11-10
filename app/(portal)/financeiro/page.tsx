@@ -3209,7 +3209,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
   const [filtroTipo, setFiltroTipo]     = useState<'todos' | 'PJ' | 'PF' | 'aberto' | 'vencidas'>('todos')
   const [form, setForm] = useState({
     razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ' as 'PJ'|'PF',
-    telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
+    telefone: '', telefone_secundario: '', contato_secundario_nome: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
     endereco: '', banco: '', agencia: '', conta: ''
   })
   const [saving, setSaving] = useState(false)
@@ -3265,7 +3265,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     setEditingFornecedor(null)
     setForm({
       razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ',
-      telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
+      telefone: '', telefone_secundario: '', contato_secundario_nome: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
       endereco: '', banco: '', agencia: '', conta: ''
     })
     setShowForm(prev => !prev)
@@ -3275,12 +3275,36 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     setEditingFornecedor(f)
     setShowForm(false)
     const docTipo = (f.tipo as 'PJ'|'PF') || (f.cnpj && f.cnpj.replace(/\D/g, '').length === 11 ? 'PF' : 'PJ')
+
+    let telPrincipal = f.telefone || ''
+    let telSecundario = ''
+    let contatoSecundarioNome = ''
+
+    if (telPrincipal.includes(' / ')) {
+      const parts = telPrincipal.split(' / ')
+      telPrincipal = parts[0] || ''
+      const secondPart = parts.slice(1).join(' / ')
+      const match = secondPart.match(/^(.*?)(?:\s*\((.*?)\))?$/)
+      if (match) {
+        telSecundario = match[1]?.trim() || ''
+        contatoSecundarioNome = match[2]?.trim() || ''
+      } else {
+        telSecundario = secondPart.trim()
+      }
+    } else if (telPrincipal.includes(' | ')) {
+      const parts = telPrincipal.split(' | ')
+      telPrincipal = parts[0] || ''
+      telSecundario = parts.slice(1).join(' | ').trim()
+    }
+
     setForm({
       razao_social: f.razao_social || '',
       nome_fantasia: f.nome_fantasia || '',
       cnpj: formatCnpjCpf(f.cnpj || '', docTipo),
       tipo: docTipo,
-      telefone: f.telefone ? formatTelefone(f.telefone) : '',
+      telefone: telPrincipal ? formatTelefone(telPrincipal) : '',
+      telefone_secundario: telSecundario ? formatTelefone(telSecundario) : '',
+      contato_secundario_nome: contatoSecundarioNome,
       email: f.email || '',
       responsavel: f.responsavel || '',
       pix: f.pix || '',
@@ -3299,6 +3323,11 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
       return toast(form.tipo === 'PJ' ? 'Informe a Razão Social (*)' : 'Informe o Nome Completo (*)', 'error')
     }
 
+    const telDigits = (form.telefone || '').replace(/\D/g, '')
+    if (!telDigits || telDigits.length < 10) {
+      return toast('O Número do Fornecedor / Telefone é obrigatório (mínimo 10 dígitos com DDD).', 'error')
+    }
+
     const docDigits = (form.cnpj || '').replace(/\D/g, '')
     if (form.tipo === 'PF' && docDigits.length > 0 && docDigits.length !== 11) {
       return toast('CPF inválido. O CPF deve conter 11 dígitos.', 'error')
@@ -3308,12 +3337,19 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
     }
 
     setSaving(true)
+
+    let telFinal = form.telefone.trim()
+    if (form.telefone_secundario.trim()) {
+      const extraLabel = form.contato_secundario_nome.trim() ? ` (${form.contato_secundario_nome.trim()})` : ''
+      telFinal += ` / ${form.telefone_secundario.trim()}${extraLabel}`
+    }
+
     const payload = {
       razao_social: form.razao_social.trim(),
       nome_fantasia: form.tipo === 'PJ' ? (form.nome_fantasia.trim() || null) : null,
       cnpj: form.cnpj.trim() || null,
       tipo: form.tipo,
-      telefone: form.telefone.trim() || null,
+      telefone: telFinal || null,
       email: form.email.trim().toLowerCase() || null,
       responsavel: form.responsavel.trim() || null,
       categoria: form.categoria.trim() || null,
@@ -3344,7 +3380,7 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
 
     setForm({
       razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ',
-      telefone: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
+      telefone: '', telefone_secundario: '', contato_secundario_nome: '', email: '', responsavel: '', pix: '', categoria: '', empresa_id: '',
       endereco: '', banco: '', agencia: '', conta: ''
     })
     setEditingFornecedor(null)
@@ -3648,9 +3684,44 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
                 <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: formatCnpjCpf(e.target.value, prev.tipo) }))} placeholder={form.tipo === 'PJ' ? "00.000.000/0000-00" : "000.000.000-00"} />
               </div>
               <div>
-                <label style={label}>Telefone / WhatsApp</label>
-                <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))} placeholder="(11) 99999-9999" />
+                <label style={label}>
+                  Número do Fornecedor / WhatsApp <span style={{ color: '#EF4444' }}>*</span>
+                </label>
+                <input
+                  style={{
+                    ...input,
+                    borderColor: !form.telefone.trim() ? 'rgba(245, 158, 11, 0.6)' : input.borderColor
+                  }}
+                  value={form.telefone}
+                  onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))}
+                  placeholder="(11) 99999-9999 (Obrigatório)"
+                  required
+                />
               </div>
+              <div>
+                <label style={label}>
+                  2º Contato / Telefone Adicional <span style={{ color: C.inkSoft, fontSize: 9.5 }}>(Opcional)</span>
+                </label>
+                <input
+                  style={input}
+                  value={form.telefone_secundario}
+                  onChange={e => setForm(prev => ({ ...prev, telefone_secundario: formatTelefone(e.target.value) }))}
+                  placeholder="(11) 98888-8888 (Opcional)"
+                />
+              </div>
+              {form.telefone_secundario && (
+                <div>
+                  <label style={label}>
+                    Nome / Setor do 2º Contato <span style={{ color: C.inkSoft, fontSize: 9.5 }}>(Opcional)</span>
+                  </label>
+                  <input
+                    style={input}
+                    value={form.contato_secundario_nome}
+                    onChange={e => setForm(prev => ({ ...prev, contato_secundario_nome: e.target.value }))}
+                    placeholder="Ex: Financeiro, Vendas, Plantão..."
+                  />
+                </div>
+              )}
               <div>
                 <label style={label}>E-mail Comercial</label>
                 <input style={input} type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} placeholder="financeiro@fornecedor.com.br" />
@@ -4063,22 +4134,59 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
                     </div>
 
                     {(f.telefone || f.email || f.responsavel) && (
-                      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', color: C.inkSoft }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, color: C.inkSoft }}>
                         {f.telefone && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <Phone size={12} color={C.amber} /> {f.telefone}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                            {f.telefone.split(/\s*[\/|]\s*/).map((tel, idx) => {
+                              const numLimpo = tel.replace(/\D/g, '')
+                              const numUrl = numLimpo.length >= 10 ? (numLimpo.startsWith('55') ? numLimpo : `55${numLimpo}`) : ''
+                              return (
+                                <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, flexWrap: 'wrap' }}>
+                                  <Phone size={12} color={idx === 0 ? C.amber : C.inkSoft} />
+                                  <span style={{ color: idx === 0 ? C.ink : C.inkSoft, fontWeight: idx === 0 ? 700 : 500 }}>
+                                    {idx === 0 ? tel : `2º Contato: ${tel}`}
+                                  </span>
+                                  {numUrl && (
+                                    <a
+                                      href={`https://wa.me/${numUrl}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={e => e.stopPropagation()}
+                                      title={`Abrir conversa no WhatsApp com ${tel}`}
+                                      style={{
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 3,
+                                        color: '#10B981',
+                                        background: 'rgba(16, 185, 129, 0.1)',
+                                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                                        borderRadius: 3,
+                                        padding: '1px 5px',
+                                        fontSize: 9,
+                                        fontWeight: 800,
+                                        textDecoration: 'none'
+                                      }}
+                                    >
+                                      WhatsApp
+                                    </a>
+                                  )}
+                                </div>
+                              )
+                            })}
                           </div>
                         )}
-                        {f.email && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <Mail size={12} color={C.amber} /> {f.email}
-                          </div>
-                        )}
-                        {f.responsavel && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <User size={12} color={C.amber} /> {f.responsavel}
-                          </div>
-                        )}
+                        <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                          {f.email && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <Mail size={12} color={C.amber} /> {f.email}
+                            </div>
+                          )}
+                          {f.responsavel && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                              <User size={12} color={C.amber} /> {f.responsavel}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
 
@@ -4170,9 +4278,44 @@ function FornecedoresTab({ colaboradorAtivo, permissaoAtiva, confirm, goToHistor
                     <input style={input} value={form.cnpj} onChange={e => setForm(prev => ({ ...prev, cnpj: formatCnpjCpf(e.target.value, prev.tipo) }))} />
                   </div>
                   <div>
-                    <label style={label}>Telefone / WhatsApp</label>
-                    <input style={input} value={form.telefone} onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))} />
+                    <label style={label}>
+                      Número do Fornecedor / WhatsApp <span style={{ color: '#EF4444' }}>*</span>
+                    </label>
+                    <input
+                      style={{
+                        ...input,
+                        borderColor: !form.telefone.trim() ? 'rgba(245, 158, 11, 0.6)' : input.borderColor
+                      }}
+                      value={form.telefone}
+                      onChange={e => setForm(prev => ({ ...prev, telefone: formatTelefone(e.target.value) }))}
+                      placeholder="(11) 99999-9999 (Obrigatório)"
+                      required
+                    />
                   </div>
+                  <div>
+                    <label style={label}>
+                      2º Contato / Telefone Adicional <span style={{ color: C.inkSoft, fontSize: 9.5 }}>(Opcional)</span>
+                    </label>
+                    <input
+                      style={input}
+                      value={form.telefone_secundario}
+                      onChange={e => setForm(prev => ({ ...prev, telefone_secundario: formatTelefone(e.target.value) }))}
+                      placeholder="(11) 98888-8888 (Opcional)"
+                    />
+                  </div>
+                  {form.telefone_secundario && (
+                    <div>
+                      <label style={label}>
+                        Nome / Setor do 2º Contato <span style={{ color: C.inkSoft, fontSize: 9.5 }}>(Opcional)</span>
+                      </label>
+                      <input
+                        style={input}
+                        value={form.contato_secundario_nome}
+                        onChange={e => setForm(prev => ({ ...prev, contato_secundario_nome: e.target.value }))}
+                        placeholder="Ex: Financeiro, Vendas, Plantão..."
+                      />
+                    </div>
+                  )}
                   <div>
                     <label style={label}>E-mail Comercial</label>
                     <input style={input} type="email" value={form.email} onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))} />
@@ -4239,17 +4382,43 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
   const [anexoFiles, setAnexoFiles]     = useState<File[]>([])
   const [showNovoFornModal, setShowNovoFornModal] = useState(false)
   const [salvandoForn, setSalvandoForn] = useState(false)
-  const [fornForm, setFornForm]         = useState({ razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ' as 'PJ'|'PF', pix: '', categoria: '' })
+  const [fornForm, setFornForm]         = useState({
+    razao_social: '',
+    nome_fantasia: '',
+    cnpj: '',
+    tipo: 'PJ' as 'PJ'|'PF',
+    telefone: '',
+    telefone_secundario: '',
+    contato_secundario_nome: '',
+    responsavel: '',
+    pix: '',
+    categoria: ''
+  })
 
   const salvarNovoFornecedorRapido = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!fornForm.razao_social.trim()) return toast('Informe a Razão Social / Nome (*)', 'error')
+
+    const telDigits = (fornForm.telefone || '').replace(/\D/g, '')
+    if (!telDigits || telDigits.length < 10) {
+      return toast('O Número do Fornecedor / WhatsApp é obrigatório (mínimo 10 dígitos com DDD).', 'error')
+    }
+
     setSalvandoForn(true)
+
+    let telFinal = fornForm.telefone.trim()
+    if (fornForm.telefone_secundario.trim()) {
+      const extraLabel = fornForm.contato_secundario_nome.trim() ? ` (${fornForm.contato_secundario_nome.trim()})` : ''
+      telFinal += ` / ${fornForm.telefone_secundario.trim()}${extraLabel}`
+    }
+
     const payload = {
       razao_social: fornForm.razao_social.trim(),
       nome_fantasia: fornForm.tipo === 'PJ' ? (fornForm.nome_fantasia.trim() || null) : null,
       cnpj: fornForm.cnpj.trim() || null,
       tipo: fornForm.tipo,
+      telefone: telFinal || null,
+      responsavel: fornForm.responsavel.trim() || null,
       pix: fornForm.pix.trim() || null,
       categoria: fornForm.categoria.trim() || null,
     }
@@ -4258,7 +4427,18 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
     if (error) return toast(`Erro ao salvar fornecedor: ${error.message}`, 'error')
     toast('Fornecedor cadastrado com sucesso!', 'success')
     setShowNovoFornModal(false)
-    setFornForm({ razao_social: '', nome_fantasia: '', cnpj: '', tipo: 'PJ', pix: '', categoria: '' })
+    setFornForm({
+      razao_social: '',
+      nome_fantasia: '',
+      cnpj: '',
+      tipo: 'PJ',
+      telefone: '',
+      telefone_secundario: '',
+      contato_secundario_nome: '',
+      responsavel: '',
+      pix: '',
+      categoria: ''
+    })
     // Reload fornecedores e seleciona o novo
     const { data: listF } = await supabase.from('fornecedores').select('*').order('razao_social')
     setFornecedores(listF || [])
@@ -4908,6 +5088,47 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
                 <div>
                   <label style={label}>{fornForm.tipo === 'PJ' ? 'CNPJ' : 'CPF'}</label>
                   <input style={input} value={fornForm.cnpj} onChange={e => setFornForm({ ...fornForm, cnpj: formatCnpjCpf(e.target.value, fornForm.tipo) })} placeholder={fornForm.tipo === 'PJ' ? '00.000.000/0000-00' : '000.000.000-00'} />
+                </div>
+
+                <div>
+                  <label style={label}>
+                    Número do Fornecedor / WhatsApp <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <input
+                    style={{
+                      ...input,
+                      borderColor: !fornForm.telefone.trim() ? 'rgba(245, 158, 11, 0.6)' : input.borderColor
+                    }}
+                    value={fornForm.telefone}
+                    onChange={e => setFornForm({ ...fornForm, telefone: formatTelefone(e.target.value) })}
+                    placeholder="(81) 99999-9999 (Obrigatório)"
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={label}>
+                      2º Telefone <span style={{ color: C.inkSoft, fontSize: 9.5 }}>(Opcional)</span>
+                    </label>
+                    <input
+                      style={input}
+                      value={fornForm.telefone_secundario}
+                      onChange={e => setFornForm({ ...fornForm, telefone_secundario: formatTelefone(e.target.value) })}
+                      placeholder="(81) 98888-8888"
+                    />
+                  </div>
+                  <div>
+                    <label style={label}>
+                      Contato Responsável <span style={{ color: C.inkSoft, fontSize: 9.5 }}>(Opcional)</span>
+                    </label>
+                    <input
+                      style={input}
+                      value={fornForm.responsavel}
+                      onChange={e => setFornForm({ ...fornForm, responsavel: e.target.value })}
+                      placeholder="Ex: Ricardo Silva"
+                    />
+                  </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>

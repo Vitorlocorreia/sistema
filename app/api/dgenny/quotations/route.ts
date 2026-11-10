@@ -3,7 +3,8 @@ import { dgenny } from '@/lib/dgenny/client'
 import { supabase } from '@/lib/supabase'
 
 function formatPhoneToE164Digits(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
+  const primary = (phone || '').split(/[\/,|]/)[0] || ''
+  const digits = primary.replace(/\D/g, '')
   if (digits.startsWith('55') && digits.length >= 12) {
     return digits
   }

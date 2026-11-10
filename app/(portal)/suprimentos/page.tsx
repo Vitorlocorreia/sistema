@@ -3341,7 +3341,7 @@ export default function SuprimentosPage() {
                           aprovForm.condicao_pagamento
                         )
                         const forn = fornecedores.find(f => f.id === aprovForm.fornecedor_id)
-                        const foneLimpo = (forn?.telefone || '').replace(/\D/g, '')
+                        const foneLimpo = (forn?.telefone || '').split(/[\/,|]/)[0].replace(/\D/g, '')
                         const foneUrl = foneLimpo ? (foneLimpo.startsWith('55') ? foneLimpo : `55${foneLimpo}`) : ''
                         const waUrl = foneUrl
                           ? `https://wa.me/${foneUrl}?text=${encodeURIComponent(txt)}`
