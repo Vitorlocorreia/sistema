@@ -37,7 +37,11 @@ import {
   Paperclip,
   Share2,
   Bot,
-  GripVertical
+  GripVertical,
+  Archive,
+  ArchiveRestore,
+  ChevronLeft,
+  Minimize2
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { toast } from '@/components/Toast'
@@ -60,7 +64,7 @@ export interface SuprimentoItem {
   unidade: string | null
   fornecedor: string | null
   valor: number | null
-  status: 'Solicitado' | 'Em Cotação' | 'Aprovação' | 'Em Trânsito' | 'Entregue'
+  status: 'Solicitado' | 'Em Cotação' | 'Aprovação' | 'Em Trânsito' | 'Entregue' | 'Arquivado'
   data_vencimento: string | null
   solicitante: string | null
   prioridade: 'baixa' | 'media' | 'alta' | 'urgente'
@@ -171,7 +175,8 @@ const COLUNAS_ESTEIRA: Array<{
   { id: 'Em Cotação', nome: '2. Em Cotação', descricao: 'Negociação com fornecedores', cor: '#F59E0B', bg: 'rgba(245, 158, 11, 0.12)', icone: Layers },
   { id: 'Aprovação', nome: '3. Aguardando Aprovação', descricao: 'Alçada da diretoria', cor: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.12)', icone: ShieldCheck },
   { id: 'Em Trânsito', nome: '4. Aprovado / Em Trânsito', descricao: 'Lançado no Financeiro', cor: '#06B6D4', bg: 'rgba(6, 182, 212, 0.12)', icone: Truck },
-  { id: 'Entregue', nome: '5. Recebido no Canteiro', descricao: 'Conferido com foto/NF', cor: '#10B981', bg: 'rgba(16, 185, 129, 0.12)', icone: CheckCircle2 }
+  { id: 'Entregue', nome: '5. Recebido no Canteiro', descricao: 'Conferido com foto/NF', cor: '#10B981', bg: 'rgba(16, 185, 129, 0.12)', icone: CheckCircle2 },
+  { id: 'Arquivado', nome: '6. Arquivados', descricao: 'Pedidos finalizados e guardados', cor: '#64748B', bg: 'rgba(100, 116, 139, 0.12)', icone: Archive }
 ]
 
 // ─── COMPONENTE PRINCIPAL ─────────────────────────────────────────────────────
@@ -201,6 +206,9 @@ export default function SuprimentosPage() {
   const [filtroPrioridade, setFiltroPrioridade] = useState('todas')
   const [filtroStatusFinanceiro, setFiltroStatusFinanceiro] = useState('todos')
   const [visao, setVisao] = useState<'esteira' | 'tabela'>('esteira')
+  const [colunaArquivadosRecolhida, setColunaArquivadosRecolhida] = useState<boolean>(true)
+  const [buscaArquivados, setBuscaArquivados] = useState<string>('')
+  const [limiteArquivados, setLimiteArquivados] = useState<number>(15)
 
   // Drag and Drop da Esteira
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
@@ -484,14 +492,16 @@ export default function SuprimentosPage() {
 
   // KPIs
   const kpis = useMemo(() => {
-    const totalAberto = suprimentos.filter(s => s.status !== 'Entregue').reduce((acc, s) => acc + (s.valor || 0), 0)
+    const totalAberto = suprimentos.filter(s => s.status !== 'Entregue' && s.status !== 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
     const emCotacao = suprimentos.filter(s => s.status === 'Em Cotação').length
     const aguardandoAprovacao = suprimentos.filter(s => s.status === 'Aprovação').length
     const lancadosNoFinanceiro = Object.values(contasVinculadas).length
     const valorLancado = Object.values(contasVinculadas).reduce((acc, c) => acc + (c.valor || 0), 0)
     const entreguesNaObra = suprimentos.filter(s => s.status === 'Entregue').length
+    const arquivados = suprimentos.filter(s => s.status === 'Arquivado').length
+    const valorArquivado = suprimentos.filter(s => s.status === 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
 
-    return { totalAberto, emCotacao, aguardandoAprovacao, lancadosNoFinanceiro, valorLancado, entreguesNaObra }
+    return { totalAberto, emCotacao, aguardandoAprovacao, lancadosNoFinanceiro, valorLancado, entreguesNaObra, arquivados, valorArquivado }
   }, [suprimentos, contasVinculadas])
 
   // ─── AÇÕES DA ESTEIRA ──────────────────────────────────────────────────────
@@ -1407,7 +1417,7 @@ export default function SuprimentosPage() {
             }}
           >
             <AlertTriangle size={12} /> ⚡ Urgentes & Críticas
-            {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && s.status !== 'Entregue').length > 0 && (
+            {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && s.status !== 'Entregue' && s.status !== 'Arquivado').length > 0 && (
               <span style={{
                 fontSize: 9.5,
                 fontWeight: 900,
@@ -1416,14 +1426,14 @@ export default function SuprimentosPage() {
                 padding: '1px 5px',
                 borderRadius: 8
               }}>
-                {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && s.status !== 'Entregue').length}
+                {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && s.status !== 'Entregue' && s.status !== 'Arquivado').length}
               </span>
             )}
           </button>
 
           {/* Mesas Automáticas por Obra Cadastrada */}
           {obras.map(o => {
-            const countObra = suprimentos.filter(s => s.obra_id === o.id && s.status !== 'Entregue').length
+            const countObra = suprimentos.filter(s => s.obra_id === o.id && s.status !== 'Entregue' && s.status !== 'Arquivado').length
             const isAtiva = mesaAtiva === `obra-${o.id}`
             return (
               <button
@@ -1545,6 +1555,29 @@ export default function SuprimentosPage() {
             </select>
           </div>
 
+          {/* Botão de Controle da Coluna de Arquivados na Esteira */}
+          {visao === 'esteira' && (
+            <button
+              type="button"
+              onClick={() => setColunaArquivadosRecolhida(prev => !prev)}
+              style={{
+                ...btnBase,
+                padding: '6px 11px',
+                background: !colunaArquivadosRecolhida ? 'rgba(100, 116, 139, 0.22)' : 'transparent',
+                color: !colunaArquivadosRecolhida ? C.ink : C.inkSoft,
+                border: `1px solid ${!colunaArquivadosRecolhida ? '#64748B' : C.border}`,
+                gap: 6
+              }}
+              title={colunaArquivadosRecolhida ? 'Expandir coluna de pedidos arquivados' : 'Recolher coluna de pedidos arquivados'}
+            >
+              <Archive size={12} color="#64748B" />
+              <span>Arquivados ({kpis.arquivados})</span>
+              <span style={{ fontSize: 9.5, opacity: 0.7 }}>
+                {colunaArquivadosRecolhida ? '▸ Abrir' : '◂ Fechar'}
+              </span>
+            </button>
+          )}
+
           {(busca || filtroPrioridade !== 'todas' || filtroStatusFinanceiro !== 'todos') && (
             <button
               onClick={() => {
@@ -1565,7 +1598,7 @@ export default function SuprimentosPage() {
         /* VISÃO 1: ESTEIRA KANBAN COM AS 5 ETAPAS (TODAS LADO A LADO) */
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(5, minmax(290px, 1fr))',
+          gridTemplateColumns: colunaArquivadosRecolhida ? 'repeat(5, minmax(280px, 1fr)) 58px' : 'repeat(5, minmax(280px, 1fr)) minmax(310px, 1fr)',
           gap: 14,
           alignItems: 'start',
           overflowX: 'auto',
@@ -1577,6 +1610,84 @@ export default function SuprimentosPage() {
             const valorTotalColuna = cardsDaColuna.reduce((acc, s) => acc + (s.valor || 0), 0)
             const Icon = col.icone
             const isDragOver = dragOverCol === col.id
+
+            // SE FOR COLUNA DE ARQUIVADOS E ESTIVER RECOLHIDA: EXIBE DOCK VERTICAL COMPACTO
+            if (col.id === 'Arquivado' && colunaArquivadosRecolhida) {
+              return (
+                <div
+                  key="col-arquivados-recolhida"
+                  onClick={() => setColunaArquivadosRecolhida(false)}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    if (dragOverCol !== 'Arquivado') setDragOverCol('Arquivado')
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setDragOverCol(null)
+                    }
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    setDragOverCol(null)
+                    const cardId = e.dataTransfer.getData('text/plain') || draggingCardId
+                    if (cardId) {
+                      const itemArrastado = suprimentos.find(s => s.id === cardId)
+                      if (itemArrastado && itemArrastado.status !== 'Arquivado') {
+                        handleMoverEtapa(itemArrastado, 'Arquivado')
+                      }
+                    }
+                    setDraggingCardId(null)
+                  }}
+                  style={{
+                    width: 58,
+                    minWidth: 58,
+                    background: isDragOver ? 'rgba(100, 116, 139, 0.22)' : 'rgba(255, 255, 255, 0.02)',
+                    border: isDragOver ? '2px dashed #64748B' : `1px dashed ${C.border}`,
+                    borderRadius: 8,
+                    padding: '16px 6px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    minHeight: 520,
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease',
+                    userSelect: 'none',
+                    boxShadow: isDragOver ? '0 0 16px rgba(100, 116, 139, 0.4)' : 'none'
+                  }}
+                  title="Clique para expandir os pedidos arquivados ou solte um card aqui para arquivar"
+                >
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <div style={{ background: 'rgba(100, 116, 139, 0.16)', padding: 7, borderRadius: 6, color: '#94A3B8' }}>
+                      <Archive size={16} />
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 900, background: '#64748B', color: '#FFFFFF', padding: '2px 6px', borderRadius: 10 }}>
+                      {cardsDaColuna.length}
+                    </span>
+                  </div>
+
+                  <div style={{
+                    writingMode: 'vertical-rl',
+                    textOrientation: 'mixed',
+                    transform: 'rotate(180deg)',
+                    fontSize: 10.5,
+                    fontWeight: 800,
+                    letterSpacing: '0.12em',
+                    color: isDragOver ? '#94A3B8' : C.inkSoft,
+                    textTransform: 'uppercase',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {isDragOver ? '⬇ Soltar p/ Arquivar' : '6. Arquivados'}
+                  </div>
+
+                  <div style={{ color: C.inkSoft, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <ChevronLeft size={15} color="#94A3B8" />
+                    <span style={{ fontSize: 8.5, fontWeight: 700, textTransform: 'uppercase', color: '#94A3B8' }}>Abrir</span>
+                  </div>
+                </div>
+              )
+            }
 
             return (
               <div
@@ -1635,31 +1746,54 @@ export default function SuprimentosPage() {
                     <span style={{ fontSize: 11, fontWeight: 900, background: col.bg, color: col.cor, padding: '2px 7px', borderRadius: 12 }}>
                       {cardsDaColuna.length}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const currentObra = mesaAtiva.startsWith('obra-') ? mesaAtiva.replace('obra-', '') : ''
-                        setQuickObraId(currentObra)
-                        setQuickTitulo('')
-                        setColunaCriacaoAtiva(col.id)
-                      }}
-                      style={{
-                        border: 'none',
-                        background: col.bg,
-                        color: col.cor,
-                        width: 22,
-                        height: 22,
-                        borderRadius: 4,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        transition: 'opacity 0.15s ease'
-                      }}
-                      title={`Criar nova demanda na etapa "${col.nome}"`}
-                    >
-                      <Plus size={13} />
-                    </button>
+                    {col.id === 'Arquivado' ? (
+                      <button
+                        type="button"
+                        onClick={() => setColunaArquivadosRecolhida(true)}
+                        style={{
+                          border: 'none',
+                          background: col.bg,
+                          color: col.cor,
+                          width: 22,
+                          height: 22,
+                          borderRadius: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'opacity 0.15s ease'
+                        }}
+                        title="Recolher coluna de Arquivados"
+                      >
+                        <Minimize2 size={12} />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const currentObra = mesaAtiva.startsWith('obra-') ? mesaAtiva.replace('obra-', '') : ''
+                          setQuickObraId(currentObra)
+                          setQuickTitulo('')
+                          setColunaCriacaoAtiva(col.id)
+                        }}
+                        style={{
+                          border: 'none',
+                          background: col.bg,
+                          color: col.cor,
+                          width: 22,
+                          height: 22,
+                          borderRadius: 4,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          transition: 'opacity 0.15s ease'
+                        }}
+                        title={`Criar nova demanda na etapa "${col.nome}"`}
+                      >
+                        <Plus size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -1675,7 +1809,212 @@ export default function SuprimentosPage() {
 
                 {/* Lista de Cards da Coluna */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {/* Formulário Rápido Inline ou Botão + Adicionar */}
+                  {col.id === 'Arquivado' ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {/* Campo de Busca Interno de Arquivados */}
+                      <div style={{ position: 'relative' }}>
+                        <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                        <input
+                          placeholder="Buscar arquivados..."
+                          value={buscaArquivados}
+                          onChange={e => setBuscaArquivados(e.target.value)}
+                          style={{
+                            ...inputStyle,
+                            paddingLeft: 26,
+                            paddingRight: buscaArquivados ? 24 : 8,
+                            paddingTop: 5,
+                            paddingBottom: 5,
+                            fontSize: 11,
+                            background: C.bgCard
+                          }}
+                        />
+                        {buscaArquivados && (
+                          <button
+                            onClick={() => setBuscaArquivados('')}
+                            style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                            title="Limpar busca"
+                          >
+                            <X size={11} />
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Lista Compacta de Arquivados */}
+                      {(() => {
+                        const arquivadosFiltrados = cardsDaColuna.filter(item => {
+                          if (!buscaArquivados.trim()) return true
+                          const q = buscaArquivados.toLowerCase().trim()
+                          const forn = (item.fornecedor || '').toLowerCase()
+                          const cod = (item.codigo || `oc-${item.id.slice(0, 6)}`).toLowerCase()
+                          const tit = (item.titulo || '').toLowerCase()
+                          const sol = (item.solicitante || '').toLowerCase()
+                          return tit.includes(q) || cod.includes(q) || forn.includes(q) || sol.includes(q)
+                        })
+
+                        const arquivadosExibidos = arquivadosFiltrados.slice(0, limiteArquivados)
+
+                        if (arquivadosFiltrados.length === 0) {
+                          return (
+                            <div style={{
+                              padding: '30px 10px',
+                              textAlign: 'center',
+                              color: C.inkSoft,
+                              fontSize: 11,
+                              border: `1px dashed ${C.border}`,
+                              borderRadius: 6,
+                              background: 'rgba(255,255,255,0.02)'
+                            }}>
+                              {buscaArquivados ? 'Nenhum arquivado encontrado para esta busca.' : 'Nenhum pedido arquivado ainda. Conclua e arquive pedidos entregues.'}
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                            {arquivadosExibidos.map(item => {
+                              const obra = obras.find(o => o.id === item.obra_id)
+                              return (
+                                <div
+                                  key={item.id}
+                                  draggable={true}
+                                  onDragStart={(e) => {
+                                    e.dataTransfer.setData('text/plain', item.id)
+                                    setDraggingCardId(item.id)
+                                  }}
+                                  onDragEnd={() => setDraggingCardId(null)}
+                                  onClick={() => handleAbrirCardDrawer(item)}
+                                  style={{
+                                    background: C.bgCard,
+                                    border: `1px solid ${C.border}`,
+                                    borderRadius: 6,
+                                    padding: '9px 10px',
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    gap: 5,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = '#64748B'
+                                    e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = C.border
+                                    e.currentTarget.style.boxShadow = 'none'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                    <span style={{ fontSize: 9.5, fontWeight: 800, color: '#94A3B8', fontFamily: 'monospace' }}>
+                                      {item.codigo || `OC-${item.id.slice(0, 6).toUpperCase()}`}
+                                    </span>
+                                    <span style={{ fontSize: 9, color: C.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
+                                      🏢 {obra?.nome || item.obra_nome_manual || 'Geral'}
+                                    </span>
+                                  </div>
+
+                                  <div style={{ fontSize: 11.5, fontWeight: 800, color: C.ink, lineHeight: 1.3 }}>
+                                    {item.titulo}
+                                  </div>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 10, borderTop: `1px solid ${C.border}`, paddingTop: 4, marginTop: 1 }}>
+                                    <span style={{ color: C.inkSoft, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>
+                                      {item.fornecedor || 'Sem fornecedor'}
+                                    </span>
+                                    <strong style={{ color: '#10B981', fontFamily: 'monospace' }}>
+                                      {item.valor ? `R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '-'}
+                                    </strong>
+                                  </div>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingTop: 4, borderTop: `1px dashed ${C.border}` }} onClick={e => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAbrirCardDrawer(item)}
+                                      style={{
+                                        border: `1px solid ${C.border}`,
+                                        background: 'rgba(255,255,255,0.03)',
+                                        color: C.inkSoft,
+                                        padding: '2px 7px',
+                                        borderRadius: 4,
+                                        fontSize: 9.5,
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 4
+                                      }}
+                                    >
+                                      <Eye size={10} /> Detalhes
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleMoverEtapa(item, 'Entregue')}
+                                      style={{
+                                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                                        background: 'rgba(16, 185, 129, 0.1)',
+                                        color: '#10B981',
+                                        padding: '2px 7px',
+                                        borderRadius: 4,
+                                        fontSize: 9.5,
+                                        fontWeight: 800,
+                                        cursor: 'pointer',
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 3
+                                      }}
+                                      title="Desarquivar pedido (retornar para Entregue no canteiro)"
+                                    >
+                                      <ArchiveRestore size={10} /> Reabrir
+                                    </button>
+                                  </div>
+                                </div>
+                              )
+                            })}
+
+                            {arquivadosFiltrados.length > limiteArquivados && (
+                              <button
+                                type="button"
+                                onClick={() => setLimiteArquivados(l => l + 15)}
+                                style={{
+                                  ...btnBase,
+                                  width: '100%',
+                                  padding: '6px 10px',
+                                  fontSize: 10,
+                                  background: 'rgba(100, 116, 139, 0.12)',
+                                  color: '#94A3B8',
+                                  border: '1px dashed #64748B',
+                                  borderRadius: 6
+                                }}
+                              >
+                                Carregar mais ({arquivadosFiltrados.length - arquivadosExibidos.length} restantes)
+                              </button>
+                            )}
+
+                            <div style={{ textAlign: 'center', paddingTop: 3 }}>
+                              <button
+                                type="button"
+                                onClick={() => setColunaArquivadosRecolhida(true)}
+                                style={{
+                                  border: 'none',
+                                  background: 'transparent',
+                                  color: C.inkSoft,
+                                  fontSize: 9.5,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: 4
+                                }}
+                              >
+                                <Minimize2 size={9} /> Recolher coluna
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })()}
+                    </div>
+                  ) : (
+                    <>
+                      {/* Formulário Rápido Inline ou Botão + Adicionar */}
                   {colunaCriacaoAtiva === col.id ? (
                     <div style={{
                       background: C.bgCard,
@@ -2476,16 +2815,37 @@ export default function SuprimentosPage() {
                             )}
 
                             {item.status === 'Entregue' && (
-                              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                                 <span style={{ fontSize: 10, color: '#10B981', fontWeight: 800, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
                                   <Check size={12} /> Concluído
                                 </span>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleMoverEtapa(item, 'Arquivado')
+                                  }}
+                                  style={{
+                                    ...btnBase,
+                                    padding: '3px 8px',
+                                    fontSize: 9.5,
+                                    background: 'rgba(100, 116, 139, 0.15)',
+                                    color: '#94A3B8',
+                                    border: '1px solid rgba(100, 116, 139, 0.3)',
+                                    borderRadius: 4
+                                  }}
+                                  title="Arquivar pedido concluído para manter a esteira limpa"
+                                >
+                                  <Archive size={10} /> Arquivar
+                                </button>
                               </div>
                             )}
                           </div>
                         </div>
                       )
                     })
+                  )}
+                    </>
                   )}
                   {isDragOver && cardsDaColuna.length > 0 && (
                     <div style={{
@@ -2575,10 +2935,12 @@ export default function SuprimentosPage() {
                           borderRadius: 4,
                           background: item.status === 'Entregue' ? 'rgba(16, 185, 129, 0.15)' :
                                       item.status === 'Em Trânsito' ? 'rgba(6, 182, 212, 0.15)' :
-                                      item.status === 'Aprovação' ? 'rgba(139, 92, 246, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                                      item.status === 'Aprovação' ? 'rgba(139, 92, 246, 0.15)' :
+                                      item.status === 'Arquivado' ? 'rgba(100, 116, 139, 0.18)' : 'rgba(245, 158, 11, 0.15)',
                           color: item.status === 'Entregue' ? '#10B981' :
                                  item.status === 'Em Trânsito' ? '#06B6D4' :
-                                 item.status === 'Aprovação' ? '#8B5CF6' : C.amber
+                                 item.status === 'Aprovação' ? '#8B5CF6' :
+                                 item.status === 'Arquivado' ? '#94A3B8' : C.amber
                         }}>
                           {item.status}
                         </span>
@@ -2664,6 +3026,32 @@ export default function SuprimentosPage() {
                                 <CheckSquare size={11} /> Receber
                               </button>
                             </div>
+                          )}
+                          {item.status === 'Entregue' && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleMoverEtapa(item, 'Arquivado')
+                              }}
+                              style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: 'rgba(100, 116, 139, 0.15)', color: '#94A3B8', border: '1px solid rgba(100, 116, 139, 0.3)', fontWeight: 800 }}
+                              title="Arquivar pedido entregue"
+                            >
+                              <Archive size={11} /> Arquivar
+                            </button>
+                          )}
+                          {item.status === 'Arquivado' && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleMoverEtapa(item, 'Entregue')
+                              }}
+                              style={{ ...btnBase, padding: '4px 8px', fontSize: 10, background: 'rgba(16, 185, 129, 0.12)', color: '#10B981', border: '1px solid rgba(16, 185, 129, 0.25)', fontWeight: 800 }}
+                              title="Desarquivar pedido (retornar para Entregue)"
+                            >
+                              <ArchiveRestore size={11} /> Reabrir
+                            </button>
                           )}
                           <button
                             onClick={(e) => {
@@ -2841,7 +3229,7 @@ export default function SuprimentosPage() {
                     value={novoForm.status}
                     onChange={e => setNovoForm({ ...novoForm, status: e.target.value as any })}
                   >
-                    {COLUNAS_ESTEIRA.map(col => (
+                    {COLUNAS_ESTEIRA.filter(c => c.id !== 'Arquivado').map(col => (
                       <option key={col.id} value={col.id}>
                         {col.nome}
                       </option>

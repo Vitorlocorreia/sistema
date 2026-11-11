@@ -142,7 +142,7 @@ export interface Suprimento {
   unidade: string | null
   fornecedor: string | null
   valor: number | null
-  status: 'Solicitado' | 'Em Cotação' | 'Aprovação' | 'Em Trânsito' | 'Entregue'
+  status: 'Solicitado' | 'Em Cotação' | 'Aprovação' | 'Em Trânsito' | 'Entregue' | 'Arquivado'
   data_vencimento: string | null
   solicitante: string | null
   prioridade: string | null

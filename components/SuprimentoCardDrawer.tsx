@@ -28,7 +28,9 @@ import {
   Bot,
   Printer,
   Copy,
-  CheckCheck
+  CheckCheck,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
@@ -1424,6 +1426,7 @@ export function SuprimentoCardDrawer({
                   <option value="Aprovação">3. Aguardando Aprovação</option>
                   <option value="Em Trânsito">4. Em Trânsito</option>
                   <option value="Entregue">5. Entregue no Canteiro</option>
+                  <option value="Arquivado">6. Arquivado (Finalizado)</option>
                 </select>
               </div>
 
@@ -1609,6 +1612,7 @@ export function SuprimentoCardDrawer({
                     <option value="Aprovação">3. Aguardando Aprovação</option>
                     <option value="Em Trânsito">4. Em Trânsito</option>
                     <option value="Entregue">5. Entregue no Canteiro</option>
+                  <option value="Arquivado">6. Arquivado (Finalizado)</option>
                   </select>
                 </div>
 
@@ -2542,6 +2546,83 @@ export function SuprimentoCardDrawer({
             >
               <DollarSign size={11} />
               <span>Lançamento</span>
+            </button>
+          </div>
+        )}
+
+        {/* Banner de Ação Rápida: Arquivamento / Desarquivamento */}
+        {item.status === 'Entregue' && (
+          <div style={{
+            background: 'rgba(100, 116, 139, 0.08)',
+            borderBottom: `1px solid rgba(100, 116, 139, 0.25)`,
+            padding: '8px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10
+          }}>
+            <div style={{ fontSize: 11, color: C.ink }}>
+              <strong style={{ color: '#94A3B8' }}>📦 Pedido Recebido na Obra:</strong>
+              <span style={{ color: C.inkSoft, marginLeft: 6 }}>Este pedido já foi finalizado. Você pode arquivá-lo para manter a esteira limpa.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleAtualizarPropriedade('status', 'Arquivado', 'Etapa da Esteira')}
+              style={{
+                background: '#64748B',
+                color: '#FFFFFF',
+                border: 'none',
+                borderRadius: 4,
+                padding: '4px 10px',
+                fontSize: 10.5,
+                fontWeight: 900,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+              title="Mover este pedido para a etapa de Arquivados"
+            >
+              <Archive size={11} />
+              <span>Arquivar Pedido</span>
+            </button>
+          </div>
+        )}
+
+        {item.status === 'Arquivado' && (
+          <div style={{
+            background: 'rgba(100, 116, 139, 0.12)',
+            borderBottom: `1px solid rgba(100, 116, 139, 0.3)`,
+            padding: '8px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10
+          }}>
+            <div style={{ fontSize: 11, color: C.ink }}>
+              <strong style={{ color: '#94A3B8' }}>📦 Pedido Arquivado:</strong>
+              <span style={{ color: C.inkSoft, marginLeft: 6 }}>Este pedido está no histórico arquivado de suprimentos.</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleAtualizarPropriedade('status', 'Entregue', 'Etapa da Esteira')}
+              style={{
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#10B981',
+                border: '1px solid rgba(16, 185, 129, 0.3)',
+                borderRadius: 4,
+                padding: '4px 10px',
+                fontSize: 10.5,
+                fontWeight: 800,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+              title="Retornar pedido para Entregue no canteiro"
+            >
+              <ArchiveRestore size={11} />
+              <span>Desarquivar (Reabrir)</span>
             </button>
           </div>
         )}
