@@ -1736,61 +1736,85 @@ export default function SuprimentosPage() {
       {/* CONTEÚDO PRINCIPAL: ESTEIRA OU TABELA */}
       {visao === 'esteira' ? (
         <div style={{ position: 'relative' }}>
-          {/* Botão Flutuante Esquerdo */}
+          {/* Botão Flutuante Esquerdo Sutil */}
           {podeRolarEsquerda && (
             <button
               type="button"
               onClick={() => rolarEsteira('esquerda')}
               style={{
                 position: 'absolute',
-                left: -10,
+                left: -6,
                 top: 240,
                 zIndex: 25,
-                width: 36,
-                height: 36,
+                width: 28,
+                height: 28,
                 borderRadius: '50%',
-                background: C.bgPanel,
-                border: `1.5px solid ${C.amber}`,
-                color: C.amber,
+                background: 'rgba(23, 23, 23, 0.75)',
+                backdropFilter: 'blur(6px)',
+                border: `1px solid ${C.border}`,
+                color: C.inkSoft,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                transition: 'all 0.15s ease'
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                transition: 'all 0.15s ease',
+                opacity: 0.65
               }}
-              title="Rolar para a esquerda"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '1'
+                e.currentTarget.style.color = C.ink
+                e.currentTarget.style.borderColor = C.amber
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '0.65'
+                e.currentTarget.style.color = C.inkSoft
+                e.currentTarget.style.borderColor = C.border
+              }}
+              title="Rolar esteira para a esquerda"
             >
-              <ChevronLeft size={18} />
+              <ChevronLeft size={14} />
             </button>
           )}
 
-          {/* Botão Flutuante Direito */}
+          {/* Botão Flutuante Direito Sutil */}
           {podeRolarDireita && (
             <button
               type="button"
               onClick={() => rolarEsteira('direita')}
               style={{
                 position: 'absolute',
-                right: -10,
+                right: -6,
                 top: 240,
                 zIndex: 25,
-                width: 36,
-                height: 36,
+                width: 28,
+                height: 28,
                 borderRadius: '50%',
-                background: C.bgPanel,
-                border: `1.5px solid ${C.amber}`,
-                color: C.amber,
+                background: 'rgba(23, 23, 23, 0.75)',
+                backdropFilter: 'blur(6px)',
+                border: `1px solid ${C.border}`,
+                color: C.inkSoft,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 cursor: 'pointer',
-                boxShadow: '0 4px 14px rgba(0,0,0,0.4)',
-                transition: 'all 0.15s ease'
+                boxShadow: '0 2px 8px rgba(0,0,0,0.25)',
+                transition: 'all 0.15s ease',
+                opacity: 0.65
               }}
-              title="Rolar para a direita"
+              onMouseEnter={(e) => {
+                e.currentTarget.style.opacity = '1'
+                e.currentTarget.style.color = C.ink
+                e.currentTarget.style.borderColor = C.amber
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.opacity = '0.65'
+                e.currentTarget.style.color = C.inkSoft
+                e.currentTarget.style.borderColor = C.border
+              }}
+              title="Rolar esteira para a direita"
             >
-              <ChevronRight size={18} />
+              <ChevronRight size={14} />
             </button>
           )}
 
