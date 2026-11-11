@@ -1818,7 +1818,7 @@ export default function SuprimentosPage() {
             </button>
           )}
 
-          /* VISÃO 1: ESTEIRA KANBAN COM AS 5 ETAPAS (TODAS LADO A LADO) COM DRAG-TO-SCROLL */
+
           <div
             ref={esteiraRef}
             onMouseDown={handleMouseDownScroll}
