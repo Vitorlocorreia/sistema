@@ -3129,7 +3129,7 @@ export default function RhPage() {
   const abasRhPermitidas = useMemo<string[]>(() => {
     if (!colaboradorAtivo) return ['admissao']
     if (colaboradorAtivo.cargo === 'admin_geral' || colaboradorAtivo.cargo === 'rh_sp') {
-      return ['admissao', 'aptos', 'registrados', 'ativos', 'inativos']
+      return ['admissao', 'aptos', 'registrados', 'ativos', 'rh_ativos', 'inativos']
     }
 
     const rawAbas = colaboradorAtivo.override_permissoes && colaboradorAtivo.abas_rh !== undefined
@@ -3143,7 +3143,7 @@ export default function RhPage() {
 
     // Fallback: se tem permissão de salário, tem acesso integral; caso contrário, restringe a admissão (obra)
     if (colaboradorAtivo.pode_ver_salario === true || cargoPermissao?.pode_ver_salario === true) {
-      return ['admissao', 'aptos', 'registrados', 'ativos', 'inativos']
+      return ['admissao', 'aptos', 'registrados', 'ativos', 'rh_ativos', 'inativos']
     }
 
     return ['admissao']
@@ -3152,15 +3152,21 @@ export default function RhPage() {
   const podeVerAbaAdmissao = abasRhPermitidas.includes('admissao')
   const podeVerAbaAptos = abasRhPermitidas.includes('aptos')
   const podeVerAbaRegistrados = abasRhPermitidas.includes('registrados') || abasRhPermitidas.includes('ativos')
-  const podeVerAbaAtivos = abasRhPermitidas.includes('ativos')
-  const podeVerAbaInativos = abasRhPermitidas.includes('inativos') || abasRhPermitidas.includes('ativos')
+  const podeVerAbaAtivos = abasRhPermitidas.includes('rh_ativos') || abasRhPermitidas.includes('ativos_campo')
+  const podeVerAbaInativos = abasRhPermitidas.includes('inativos') || abasRhPermitidas.includes('rh_inativos')
 
   useEffect(() => {
-    if (abasRhPermitidas.length > 0 && !abasRhPermitidas.includes(activeTab)) {
-      const fallbackTab = (abasRhPermitidas[0] as 'admissao' | 'aptos' | 'registrados' | 'ativos' | 'inativos') || 'admissao'
-      setActiveTab(fallbackTab)
+    const permitidasMapeadas: Array<'admissao' | 'aptos' | 'registrados' | 'ativos' | 'inativos'> = []
+    if (podeVerAbaAdmissao) permitidasMapeadas.push('admissao')
+    if (podeVerAbaAptos) permitidasMapeadas.push('aptos')
+    if (podeVerAbaRegistrados) permitidasMapeadas.push('registrados')
+    if (podeVerAbaAtivos) permitidasMapeadas.push('ativos')
+    if (podeVerAbaInativos) permitidasMapeadas.push('inativos')
+
+    if (permitidasMapeadas.length > 0 && !permitidasMapeadas.includes(activeTab)) {
+      setActiveTab(permitidasMapeadas[0])
     }
-  }, [abasRhPermitidas, activeTab])
+  }, [podeVerAbaAdmissao, podeVerAbaAptos, podeVerAbaRegistrados, podeVerAbaAtivos, podeVerAbaInativos, activeTab])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {

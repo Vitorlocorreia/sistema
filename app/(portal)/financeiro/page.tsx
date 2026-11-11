@@ -8908,8 +8908,11 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
     setConfigPermissoes(prev => prev.map(c => {
       if (c.cargo === cargo) {
         const abasList = c.abas_rh ? c.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-        const newAbasList = abasList.includes(abaId)
-          ? abasList.filter((x: string) => x !== abaId)
+        const isChecked = abaId === 'ativos'
+          ? (abasList.includes('ativos') || abasList.includes('registrados'))
+          : abasList.includes(abaId)
+        const newAbasList = isChecked
+          ? abasList.filter((x: string) => x !== abaId && (abaId !== 'ativos' || x !== 'registrados'))
           : [...abasList, abaId]
         return { ...c, abas_rh: newAbasList.join(',') }
       }
@@ -8920,8 +8923,11 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
   const handleToggleAbaRHColaborador = (abaId: string) => {
     if (!editColForm) return
     const abasList = editColForm.abas_rh ? editColForm.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-    const newAbasList = abasList.includes(abaId)
-      ? abasList.filter((x: string) => x !== abaId)
+    const isChecked = abaId === 'ativos'
+      ? (abasList.includes('ativos') || abasList.includes('registrados'))
+      : abasList.includes(abaId)
+    const newAbasList = isChecked
+      ? abasList.filter((x: string) => x !== abaId && (abaId !== 'ativos' || x !== 'registrados'))
       : [...abasList, abaId]
     setEditColForm({ ...editColForm, abas_rh: newAbasList.join(',') })
   }
@@ -9627,9 +9633,9 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                             <button
                               type="button"
                               onClick={() => {
-                                const ALL_RH_ABAS = ['admissao', 'aptos', 'ativos']
+                                const ALL_RH_ABAS = ['admissao', 'aptos', 'ativos', 'rh_ativos', 'inativos']
                                 const abasRhList = cfg.abas_rh ? cfg.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                                const todasMarcadas = ALL_RH_ABAS.every(a => abasRhList.includes(a))
+                                const todasMarcadas = ALL_RH_ABAS.every(a => abasRhList.includes(a) || (a === 'ativos' && abasRhList.includes('registrados')))
                                 setConfigPermissoes(prev => prev.map(c => c.cargo === cfg.cargo
                                   ? { ...c, abas_rh: todasMarcadas ? '' : ALL_RH_ABAS.join(',') }
                                   : c
@@ -9638,20 +9644,22 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                               style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
                             >
                               {(() => {
-                                const ALL_RH_ABAS = ['admissao', 'aptos', 'ativos']
+                                const ALL_RH_ABAS = ['admissao', 'aptos', 'ativos', 'rh_ativos', 'inativos']
                                 const abasRhList = cfg.abas_rh ? cfg.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                                return ALL_RH_ABAS.every(a => abasRhList.includes(a)) ? 'Desmarcar todas' : '✓ Selecionar todas'
+                                return ALL_RH_ABAS.every(a => abasRhList.includes(a) || (a === 'ativos' && abasRhList.includes('registrados'))) ? 'Desmarcar todas' : '✓ Selecionar todas'
                               })()}
                             </button>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 6 }}>
                             {([
-                              ['admissao', '1. Admissões (Obra / Campo)'],
-                              ['aptos',    '2. Aptos p/ Registro (RH SP)'],
-                              ['ativos',   '3. Registrados'],
+                              ['admissao',   '1. Admissão (Obra / Campo)'],
+                              ['aptos',      '2. Aptos p/ Registro (RH SP)'],
+                              ['ativos',     '3. Registrados (Formalizados)'],
+                              ['rh_ativos',  '4. Ativos (Em Atividade na Obra)'],
+                              ['inativos',   '5. Inativos (Desligados & Rescisões)'],
                             ] as const).map(([abaId, abaLabel]) => {
                               const abasRhList = cfg.abas_rh ? cfg.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                              const checked = abasRhList.includes(abaId)
+                              const checked = abasRhList.includes(abaId) || (abaId === 'ativos' && abasRhList.includes('registrados'))
                               return (
                                 <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4, border: `1px solid ${checked ? '#F59E0B22' : 'transparent'}` }}>
                                   <input
@@ -9893,17 +9901,42 @@ function PermissoesTab({ colaboradorAtivo, colaboradores, onRefresh, confirm }: 
                     </div>
 
                     <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
-                      <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Abas do Recursos Humanos (RH)</span>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase' }}>
+                          Abas do Recursos Humanos (RH)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const ALL_RH_ABAS = ['admissao', 'aptos', 'ativos', 'rh_ativos', 'inativos']
+                            const abasList = editColForm.abas_rh ? editColForm.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                            const todasMarcadas = ALL_RH_ABAS.every(a => abasList.includes(a) || (a === 'ativos' && abasList.includes('registrados')))
+                            setEditColForm({
+                              ...editColForm,
+                              abas_rh: todasMarcadas ? '' : ALL_RH_ABAS.join(',')
+                            })
+                          }}
+                          style={{ background: 'transparent', border: 0, color: C.amber, fontSize: 9.5, fontWeight: 800, cursor: 'pointer' }}
+                        >
+                          {(() => {
+                            const ALL_RH_ABAS = ['admissao', 'aptos', 'ativos', 'rh_ativos', 'inativos']
+                            const abasList = editColForm.abas_rh ? editColForm.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
+                            return ALL_RH_ABAS.every(a => abasList.includes(a) || (a === 'ativos' && abasList.includes('registrados'))) ? 'Desmarcar todas' : '✓ Selecionar todas'
+                          })()}
+                        </button>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 6 }}>
                         {([
-                          ['admissao', '1. Admissões (Obra / Campo)'],
-                          ['aptos',    '2. Aptos p/ Registro (RH SP)'],
-                          ['ativos',   '3. Registrados'],
+                          ['admissao',   '1. Admissão (Obra / Campo)'],
+                          ['aptos',      '2. Aptos p/ Registro (RH SP)'],
+                          ['ativos',     '3. Registrados (Formalizados)'],
+                          ['rh_ativos',  '4. Ativos (Em Atividade na Obra)'],
+                          ['inativos',   '5. Inativos (Desligados & Rescisões)'],
                         ] as const).map(([abaId, abaLabel]) => {
                           const abasList = editColForm.abas_rh ? editColForm.abas_rh.split(',').map((x: string) => x.trim()).filter(Boolean) : []
-                          const checked = abasList.includes(abaId)
+                          const checked = abasList.includes(abaId) || (abaId === 'ativos' && abasList.includes('registrados'))
                           return (
-                            <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.ink, cursor: 'pointer' }}>
+                            <label key={abaId} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: C.ink, cursor: 'pointer', background: checked ? '#F59E0B0A' : 'transparent', padding: '4px 6px', borderRadius: 4, border: `1px solid ${checked ? '#F59E0B22' : 'transparent'}` }}>
                               <input
                                 type="checkbox"
                                 checked={checked}
