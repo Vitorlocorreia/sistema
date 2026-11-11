@@ -41,7 +41,8 @@ import {
   Archive,
   ArchiveRestore,
   ChevronLeft,
-  Minimize2
+  Minimize2,
+  SlidersHorizontal
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { toast } from '@/components/Toast'
@@ -209,6 +210,46 @@ export default function SuprimentosPage() {
   const [colunaArquivadosRecolhida, setColunaArquivadosRecolhida] = useState<boolean>(true)
   const [buscaArquivados, setBuscaArquivados] = useState<string>('')
   const [limiteArquivados, setLimiteArquivados] = useState<number>(15)
+
+  // Modo de visualização da esteira: ajustar à tela (100% visível) ou colunas largas
+  const [ajustarATela, setAjustarATela] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('jwa_suprimentos_fit_screen')
+      if (saved !== null) return saved === 'true'
+    }
+    return true // Padrão: ajustar à tela para caber todas as fases sem rolagem horizontal
+  })
+
+  // Ref do container da esteira para rolagem horizontal suave
+  const esteiraRef = useRef<HTMLDivElement>(null)
+
+  function handleToggleAjustarATela() {
+    setAjustarATela(prev => {
+      const next = !prev
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('jwa_suprimentos_fit_screen', String(next))
+      }
+      return next
+    })
+  }
+
+  function rolarHorizontalmente(direcao: 'esquerda' | 'direita') {
+    if (!esteiraRef.current) return
+    const step = 340
+    esteiraRef.current.scrollBy({ left: direcao === 'esquerda' ? -step : step, behavior: 'smooth' })
+  }
+
+  function rolarParaColuna(colId: string) {
+    if (colId === 'Arquivado' && colunaArquivadosRecolhida) {
+      setColunaArquivadosRecolhida(false)
+    }
+    setTimeout(() => {
+      const el = document.getElementById(`coluna-esteira-${colId}`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+      }
+    }, 50)
+  }
 
   // Drag and Drop da Esteira
   const [draggingCardId, setDraggingCardId] = useState<string | null>(null)
@@ -1557,25 +1598,44 @@ export default function SuprimentosPage() {
 
           {/* Botão de Controle da Coluna de Arquivados na Esteira */}
           {visao === 'esteira' && (
-            <button
-              type="button"
-              onClick={() => setColunaArquivadosRecolhida(prev => !prev)}
-              style={{
-                ...btnBase,
-                padding: '6px 11px',
-                background: !colunaArquivadosRecolhida ? 'rgba(100, 116, 139, 0.22)' : 'transparent',
-                color: !colunaArquivadosRecolhida ? C.ink : C.inkSoft,
-                border: `1px solid ${!colunaArquivadosRecolhida ? '#64748B' : C.border}`,
-                gap: 6
-              }}
-              title={colunaArquivadosRecolhida ? 'Expandir coluna de pedidos arquivados' : 'Recolher coluna de pedidos arquivados'}
-            >
-              <Archive size={12} color="#64748B" />
-              <span>Arquivados ({kpis.arquivados})</span>
-              <span style={{ fontSize: 9.5, opacity: 0.7 }}>
-                {colunaArquivadosRecolhida ? '▸ Abrir' : '◂ Fechar'}
-              </span>
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={handleToggleAjustarATela}
+                style={{
+                  ...btnBase,
+                  padding: '6px 11px',
+                  background: ajustarATela ? 'rgba(245, 158, 11, 0.15)' : 'transparent',
+                  color: ajustarATela ? C.amber : C.inkSoft,
+                  border: `1px solid ${ajustarATela ? C.amber : C.border}`,
+                  gap: 6
+                }}
+                title={ajustarATela ? 'Todas as fases ajustadas na tela. Clique para modo de colunas largas com rolagem.' : 'Modo colunas largas ativo. Clique para ajustar todas as fases na tela.'}
+              >
+                <SlidersHorizontal size={12} />
+                <span>{ajustarATela ? '↔ Ajustado à Tela' : '⇄ Colunas Largas'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setColunaArquivadosRecolhida(prev => !prev)}
+                style={{
+                  ...btnBase,
+                  padding: '6px 11px',
+                  background: !colunaArquivadosRecolhida ? 'rgba(100, 116, 139, 0.22)' : 'transparent',
+                  color: !colunaArquivadosRecolhida ? C.ink : C.inkSoft,
+                  border: `1px solid ${!colunaArquivadosRecolhida ? '#64748B' : C.border}`,
+                  gap: 6
+                }}
+                title={colunaArquivadosRecolhida ? 'Expandir coluna de pedidos arquivados' : 'Recolher coluna de pedidos arquivados'}
+              >
+                <Archive size={12} color="#64748B" />
+                <span>Arquivados ({kpis.arquivados})</span>
+                <span style={{ fontSize: 9.5, opacity: 0.7 }}>
+                  {colunaArquivadosRecolhida ? '▸ Abrir' : '◂ Fechar'}
+                </span>
+              </button>
+            </>
           )}
 
           {(busca || filtroPrioridade !== 'todas' || filtroStatusFinanceiro !== 'todos') && (
@@ -1595,16 +1655,123 @@ export default function SuprimentosPage() {
 
       {/* CONTEÚDO PRINCIPAL: ESTEIRA OU TABELA */}
       {visao === 'esteira' ? (
-        /* VISÃO 1: ESTEIRA KANBAN COM AS 5 ETAPAS (TODAS LADO A LADO) */
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: colunaArquivadosRecolhida ? 'repeat(5, minmax(280px, 1fr)) 58px' : 'repeat(5, minmax(280px, 1fr)) minmax(310px, 1fr)',
-          gap: 14,
-          alignItems: 'start',
-          overflowX: 'auto',
-          paddingBottom: 16,
-          scrollbarWidth: 'thin'
-        }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* BARRA DE NAVEGAÇÃO RÁPIDA ENTRE FASES & CONTROLES LATERAIS */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            background: C.bgPanel,
+            border: `1px solid ${C.border}`,
+            borderRadius: 6,
+            padding: '7px 12px',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto', scrollbarWidth: 'none', flex: 1 }}>
+              <span style={{ fontSize: 10, fontWeight: 900, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap', marginRight: 2 }}>
+                Fases da Esteira:
+              </span>
+              {COLUNAS_ESTEIRA.map(col => {
+                const count = suprimentosFiltrados.filter(s => s.status === col.id).length
+                const Icon = col.icone
+                return (
+                  <button
+                    key={col.id}
+                    type="button"
+                    onClick={() => rolarParaColuna(col.id)}
+                    style={{
+                      border: `1px solid ${col.cor}33`,
+                      background: col.bg,
+                      color: col.cor,
+                      padding: '4px 8px',
+                      borderRadius: 4,
+                      fontSize: 10.5,
+                      fontWeight: 800,
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 5,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s ease'
+                    }}
+                    title={`Ir direto para a fase "${col.nome}"`}
+                  >
+                    <Icon size={11} color={col.cor} />
+                    <span>{col.nome.replace(/^[0-9].s*/, '')}</span>
+                    <span style={{
+                      background: col.cor,
+                      color: '#FFFFFF',
+                      fontSize: 9,
+                      fontWeight: 900,
+                      padding: '1px 5px',
+                      borderRadius: 10,
+                      minWidth: 15,
+                      textAlign: 'center'
+                    }}>
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            {/* Controles de Navegação Horizontal e Ajuste */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => rolarHorizontalmente('esquerda')}
+                style={{ ...btnBase, padding: '4px 9px', fontSize: 10.5, background: C.bgCard, color: C.inkSoft, border: `1px solid ${C.border}`, gap: 4 }}
+                title="Rolar esteira para a esquerda"
+              >
+                <ChevronLeft size={13} />
+                <span>Anterior</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => rolarHorizontalmente('direita')}
+                style={{ ...btnBase, padding: '4px 9px', fontSize: 10.5, background: C.bgCard, color: C.inkSoft, border: `1px solid ${C.border}`, gap: 4 }}
+                title="Rolar esteira para a direita"
+              >
+                <span>Próxima</span>
+                <ChevronRight size={13} />
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleAjustarATela}
+                style={{
+                  ...btnBase,
+                  padding: '4px 9px',
+                  fontSize: 10.5,
+                  background: ajustarATela ? 'rgba(245, 158, 11, 0.15)' : C.bgCard,
+                  color: ajustarATela ? C.amber : C.inkSoft,
+                  border: `1px solid ${ajustarATela ? C.amber : C.border}`,
+                  gap: 4
+                }}
+                title={ajustarATela ? 'Todas as fases ajustadas na tela sem rolagem lateral. Clique para modo de colunas largas.' : 'Modo colunas largas com rolagem ativo. Clique para ajustar tudo na tela.'}
+              >
+                <SlidersHorizontal size={12} />
+                <span>{ajustarATela ? '↔ Ajustado' : '⇄ Largo'}</span>
+              </button>
+            </div>
+          </div>
+
+          /* VISÃO 1: ESTEIRA KANBAN COM AS 5 ETAPAS (TODAS LADO A LADO) */
+          <div
+            ref={esteiraRef}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: ajustarATela
+                ? (colunaArquivadosRecolhida ? 'repeat(5, minmax(0, 1fr)) 44px' : 'repeat(5, minmax(0, 1fr)) minmax(180px, 1fr)')
+                : (colunaArquivadosRecolhida ? 'repeat(5, minmax(280px, 1fr)) 58px' : 'repeat(5, minmax(280px, 1fr)) minmax(310px, 1fr)'),
+              gap: ajustarATela ? 10 : 14,
+              alignItems: 'start',
+              overflowX: ajustarATela ? 'visible' : 'auto',
+              paddingBottom: 16,
+              scrollbarWidth: 'thin',
+              scrollBehavior: 'smooth'
+            }}
+          >
           {COLUNAS_ESTEIRA.map(col => {
             const cardsDaColuna = suprimentosFiltrados.filter(s => s.status === col.id)
             const valorTotalColuna = cardsDaColuna.reduce((acc, s) => acc + (s.valor || 0), 0)
@@ -1691,6 +1858,7 @@ export default function SuprimentosPage() {
 
             return (
               <div
+                id={`coluna-esteira-${col.id}`}
                 key={col.id}
                 onDragOver={(e) => {
                   e.preventDefault()
@@ -1718,11 +1886,12 @@ export default function SuprimentosPage() {
                   background: isDragOver ? `${col.cor}0D` : C.bgPanel,
                   border: isDragOver ? `2px dashed ${col.cor}` : `1px solid ${C.border}`,
                   borderRadius: 8,
-                  padding: 12,
+                  padding: ajustarATela ? '10px 8px' : 12,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 10,
-                  minHeight: 520,
+                  gap: 8,
+                  minHeight: 480,
+                  maxHeight: 'calc(100vh - 275px)',
                   transition: 'background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
                   boxShadow: isDragOver ? `0 0 20px ${col.cor}25` : 'none'
                 }}
@@ -1807,8 +1976,15 @@ export default function SuprimentosPage() {
                   </div>
                 )}
 
-                {/* Lista de Cards da Coluna */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {/* Lista de Cards da Coluna com Scroll Interno Independente */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 8,
+                  overflowY: 'auto',
+                  paddingRight: 2,
+                  scrollbarWidth: 'thin'
+                }}>
                   {col.id === 'Arquivado' ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {/* Campo de Busca Interno de Arquivados */}
@@ -2865,6 +3041,7 @@ export default function SuprimentosPage() {
               </div>
             )
           })}
+          </div>
         </div>
       ) : (
         /* VISÃO 2: TABELA GERAL OPERACIONAL */
