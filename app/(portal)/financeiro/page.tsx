@@ -5167,7 +5167,18 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const [filtObra, setFiltObra] = useState('')
   const [filtFornecedor, setFiltFornecedor] = useState(initialFornecedorId || '')
   const [filtTipo, setFiltTipo]       = useState<'todos'|'pagar'|'receber'>('todos')
-  const [filtStatus, setFiltStatus]   = useState<'todos'|'Lançado'|'Bloqueado'|'Atenção'|'Aguardando aprovação'|'Liberado/OK'|'A pagar'|'Pago Parcial'|'Pago'|'Pago sem Nota Fiscal'|'Negado'|'Estornado'>('todos')
+  const [filtStatus, setFiltStatus]   = useState<ContaComRelacoes['status'][]>([])
+
+  const toggleFiltStatus = (st: string) => {
+    if (st === 'todos') {
+      setFiltStatus([])
+      return
+    }
+    const statusVal = st as ContaComRelacoes['status']
+    setFiltStatus(prev =>
+      prev.includes(statusVal) ? prev.filter(s => s !== statusVal) : [...prev, statusVal]
+    )
+  }
   const [filtDataInicio, setFiltDataInicio] = useState('')
   const [filtDataFim, setFiltDataFim] = useState('')
   const [filtTipoData, setFiltTipoData] = useState<'previsao_vencimento' | 'vencimento' | 'previsao' | 'pago_em' | 'created_at'>('previsao_vencimento')
@@ -5919,7 +5930,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
       const matchObra = !filtObra || (filtObra === 'geral' ? (!c.obra_id || c.obra_id === 'geral') : c.obra_id === filtObra)
       const matchFornecedor = !filtFornecedor || c.fornecedor_id === filtFornecedor
       const matchTipo    = filtTipo === 'todos' || c.tipo === filtTipo
-      const matchStatus  = filtStatus === 'todos' || c.status === filtStatus
+      const matchStatus  = filtStatus.length === 0 || filtStatus.includes(c.status)
       let data = c.data_previsao || c.data_vencimento || ''
       if (filtTipoData === 'vencimento') data = c.data_vencimento || ''
       else if (filtTipoData === 'previsao') data = c.data_previsao || ''
@@ -6197,7 +6208,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     filtEmpresa,
     filtFornecedor,
     filtTipo !== 'todos' ? filtTipo : '',
-    filtStatus !== 'todos' ? filtStatus : '',
+    filtStatus.length > 0 ? filtStatus.join(',') : '',
     filtTipoData !== 'previsao_vencimento' ? filtTipoData : '',
     filtDataInicio,
     filtDataFim,
@@ -6209,7 +6220,9 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
   const clearFiltros = () => {
     const ids = colaboradorAtivo.empresas_ids || (colaboradorAtivo.empresa_id ? [colaboradorAtivo.empresa_id] : [])
     setFiltEmpresa(ids.length === 1 ? ids[0] : '')
+    setFiltObra('')
     setFiltFornecedor('')
+    setFiltStatus([])
     setFiltTipoData('previsao_vencimento')
     setFiltDataInicio('')
     setFiltDataFim('')
@@ -6222,7 +6235,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
     clearFiltros()
     setSearch('')
     setFiltTipo('todos')
-    setFiltStatus('todos')
+    setFiltStatus([])
   }
 
   const aplicarPresetData = (preset: 'hoje' | 'esta_semana' | 'este_mes' | 'prox_30' | 'ultimos_30' | 'este_ano') => {
@@ -6458,6 +6471,8 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 right: 0,
                 zIndex: 100,
                 width: 400,
+                maxHeight: '80vh',
+                overflowY: 'auto',
                 background: C.bgWhite,
                 border: `1px solid ${C.border}`,
                 borderRadius: 10,
@@ -6598,6 +6613,53 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   </div>
                 </div>
 
+                {/* Status (Múltipla Escolha) */}
+                <div style={{ display: 'grid', gap: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label style={{ fontSize: 10.5, color: C.inkSoft, fontWeight: 800, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Status (Múltipla Seleção)
+                    </label>
+                    {filtStatus.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setFiltStatus([])}
+                        style={{ border: 0, background: 'transparent', color: C.amber, fontSize: 10, fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                      >
+                        Limpar ({filtStatus.length})
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {listaStatusOpcoes.filter(o => o.value !== 'todos').map(st => {
+                      const isSel = filtStatus.includes(st.value as ContaComRelacoes['status'])
+                      return (
+                        <button
+                          key={st.value}
+                          type="button"
+                          onClick={() => toggleFiltStatus(st.value)}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            padding: '4px 9px',
+                            borderRadius: 6,
+                            fontSize: 10.5,
+                            fontWeight: isSel ? 800 : 600,
+                            cursor: 'pointer',
+                            border: `1px solid ${isSel ? C.amber : C.border}`,
+                            background: isSel ? '#F59E0B18' : C.bgPanel,
+                            color: isSel ? C.amber : C.inkSoft,
+                            transition: 'all 0.15s ease'
+                          }}
+                        >
+                          {isSel && <Check size={10} />}
+                          <span>{st.label}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 {/* Faixa de Valor */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
@@ -6632,7 +6694,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
           </div>
 
           {/* Botão de Limpar Tudo na Barra Principal (Visível quando houver qualquer filtro ou busca ativo) */}
-          {(search || filtTipo !== 'todos' || filtStatus !== 'todos' || activeFiltrosCount > 0) && (
+          {(search || filtTipo !== 'todos' || filtStatus.length > 0 || activeFiltrosCount > 0) && (
             <button
               onClick={clearAllFiltersAndSearch}
               title="Resetar todos os filtros e busca"
@@ -6657,19 +6719,20 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
           )}
         </div>
 
-        {/* Linha 2: Pílulas de Status Rápidas com Contadores */}
+        {/* Linha 2: Pílulas de Status Rápidas com Contadores (Múltipla Seleção) */}
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
           {listaStatusOpcoes.map(st => {
             const stats = getStatsByStatus(st.value)
-            const isSel = filtStatus === st.value
+            const isSel = st.value === 'todos' ? filtStatus.length === 0 : filtStatus.includes(st.value as ContaComRelacoes['status'])
             return (
               <button
                 key={st.value}
-                onClick={() => setFiltStatus(st.value as any)}
+                onClick={() => toggleFiltStatus(st.value)}
+                title={st.value === 'todos' ? 'Exibir todos os status' : `Clique para ${isSel ? 'remover' : 'adicionar'} "${st.label}" (permite selecionar múltiplos status)`}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
+                  gap: 5,
                   padding: '5px 11px',
                   borderRadius: 20,
                   fontSize: 11,
@@ -6682,6 +6745,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                   transition: 'all 0.15s ease'
                 }}
               >
+                {isSel && st.value !== 'todos' && <Check size={11} />}
                 <span>{st.label}</span>
                 <span style={{
                   fontSize: 9.5,
@@ -6699,7 +6763,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
         </div>
 
         {/* Linha 3: Tags de Filtros Ativos (Feedback visual imediato com remoção em 1 clique) */}
-        {(search || filtTipo !== 'todos' || filtStatus !== 'todos' || activeFiltrosCount > 0) && (
+        {(search || filtTipo !== 'todos' || filtStatus.length > 0 || activeFiltrosCount > 0) && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
             <span style={{ fontSize: 10, fontWeight: 800, color: C.inkSoft, textTransform: 'uppercase', letterSpacing: 0.5 }}>Filtros Ativos:</span>
             
@@ -6717,12 +6781,12 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               </span>
             )}
 
-            {filtStatus !== 'todos' && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.amber, fontWeight: 700 }}>
-                Status: {filtStatus}
-                <button onClick={() => setFiltStatus('todos')} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }}><X size={11} /></button>
+            {filtStatus.map(st => (
+              <span key={st} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.amber, fontWeight: 700 }}>
+                Status: {st}
+                <button onClick={() => setFiltStatus(prev => prev.filter(x => x !== st))} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: C.inkSoft, padding: 0, display: 'flex' }} title={`Remover filtro ${st}`}><X size={11} /></button>
               </span>
-            )}
+            ))}
 
             {filtEmpresa && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: C.bgWhite, border: `1px solid ${C.border}`, padding: '2px 8px', borderRadius: 4, fontSize: 10.5, color: C.ink, fontWeight: 600 }}>
