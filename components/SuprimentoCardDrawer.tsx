@@ -349,7 +349,11 @@ export function SuprimentoCardDrawer({
 
     const { error } = await supabase.from('suprimentos').update(fullPayload).eq('id', item.id)
     if (error) {
-      toast('Erro ao registrar histórico: ' + error.message, 'error')
+      if (error?.message?.includes('suprimentos_status_check')) {
+        toast('Restrição no banco de dados: Execute o script migracao_status_arquivado_suprimentos.sql no SQL Editor do Supabase para permitir o status "Arquivado".', 'error')
+      } else {
+        toast('Erro ao registrar histórico: ' + error.message, 'error')
+      }
       return false
     }
 

@@ -849,7 +849,11 @@ export default function SuprimentosPage() {
       toast(`Pedido movido para "${novoStatus}"`, 'success')
       await loadData(true)
     } catch (err: any) {
-      toast('Erro ao atualizar etapa: ' + err.message, 'error')
+      if (err?.message?.includes('suprimentos_status_check')) {
+        toast('Restrição no banco de dados: Execute o script migracao_status_arquivado_suprimentos.sql no SQL Editor do Supabase para permitir o status "Arquivado".', 'error')
+      } else {
+        toast('Erro ao atualizar etapa: ' + err.message, 'error')
+      }
     }
   }
 
