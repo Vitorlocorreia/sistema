@@ -780,7 +780,7 @@ export default function SuprimentosPage() {
 
       return true
     })
-  }, [suprimentos, mesaAtiva, mesasCustom, busca, filtroPrioridade, filtroStatusFinanceiro, obras, contasVinculadas])
+  }, [suprimentos, abaAtiva, mesaAtiva, mesasCustom, busca, filtroPrioridade, filtroStatusFinanceiro, obras, contasVinculadas])
 
   // KPIs dinâmicos da Sub-Aba Ativa
   const kpis = useMemo(() => {

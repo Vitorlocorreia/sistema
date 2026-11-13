@@ -466,6 +466,33 @@ export function SuprimentoCardDrawer({
     }
   }
 
+  // 1.15 MUDAR TIPO DE DEMANDA (MATERIAL / SERVIÇO / LOCAÇÃO)
+  async function handleMudarTipoDemanda(novoTipo: 'material' | 'servico' | 'locacao') {
+    const antigoTipo = item.tipo_demanda || item.dados_contrato?.tipo_demanda || 'material'
+    if (novoTipo === antigoTipo) return
+    setSalvando(true)
+    try {
+      const ok = await registrarMexida(
+        'mudanca_tipo_demanda',
+        `Alterou a categoria da demanda de "${antigoTipo}" para "${novoTipo}"`,
+        antigoTipo,
+        novoTipo,
+        {
+          tipo_demanda: novoTipo,
+          dados_contrato: {
+            ...(item.dados_contrato || {}),
+            tipo_demanda: novoTipo
+          }
+        }
+      )
+      if (ok) {
+        toast(`Demanda alterada para ${novoTipo === 'material' ? 'Material' : novoTipo === 'servico' ? 'Serviço' : 'Locação'}!`, 'success')
+      }
+    } finally {
+      setSalvando(false)
+    }
+  }
+
   // 1.2 ATUALIZAR CÓDIGO DO CARTÃO
   async function handleSalvarCodigo() {
     if (novoCodigo.trim() === (item.codigo || '')) {
