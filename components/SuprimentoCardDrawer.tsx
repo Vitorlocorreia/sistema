@@ -142,6 +142,7 @@ export function SuprimentoCardDrawer({
   const [formEdicao, setFormEdicao] = useState({
     codigo: '',
     titulo: '',
+    tipo_demanda: 'material',
     status: 'Solicitado',
     solicitante: '',
     responsavel_id: '',
@@ -250,6 +251,7 @@ export function SuprimentoCardDrawer({
         setFormEdicao({
           codigo: item.codigo || '',
           titulo: item.titulo || '',
+          tipo_demanda: item.tipo_demanda || item.dados_contrato?.tipo_demanda || 'material',
           status: item.status || 'Solicitado',
           solicitante: item.solicitante || '',
           responsavel_id: item.responsavel_id || '',
@@ -290,6 +292,7 @@ export function SuprimentoCardDrawer({
           setFormEdicao({
             codigo: item.codigo || '',
             titulo: item.titulo || '',
+            tipo_demanda: item.tipo_demanda || item.dados_contrato?.tipo_demanda || 'material',
             status: item.status || 'Solicitado',
             solicitante: item.solicitante || '',
             responsavel_id: item.responsavel_id || '',
@@ -731,6 +734,13 @@ export function SuprimentoCardDrawer({
         mudancas.push(`Etapa da Esteira: "${item.status}" ➔ "${formEdicao.status}"`)
       }
 
+      // 3.5 Tipo de Demanda / Esteira (Grupo)
+      const antigoTipoDemanda = item.tipo_demanda || item.dados_contrato?.tipo_demanda || 'material'
+      const novoTipoDemanda = formEdicao.tipo_demanda || 'material'
+      if (novoTipoDemanda !== antigoTipoDemanda) {
+        mudancas.push(`Grupo / Esteira: "${antigoTipoDemanda}" ➔ "${novoTipoDemanda}"`)
+      }
+
       // 4. Solicitante
       const limpoSolicitante = formEdicao.solicitante.trim() || null
       if (limpoSolicitante !== (item.solicitante || null)) {
@@ -838,6 +848,7 @@ export function SuprimentoCardDrawer({
       const updatePayload = {
         titulo: limpoTitulo,
         codigo: limpoCodigo,
+        tipo_demanda: novoTipoDemanda,
         status: formEdicao.status,
         solicitante: limpoSolicitante,
         responsavel_id: novoRespId,
@@ -1471,6 +1482,83 @@ export function SuprimentoCardDrawer({
                   <option value="Entregue">5. Entregue no Canteiro</option>
                   <option value="Arquivado">6. Arquivado (Finalizado)</option>
                 </select>
+
+                {/* Seletor Rápido de Grupo / Esteira (Mover entre Material | Serviço | Locação) */}
+                {(() => {
+                  const tipoAtual = item.tipo_demanda || item.dados_contrato?.tipo_demanda || 'material'
+                  return (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 5, padding: 2, gap: 2 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleMudarTipoDemanda('material')}
+                        disabled={salvando}
+                        style={{
+                          border: 'none',
+                          background: tipoAtual === 'material' ? C.amber : 'transparent',
+                          color: tipoAtual === 'material' ? '#0A0A0A' : C.inkSoft,
+                          padding: '3px 8px',
+                          borderRadius: 3,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          transition: 'all 0.15s ease'
+                        }}
+                        title="Mover cartão para o grupo: Materiais & Insumos"
+                      >
+                        📦 Material
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleMudarTipoDemanda('servico')}
+                        disabled={salvando}
+                        style={{
+                          border: 'none',
+                          background: tipoAtual === 'servico' ? C.amber : 'transparent',
+                          color: tipoAtual === 'servico' ? '#0A0A0A' : C.inkSoft,
+                          padding: '3px 8px',
+                          borderRadius: 3,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          transition: 'all 0.15s ease'
+                        }}
+                        title="Mover cartão para o grupo: Contratação de Serviços"
+                      >
+                        🛠️ Serviço
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleMudarTipoDemanda('locacao')}
+                        disabled={salvando}
+                        style={{
+                          border: 'none',
+                          background: tipoAtual === 'locacao' ? C.amber : 'transparent',
+                          color: tipoAtual === 'locacao' ? '#0A0A0A' : C.inkSoft,
+                          padding: '3px 8px',
+                          borderRadius: 3,
+                          fontSize: 10,
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                          transition: 'all 0.15s ease'
+                        }}
+                        title="Mover cartão para o grupo: Locações de Equipamentos"
+                      >
+                        🚜 Locação
+                      </button>
+                    </div>
+                  )
+                })()}
               </div>
 
               {/* Título Editável */}
@@ -1656,6 +1744,20 @@ export function SuprimentoCardDrawer({
                     <option value="Em Trânsito">4. Em Trânsito</option>
                     <option value="Entregue">5. Entregue no Canteiro</option>
                   <option value="Arquivado">6. Arquivado (Finalizado)</option>
+                  </select>
+                </div>
+
+                {/* Grupo / Esteira */}
+                <div>
+                  <label style={{ fontSize: 9.5, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Grupo / Esteira</label>
+                  <select
+                    value={formEdicao.tipo_demanda || 'material'}
+                    onChange={e => setFormEdicao(prev => ({ ...prev, tipo_demanda: e.target.value as any }))}
+                    style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 11.5, padding: '6px 8px', borderRadius: 4, outline: 'none' }}
+                  >
+                    <option value="material">📦 Materiais & Insumos</option>
+                    <option value="servico">🛠️ Contratação de Serviços</option>
+                    <option value="locacao">🚜 Locações de Equipamentos</option>
                   </select>
                 </div>
 
