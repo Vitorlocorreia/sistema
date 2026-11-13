@@ -97,6 +97,7 @@ type Details = {
   documentos: Array<Record<string, string | null>>
   exames: Array<Record<string, string | null>>
   etapas: EtapaAdmissao[]
+  convite?: Convite | null
 }
 
 type DocumentoCadastro = {
@@ -171,7 +172,7 @@ function formatarDataHora(val?: string | null, apenasData = false): string {
   }
 }
 
-const emptyDetails: Details = { historico: [], documentos: [], exames: [], etapas: [] }
+const emptyDetails: Details = { historico: [], documentos: [], exames: [], etapas: [], convite: null }
 
 // ─── ESTILOS EMPRESARIAIS & DESIGN TOKENS ───────────────────────────────────
 const inputStyle: React.CSSProperties = {
@@ -615,7 +616,9 @@ function ArchivePanel({
   onAtivar,
   onDesligar,
   onReativar,
-  onAnexarRescisao
+  onAnexarRescisao,
+  convite,
+  colaboradores
 }: {
   person: Funcionario
   details: Details
@@ -634,6 +637,8 @@ function ArchivePanel({
   onDesligar?: () => void
   onReativar?: () => void
   onAnexarRescisao?: () => void
+  convite?: Convite | null
+  colaboradores?: any[]
 }) {
   const [filter, setFilter] = useState('')
   const [baixandoZip, setBaixandoZip] = useState(false)
@@ -1194,63 +1199,76 @@ function ArchivePanel({
       )}
 
       {/* LINHA DO TEMPO DE MARCOS DO COLABORADOR REGISTRADO */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-        gap: 8,
-        background: C.bgPanel,
-        border: `1px solid ${C.border}`,
-        borderRadius: 6,
-        padding: '10px 12px'
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: C.inkSoft }}>
-            1. Entrada em Admissão
-          </span>
-          <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>
-            {formatarDataHora((person as any).created_at, true)}
-          </span>
-          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
-            Admissão no sistema
-          </span>
-        </div>
+      {/* Linha do Tempo / Histórico de Andamento Real */}
+      {(() => {
+        const conv = convite || details.convite || null
+        const dataEntradaAdmissao = conv?.created_at || (person as any).created_at
+        const autorAdmissao = conv?.criado_por ? resolveNomeCriador(conv.criado_por, colaboradores || []) : null
+        const dataApto = conv?.apto_em || getDataApto(conv) || (person.dados_registro?.registrado_em ? null : (person as any).created_at)
+        const dataRegistro = person.dados_registro?.registrado_em || conv?.aprovado_em || (person as any).created_at
+        const registradorPor = person.dados_registro?.registrado_por || null
+        const dataInicioAtividades = person.data_admissao || conv?.data_inicio_efetivo || conv?.data_admissao
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: '#10B981' }}>
-            2. Apto p/ Registro
-          </span>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#10B981' }}>
-            {formatarDataHora(person.dados_registro?.registrado_em || (person as any).created_at, true)}
-          </span>
-          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
-            Aprovado pelo RH
-          </span>
-        </div>
+        return (
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
+            gap: 8,
+            background: C.bgPanel,
+            border: `1px solid ${C.border}`,
+            borderRadius: 6,
+            padding: '10px 12px'
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: C.inkSoft }}>
+                1. Entrada em Admissão
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>
+                {formatarDataHora(dataEntradaAdmissao, true)}
+              </span>
+              <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+                {autorAdmissao ? `Criado por: ${autorAdmissao}` : 'Admissão no sistema'}
+              </span>
+            </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: '#10B981' }}>
-            3. Registro em Carteira
-          </span>
-          <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>
-            {person.dados_registro?.registrado_em ? formatarDataHora(person.dados_registro.registrado_em, true) : 'Formalizado'}
-          </span>
-          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
-            Colaborador Ativo
-          </span>
-        </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: '#10B981' }}>
+                2. Apto p/ Registro
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: dataApto ? '#10B981' : C.inkSoft }}>
+                {dataApto ? formatarDataHora(dataApto, true) : 'Validado pelo RH'}
+              </span>
+              <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+                {dataApto ? 'Aprovado pelo RH' : 'Etapa de Triagem'}
+              </span>
+            </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: C.amber }}>
-            4. Início de Atividades
-          </span>
-          <span style={{ fontSize: 11, fontWeight: 800, color: C.amber }}>
-            {person.data_admissao ? formatarDataHora(person.data_admissao, true) : 'A definir'}
-          </span>
-          <span style={{ fontSize: 8.5, color: C.inkSoft }}>
-            No canteiro / sede
-          </span>
-        </div>
-      </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: '#10B981' }}>
+                3. Registro em Carteira
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: C.ink }}>
+                {dataRegistro ? formatarDataHora(dataRegistro, true) : 'Formalizado'}
+              </span>
+              <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+                {registradorPor ? `Registrado por: ${registradorPor}` : 'Colaborador Ativo'}
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', color: C.amber }}>
+                4. Início de Atividades
+              </span>
+              <span style={{ fontSize: 11, fontWeight: 800, color: C.amber }}>
+                {dataInicioAtividades ? formatarDataHora(dataInicioAtividades, true) : 'A definir'}
+              </span>
+              <span style={{ fontSize: 8.5, color: C.inkSoft }}>
+                {conv?.inicio_efetivo ? 'Confirmado no canteiro' : 'No canteiro / sede'}
+              </span>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Header do Baú Documental */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
@@ -3256,7 +3274,7 @@ export default function RhPage() {
       supabase.from('funcionario_documentos').select('*').eq('funcionario_id', person.id).order('created_at', { ascending: false }),
       supabase.from('exames_ocupacionais').select('*').eq('funcionario_id', person.id).order('created_at', { ascending: false }),
       supabase.from('funcionario_admissao_etapas').select('*, modelo:rh_modelos_admissao(*)').eq('funcionario_id', person.id).order('modelo(ordem)', { ascending: true }),
-      supabase.from('rh_admissao_convites').select('id, documentos:rh_admissao_documentos(*)').eq('funcionario_id', person.id),
+      supabase.from('rh_admissao_convites').select('*, documentos:rh_admissao_documentos(*)').eq('funcionario_id', person.id),
     ])
 
     const docsFuncionario = (documentos ?? []).map((d: any) => {
@@ -3342,11 +3360,14 @@ export default function RhPage() {
       })
     }
 
+    const conviteAssociado = (listaConvitesRel && listaConvitesRel.length > 0) ? (listaConvitesRel[0] as Convite) : null
+
     setDetails({
       historico: historico ?? [],
       documentos: [...docsFuncionario, ...docsAdmissao],
       exames: exames ?? [],
-      etapas: ((etapas ?? []) as unknown as EtapaAdmissao[]).sort((a, b) => a.modelo.ordem - b.modelo.ordem)
+      etapas: ((etapas ?? []) as unknown as EtapaAdmissao[]).sort((a, b) => a.modelo.ordem - b.modelo.ordem),
+      convite: conviteAssociado
     })
   }, [modelos, todosConvites])
 
@@ -4709,6 +4730,16 @@ export default function RhPage() {
       setEditSalarioFuncionarioModal(prev => ({ ...prev, salvando: false }))
     }
   }
+
+  const getConviteFuncionario = useCallback((p: Funcionario | null | undefined): Convite | null => {
+    if (!p) return null
+    const cpfClean = (p.cpf || '').replace(/\D/g, '')
+    return todosConvites.find(c =>
+      c.funcionario_id === p.id ||
+      (cpfClean && c.cpf && c.cpf.replace(/\D/g, '') === cpfClean) ||
+      (c.nome_destinatario && p.nome && c.nome_destinatario.trim().toLowerCase() === p.nome.trim().toLowerCase())
+    ) || null
+  }, [todosConvites])
 
   const getEmailFuncionario = useCallback((p: Funcionario | null | undefined): string => {
     if (!p) return ''
@@ -6559,6 +6590,8 @@ export default function RhPage() {
                 <ArchivePanel
                   person={selected}
                   details={details}
+                  convite={details.convite || getConviteFuncionario(selected)}
+                  colaboradores={colaboradores}
                   email={getEmailFuncionario(selected)}
                   onEditEmail={() => abrirModalEditarEmailFuncionario(selected)}
                   dadosBanco={(() => {
