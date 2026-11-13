@@ -1370,7 +1370,7 @@ export function SuprimentoCardDrawer({
     >
       <div
         style={{
-          width: tabAtiva === 'dgenny' || tabAtiva === 'contrato' ? 920 : 620,
+          width: tabAtiva === 'dgenny' || tabAtiva === 'contrato' ? 960 : 700,
           maxWidth: '96vw',
           transition: 'width 0.2s ease',
           height: '100%',
@@ -1394,227 +1394,100 @@ export function SuprimentoCardDrawer({
             gap: 10
           }}
         >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                {editandoCodigo ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <input
-                      value={novoCodigo}
-                      onChange={e => setNovoCodigo(e.target.value)}
-                      placeholder="Ex: SG-BC 0069/26"
-                      autoFocus
-                      style={{
-                        fontSize: 10,
-                        fontWeight: 800,
-                        fontFamily: 'monospace',
-                        background: C.bgPanel,
-                        border: `1px solid ${C.amber}`,
-                        color: C.ink,
-                        padding: '2px 6px',
-                        borderRadius: 4,
-                        outline: 'none'
-                      }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter') handleSalvarCodigo()
-                        if (e.key === 'Escape') setEditandoCodigo(false)
-                      }}
-                    />
-                    <button
-                      onClick={handleSalvarCodigo}
-                      disabled={salvando}
-                      style={{ background: C.amber, color: '#0A0A0A', border: 'none', borderRadius: 3, padding: '2px 6px', cursor: 'pointer', fontWeight: 800, fontSize: 10 }}
-                    >
-                      <Check size={11} />
-                    </button>
-                    <button
-                      onClick={() => setEditandoCodigo(false)}
-                      style={{ background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 3, padding: '2px 4px', cursor: 'pointer' }}
-                    >
-                      <X size={11} />
-                    </button>
-                  </div>
-                ) : (
-                  <span
-                    onClick={() => { setNovoCodigo(item.codigo || ''); setEditandoCodigo(true); }}
-                    title="Clique para editar o código / identificador"
+          {/* LINHA 1: Código + Etapa na esquerda | Ações principais na direita */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {editandoCodigo ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <input
+                    value={novoCodigo}
+                    onChange={e => setNovoCodigo(e.target.value)}
+                    placeholder="Ex: SG-BC 0069/26"
+                    autoFocus
                     style={{
                       fontSize: 10,
                       fontWeight: 800,
                       fontFamily: 'monospace',
-                      textTransform: 'uppercase',
-                      letterSpacing: 1,
-                      background: 'rgba(245, 158, 11, 0.15)',
-                      color: C.amber,
-                      border: '1px solid rgba(245, 158, 11, 0.3)',
-                      padding: '2px 8px',
-                      borderRadius: 4,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4
-                    }}
-                  >
-                    {item.codigo ? item.codigo : `OC-${item.id.slice(0, 6).toUpperCase()}`}
-                    <Edit2 size={9} style={{ opacity: 0.7 }} />
-                  </span>
-                )}
-
-                <select
-                  value={item.status}
-                  onChange={e => handleAtualizarPropriedade('status', e.target.value, 'Etapa da Esteira')}
-                  style={{
-                    fontSize: 11,
-                    fontWeight: 700,
-                    background: C.bgWhite,
-                    color: C.ink,
-                    border: `1px solid ${C.border}`,
-                    borderRadius: 4,
-                    padding: '3px 8px',
-                    outline: 'none',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="Solicitado">1. Solicitado</option>
-                  <option value="Em Cotação">2. Em Cotação</option>
-                  <option value="Aprovação">3. Aguardando Aprovação</option>
-                  <option value="Em Trânsito">4. Em Trânsito</option>
-                  <option value="Entregue">5. Entregue no Canteiro</option>
-                  <option value="Arquivado">6. Arquivado (Finalizado)</option>
-                </select>
-
-                {/* Seletor Rápido de Grupo / Esteira (Mover entre Material | Serviço | Locação) */}
-                {(() => {
-                  const tipoAtual = item.tipo_demanda || item.dados_contrato?.tipo_demanda || 'material'
-                  return (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 5, padding: 2, gap: 2 }}>
-                      <button
-                        type="button"
-                        onClick={() => handleMudarTipoDemanda('material')}
-                        disabled={salvando}
-                        style={{
-                          border: 'none',
-                          background: tipoAtual === 'material' ? C.amber : 'transparent',
-                          color: tipoAtual === 'material' ? '#0A0A0A' : C.inkSoft,
-                          padding: '3px 8px',
-                          borderRadius: 3,
-                          fontSize: 10,
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 3,
-                          transition: 'all 0.15s ease'
-                        }}
-                        title="Mover cartão para o grupo: Materiais & Insumos"
-                      >
-                        📦 Material
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleMudarTipoDemanda('servico')}
-                        disabled={salvando}
-                        style={{
-                          border: 'none',
-                          background: tipoAtual === 'servico' ? C.amber : 'transparent',
-                          color: tipoAtual === 'servico' ? '#0A0A0A' : C.inkSoft,
-                          padding: '3px 8px',
-                          borderRadius: 3,
-                          fontSize: 10,
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 3,
-                          transition: 'all 0.15s ease'
-                        }}
-                        title="Mover cartão para o grupo: Contratação de Serviços"
-                      >
-                        🛠️ Serviço
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => handleMudarTipoDemanda('locacao')}
-                        disabled={salvando}
-                        style={{
-                          border: 'none',
-                          background: tipoAtual === 'locacao' ? C.amber : 'transparent',
-                          color: tipoAtual === 'locacao' ? '#0A0A0A' : C.inkSoft,
-                          padding: '3px 8px',
-                          borderRadius: 3,
-                          fontSize: 10,
-                          fontWeight: 800,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: 3,
-                          transition: 'all 0.15s ease'
-                        }}
-                        title="Mover cartão para o grupo: Locações de Equipamentos"
-                      >
-                        🚜 Locação
-                      </button>
-                    </div>
-                  )
-                })()}
-              </div>
-
-              {/* Título Editável */}
-              {editandoTitulo ? (
-                <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                  <input
-                    value={novoTitulo}
-                    onChange={e => setNovoTitulo(e.target.value)}
-                    autoFocus
-                    style={{
-                      flex: 1,
                       background: C.bgPanel,
                       border: `1px solid ${C.amber}`,
                       color: C.ink,
-                      fontSize: 14,
-                      fontWeight: 700,
-                      padding: '4px 8px',
+                      padding: '2px 6px',
                       borderRadius: 4,
                       outline: 'none'
                     }}
                     onKeyDown={e => {
-                      if (e.key === 'Enter') handleSalvarTitulo()
-                      if (e.key === 'Escape') setEditandoTitulo(false)
+                      if (e.key === 'Enter') handleSalvarCodigo()
+                      if (e.key === 'Escape') setEditandoCodigo(false)
                     }}
                   />
                   <button
-                    onClick={handleSalvarTitulo}
+                    onClick={handleSalvarCodigo}
                     disabled={salvando}
-                    style={{ background: C.amber, color: '#0A0A0A', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontWeight: 800 }}
+                    style={{ background: C.amber, color: '#0A0A0A', border: 'none', borderRadius: 3, padding: '2px 6px', cursor: 'pointer', fontWeight: 800, fontSize: 10 }}
                   >
-                    <Check size={14} />
+                    <Check size={11} />
                   </button>
                   <button
-                    onClick={() => setEditandoTitulo(false)}
-                    style={{ background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}
+                    onClick={() => setEditandoCodigo(false)}
+                    style={{ background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 3, padding: '2px 4px', cursor: 'pointer' }}
                   >
-                    <X size={14} />
+                    <X size={11} />
                   </button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.ink }}>
-                    {item.titulo}
-                  </h3>
-                  <button
-                    onClick={() => { setNovoTitulo(item.titulo); setEditandoTitulo(true); }}
-                    title="Editar título do pedido"
-                    style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
-                  >
-                    <Edit2 size={13} />
-                  </button>
-                </div>
+                <span
+                  onClick={() => { setNovoCodigo(item.codigo || ''); setEditandoCodigo(true); }}
+                  title="Clique para editar o código / identificador"
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 800,
+                    fontFamily: 'monospace',
+                    textTransform: 'uppercase',
+                    letterSpacing: 1,
+                    background: 'rgba(245, 158, 11, 0.15)',
+                    color: C.amber,
+                    border: '1px solid rgba(245, 158, 11, 0.3)',
+                    padding: '3px 8px',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {item.codigo ? item.codigo : `OC-${item.id.slice(0, 6).toUpperCase()}`}
+                  <Edit2 size={9} style={{ opacity: 0.7 }} />
+                </span>
               )}
+
+              <select
+                value={item.status}
+                onChange={e => handleAtualizarPropriedade('status', e.target.value, 'Etapa da Esteira')}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  background: C.bgWhite,
+                  color: C.ink,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 4,
+                  padding: '4px 8px',
+                  outline: 'none',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                <option value="Solicitado">1. Solicitado</option>
+                <option value="Em Cotação">2. Em Cotação</option>
+                <option value="Aprovação">3. Aguardando Aprovação</option>
+                <option value="Em Trânsito">4. Em Trânsito</option>
+                <option value="Entregue">5. Entregue no Canteiro</option>
+                <option value="Arquivado">6. Arquivado (Finalizado)</option>
+              </select>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Ações da direita: Exportar OC, Editar Ficha Completa, Fechar */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
               <button
                 type="button"
                 onClick={async () => {
@@ -1678,7 +1551,10 @@ export function SuprimentoCardDrawer({
                   color: C.inkSoft,
                   cursor: 'pointer',
                   padding: 4,
-                  borderRadius: 4
+                  borderRadius: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
                 }}
                 title="Fechar gaveta (Esc)"
               >
@@ -1686,6 +1562,166 @@ export function SuprimentoCardDrawer({
               </button>
             </div>
           </div>
+
+          {/* LINHA 2: Título Editável */}
+          <div>
+            {editandoTitulo ? (
+              <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                <input
+                  value={novoTitulo}
+                  onChange={e => setNovoTitulo(e.target.value)}
+                  autoFocus
+                  style={{
+                    flex: 1,
+                    background: C.bgPanel,
+                    border: `1px solid ${C.amber}`,
+                    color: C.ink,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    padding: '4px 8px',
+                    borderRadius: 4,
+                    outline: 'none'
+                  }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') handleSalvarTitulo()
+                    if (e.key === 'Escape') setEditandoTitulo(false)
+                  }}
+                />
+                <button
+                  onClick={handleSalvarTitulo}
+                  disabled={salvando}
+                  style={{ background: C.amber, color: '#0A0A0A', border: 'none', borderRadius: 4, padding: '4px 8px', cursor: 'pointer', fontWeight: 800 }}
+                >
+                  <Check size={14} />
+                </button>
+                <button
+                  onClick={() => setEditandoTitulo(false)}
+                  style={{ background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: C.ink }}>
+                  {item.titulo}
+                </h3>
+                <button
+                  onClick={() => { setNovoTitulo(item.titulo); setEditandoTitulo(true); }}
+                  title="Editar título do pedido"
+                  style={{ background: 'none', border: 'none', color: C.inkSoft, cursor: 'pointer', padding: 2 }}
+                >
+                  <Edit2 size={13} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* LINHA 3: Seletor Dedicado de Grupo / Esteira (Espaçoso, sem quebras indesejadas) */}
+          {(() => {
+            const tipoAtual = item.tipo_demanda || item.dados_contrato?.tipo_demanda || 'material'
+            return (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
+                background: 'rgba(255, 255, 255, 0.02)',
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                padding: '6px 10px'
+              }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: C.inkSoft, letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>
+                    Grupo / Esteira:
+                  </span>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 5, padding: 2, gap: 2 }}>
+                    <button
+                      type="button"
+                      onClick={() => handleMudarTipoDemanda('material')}
+                      disabled={salvando}
+                      style={{
+                        border: 'none',
+                        background: tipoAtual === 'material' ? C.amber : 'transparent',
+                        color: tipoAtual === 'material' ? '#0A0A0A' : C.inkSoft,
+                        padding: '4px 10px',
+                        borderRadius: 3,
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Mover este cartão para o grupo: Materiais & Insumos"
+                    >
+                      <span>📦</span>
+                      <span>Material</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleMudarTipoDemanda('servico')}
+                      disabled={salvando}
+                      style={{
+                        border: 'none',
+                        background: tipoAtual === 'servico' ? C.amber : 'transparent',
+                        color: tipoAtual === 'servico' ? '#0A0A0A' : C.inkSoft,
+                        padding: '4px 10px',
+                        borderRadius: 3,
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Mover este cartão para o grupo: Contratação de Serviços"
+                    >
+                      <span>🛠️</span>
+                      <span>Serviço</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handleMudarTipoDemanda('locacao')}
+                      disabled={salvando}
+                      style={{
+                        border: 'none',
+                        background: tipoAtual === 'locacao' ? C.amber : 'transparent',
+                        color: tipoAtual === 'locacao' ? '#0A0A0A' : C.inkSoft,
+                        padding: '4px 10px',
+                        borderRadius: 3,
+                        fontSize: 10.5,
+                        fontWeight: 800,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease'
+                      }}
+                      title="Mover este cartão para o grupo: Locações de Equipamentos"
+                    >
+                      <span>🚜</span>
+                      <span>Locação</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 10, color: C.inkSoft, whiteSpace: 'nowrap' }}>
+                  {tipoAtual === 'material' && '📦 Compras & Materiais Físicos'}
+                  {tipoAtual === 'servico' && '🛠️ Contratos & Empreiteiros'}
+                  {tipoAtual === 'locacao' && '🚜 Locação & Maquinários'}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* ─── PAINEL DE EDIÇÃO COMPLETA DA FICHA OU VISUALIZAÇÃO PADRÃO ──── */}
           {modoEdicaoCompleta ? (
