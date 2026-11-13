@@ -41,7 +41,10 @@ import {
   Archive,
   ArchiveRestore,
   ChevronLeft,
-  Minimize2
+  Minimize2,
+  Wrench,
+  HardHat,
+  FileSpreadsheet
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { toast } from '@/components/Toast'
@@ -53,6 +56,18 @@ import { NotificationCenter } from '@/components/NotificationCenter'
 import { SuprimentoCardDrawer, ColaboradorOption } from '@/components/SuprimentoCardDrawer'
 
 // ─── TIPOS ───────────────────────────────────────────────────────────────────
+
+export interface MedicaoMensalContrato {
+  id: string
+  mes_indice: number
+  mes_ano: string
+  valor_previsto: number
+  valor_medido?: number | null
+  status: 'previsto' | 'medido' | 'pago'
+  nota_fiscal?: string | null
+  pago_em?: string | null
+  observacao?: string | null
+}
 
 export interface SuprimentoItem {
   id: string
@@ -82,7 +97,150 @@ export interface SuprimentoItem {
   forma_pagamento?: string | null
   tipo_frete?: string | null
   observacoes_oc?: string | null
+  // Extensões de Contratos (Serviços & Locações com Acompanhamento Mensal)
+  tipo_demanda?: 'material' | 'servico' | 'locacao'
+  empresa_id?: string | null
+  empresa_nome?: string | null
+  data_inicio?: string | null
+  data_termino?: string | null
+  valor_mensal?: number | null
+  acompanhamento_mensal?: MedicaoMensalContrato[]
+  contrato_encerrado?: boolean
+  contrato_encerrado_em?: string | null
+  contrato_encerrado_motivo?: string | null
+  dados_contrato?: any
 }
+// ─── HELPERS DE CONTRATOS & SERVIÇOS/LOCAÇÕES ───────────────────────────────
+
+export function matchesAba(tipo: 'material' | 'servico' | 'locacao', aba: 'materiais' | 'servicos' | 'locacoes'): boolean {
+  if (aba === 'materiais') return tipo === 'material'
+  if (aba === 'servicos') return tipo === 'servico'
+  if (aba === 'locacoes') return tipo === 'locacao'
+  return true
+}
+
+export function getTipoDemanda(item: Partial<SuprimentoItem> | null | undefined): 'material' | 'servico' | 'locacao' {
+  if (!item) return 'material'
+  if (item.tipo_demanda === 'servico' || item.tipo_demanda === 'locacao' || item.tipo_demanda === 'material') {
+    return item.tipo_demanda
+  }
+  if (item.dados_contrato?.tipo_demanda) {
+    return item.dados_contrato.tipo_demanda
+  }
+  // Auto-detecção inteligente de demandas existentes por título
+  const t = (item.titulo || '').toLowerCase()
+  if (t.includes('locação') || t.includes('locacao') || t.includes('aluguel') || t.includes('caçamba') || t.includes('cacamba') || t.includes('andaime') || t.includes('betoneira') || t.includes('retroescavadeira') || t.includes('gerador')) {
+    return 'locacao'
+  }
+  if (t.includes('serviço') || t.includes('servico') || t.includes('mão de obra') || t.includes('mao de obra') || t.includes('execução') || t.includes('execucao') || t.includes('montagem') || t.includes('instalação') || t.includes('instalacao') || t.includes('pintura') || t.includes('manutenção') || t.includes('manutencao')) {
+    return 'servico'
+  }
+  return 'material'
+}
+
+export function calcularProgressoContrato(item: Partial<SuprimentoItem>) {
+  if (item.contrato_encerrado) {
+    return {
+      labelMes: 'Contrato Encerrado',
+      porcentagem: 100,
+      corBarra: '#64748B',
+      corStatus: '#94A3B8',
+      textoStatus: 'Encerrado / Desmobilizado',
+      diasRestantes: 0,
+      mesAtual: 0,
+      totalMeses: 0
+    }
+  }
+
+  const dtIniStr = item.data_inicio || item.created_at
+  if (!dtIniStr) return null
+
+  const dIni = new Date(dtIniStr.slice(0, 10) + 'T00:00:00')
+  const agora = new Date()
+
+  // Se não tem data término, projeta 6 meses
+  const dFim = item.data_termino
+    ? new Date(item.data_termino.slice(0, 10) + 'T23:59:59')
+    : new Date(dIni.getFullYear(), dIni.getMonth() + 6, dIni.getDate())
+
+  const diffTotalMs = dFim.getTime() - dIni.getTime()
+  const diffDecorridoMs = agora.getTime() - dIni.getTime()
+  const diffRestanteMs = dFim.getTime() - agora.getTime()
+
+  const diasRestantes = Math.ceil(diffRestanteMs / (1000 * 60 * 60 * 24))
+  
+  // Cálculo de meses aproximado
+  const totalMeses = Math.max(1, Math.round(diffTotalMs / (1000 * 60 * 60 * 24 * 30.4)))
+  const mesesDecorridos = Math.max(1, Math.min(totalMeses, Math.ceil(diffDecorridoMs / (1000 * 60 * 60 * 24 * 30.4))))
+
+  let porcentagem = Math.round((diffDecorridoMs / diffTotalMs) * 100)
+  if (isNaN(porcentagem)) porcentagem = 0
+  porcentagem = Math.max(0, Math.min(100, porcentagem))
+
+  let corBarra = '#10B981'
+  let corStatus = '#10B981'
+  let textoStatus = `Em vigência (restam ${diasRestantes} dias)`
+
+  if (diasRestantes <= 0) {
+    corBarra = '#EF4444'
+    corStatus = '#EF4444'
+    textoStatus = 'Vencido / A Renovar'
+  } else if (diasRestantes <= 30) {
+    corBarra = '#F59E0B'
+    corStatus = '#F59E0B'
+    textoStatus = `Atenção: restam ${diasRestantes} dias`
+  }
+
+  return {
+    labelMes: `Mês ${mesesDecorridos} de ${totalMeses}`,
+    porcentagem,
+    corBarra,
+    corStatus,
+    textoStatus,
+    diasRestantes,
+    mesAtual: mesesDecorridos,
+    totalMeses
+  }
+}
+
+export function getColunasPorAba(aba: 'materiais' | 'servicos' | 'locacoes'): Array<{
+  id: SuprimentoItem['status']
+  nome: string
+  descricao: string
+  cor: string
+  bg: string
+  icone: any
+}> {
+  if (aba === 'servicos') {
+    return [
+      { id: 'Solicitado', nome: '1. Solicitação da Obra', descricao: 'Escopo solicitado pelo canteiro', cor: '#3B82F6', bg: 'rgba(59, 130, 246, 0.1)', icone: Wrench },
+      { id: 'Em Cotação', nome: '2. Cotação de Prestadores', descricao: 'Orçamentos de empreiteiros', cor: '#F59E0B', bg: 'rgba(245, 158, 11, 0.12)', icone: Layers },
+      { id: 'Aprovação', nome: '3. Aprovação da Diretoria', descricao: 'Alçada para validar contrato', cor: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.12)', icone: ShieldCheck },
+      { id: 'Em Trânsito', nome: '4. Em Execução / Medição', descricao: 'Serviço em andamento na obra', cor: '#06B6D4', bg: 'rgba(6, 182, 212, 0.12)', icone: Clock },
+      { id: 'Entregue', nome: '5. Concluído na Obra', descricao: 'Aceite técnico do engenheiro', cor: '#10B981', bg: 'rgba(16, 185, 129, 0.12)', icone: CheckCircle2 },
+      { id: 'Arquivado', nome: '6. Arquivados', descricao: 'Contratos finalizados', cor: '#64748B', bg: 'rgba(100, 116, 139, 0.12)', icone: Archive }
+    ]
+  }
+  if (aba === 'locacoes') {
+    return [
+      { id: 'Solicitado', nome: '1. Solicitação da Obra', descricao: 'Equipamento e período pedido', cor: '#3B82F6', bg: 'rgba(59, 130, 246, 0.1)', icone: HardHat },
+      { id: 'Em Cotação', nome: '2. Cotação de Locadoras', descricao: 'Propostas de diária/mês e frete', cor: '#F59E0B', bg: 'rgba(245, 158, 11, 0.12)', icone: Layers },
+      { id: 'Aprovação', nome: '3. Aprovação da Diretoria', descricao: 'Alçada para locação', cor: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.12)', icone: ShieldCheck },
+      { id: 'Em Trânsito', nome: '4. Em Uso no Canteiro', descricao: 'Máquina/equipamento operando', cor: '#06B6D4', bg: 'rgba(6, 182, 212, 0.12)', icone: Truck },
+      { id: 'Entregue', nome: '5. Devolvido / Desmobilizado', descricao: 'Coletado com vistoria de saída', cor: '#10B981', bg: 'rgba(16, 185, 129, 0.12)', icone: CheckCircle2 },
+      { id: 'Arquivado', nome: '6. Arquivados', descricao: 'Locações encerradas', cor: '#64748B', bg: 'rgba(100, 116, 139, 0.12)', icone: Archive }
+    ]
+  }
+  return [
+    { id: 'Solicitado', nome: '1. Solicitação da Obra', descricao: 'Pedidos abertos no canteiro', cor: '#3B82F6', bg: 'rgba(59, 130, 246, 0.1)', icone: ShoppingCart },
+    { id: 'Em Cotação', nome: '2. Em Cotação', descricao: 'Negociação com fornecedores', cor: '#F59E0B', bg: 'rgba(245, 158, 11, 0.12)', icone: Layers },
+    { id: 'Aprovação', nome: '3. Aguardando Aprovação', descricao: 'Alçada da diretoria', cor: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.12)', icone: ShieldCheck },
+    { id: 'Em Trânsito', nome: '4. Aprovado / Em Trânsito', descricao: 'Lançado no Financeiro', cor: '#06B6D4', bg: 'rgba(6, 182, 212, 0.12)', icone: Truck },
+    { id: 'Entregue', nome: '5. Recebido no Canteiro', descricao: 'Conferido com foto/NF', cor: '#10B981', bg: 'rgba(16, 185, 129, 0.12)', icone: CheckCircle2 },
+    { id: 'Arquivado', nome: '6. Arquivados', descricao: 'Pedidos finalizados e guardados', cor: '#64748B', bg: 'rgba(100, 116, 139, 0.12)', icone: Archive }
+  ]
+}
+
 
 export interface ObraItem {
   id: string
@@ -198,6 +356,31 @@ export default function SuprimentosPage() {
   const [drawerItem, setDrawerItem] = useState<SuprimentoItem | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerInitialTab, setDrawerInitialTab] = useState<'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'>('checklist')
+
+  // Sub-Aba Ativa: Materiais, Serviços ou Locações
+  const [abaAtiva, setAbaAtiva] = useState<'materiais' | 'servicos' | 'locacoes'>('materiais')
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const tabParam = params.get('tab')
+      if (tabParam === 'servicos' || tabParam === 'locacoes' || tabParam === 'materiais') {
+        setAbaAtiva(tabParam)
+      }
+    }
+  }, [])
+
+  function handleMudarAba(novaAba: 'materiais' | 'servicos' | 'locacoes') {
+    setAbaAtiva(novaAba)
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href)
+      url.searchParams.set('tab', novaAba)
+      window.history.replaceState({}, '', url.toString())
+    }
+  }
+
+  // Colunas da Esteira dinâmicas com base na Sub-Aba Ativa
+  const colunasAtivas = useMemo(() => getColunasPorAba(abaAtiva), [abaAtiva])
 
   // Mesas e Filtros
   const [mesaAtiva, setMesaAtiva] = useState<string>('todas')
@@ -338,12 +521,17 @@ export default function SuprimentosPage() {
   const [modalNovaMesaOpen, setModalNovaMesaOpen] = useState(false)
   const [itemSelecionado, setItemSelecionado] = useState<SuprimentoItem | null>(null)
 
-  // Formulário Novo Pedido
+  // Formulário Novo Pedido / Contrato
   const [novoForm, setNovoForm] = useState({
     codigo: '',
     obra_id: '',
     obra_nome_manual: '',
     titulo: '',
+    tipo_demanda: 'material' as 'material' | 'servico' | 'locacao',
+    empresa_id: '',
+    data_inicio: '',
+    data_termino: '',
+    valor_mensal: '',
     itens: [
       { id: 'item-1', descricao: '', quantidade: '', unidade: 'un' }
     ],
@@ -526,8 +714,25 @@ export default function SuprimentosPage() {
 
   // ─── FILTROS & MESAS ───────────────────────────────────────────────────────
 
+  const contagensAbas = useMemo(() => {
+    let materiais = 0
+    let servicos = 0
+    let locacoes = 0
+    suprimentos.forEach(s => {
+      const t = getTipoDemanda(s)
+      if (t === 'servico') servicos++
+      else if (t === 'locacao') locacoes++
+      else materiais++
+    })
+    return { materiais, servicos, locacoes }
+  }, [suprimentos])
+
   const suprimentosFiltrados = useMemo(() => {
     return suprimentos.filter(item => {
+      // 0. Sub-Aba Ativa (Materiais vs Serviços vs Locações)
+      const tipoItem = getTipoDemanda(item)
+      if (!matchesAba(tipoItem, abaAtiva)) return false
+
       // 1. Filtro da Mesa Ativa
       if (mesaAtiva === 'minhas') {
         if (item.responsavel_id !== colaboradorAtivo?.id) return false
@@ -577,19 +782,20 @@ export default function SuprimentosPage() {
     })
   }, [suprimentos, mesaAtiva, mesasCustom, busca, filtroPrioridade, filtroStatusFinanceiro, obras, contasVinculadas])
 
-  // KPIs
+  // KPIs dinâmicos da Sub-Aba Ativa
   const kpis = useMemo(() => {
-    const totalAberto = suprimentos.filter(s => s.status !== 'Entregue' && s.status !== 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
-    const emCotacao = suprimentos.filter(s => s.status === 'Em Cotação').length
-    const aguardandoAprovacao = suprimentos.filter(s => s.status === 'Aprovação').length
-    const lancadosNoFinanceiro = Object.values(contasVinculadas).length
-    const valorLancado = Object.values(contasVinculadas).reduce((acc, c) => acc + (c.valor || 0), 0)
-    const entreguesNaObra = suprimentos.filter(s => s.status === 'Entregue').length
-    const arquivados = suprimentos.filter(s => s.status === 'Arquivado').length
-    const valorArquivado = suprimentos.filter(s => s.status === 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
+    const itensDaAba = suprimentos.filter(s => matchesAba(getTipoDemanda(s), abaAtiva))
+    const totalAberto = itensDaAba.filter(s => s.status !== 'Entregue' && s.status !== 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
+    const emCotacao = itensDaAba.filter(s => s.status === 'Em Cotação').length
+    const aguardandoAprovacao = itensDaAba.filter(s => s.status === 'Aprovação').length
+    const lancadosNoFinanceiro = itensDaAba.filter(s => s.status === 'Em Trânsito').length
+    const valorLancado = itensDaAba.filter(s => s.status === 'Em Trânsito').reduce((acc, s) => acc + (s.valor || 0), 0)
+    const entreguesNaObra = itensDaAba.filter(s => s.status === 'Entregue').length
+    const arquivados = itensDaAba.filter(s => s.status === 'Arquivado').length
+    const valorArquivado = itensDaAba.filter(s => s.status === 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
 
     return { totalAberto, emCotacao, aguardandoAprovacao, lancadosNoFinanceiro, valorLancado, entreguesNaObra, arquivados, valorArquivado }
-  }, [suprimentos, contasVinculadas])
+  }, [suprimentos, abaAtiva])
 
   // ─── AÇÕES DA ESTEIRA ──────────────────────────────────────────────────────
 
@@ -653,7 +859,21 @@ export default function SuprimentosPage() {
         detalhe: `Solicitação criada no sistema por ${solicitanteNome}.${respNome ? ` Responsável da Demanda: ${respNome}.` : ''}${proxNome ? ` Próximo responsável: ${proxNome}.` : ''}`
       }]
 
-      const { data, error } = await supabase.from('suprimentos').insert({
+      const cleanValorMensal = novoForm.valor_mensal ? parseFloat(novoForm.valor_mensal.replace(/\./g, '').replace(',', '.')) : null
+      const selectedEmp = empresas.find(e => e.id === novoForm.empresa_id)
+      const empNome = selectedEmp ? (selectedEmp.nome_fantasia || selectedEmp.razao_social) : (empresas[0]?.nome_fantasia || empresas[0]?.razao_social || 'JWA')
+      const empId = selectedEmp?.id || empresas[0]?.id || null
+
+      const dadosContrato = {
+        tipo_demanda: novoForm.tipo_demanda,
+        empresa_id: empId,
+        empresa_nome: empNome,
+        data_inicio: novoForm.data_inicio || null,
+        data_termino: novoForm.data_termino || null,
+        valor_mensal: cleanValorMensal
+      }
+
+      const insertPayload: any = {
         codigo: novoForm.codigo.trim() || null,
         obra_id: obraDestinoId,
         obra_nome_manual: obraNomeManual,
@@ -677,10 +897,30 @@ export default function SuprimentosPage() {
         condicao_pagamento: novoForm.condicao_pagamento.trim() || null,
         forma_pagamento: novoForm.forma_pagamento.trim() || null,
         tipo_frete: novoForm.tipo_frete.trim() || null,
-        observacoes_oc: novoForm.observacoes_oc.trim() || null
-      }).select().single()
+        observacoes_oc: novoForm.observacoes_oc.trim() || null,
+        tipo_demanda: novoForm.tipo_demanda,
+        empresa_id: empId,
+        empresa_nome: empNome,
+        data_inicio: novoForm.data_inicio || null,
+        data_termino: novoForm.data_termino || null,
+        valor_mensal: cleanValorMensal,
+        dados_contrato: dadosContrato
+      }
 
-      if (error) throw error
+      let res = await supabase.from('suprimentos').insert(insertPayload).select().single()
+      if (res.error && res.error.code === 'PGRST204') {
+        delete insertPayload.tipo_demanda
+        delete insertPayload.empresa_id
+        delete insertPayload.empresa_nome
+        delete insertPayload.data_inicio
+        delete insertPayload.data_termino
+        delete insertPayload.valor_mensal
+        delete insertPayload.dados_contrato
+        insertPayload.observacoes_oc = (insertPayload.observacoes_oc ? insertPayload.observacoes_oc + '\n' : '') + `[METADATA_CONTRATO]: ${JSON.stringify(dadosContrato)}`
+        res = await supabase.from('suprimentos').insert(insertPayload).select().single()
+      }
+      if (res.error) throw res.error
+      const data = res.data
 
       if (respId && respId !== colaboradorAtivo?.id) {
         await supabase.from('notificacoes').insert({
@@ -715,6 +955,11 @@ export default function SuprimentosPage() {
         obra_id: '',
         obra_nome_manual: '',
         titulo: '',
+        tipo_demanda: 'material',
+        empresa_id: '',
+        data_inicio: '',
+        data_termino: '',
+        valor_mensal: '',
         itens: [
           { id: 'item-1', descricao: '', quantidade: '', unidade: 'un' }
         ],
@@ -1376,14 +1621,123 @@ export default function SuprimentosPage() {
               const currentObraId = mesaAtiva.startsWith('obra-') ? mesaAtiva.replace('obra-', '') : ''
               setNovoForm(prev => ({
                 ...prev,
-                obra_id: currentObraId || prev.obra_id
+                obra_id: currentObraId || prev.obra_id,
+                tipo_demanda: abaAtiva === 'servicos' ? 'servico' : abaAtiva === 'locacoes' ? 'locacao' : 'material'
               }))
               setModalNovoOpen(true)
             }}
             style={{ ...btnBase, background: C.amber, color: '#0A0A0A', fontWeight: 900, boxShadow: '0 2px 8px rgba(245, 158, 11, 0.25)' }}
           >
-            <Plus size={15} /> Nova Solicitação de Compra
+            <Plus size={15} /> {abaAtiva === 'servicos' ? 'Nova Contratação de Serviço' : abaAtiva === 'locacoes' ? 'Nova Locação de Equipamento' : 'Nova Solicitação de Compra'}
           </button>
+        </div>
+      </div>
+
+      {/* SELETOR DE SUB-ABAS DE SUPRIMENTOS (MATERIAIS / SERVIÇOS / LOCAÇÕES) */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+        background: C.bgPanel,
+        border: `1px solid ${C.border}`,
+        borderRadius: 8,
+        padding: '8px 12px'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => handleMudarAba('materiais')}
+            style={{
+              ...btnBase,
+              padding: '8px 16px',
+              borderRadius: 6,
+              background: abaAtiva === 'materiais' ? C.amber : 'rgba(255, 255, 255, 0.03)',
+              color: abaAtiva === 'materiais' ? '#0A0A0A' : C.ink,
+              border: `1px solid ${abaAtiva === 'materiais' ? C.amber : C.border}`,
+              fontSize: 12,
+              fontWeight: 800,
+              gap: 8
+            }}
+          >
+            <Package size={15} />
+            <span>📦 Materiais & Insumos</span>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 900,
+              padding: '1px 6px',
+              borderRadius: 10,
+              background: abaAtiva === 'materiais' ? '#0A0A0A' : 'rgba(255,255,255,0.08)',
+              color: abaAtiva === 'materiais' ? C.amber : C.inkSoft
+            }}>
+              {contagensAbas.materiais}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleMudarAba('servicos')}
+            style={{
+              ...btnBase,
+              padding: '8px 16px',
+              borderRadius: 6,
+              background: abaAtiva === 'servicos' ? C.amber : 'rgba(255, 255, 255, 0.03)',
+              color: abaAtiva === 'servicos' ? '#0A0A0A' : C.ink,
+              border: `1px solid ${abaAtiva === 'servicos' ? C.amber : C.border}`,
+              fontSize: 12,
+              fontWeight: 800,
+              gap: 8
+            }}
+          >
+            <Wrench size={15} />
+            <span>🛠️ Contratação de Serviços</span>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 900,
+              padding: '1px 6px',
+              borderRadius: 10,
+              background: abaAtiva === 'servicos' ? '#0A0A0A' : 'rgba(255,255,255,0.08)',
+              color: abaAtiva === 'servicos' ? C.amber : C.inkSoft
+            }}>
+              {contagensAbas.servicos}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleMudarAba('locacoes')}
+            style={{
+              ...btnBase,
+              padding: '8px 16px',
+              borderRadius: 6,
+              background: abaAtiva === 'locacoes' ? C.amber : 'rgba(255, 255, 255, 0.03)',
+              color: abaAtiva === 'locacoes' ? '#0A0A0A' : C.ink,
+              border: `1px solid ${abaAtiva === 'locacoes' ? C.amber : C.border}`,
+              fontSize: 12,
+              fontWeight: 800,
+              gap: 8
+            }}
+          >
+            <Truck size={15} />
+            <span>🚜 Locações de Equipamentos</span>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 900,
+              padding: '1px 6px',
+              borderRadius: 10,
+              background: abaAtiva === 'locacoes' ? '#0A0A0A' : 'rgba(255,255,255,0.08)',
+              color: abaAtiva === 'locacoes' ? C.amber : C.inkSoft
+            }}>
+              {contagensAbas.locacoes}
+            </span>
+          </button>
+        </div>
+
+        <div style={{ fontSize: 11, color: C.inkSoft }}>
+          {abaAtiva === 'materiais' && 'Gerenciando compras físicas, cotações de materiais e entregas no canteiro.'}
+          {abaAtiva === 'servicos' && 'Gerenciando contratos de empreiteiros, medições mensais e escopo de serviços.'}
+          {abaAtiva === 'locacoes' && 'Gerenciando aluguel de máquinas, equipamentos, períodos de vigência e devolução.'}
         </div>
       </div>
 
@@ -1846,7 +2200,7 @@ export default function SuprimentosPage() {
               WebkitOverflowScrolling: 'touch'
             }}
           >
-          {COLUNAS_ESTEIRA.map(col => {
+          {colunasAtivas.map(col => {
             const cardsDaColuna = suprimentosFiltrados.filter(s => s.status === col.id)
             const valorTotalColuna = cardsDaColuna.reduce((acc, s) => acc + (s.valor || 0), 0)
             const Icon = col.icone
@@ -2415,6 +2769,11 @@ export default function SuprimentosPage() {
                     cardsDaColuna.map(item => {
                       const obra = obras.find(o => o.id === item.obra_id)
                       const contaVinculada = contasVinculadas[item.id]
+                      const tipoDemandaItem = getTipoDemanda(item)
+                      const isContrato = tipoDemandaItem === 'servico' || tipoDemandaItem === 'locacao'
+                      const progressoContrato = isContrato ? calcularProgressoContrato(item) : null
+                      const empContratante = empresas.find(e => e.id === item.empresa_id)
+                      const empNome = empContratante ? (empContratante.nome_fantasia || empContratante.razao_social) : (item.empresa_nome || 'JWA')
 
                       const prioridadeBg =
                         item.prioridade === 'urgente' ? 'rgba(239, 68, 68, 0.15)' :
@@ -2583,16 +2942,76 @@ export default function SuprimentosPage() {
                             <h5 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: C.ink, lineHeight: 1.3 }}>
                               {item.titulo}
                             </h5>
-                            {totalChecklist > 0 ? (
+                            {totalChecklist > 0 && !isContrato ? (
                               <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
                                 Materiais: <strong style={{ color: C.ink }}>{totalChecklist} item(ns) no pedido</strong>
                               </div>
-                            ) : (item.quantidade || item.unidade) ? (
+                            ) : (item.quantidade || item.unidade) && !isContrato ? (
                               <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
                                 Quantidade: <strong style={{ color: C.ink }}>{item.quantidade} {item.unidade}</strong>
                               </div>
                             ) : null}
                           </div>
+
+                          {/* ─── RESUMO DE CONTRATO (SERVIÇOS & LOCAÇÕES) ─── */}
+                          {isContrato && (
+                            <div style={{
+                              background: 'rgba(255, 255, 255, 0.025)',
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 5,
+                              padding: '7px 8px',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 4
+                            }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5 }}>
+                                <span style={{ color: C.inkSoft, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                  <Building2 size={11} color={C.amber} />
+                                  <strong style={{ color: C.ink }}>{empNome}</strong>
+                                </span>
+                                {item.contrato_encerrado ? (
+                                  <span style={{ color: '#94A3B8', fontWeight: 800, fontSize: 9, background: 'rgba(100, 116, 139, 0.15)', padding: '1px 5px', borderRadius: 3 }}>
+                                    🏁 Encerrado
+                                  </span>
+                                ) : progressoContrato ? (
+                                  <span style={{ color: progressoContrato.corStatus, fontWeight: 800, fontSize: 9 }}>
+                                    {progressoContrato.labelMes}
+                                  </span>
+                                ) : null}
+                              </div>
+
+                              {/* Valor do Contrato + Parcela */}
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <span style={{ fontSize: 11, fontWeight: 800, color: '#10B981', fontFamily: 'monospace' }}>
+                                  {item.valor ? `R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : 'R$ A definir'}
+                                </span>
+                                {item.valor_mensal && (
+                                  <span style={{ fontSize: 9.5, color: C.inkSoft }}>
+                                    (R$ {item.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}/mês)
+                                  </span>
+                                )}
+                              </div>
+
+                              {/* Barra de Progresso Mensal */}
+                              {progressoContrato && !item.contrato_encerrado && (
+                                <div>
+                                  <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 2, overflow: 'hidden', margin: '2px 0' }}>
+                                    <div style={{
+                                      height: '100%',
+                                      width: `${progressoContrato.porcentagem}%`,
+                                      background: progressoContrato.corBarra,
+                                      borderRadius: 2
+                                    }} />
+                                  </div>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8.5, color: C.inkSoft }}>
+                                    <span>{item.data_inicio ? item.data_inicio.slice(0, 7) : 'Início'}</span>
+                                    <span style={{ color: progressoContrato.corStatus, fontWeight: 700 }}>{progressoContrato.textoStatus}</span>
+                                    <span>{item.data_termino ? item.data_termino.slice(0, 7) : 'Fim'}</span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
 
                           {/* Solicitante & Responsáveis da Demanda */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 10 }}>
@@ -3323,11 +3742,11 @@ export default function SuprimentosPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, paddingBottom: 10, borderBottom: `1px solid ${C.border}` }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: 14, fontWeight: 900, color: C.ink, textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <ShoppingCart size={16} color={C.amber} />
-                  Nova Solicitação de Compra
+                  {novoForm.tipo_demanda === 'servico' ? <Wrench size={16} color={C.amber} /> : novoForm.tipo_demanda === 'locacao' ? <Truck size={16} color={C.amber} /> : <ShoppingCart size={16} color={C.amber} />}
+                  {novoForm.tipo_demanda === 'servico' ? 'Nova Contratação de Serviço' : novoForm.tipo_demanda === 'locacao' ? 'Nova Locação de Equipamento' : 'Nova Solicitação de Compra'}
                 </h3>
                 <p style={{ fontSize: 11, color: C.inkSoft, margin: '2px 0 0' }}>
-                  Aberto pela equipe de obra ou canteiro para iniciar o fluxo de suprimentos.
+                  {novoForm.tipo_demanda === 'servico' ? 'Cadastro de contrato com empreiteiro, escopo, vigência e medições mensais.' : novoForm.tipo_demanda === 'locacao' ? 'Cadastro de aluguel de máquinas, equipamentos e acompanhamento mensal.' : 'Aberto pela equipe de obra ou canteiro para iniciar o fluxo de suprimentos.'}
                 </p>
               </div>
               <button onClick={() => setModalNovoOpen(false)} style={{ border: 'none', background: 'none', color: C.inkSoft, cursor: 'pointer', padding: 4 }}>
@@ -3336,6 +3755,30 @@ export default function SuprimentosPage() {
             </div>
 
             <form onSubmit={handleCriarSolicitacao} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {/* Seletor de Tipo no Modal */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={labelStyle}>Categoria da Demanda</span>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6 }}>
+                  {(['material', 'servico', 'locacao'] as const).map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      onClick={() => setNovoForm(prev => ({ ...prev, tipo_demanda: t }))}
+                      style={{
+                        ...btnBase,
+                        padding: '7px 8px',
+                        background: novoForm.tipo_demanda === t ? C.amber : 'rgba(255,255,255,0.03)',
+                        color: novoForm.tipo_demanda === t ? '#0A0A0A' : C.ink,
+                        border: `1px solid ${novoForm.tipo_demanda === t ? C.amber : C.border}`,
+                        fontWeight: 800,
+                        fontSize: 11
+                      }}
+                    >
+                      {t === 'material' ? '📦 Material' : t === 'servico' ? '🛠️ Serviço' : '🚜 Locação'}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {/* 1. Código & Título do Cartão */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
@@ -3366,7 +3809,89 @@ export default function SuprimentosPage() {
                 </div>
               </div>
 
-              {/* 2. Lista Dinâmica de Materiais com Botão "+" */}
+              {/* Campos Exclusivos para Serviços & Locações */}
+              {novoForm.tipo_demanda !== 'material' ? (
+                <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <span style={{ ...labelStyle, marginBottom: 0, color: C.ink }}>
+                    📋 Parâmetros do Contrato / Vigência Mensal
+                  </span>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <span style={labelStyle}>Empresa do Grupo (Contratante)</span>
+                      <select
+                        style={inputStyle}
+                        value={novoForm.empresa_id}
+                        onChange={e => setNovoForm({ ...novoForm, empresa_id: e.target.value })}
+                      >
+                        <option value="">Selecione a empresa...</option>
+                        {empresas.map(emp => (
+                          <option key={emp.id} value={emp.id}>
+                            {emp.nome_fantasia || emp.razao_social}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <span style={labelStyle}>{novoForm.tipo_demanda === 'locacao' ? 'Locadora' : 'Prestador / Empreiteiro'}</span>
+                      <select
+                        style={inputStyle}
+                        value={novoForm.fornecedor_id}
+                        onChange={e => setNovoForm({ ...novoForm, fornecedor_id: e.target.value })}
+                      >
+                        <option value="">Selecione o fornecedor/locadora...</option>
+                        {fornecedores.map(f => (
+                          <option key={f.id} value={f.id}>
+                            {f.nome_fantasia || f.razao_social}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <span style={labelStyle}>Início da Vigência / Chegada na Obra</span>
+                      <input
+                        type="date"
+                        style={inputStyle}
+                        value={novoForm.data_inicio}
+                        onChange={e => setNovoForm({ ...novoForm, data_inicio: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <span style={labelStyle}>Término Previsto / Devolução</span>
+                      <input
+                        type="date"
+                        style={inputStyle}
+                        value={novoForm.data_termino}
+                        onChange={e => setNovoForm({ ...novoForm, data_termino: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <span style={labelStyle}>Valor Total do Contrato (R$)</span>
+                      <input
+                        style={{ ...inputStyle, color: '#10B981', fontFamily: 'monospace', fontWeight: 700 }}
+                        placeholder="Ex: 36.000,00"
+                        value={novoForm.valor}
+                        onChange={e => setNovoForm({ ...novoForm, valor: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <span style={labelStyle}>Valor Mensal / Parcela Prevista (R$)</span>
+                      <input
+                        style={{ ...inputStyle, color: C.ink, fontFamily: 'monospace', fontWeight: 700 }}
+                        placeholder="Ex: 6.000,00"
+                        value={novoForm.valor_mensal}
+                        onChange={e => setNovoForm({ ...novoForm, valor_mensal: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+              /* 2. Lista Dinâmica de Materiais com Botão "+" */
               <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, padding: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <span style={{ ...labelStyle, marginBottom: 0, color: C.ink }}>
@@ -3444,6 +3969,8 @@ export default function SuprimentosPage() {
                   ))}
                 </div>
               </div>
+
+              )}
 
               {/* 3. Obra Destino com Suporte a "Outros" */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -4225,6 +4752,7 @@ export default function SuprimentosPage() {
         }}
         colaboradores={colaboradores}
         obras={obras}
+        empresas={empresas}
         fornecedores={fornecedores}
         colaboradorAtivo={colaboradorAtivo}
         contaVinculada={drawerItem ? contasVinculadas[drawerItem.id] : undefined}

@@ -134,6 +134,18 @@ export interface RdoEquipamento {
   status: 'OPERANDO' | 'PARADO' | 'MANUTENÇÃO'
 }
 
+export interface MedicaoMensalContrato {
+  id: string
+  mes_indice: number
+  mes_ano: string
+  valor_previsto: number
+  valor_medido?: number | null
+  status: 'previsto' | 'medido' | 'pago'
+  nota_fiscal?: string | null
+  pago_em?: string | null
+  observacao?: string | null
+}
+
 export interface Suprimento {
   id: string
   obra_id: string | null
@@ -147,6 +159,17 @@ export interface Suprimento {
   solicitante: string | null
   prioridade: string | null
   created_at: string
+  tipo_demanda?: 'material' | 'servico' | 'locacao'
+  empresa_id?: string | null
+  empresa_nome?: string | null
+  data_inicio?: string | null
+  data_termino?: string | null
+  valor_mensal?: number | null
+  acompanhamento_mensal?: MedicaoMensalContrato[]
+  contrato_encerrado?: boolean
+  contrato_encerrado_em?: string | null
+  contrato_encerrado_motivo?: string | null
+  dados_contrato?: any
 }
 
 export interface Tarefa {

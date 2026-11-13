@@ -36,6 +36,7 @@ import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
 import { toast } from '@/components/Toast'
 import { DgennyCotacaoTab } from '@/components/DgennyCotacaoTab'
+import { SuprimentoContratoTab } from '@/components/SuprimentoContratoTab'
 
 export interface ItemChecklist {
   id: string
@@ -88,6 +89,7 @@ interface SuprimentoCardDrawerProps {
   onUpdateItem: (updated: any) => void
   colaboradores: ColaboradorOption[]
   obras: Array<{ id: string; nome: string; endereco?: string | null; cliente?: string | null }>
+  empresas?: Array<{ id: string; razao_social: string; nome_fantasia?: string | null }>
   fornecedores: Array<{
     id: string
     razao_social: string
@@ -99,7 +101,7 @@ interface SuprimentoCardDrawerProps {
   }>
   colaboradorAtivo: any
   contaVinculada?: any
-  initialTab?: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'
+  initialTab?: 'checklist' | 'dgenny' | 'contrato' | 'anexos' | 'chat' | 'historico'
   onAbrirLancamentoFinanceiro?: (item: any) => void
 }
 
@@ -110,20 +112,30 @@ export function SuprimentoCardDrawer({
   onUpdateItem,
   colaboradores,
   obras,
+  empresas = [],
   fornecedores,
   colaboradorAtivo,
   contaVinculada,
   initialTab,
   onAbrirLancamentoFinanceiro
 }: SuprimentoCardDrawerProps) {
-  // Aba ativa: 'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'
-  const [tabAtiva, setTabAtiva] = useState<'checklist' | 'dgenny' | 'anexos' | 'chat' | 'historico'>(initialTab || 'checklist')
+  // Detecção de Tipo de Demanda para abrir tab de Contrato por padrão se for serviço/locação
+  const isContratoInicial = item?.tipo_demanda === 'servico' || item?.tipo_demanda === 'locacao' || item?.dados_contrato?.tipo_demanda === 'servico' || item?.dados_contrato?.tipo_demanda === 'locacao' || (item?.titulo || '').toLowerCase().includes('serviço') || (item?.titulo || '').toLowerCase().includes('locaç')
+
+  // Aba ativa: 'checklist' | 'dgenny' | 'contrato' | 'anexos' | 'chat' | 'historico'
+  const [tabAtiva, setTabAtiva] = useState<'checklist' | 'dgenny' | 'contrato' | 'anexos' | 'chat' | 'historico'>(
+    initialTab || (isContratoInicial ? 'contrato' : 'checklist')
+  )
 
   useEffect(() => {
-    if (isOpen && initialTab) {
-      setTabAtiva(initialTab)
+    if (isOpen) {
+      if (initialTab) {
+        setTabAtiva(initialTab)
+      } else if (isContratoInicial) {
+        setTabAtiva('contrato')
+      }
     }
-  }, [isOpen, initialTab, item?.id])
+  }, [isOpen, initialTab, item?.id, isContratoInicial])
 
   // Modo de Edição Completa da Ficha
   const [modoEdicaoCompleta, setModoEdicaoCompleta] = useState(false)
@@ -1320,7 +1332,7 @@ export function SuprimentoCardDrawer({
     >
       <div
         style={{
-          width: tabAtiva === 'dgenny' ? 920 : 620,
+          width: tabAtiva === 'dgenny' || tabAtiva === 'contrato' ? 920 : 620,
           maxWidth: '96vw',
           transition: 'width 0.2s ease',
           height: '100%',
@@ -2633,6 +2645,39 @@ export function SuprimentoCardDrawer({
 
         {/* ─── 2. ABAS DE NAVEGAÇÃO DA GAVETA ─────────────────────────────────── */}
         <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.bgCard, padding: '0 16px' }}>
+          {/* ABA DE CONTRATO & ACOMPANHAMENTO MENSAL */}
+          <button
+            onClick={() => setTabAtiva('contrato')}
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              fontWeight: tabAtiva === 'contrato' ? 800 : 600,
+              color: tabAtiva === 'contrato' ? C.amber : C.inkSoft,
+              borderBottom: `2px solid ${tabAtiva === 'contrato' ? C.amber : 'transparent'}`,
+              background: isContratoInicial ? 'rgba(245, 158, 11, 0.05)' : 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Calendar size={13} color={tabAtiva === 'contrato' ? C.amber : undefined} />
+            <span>Acompanhamento Mensal</span>
+            <span style={{
+              fontSize: 9.5,
+              fontWeight: 900,
+              padding: '1px 5px',
+              borderRadius: 4,
+              background: item?.contrato_encerrado ? 'rgba(100, 116, 139, 0.25)' : C.amber,
+              color: item?.contrato_encerrado ? '#94A3B8' : '#0A0A0A'
+            }}>
+              {item?.contrato_encerrado ? 'Encerrado' : 'Mensal'}
+            </span>
+          </button>
+
           <button
             onClick={() => setTabAtiva('checklist')}
             style={{
@@ -2746,6 +2791,19 @@ export function SuprimentoCardDrawer({
 
         {/* ─── 3. CONTEÚDO DA ABA ATIVA ────────────────────────────────────────── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+
+          {/* ════ ABA: CONTRATO & ACOMPANHAMENTO MENSAL ═══════════════ */}
+          {tabAtiva === 'contrato' && (
+            <SuprimentoContratoTab
+              item={item}
+              empresas={empresas}
+              fornecedores={fornecedores}
+              obras={obras}
+              colaboradorAtivo={colaboradorAtivo}
+              onUpdateItem={onUpdateItem}
+              onRegistrarMexida={registrarMexida}
+            />
+          )}
 
           {/* ════ ABA 1: CHECKLIST DE ITENS & CONFERÊNCIA PARCIAL ═══════════════ */}
           {tabAtiva === 'checklist' && (
