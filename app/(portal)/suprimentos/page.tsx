@@ -44,7 +44,8 @@ import {
   Minimize2,
   Wrench,
   HardHat,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Info
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { toast } from '@/components/Toast'
@@ -715,17 +716,35 @@ export default function SuprimentosPage() {
   // ─── FILTROS & MESAS ───────────────────────────────────────────────────────
 
   const contagensAbas = useMemo(() => {
+    let base = suprimentos
+
+    if (mesaAtiva === 'minhas') {
+      base = base.filter(s => s.responsavel_id === colaboradorAtivo?.id)
+    } else if (mesaAtiva === 'urgentes') {
+      base = base.filter(s => s.prioridade === 'alta' || s.prioridade === 'urgente')
+    } else if (mesaAtiva.startsWith('obra-')) {
+      const targetObraId = mesaAtiva.replace('obra-', '')
+      base = base.filter(s => s.obra_id === targetObraId)
+    } else if (mesaAtiva !== 'todas') {
+      const custom = mesasCustom.find(m => m.id === mesaAtiva)
+      if (custom) {
+        if (custom.obra_id) base = base.filter(s => s.obra_id === custom.obra_id)
+        if (custom.prioridade && custom.prioridade !== 'todas') base = base.filter(s => s.prioridade === custom.prioridade)
+      }
+    }
+
     let materiais = 0
     let servicos = 0
     let locacoes = 0
-    suprimentos.forEach(s => {
+    base.forEach(s => {
+      if (s.status === 'Arquivado') return
       const t = getTipoDemanda(s)
       if (t === 'servico') servicos++
       else if (t === 'locacao') locacoes++
       else materiais++
     })
     return { materiais, servicos, locacoes }
-  }, [suprimentos])
+  }, [suprimentos, mesaAtiva, colaboradorAtivo?.id, mesasCustom])
 
   const suprimentosFiltrados = useMemo(() => {
     return suprimentos.filter(item => {
@@ -782,20 +801,61 @@ export default function SuprimentosPage() {
     })
   }, [suprimentos, abaAtiva, mesaAtiva, mesasCustom, busca, filtroPrioridade, filtroStatusFinanceiro, obras, contasVinculadas])
 
-  // KPIs dinâmicos da Sub-Aba Ativa
+  // KPIs dinâmicos da Sub-Aba Ativa e da Mesa Selecionada
   const kpis = useMemo(() => {
-    const itensDaAba = suprimentos.filter(s => matchesAba(getTipoDemanda(s), abaAtiva))
-    const totalAberto = itensDaAba.filter(s => s.status !== 'Entregue' && s.status !== 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
-    const emCotacao = itensDaAba.filter(s => s.status === 'Em Cotação').length
-    const aguardandoAprovacao = itensDaAba.filter(s => s.status === 'Aprovação').length
-    const lancadosNoFinanceiro = itensDaAba.filter(s => s.status === 'Em Trânsito').length
-    const valorLancado = itensDaAba.filter(s => s.status === 'Em Trânsito').reduce((acc, s) => acc + (s.valor || 0), 0)
-    const entreguesNaObra = itensDaAba.filter(s => s.status === 'Entregue').length
-    const arquivados = itensDaAba.filter(s => s.status === 'Arquivado').length
-    const valorArquivado = itensDaAba.filter(s => s.status === 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
+    let itensDaMesa = suprimentos.filter(s => matchesAba(getTipoDemanda(s), abaAtiva))
+
+    if (mesaAtiva === 'minhas') {
+      itensDaMesa = itensDaMesa.filter(s => s.responsavel_id === colaboradorAtivo?.id)
+    } else if (mesaAtiva === 'urgentes') {
+      itensDaMesa = itensDaMesa.filter(s => s.prioridade === 'alta' || s.prioridade === 'urgente')
+    } else if (mesaAtiva.startsWith('obra-')) {
+      const targetObraId = mesaAtiva.replace('obra-', '')
+      itensDaMesa = itensDaMesa.filter(s => s.obra_id === targetObraId)
+    } else if (mesaAtiva !== 'todas') {
+      const custom = mesasCustom.find(m => m.id === mesaAtiva)
+      if (custom) {
+        if (custom.obra_id) itensDaMesa = itensDaMesa.filter(s => s.obra_id === custom.obra_id)
+        if (custom.prioridade && custom.prioridade !== 'todas') itensDaMesa = itensDaMesa.filter(s => s.prioridade === custom.prioridade)
+      }
+    }
+
+    const totalAberto = itensDaMesa.filter(s => s.status !== 'Entregue' && s.status !== 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
+    const emCotacao = itensDaMesa.filter(s => s.status === 'Em Cotação').length
+    const aguardandoAprovacao = itensDaMesa.filter(s => s.status === 'Aprovação').length
+    const lancadosNoFinanceiro = itensDaMesa.filter(s => s.status === 'Em Trânsito').length
+    const valorLancado = itensDaMesa.filter(s => s.status === 'Em Trânsito').reduce((acc, s) => acc + (s.valor || 0), 0)
+    const entreguesNaObra = itensDaMesa.filter(s => s.status === 'Entregue').length
+    const arquivados = itensDaMesa.filter(s => s.status === 'Arquivado').length
+    const valorArquivado = itensDaMesa.filter(s => s.status === 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
 
     return { totalAberto, emCotacao, aguardandoAprovacao, lancadosNoFinanceiro, valorLancado, entreguesNaObra, arquivados, valorArquivado }
-  }, [suprimentos, abaAtiva])
+  }, [suprimentos, abaAtiva, mesaAtiva, colaboradorAtivo?.id, mesasCustom])
+
+  // Notificação inteligente quando uma obra selecionada não tem itens na aba atual mas tem em outras
+  const alertaOutrasAbas = useMemo(() => {
+    if (!mesaAtiva.startsWith('obra-')) return null
+    const targetObraId = mesaAtiva.replace('obra-', '')
+    const obra = obras.find(o => o.id === targetObraId)
+    if (!obra) return null
+
+    // Itens ativos na aba atual
+    const totalNaAba = suprimentos.filter(s => s.obra_id === targetObraId && matchesAba(getTipoDemanda(s), abaAtiva) && s.status !== 'Arquivado').length
+    if (totalNaAba > 0) return null
+
+    // Verificar se há em outras abas
+    const servicos = suprimentos.filter(s => s.obra_id === targetObraId && getTipoDemanda(s) === 'servico' && s.status !== 'Arquivado').length
+    const locacoes = suprimentos.filter(s => s.obra_id === targetObraId && getTipoDemanda(s) === 'locacao' && s.status !== 'Arquivado').length
+    const materiais = suprimentos.filter(s => s.obra_id === targetObraId && getTipoDemanda(s) === 'material' && s.status !== 'Arquivado').length
+
+    const outras: Array<{ count: number; abaDestino: 'materiais' | 'servicos' | 'locacoes'; abaNome: string }> = []
+    if (abaAtiva !== 'materiais' && materiais > 0) outras.push({ count: materiais, abaDestino: 'materiais', abaNome: 'Materiais & Insumos' })
+    if (abaAtiva !== 'servicos' && servicos > 0) outras.push({ count: servicos, abaDestino: 'servicos', abaNome: 'Contratação de Serviços' })
+    if (abaAtiva !== 'locacoes' && locacoes > 0) outras.push({ count: locacoes, abaDestino: 'locacoes', abaNome: 'Locações de Equipamentos' })
+
+    if (outras.length === 0) return null
+    return { obraNome: obra.nome, outras }
+  }, [mesaAtiva, obras, suprimentos, abaAtiva])
 
   // ─── AÇÕES DA ESTEIRA ──────────────────────────────────────────────────────
 
@@ -1833,7 +1893,7 @@ export default function SuprimentosPage() {
             }}
           >
             <User size={12} /> Minhas Demandas
-            {suprimentos.filter(s => s.responsavel_id === colaboradorAtivo?.id).length > 0 && (
+            {suprimentos.filter(s => s.responsavel_id === colaboradorAtivo?.id && matchesAba(getTipoDemanda(s), abaAtiva) && s.status !== 'Arquivado').length > 0 && (
               <span style={{
                 marginLeft: 5,
                 fontSize: 9.5,
@@ -1843,7 +1903,7 @@ export default function SuprimentosPage() {
                 padding: '1px 5px',
                 borderRadius: 8
               }}>
-                {suprimentos.filter(s => s.responsavel_id === colaboradorAtivo?.id).length}
+                {suprimentos.filter(s => s.responsavel_id === colaboradorAtivo?.id && matchesAba(getTipoDemanda(s), abaAtiva) && s.status !== 'Arquivado').length}
               </span>
             )}
           </button>
@@ -1862,7 +1922,7 @@ export default function SuprimentosPage() {
             }}
           >
             <AlertTriangle size={12} /> ⚡ Urgentes & Críticas
-            {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && s.status !== 'Entregue' && s.status !== 'Arquivado').length > 0 && (
+            {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && matchesAba(getTipoDemanda(s), abaAtiva) && s.status !== 'Entregue' && s.status !== 'Arquivado').length > 0 && (
               <span style={{
                 fontSize: 9.5,
                 fontWeight: 900,
@@ -1871,14 +1931,15 @@ export default function SuprimentosPage() {
                 padding: '1px 5px',
                 borderRadius: 8
               }}>
-                {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && s.status !== 'Entregue' && s.status !== 'Arquivado').length}
+                {suprimentos.filter(s => (s.prioridade === 'urgente' || s.prioridade === 'alta') && matchesAba(getTipoDemanda(s), abaAtiva) && s.status !== 'Entregue' && s.status !== 'Arquivado').length}
               </span>
             )}
           </button>
 
           {/* Mesas Automáticas por Obra Cadastrada */}
           {obras.map(o => {
-            const countObra = suprimentos.filter(s => s.obra_id === o.id && s.status !== 'Entregue' && s.status !== 'Arquivado').length
+            const countObraNaAba = suprimentos.filter(s => s.obra_id === o.id && matchesAba(getTipoDemanda(s), abaAtiva) && s.status !== 'Entregue' && s.status !== 'Arquivado').length
+            const countObraOutras = suprimentos.filter(s => s.obra_id === o.id && !matchesAba(getTipoDemanda(s), abaAtiva) && s.status !== 'Entregue' && s.status !== 'Arquivado').length
             const isAtiva = mesaAtiva === `obra-${o.id}`
             return (
               <button
@@ -1894,10 +1955,10 @@ export default function SuprimentosPage() {
                   alignItems: 'center',
                   gap: 6
                 }}
-                title={`Mesa da obra: ${o.nome}${o.cliente ? ` (${o.cliente})` : ''}`}
+                title={`Mesa da obra: ${o.nome}${o.cliente ? ` (${o.cliente})` : ''}${countObraOutras > 0 ? ` • ${countObraOutras} pedido(s) em outras seções` : ''}`}
               >
                 <span>🏢 {o.nome}</span>
-                {countObra > 0 && (
+                {countObraNaAba > 0 && (
                   <span style={{
                     fontSize: 9.5,
                     fontWeight: 900,
@@ -1906,7 +1967,23 @@ export default function SuprimentosPage() {
                     padding: '1px 5px',
                     borderRadius: 8
                   }}>
-                    {countObra}
+                    {countObraNaAba}
+                  </span>
+                )}
+                {countObraNaAba === 0 && countObraOutras > 0 && (
+                  <span
+                    title={`${countObraOutras} pedido(s) em outras seções`}
+                    style={{
+                      fontSize: 9,
+                      fontWeight: 700,
+                      background: isAtiva ? 'rgba(0,0,0,0.25)' : 'rgba(255,255,255,0.06)',
+                      color: isAtiva ? '#0A0A0A' : C.inkSoft,
+                      padding: '1px 5px',
+                      borderRadius: 8,
+                      border: `1px dashed ${isAtiva ? 'rgba(0,0,0,0.3)' : C.border}`
+                    }}
+                  >
+                    {countObraOutras} em out.
                   </span>
                 )}
               </button>
@@ -2090,6 +2167,61 @@ export default function SuprimentosPage() {
           )}
         </div>
       </div>
+
+      {/* BANNER INTELIGENTE: PEDIDOS EM OUTRAS SEÇÕES PARA A OBRA SELECIONADA */}
+      {alertaOutrasAbas && (
+        <div style={{
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: 8,
+          padding: '10px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+          marginTop: -2,
+          marginBottom: 4
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ background: 'rgba(245, 158, 11, 0.16)', padding: 6, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Info size={16} color={C.amber} />
+            </div>
+            <span style={{ fontSize: 12, color: C.ink }}>
+              A obra <strong>{alertaOutrasAbas.obraNome}</strong> não possui pedidos nesta seção, mas possui:{' '}
+              {alertaOutrasAbas.outras.map((o, idx) => (
+                <span key={o.abaDestino}>
+                  {idx > 0 && ' e '}
+                  <strong>{o.count} {o.count === 1 ? 'demanda' : 'demandas'}</strong> em <strong>{o.abaNome}</strong>
+                </span>
+              ))}.
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {alertaOutrasAbas.outras.map(o => (
+              <button
+                key={o.abaDestino}
+                type="button"
+                onClick={() => handleMudarAba(o.abaDestino)}
+                style={{
+                  ...btnBase,
+                  padding: '6px 14px',
+                  background: C.amber,
+                  color: '#0A0A0A',
+                  fontWeight: 800,
+                  fontSize: 11,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5
+                }}
+              >
+                <span>Ver em {o.abaNome}</span>
+                <ArrowRight size={13} />
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* CONTEÚDO PRINCIPAL: ESTEIRA OU TABELA */}
       {visao === 'esteira' ? (
