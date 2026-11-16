@@ -242,6 +242,7 @@ export function SuprimentoCardDrawer({
   // Exportação Ordem de Compra (OC)
   const [modalExportarOC, setModalExportarOC] = useState(false)
   const [copiadoWhats, setCopiadoWhats] = useState(false)
+  const [sincronizandoDgennyOC, setSincronizandoDgennyOC] = useState(false)
 
   const prevItemIdRef = useRef<string | null>(null)
 
@@ -1126,6 +1127,126 @@ export function SuprimentoCardDrawer({
     return m && m[1] ? m[1].trim() : ''
   })()
   const condicaoCompraEfetiva = item.condicao_pagamento || condicaoExtraidaDaConta || ''
+  const valorCardEfetivo =
+    parseNumeroBR(item.valor) > 0
+      ? parseNumeroBR(item.valor)
+      : parseNumeroBR(contaVinculada?.valor) > 0
+      ? parseNumeroBR(contaVinculada?.valor)
+      : null
+
+  // Sincronização automática de preços da cotação Dgenny ao abrir a Ordem de Compra
+  useEffect(() => {
+    if (!modalExportarOC || !item) return
+    const listaAtual: ItemChecklist[] = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
+    const precisaPrecosItens = listaAtual.some(c => !(c.valor_unitario && Number(c.valor_unitario) > 0))
+    const precisaValorTotal = !(parseNumeroBR(item.valor) > 0)
+    if (!precisaPrecosItens && !precisaValorTotal) return
+
+    const hist = Array.isArray(item.historico_atividades) ? item.historico_atividades : []
+    const actDgenny = hist.find((a: any) => a.dgenny_quotation_id)
+    let cancelled = false
+
+    async function sincronizarDgennyParaOC() {
+      setSincronizandoDgennyOC(true)
+      try {
+        let qId: string | null = actDgenny?.dgenny_quotation_id || null
+        if (!qId) {
+          const listRes = await fetch('/api/dgenny/quotations')
+          const listData = await listRes.json()
+          if (listData?.ok && Array.isArray(listData.items)) {
+            const cod = (item.codigo || '').trim().toLowerCase()
+            const tit = (item.titulo || '').trim().toLowerCase()
+            const matchedQ = listData.items.find((q: any) => {
+              const qName = (q.name || '').toLowerCase()
+              if (cod && cod.length >= 4 && qName.includes(cod)) return true
+              if (tit && tit.length >= 6 && (qName.includes(tit) || tit.includes(qName))) return true
+              return false
+            })
+            if (matchedQ?.id) qId = matchedQ.id
+          }
+        }
+        if (!qId || cancelled) return
+
+        const res = await fetch(`/api/dgenny/quotations/${qId}`)
+        const data = await res.json()
+        if (!data?.ok || cancelled) return
+
+        const compSuppliers: any[] = Array.isArray(data.comparison?.suppliers) ? data.comparison.suppliers : []
+        const compItems: any[] = Array.isArray(data.comparison?.items) ? data.comparison.items : []
+        const qSuppliers: any[] = Array.isArray(data.quotation?.suppliers) ? data.quotation.suppliers : []
+        const fornCard = (item.fornecedor || '').trim().toLowerCase()
+
+        const winnerId: string | null =
+          qSuppliers.find((s: any) => s.winner)?.supplierId ||
+          (fornCard ? compSuppliers.find((s: any) => String(s.name || '').trim().toLowerCase() === fornCard)?.supplierId : null) ||
+          (fornCard ? compSuppliers.find((s: any) => {
+            const sn = String(s.name || '').trim().toLowerCase()
+            return sn && (sn.includes(fornCard) || fornCard.includes(sn))
+          })?.supplierId : null) ||
+          data.comparison?.bestTotalSupplierId ||
+          null
+
+        if (!winnerId) return
+
+        let mudouLista = false
+        const novaLista = listaAtual.map((chk, idx) => {
+          if (chk.valor_unitario && Number(chk.valor_unitario) > 0) return chk
+          const descNorm = String(chk.descricao || '').trim().toLowerCase()
+          const matchedComp =
+            compItems.find((ci: any) => String(ci.description || '').trim().toLowerCase() === descNorm) ||
+            compItems.find((ci: any) => {
+              const cd = String(ci.description || '').trim().toLowerCase()
+              return cd && descNorm && (cd.includes(descNorm) || descNorm.includes(cd))
+            }) ||
+            compItems[idx]
+
+          const offer = matchedComp?.offers?.find((o: any) => o.supplierId === winnerId)
+          if (!offer) return chk
+          const unitVal = parseNumeroBR(offer.unitPrice)
+          const totalVal = parseNumeroBR(offer.total)
+          const qtd = Number(chk.qtd_pedida || offer.quantity || 1)
+          const precoFinal = unitVal > 0 ? unitVal : (totalVal > 0 && qtd > 0 ? totalVal / qtd : 0)
+          if (precoFinal > 0) {
+            mudouLista = true
+            return { ...chk, valor_unitario: Number(precoFinal.toFixed(2)) }
+          }
+          return chk
+        })
+
+        const winnerCompSup = compSuppliers.find((s: any) => s.supplierId === winnerId)
+        const totalDgenny = parseNumeroBR(winnerCompSup?.total)
+        const somaItens = novaLista.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
+        const novoValorTotal = precisaValorTotal ? (totalDgenny > 0 ? totalDgenny : somaItens > 0 ? Number(somaItens.toFixed(2)) : null) : null
+
+        if (!mudouLista && !novoValorTotal) return
+
+        const updates: Record<string, any> = {}
+        if (mudouLista) updates.itens_checklist = novaLista
+        if (novoValorTotal && novoValorTotal > 0) updates.valor = novoValorTotal
+
+        const { data: updatedRow, error } = await supabase
+          .from('suprimentos')
+          .update(updates)
+          .eq('id', item.id)
+          .select()
+          .single()
+
+        if (!error && updatedRow && !cancelled) {
+          onUpdateItem(updatedRow)
+          toast('Preços dos itens sincronizados automaticamente da cotação dgenny.', 'success')
+        }
+      } catch {
+        // Silencioso para não bloquear a visualização da OC
+      } finally {
+        if (!cancelled) setSincronizandoDgennyOC(false)
+      }
+    }
+
+    sincronizarDgennyParaOC()
+    return () => {
+      cancelled = true
+    }
+  }, [modalExportarOC, item?.id])
 
     // 5.2.1 IMPRESSÃO / SALVAR EM PDF (Gera janela limpa A4 independente de tema escuro ou layout)
   function handleImprimirOC() {
@@ -1239,11 +1360,11 @@ export function SuprimentoCardDrawer({
     texto += `\n*ITENS SOLICITADOS:*\n`
 
     const somaItensWhats = listaAtual.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
-    const valorTotalWhats = item.valor && Number(item.valor) > 0 ? Number(item.valor) : somaItensWhats
+    const valorTotalWhats = valorCardEfetivo && valorCardEfetivo > 0 ? valorCardEfetivo : somaItensWhats
 
     if (listaAtual.length > 0) {
       listaAtual.forEach((chk, idx) => {
-        const { unitario, subtotal } = resolverPrecoItemOC(chk, listaAtual.length, item.valor)
+        const { unitario, subtotal } = resolverPrecoItemOC(chk, listaAtual.length, valorCardEfetivo)
         const precoTxt = unitario !== null && subtotal !== null
           ? ` | Unit: ${formatBRL(unitario)} | Subtotal: ${formatBRL(subtotal)}`
           : ''
@@ -1251,8 +1372,8 @@ export function SuprimentoCardDrawer({
       })
     } else {
       const qtdFallback = parseNumeroBR(item.quantidade) || 1
-      const precoTxt = item.valor && Number(item.valor) > 0
-        ? ` | Unit: ${formatBRL(Number(item.valor) / qtdFallback)} | Subtotal: ${formatBRL(Number(item.valor))}`
+      const precoTxt = valorCardEfetivo && valorCardEfetivo > 0
+        ? ` | Unit: ${formatBRL(valorCardEfetivo / qtdFallback)} | Subtotal: ${formatBRL(valorCardEfetivo)}`
         : ''
       texto += `1. ${item.titulo} - ${item.quantidade || '1'} ${item.unidade || 'un'}${precoTxt}\n`
     }
@@ -3801,8 +3922,15 @@ export function SuprimentoCardDrawer({
             </div>
           </div>
 
+          {/* Indicador de sincronização dgenny (não sai na impressão) */}
+          {sincronizandoDgennyOC && (
+            <div className="no-print" style={{ padding: '7px 18px', background: '#EFF6FF', borderBottom: '1px solid #BFDBFE', color: '#1E40AF', fontSize: 11.5, fontWeight: 700 }}>
+              ⏳ Buscando preços unitários da cotação dgenny...
+            </div>
+          )}
+
           {/* Aviso rápido (não sai na impressão) se houver itens sem preço unitário */}
-          {itensChecklist.some(chk => resolverPrecoItemOC(chk, itensChecklist.length, item.valor).unitario === null) && (
+          {!sincronizandoDgennyOC && itensChecklist.some(chk => resolverPrecoItemOC(chk, itensChecklist.length, valorCardEfetivo).unitario === null) && (
             <div
               className="no-print"
               style={{
@@ -4030,7 +4158,7 @@ export function SuprimentoCardDrawer({
                 <tbody>
                   {itensChecklist.length > 0 ? (
                     itensChecklist.map((chk, idx) => {
-                      const { unitario, subtotal } = resolverPrecoItemOC(chk, itensChecklist.length, item.valor)
+                      const { unitario, subtotal } = resolverPrecoItemOC(chk, itensChecklist.length, valorCardEfetivo)
                       return (
                         <tr key={chk.id} style={{ borderBottom: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>
                           <td style={{ padding: '7px 6px', color: '#374151', fontWeight: 700 }}>{idx + 1}</td>
@@ -4062,7 +4190,7 @@ export function SuprimentoCardDrawer({
                   ) : (
                     (() => {
                       const qtdFallback = parseNumeroBR(item.quantidade) || 1
-                      const valTotalFallback = item.valor && Number(item.valor) > 0 ? Number(item.valor) : null
+                      const valTotalFallback = valorCardEfetivo && valorCardEfetivo > 0 ? valorCardEfetivo : null
                       const unitFallback = valTotalFallback !== null ? valTotalFallback / qtdFallback : null
                       return (
                         <tr style={{ borderBottom: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>
@@ -4092,7 +4220,7 @@ export function SuprimentoCardDrawer({
             {/* Total Financeiro Sempre Visível */}
             {(() => {
               const somaItensOC = itensChecklist.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
-              const valorTotalOC = item.valor && Number(item.valor) > 0 ? Number(item.valor) : somaItensOC
+              const valorTotalOC = valorCardEfetivo && valorCardEfetivo > 0 ? valorCardEfetivo : somaItensOC
               return (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
                   <span style={{ fontSize: 12, fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>Valor Total da Ordem de Compra:</span>

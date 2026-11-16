@@ -9,7 +9,7 @@ export async function POST(
   try {
     const { id } = await context.params
     const body = await req.json()
-    const { suprimentoId, winnerSupplierId, winnerSupplierName, finalPrice, paymentMethod, freight, deliveryTerm } = body
+    const { suprimentoId, winnerSupplierId, winnerSupplierName, finalPrice, paymentMethod, freight, deliveryTerm, itensChecklist } = body
 
     if (!id || !winnerSupplierId) {
       return NextResponse.json(
@@ -57,6 +57,9 @@ export async function POST(
       }
       if (deliveryTerm) {
         updateData.observacoes_oc = `Prazo de entrega cotado: ${deliveryTerm}`
+      }
+      if (Array.isArray(itensChecklist) && itensChecklist.length > 0) {
+        updateData.itens_checklist = itensChecklist
       }
 
       await supabase

@@ -909,6 +909,32 @@ export function DgennyCotacaoTab({
     if (!quotationId) return
     setConcluindo(true)
     try {
+      const compItems = Array.isArray(quotationData?.comparison?.items) ? quotationData.comparison.items : []
+      const checklistAtual = Array.isArray(suprimento?.itens_checklist) ? suprimento.itens_checklist : []
+      const checklistComPrecos = checklistAtual.map((chk: any, idx: number) => {
+        const descNorm = String(chk.descricao || '').trim().toLowerCase()
+        const matchedComp =
+          compItems.find((ci: any) => String(ci.description || '').trim().toLowerCase() === descNorm) ||
+          compItems.find((ci: any) => {
+            const cd = String(ci.description || '').trim().toLowerCase()
+            return cd && descNorm && (cd.includes(descNorm) || descNorm.includes(cd))
+          }) ||
+          compItems[idx]
+
+        const offer = matchedComp?.offers?.find((o: any) => o.supplierId === supplierId)
+        if (!offer) return chk
+        const parseP = (v: any) => {
+          const s = String(v || '').trim()
+          const n = parseFloat(s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s)
+          return Number.isFinite(n) ? n : 0
+        }
+        const unitVal = parseP(offer.unitPrice)
+        const totalVal = parseP(offer.total)
+        const qtd = Number(chk.qtd_pedida || offer.quantity || 1)
+        const precoFinal = unitVal > 0 ? unitVal : (totalVal > 0 && qtd > 0 ? totalVal / qtd : 0)
+        return precoFinal > 0 ? { ...chk, valor_unitario: Number(precoFinal.toFixed(2)) } : chk
+      })
+
       const res = await fetch(`/api/dgenny/quotations/${quotationId}/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -919,7 +945,8 @@ export function DgennyCotacaoTab({
           finalPrice: parseFloat(total),
           paymentMethod,
           freight,
-          deliveryTerm
+          deliveryTerm,
+          itensChecklist: checklistComPrecos
         })
       })
       const data = await res.json()
@@ -931,7 +958,8 @@ export function DgennyCotacaoTab({
           fornecedor: supplierName,
           valor: parseFloat(total),
           condicao_pagamento: paymentMethod || suprimento.condicao_pagamento,
-          tipo_frete: freight && parseFloat(freight) > 0 ? `Frete R$ ${freight}` : (suprimento.tipo_frete || 'CIF (Incluso)')
+          tipo_frete: freight && parseFloat(freight) > 0 ? `Frete R$ ${freight}` : (suprimento.tipo_frete || 'CIF (Incluso)'),
+          itens_checklist: checklistComPrecos
         })
         carregarDadosCotacao(quotationId)
       } else {
