@@ -51,10 +51,23 @@ export interface ItemChecklist {
 function parseNumeroBR(val: string | number | null | undefined): number {
   if (typeof val === 'number') return Number.isFinite(val) ? val : 0
   if (!val) return 0
-  const str = String(val).trim()
-  const normalized = str.includes(',') ? str.replace(/\./g, '').replace(',', '.') : str
+  const str = String(val).replace(/R\$/gi, '').trim()
+  let normalized = str
+  if (str.includes(',')) {
+    normalized = str.replace(/\./g, '').replace(',', '.')
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
+    normalized = str.replace(/\./g, '')
+  }
   const n = parseFloat(normalized)
   return Number.isFinite(n) ? n : 0
+}
+
+function extrairPrecoDeDescricao(desc: string | null | undefined): number | null {
+  if (!desc) return null
+  const m = desc.match(/R\$\s*(\d+(?:\.\d{3})*(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/i)
+  if (!m || !m[1]) return null
+  const val = parseNumeroBR(m[1])
+  return val > 0 ? val : null
 }
 
 function formatBRL(val: number): string {
@@ -69,6 +82,10 @@ function resolverPrecoItemOC(
   const qtd = Number(chk.qtd_pedida) || 0
   if (chk.valor_unitario && chk.valor_unitario > 0) {
     return { unitario: chk.valor_unitario, subtotal: chk.valor_unitario * qtd }
+  }
+  const precoNaDesc = extrairPrecoDeDescricao(chk.descricao)
+  if (precoNaDesc && precoNaDesc > 0) {
+    return { unitario: precoNaDesc, subtotal: precoNaDesc * (qtd || 1) }
   }
   if (totalItens === 1 && valorTotalCard && valorTotalCard > 0 && qtd > 0) {
     return { unitario: valorTotalCard / qtd, subtotal: valorTotalCard }
@@ -1359,7 +1376,7 @@ export function SuprimentoCardDrawer({
     if (item.responsavel_nome) texto += `Responsavel: ${item.responsavel_nome}\n`
     texto += `\n*ITENS SOLICITADOS:*\n`
 
-    const somaItensWhats = listaAtual.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
+    const somaItensWhats = listaAtual.reduce((acc, c) => acc + (resolverPrecoItemOC(c, listaAtual.length, null).subtotal || 0), 0)
     const valorTotalWhats = valorCardEfetivo && valorCardEfetivo > 0 ? valorCardEfetivo : somaItensWhats
 
     if (listaAtual.length > 0) {
@@ -4219,7 +4236,7 @@ export function SuprimentoCardDrawer({
 
             {/* Total Financeiro Sempre Visível */}
             {(() => {
-              const somaItensOC = itensChecklist.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
+              const somaItensOC = itensChecklist.reduce((acc, c) => acc + (resolverPrecoItemOC(c, itensChecklist.length, null).subtotal || 0), 0)
               const valorTotalOC = valorCardEfetivo && valorCardEfetivo > 0 ? valorCardEfetivo : somaItensOC
               return (
                 <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
