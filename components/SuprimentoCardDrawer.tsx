@@ -45,6 +45,35 @@ export interface ItemChecklist {
   qtd_entregue: number
   unidade: string
   status: 'pendente' | 'comprado' | 'parcial' | 'entregue'
+  valor_unitario?: number | null
+}
+
+function parseNumeroBR(val: string | number | null | undefined): number {
+  if (typeof val === 'number') return Number.isFinite(val) ? val : 0
+  if (!val) return 0
+  const str = String(val).trim()
+  const normalized = str.includes(',') ? str.replace(/\./g, '').replace(',', '.') : str
+  const n = parseFloat(normalized)
+  return Number.isFinite(n) ? n : 0
+}
+
+function formatBRL(val: number): string {
+  return `R$ ${val.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+}
+
+function resolverPrecoItemOC(
+  chk: ItemChecklist,
+  totalItens: number,
+  valorTotalCard?: number | null
+): { unitario: number | null; subtotal: number | null } {
+  const qtd = Number(chk.qtd_pedida) || 0
+  if (chk.valor_unitario && chk.valor_unitario > 0) {
+    return { unitario: chk.valor_unitario, subtotal: chk.valor_unitario * qtd }
+  }
+  if (totalItens === 1 && valorTotalCard && valorTotalCard > 0 && qtd > 0) {
+    return { unitario: valorTotalCard / qtd, subtotal: valorTotalCard }
+  }
+  return { unitario: null, subtotal: null }
 }
 
 export interface MensagemChat {
@@ -199,7 +228,9 @@ export function SuprimentoCardDrawer({
   const [editandoChecklistId, setEditandoChecklistId] = useState<string | null>(null)
   const [editChecklistDesc, setEditChecklistDesc] = useState('')
   const [editChecklistQtd, setEditChecklistQtd] = useState('')
+  const [novoItemValorUnit, setNovoItemValorUnit] = useState('')
   const [editChecklistUnidade, setEditChecklistUnidade] = useState('un')
+  const [editChecklistValorUnit, setEditChecklistValorUnit] = useState('')
 
   // Nota de Auditoria / Parecer de Segurança
   const [novaNotaAuditoria, setNovaNotaAuditoria] = useState('')
@@ -886,6 +917,11 @@ export function SuprimentoCardDrawer({
     setEditChecklistDesc(chk.descricao)
     setEditChecklistQtd(String(chk.qtd_pedida))
     setEditChecklistUnidade(chk.unidade || 'un')
+    setEditChecklistValorUnit(
+      chk.valor_unitario && chk.valor_unitario > 0
+        ? String(chk.valor_unitario).replace('.', ',')
+        : ''
+    )
   }
 
   async function handleSalvarEdicaoItemChecklist(chkId: string) {
@@ -893,9 +929,11 @@ export function SuprimentoCardDrawer({
     const itemTarget = listaAtual.find(i => i.id === chkId)
     if (!itemTarget) return
 
-    const qtdNum = parseFloat(editChecklistQtd.replace(',', '.')) || itemTarget.qtd_pedida
+    const qtdNum = parseNumeroBR(editChecklistQtd) || itemTarget.qtd_pedida
     const novaDesc = editChecklistDesc.trim() || itemTarget.descricao
     const novaUn = editChecklistUnidade.trim() || itemTarget.unidade
+    const valorUnitNum = parseNumeroBR(editChecklistValorUnit)
+    const novoValorUnit = valorUnitNum > 0 ? valorUnitNum : null
 
     const novaLista = listaAtual.map(i => {
       if (i.id === chkId) {
@@ -906,19 +944,27 @@ export function SuprimentoCardDrawer({
           descricao: novaDesc,
           qtd_pedida: qtdNum,
           unidade: novaUn,
+          valor_unitario: novoValorUnit,
           status: novoStatus
         }
       }
       return i
     })
 
-    const detalhe = `Editou item do checklist de "${itemTarget.descricao}" (${itemTarget.qtd_pedida} ${itemTarget.unidade}) para "${novaDesc}" (${qtdNum} ${novaUn})`
+    const somaItens = novaLista.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
+    const extraUpdates: Record<string, any> = { itens_checklist: novaLista }
+    if ((!item.valor || Number(item.valor) <= 0) && somaItens > 0) {
+      extraUpdates.valor = Number(somaItens.toFixed(2))
+    }
+
+    const precoStr = novoValorUnit ? ` · ${formatBRL(novoValorUnit)}/${novaUn}` : ''
+    const detalhe = `Editou item do checklist de "${itemTarget.descricao}" (${itemTarget.qtd_pedida} ${itemTarget.unidade}) para "${novaDesc}" (${qtdNum} ${novaUn}${precoStr})`
     const ok = await registrarMexida(
       'checklist_edicao',
       detalhe,
       `${itemTarget.descricao} (${itemTarget.qtd_pedida} ${itemTarget.unidade})`,
-      `${novaDesc} (${qtdNum} ${novaUn})`,
-      { itens_checklist: novaLista }
+      `${novaDesc} (${qtdNum} ${novaUn}${precoStr})`,
+      extraUpdates
     )
     if (ok) {
       setEditandoChecklistId(null)
@@ -954,30 +1000,39 @@ export function SuprimentoCardDrawer({
     e.preventDefault()
     if (!novoItemDesc.trim()) return
 
-    const qtdNum = parseFloat(novoItemQtd.replace(',', '.')) || 1
+    const qtdNum = parseNumeroBR(novoItemQtd) || 1
+    const valorUnitNum = parseNumeroBR(novoItemValorUnit)
     const novoCheck: ItemChecklist = {
       id: 'chk-' + Date.now(),
       descricao: novoItemDesc.trim(),
       qtd_pedida: qtdNum,
       qtd_entregue: 0,
       unidade: novoItemUnidade.trim() || 'un',
+      valor_unitario: valorUnitNum > 0 ? valorUnitNum : null,
       status: 'pendente'
     }
 
     const listaAtual: ItemChecklist[] = Array.isArray(item.itens_checklist) ? item.itens_checklist : []
     const novaLista = [...listaAtual, novoCheck]
 
+    const somaItens = novaLista.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
+    const extraUpdates: Record<string, any> = { itens_checklist: novaLista }
+    if ((!item.valor || Number(item.valor) <= 0) && somaItens > 0) {
+      extraUpdates.valor = Number(somaItens.toFixed(2))
+    }
+
     const ok = await registrarMexida(
       'checklist_adicionar',
-      `Adicionou item ao pedido: "${novoCheck.descricao}" (${novoCheck.qtd_pedida} ${novoCheck.unidade})`,
+      `Adicionou item ao pedido: "${novoCheck.descricao}" (${novoCheck.qtd_pedida} ${novoCheck.unidade}${novoCheck.valor_unitario ? ` · ${formatBRL(novoCheck.valor_unitario)}` : ''})`,
       undefined,
       novoCheck.descricao,
-      { itens_checklist: novaLista }
+      extraUpdates
     )
 
     if (ok) {
       setNovoItemDesc('')
       setNovoItemQtd('')
+      setNovoItemValorUnit('')
       toast('Item adicionado ao pedido.', 'success')
     }
   }
@@ -1183,16 +1238,27 @@ export function SuprimentoCardDrawer({
     if (item.responsavel_nome) texto += `Responsavel: ${item.responsavel_nome}\n`
     texto += `\n*ITENS SOLICITADOS:*\n`
 
+    const somaItensWhats = listaAtual.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
+    const valorTotalWhats = item.valor && Number(item.valor) > 0 ? Number(item.valor) : somaItensWhats
+
     if (listaAtual.length > 0) {
       listaAtual.forEach((chk, idx) => {
-        texto += `${idx + 1}. ${chk.descricao} - ${chk.qtd_pedida} ${chk.unidade} [Status: ${chk.status.toUpperCase()}]\n`
+        const { unitario, subtotal } = resolverPrecoItemOC(chk, listaAtual.length, item.valor)
+        const precoTxt = unitario !== null && subtotal !== null
+          ? ` | Unit: ${formatBRL(unitario)} | Subtotal: ${formatBRL(subtotal)}`
+          : ''
+        texto += `${idx + 1}. ${chk.descricao} - ${chk.qtd_pedida} ${chk.unidade}${precoTxt}\n`
       })
     } else {
-      texto += `1. ${item.titulo} - ${item.quantidade || '1'} ${item.unidade || 'un'}\n`
+      const qtdFallback = parseNumeroBR(item.quantidade) || 1
+      const precoTxt = item.valor && Number(item.valor) > 0
+        ? ` | Unit: ${formatBRL(Number(item.valor) / qtdFallback)} | Subtotal: ${formatBRL(Number(item.valor))}`
+        : ''
+      texto += `1. ${item.titulo} - ${item.quantidade || '1'} ${item.unidade || 'un'}${precoTxt}\n`
     }
 
-    if (item.valor) {
-      texto += `\n*Valor Total:* R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`
+    if (valorTotalWhats > 0) {
+      texto += `\n*Valor Total:* ${formatBRL(valorTotalWhats)}\n`
     }
 
     texto += `\n🏢 *DADOS PARA FATURAMENTO (NF / BOLETO):*\n`
@@ -3074,6 +3140,15 @@ export function SuprimentoCardDrawer({
                             <option value="rolo">rolo</option>
                             <option value="peça">peça</option>
                           </select>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={editChecklistValorUnit}
+                            onChange={e => setEditChecklistValorUnit(e.target.value)}
+                            placeholder="R$ Unit."
+                            title="Preço unitário do item (ex: 45,50)"
+                            style={{ width: 82, background: C.bgPanel, border: `1px solid ${C.amber}`, color: C.ink, fontSize: 12, padding: '4px 6px', borderRadius: 4, textAlign: 'right', outline: 'none' }}
+                          />
                           <button
                             type="button"
                             onClick={() => handleSalvarEdicaoItemChecklist(chk.id)}
@@ -3120,8 +3195,13 @@ export function SuprimentoCardDrawer({
                             <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, textDecoration: chk.status === 'entregue' ? 'line-through' : 'none', opacity: chk.status === 'entregue' ? 0.7 : 1 }}>
                               {chk.descricao}
                             </div>
-                            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2 }}>
-                              Pedido: <strong style={{ color: C.ink }}>{chk.qtd_pedida} {chk.unidade}</strong>
+                            <div style={{ fontSize: 11, color: C.inkSoft, marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span>Pedido: <strong style={{ color: C.ink }}>{chk.qtd_pedida} {chk.unidade}</strong></span>
+                              {chk.valor_unitario && chk.valor_unitario > 0 ? (
+                                <span style={{ color: '#10B981', fontWeight: 700, fontFamily: 'monospace', fontSize: 10.5 }}>
+                                  · Unit: {formatBRL(chk.valor_unitario)} · Sub: {formatBRL(chk.valor_unitario * chk.qtd_pedida)}
+                                </span>
+                              ) : null}
                             </div>
                           </div>
 
@@ -3219,26 +3299,58 @@ export function SuprimentoCardDrawer({
                 </div>
               )}
 
+              {/* Resumo de Preços dos Itens & Sincronização com Total */}
+              {(() => {
+                const somaItens = itensChecklist.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
+                if (somaItens <= 0) return null
+                const diverge = Math.abs((Number(item.valor) || 0) - somaItens) > 0.01
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.28)', borderRadius: 6, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 11.5, color: C.ink }}>
+                      Soma dos itens precificados: <strong style={{ color: '#10B981', fontFamily: 'monospace' }}>{formatBRL(somaItens)}</strong>
+                    </div>
+                    {diverge && (
+                      <button
+                        type="button"
+                        onClick={() => handleAtualizarPropriedade('valor', Number(somaItens.toFixed(2)), 'Valor Total da OC')}
+                        style={{ background: '#10B981', color: '#06281E', border: 'none', borderRadius: 4, padding: '4px 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                      >
+                        Aplicar ao Valor Total
+                      </button>
+                    )}
+                  </div>
+                )
+              })()}
+
               {/* Formulário Novo Item */}
-              <form onSubmit={handleAdicionarItemChecklist} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 12px', display: 'flex', gap: 8, alignItems: 'center', marginTop: 6 }}>
+              <form onSubmit={handleAdicionarItemChecklist} style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 6, padding: '10px 12px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
                 <input
                   placeholder="Novo item (ex: Cimento CP-II, Ferragem 1/2...)"
                   value={novoItemDesc}
                   onChange={e => setNovoItemDesc(e.target.value)}
-                  style={{ flex: 1, background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 12, padding: '6px 10px', borderRadius: 4, outline: 'none' }}
+                  style={{ flex: 1, minWidth: 160, background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 12, padding: '6px 10px', borderRadius: 4, outline: 'none' }}
                 />
                 <input
                   placeholder="Qtd"
                   type="number"
                   value={novoItemQtd}
                   onChange={e => setNovoItemQtd(e.target.value)}
-                  style={{ width: 60, background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 12, padding: '6px 8px', borderRadius: 4, textAlign: 'center', outline: 'none' }}
+                  style={{ width: 58, background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 12, padding: '6px 8px', borderRadius: 4, textAlign: 'center', outline: 'none' }}
                 />
                 <input
                   placeholder="Un"
                   value={novoItemUnidade}
                   onChange={e => setNovoItemUnidade(e.target.value)}
                   style={{ width: 45, background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 12, padding: '6px 8px', borderRadius: 4, textAlign: 'center', outline: 'none' }}
+                />
+                <input
+                  placeholder="R$ Unit."
+                  type="text"
+                  inputMode="decimal"
+                  value={novoItemValorUnit}
+                  onChange={e => setNovoItemValorUnit(e.target.value)}
+                  title="Preço unitário opcional (ex: 45,50)"
+                  style={{ width: 82, background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 12, padding: '6px 8px', borderRadius: 4, textAlign: 'right', outline: 'none' }}
                 />
                 <button
                   type="submit"
@@ -3689,6 +3801,46 @@ export function SuprimentoCardDrawer({
             </div>
           </div>
 
+          {/* Aviso rápido (não sai na impressão) se houver itens sem preço unitário */}
+          {itensChecklist.some(chk => resolverPrecoItemOC(chk, itensChecklist.length, item.valor).unitario === null) && (
+            <div
+              className="no-print"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                padding: '8px 18px',
+                background: '#FFFBEB',
+                borderBottom: '1px solid #FDE68A',
+                color: '#92400E',
+                fontSize: 11.5
+              }}
+            >
+              <span>💡 Alguns itens ainda estão sem <strong>Preço Unitário</strong>. Preencha na aba Checklist para sair na OC.</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setModalExportarOC(false)
+                  setTabAtiva('checklist')
+                }}
+                style={{
+                  background: '#F59E0B',
+                  color: '#111827',
+                  border: 'none',
+                  borderRadius: 4,
+                  padding: '4px 10px',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                Preencher Preços
+              </button>
+            </div>
+          )}
+
           {/* Folha de Impressão (id="area-ordem-compra") */}
           <div id="area-ordem-compra" style={{ padding: '32px 36px', background: '#FFFFFF', color: '#111827', fontFamily: 'Arial, sans-serif' }}>
             <style>{`
@@ -3866,62 +4018,90 @@ export function SuprimentoCardDrawer({
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11, color: '#111827', background: '#FFFFFF' }}>
                 <thead>
                   <tr style={{ background: '#F3F4F6', borderBottom: '1px solid #D1D5DB', textAlign: 'left', color: '#111827' }}>
-                    <th style={{ padding: '7px 8px', width: 35, color: '#111827', fontWeight: 800 }}>#</th>
+                    <th style={{ padding: '7px 6px', width: 28, color: '#111827', fontWeight: 800 }}>#</th>
                     <th style={{ padding: '7px 8px', color: '#111827', fontWeight: 800 }}>Descrição do Material</th>
-                    <th style={{ padding: '7px 8px', textAlign: 'center', width: 90, color: '#111827', fontWeight: 800 }}>Qtd Pedida</th>
-                    <th style={{ padding: '7px 8px', textAlign: 'center', width: 70, color: '#111827', fontWeight: 800 }}>Unidade</th>
-                    <th style={{ padding: '7px 8px', textAlign: 'center', width: 90, color: '#111827', fontWeight: 800 }}>Status</th>
+                    <th style={{ padding: '7px 6px', textAlign: 'center', width: 62, color: '#111827', fontWeight: 800 }}>Qtd</th>
+                    <th style={{ padding: '7px 6px', textAlign: 'center', width: 48, color: '#111827', fontWeight: 800 }}>Unid.</th>
+                    <th style={{ padding: '7px 8px', textAlign: 'right', width: 92, color: '#111827', fontWeight: 800 }}>Preço Unit.</th>
+                    <th style={{ padding: '7px 8px', textAlign: 'right', width: 96, color: '#111827', fontWeight: 800 }}>Subtotal</th>
+                    <th style={{ padding: '7px 6px', textAlign: 'center', width: 72, color: '#111827', fontWeight: 800 }}>Status</th>
                   </tr>
                 </thead>
                 <tbody>
                   {itensChecklist.length > 0 ? (
-                    itensChecklist.map((chk, idx) => (
-                      <tr key={chk.id} style={{ borderBottom: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>
-                        <td style={{ padding: '7px 8px', color: '#374151', fontWeight: 700 }}>{idx + 1}</td>
-                        <td style={{ padding: '7px 8px', fontWeight: 800, color: '#111827' }}>{chk.descricao}</td>
-                        <td style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 900, color: '#111827' }}>{chk.qtd_pedida}</td>
-                        <td style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 700, color: '#374151' }}>{chk.unidade}</td>
-                        <td style={{ padding: '7px 8px', textAlign: 'center', color: '#111827' }}>
-                          <span style={{
-                            fontSize: 9,
-                            fontWeight: 800,
-                            textTransform: 'uppercase',
-                            padding: '2px 6px',
-                            borderRadius: 3,
-                            background: chk.status === 'entregue' ? '#D1FAE5' : chk.status === 'comprado' ? '#DBEAFE' : chk.status === 'parcial' ? '#FEF3C7' : '#E5E7EB',
-                            color: chk.status === 'entregue' ? '#065F46' : chk.status === 'comprado' ? '#1E40AF' : chk.status === 'parcial' ? '#92400E' : '#1F2937'
-                          }}>
-                            {chk.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
+                    itensChecklist.map((chk, idx) => {
+                      const { unitario, subtotal } = resolverPrecoItemOC(chk, itensChecklist.length, item.valor)
+                      return (
+                        <tr key={chk.id} style={{ borderBottom: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>
+                          <td style={{ padding: '7px 6px', color: '#374151', fontWeight: 700 }}>{idx + 1}</td>
+                          <td style={{ padding: '7px 8px', fontWeight: 800, color: '#111827' }}>{chk.descricao}</td>
+                          <td style={{ padding: '7px 6px', textAlign: 'center', fontWeight: 900, color: '#111827' }}>{chk.qtd_pedida}</td>
+                          <td style={{ padding: '7px 6px', textAlign: 'center', fontWeight: 700, color: '#374151' }}>{chk.unidade}</td>
+                          <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', color: unitario !== null ? '#111827' : '#9CA3AF', whiteSpace: 'nowrap' }}>
+                            {unitario !== null ? formatBRL(unitario) : '—'}
+                          </td>
+                          <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: subtotal !== null ? '#065F46' : '#9CA3AF', whiteSpace: 'nowrap' }}>
+                            {subtotal !== null ? formatBRL(subtotal) : '—'}
+                          </td>
+                          <td style={{ padding: '7px 6px', textAlign: 'center', color: '#111827' }}>
+                            <span style={{
+                              fontSize: 9,
+                              fontWeight: 800,
+                              textTransform: 'uppercase',
+                              padding: '2px 5px',
+                              borderRadius: 3,
+                              background: chk.status === 'entregue' ? '#D1FAE5' : chk.status === 'comprado' ? '#DBEAFE' : chk.status === 'parcial' ? '#FEF3C7' : '#E5E7EB',
+                              color: chk.status === 'entregue' ? '#065F46' : chk.status === 'comprado' ? '#1E40AF' : chk.status === 'parcial' ? '#92400E' : '#1F2937'
+                            }}>
+                              {chk.status}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })
                   ) : (
-                    <tr style={{ borderBottom: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>
-                      <td style={{ padding: '7px 8px', color: '#374151', fontWeight: 700 }}>1</td>
-                      <td style={{ padding: '7px 8px', fontWeight: 800, color: '#111827' }}>{item.titulo}</td>
-                      <td style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 900, color: '#111827' }}>{item.quantidade || '1'}</td>
-                      <td style={{ padding: '7px 8px', textAlign: 'center', fontWeight: 700, color: '#374151' }}>{item.unidade || 'un'}</td>
-                      <td style={{ padding: '7px 8px', textAlign: 'center', color: '#111827' }}>
-                        <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', padding: '2px 6px', borderRadius: 3, background: '#DBEAFE', color: '#1E40AF' }}>
-                          {item.status}
-                        </span>
-                      </td>
-                    </tr>
+                    (() => {
+                      const qtdFallback = parseNumeroBR(item.quantidade) || 1
+                      const valTotalFallback = item.valor && Number(item.valor) > 0 ? Number(item.valor) : null
+                      const unitFallback = valTotalFallback !== null ? valTotalFallback / qtdFallback : null
+                      return (
+                        <tr style={{ borderBottom: '1px solid #E5E7EB', background: '#FFFFFF', color: '#111827' }}>
+                          <td style={{ padding: '7px 6px', color: '#374151', fontWeight: 700 }}>1</td>
+                          <td style={{ padding: '7px 8px', fontWeight: 800, color: '#111827' }}>{item.titulo}</td>
+                          <td style={{ padding: '7px 6px', textAlign: 'center', fontWeight: 900, color: '#111827' }}>{item.quantidade || '1'}</td>
+                          <td style={{ padding: '7px 6px', textAlign: 'center', fontWeight: 700, color: '#374151' }}>{item.unidade || 'un'}</td>
+                          <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 700, fontFamily: 'monospace', color: unitFallback !== null ? '#111827' : '#9CA3AF', whiteSpace: 'nowrap' }}>
+                            {unitFallback !== null ? formatBRL(unitFallback) : '—'}
+                          </td>
+                          <td style={{ padding: '7px 8px', textAlign: 'right', fontWeight: 900, fontFamily: 'monospace', color: valTotalFallback !== null ? '#065F46' : '#9CA3AF', whiteSpace: 'nowrap' }}>
+                            {valTotalFallback !== null ? formatBRL(valTotalFallback) : '—'}
+                          </td>
+                          <td style={{ padding: '7px 6px', textAlign: 'center', color: '#111827' }}>
+                            <span style={{ fontSize: 9, fontWeight: 800, textTransform: 'uppercase', padding: '2px 5px', borderRadius: 3, background: '#DBEAFE', color: '#1E40AF' }}>
+                              {item.status}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })()
                   )}
                 </tbody>
               </table>
             </div>
 
             {/* Total Financeiro Sempre Visível */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
-              <span style={{ fontSize: 12, fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>Valor Total da Ordem de Compra:</span>
-              <span style={{ fontSize: 15, fontWeight: 900, color: '#047857', fontFamily: 'monospace' }}>
-                {item.valor
-                  ? `R$ ${item.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                  : 'Em cotação / A definir'}
-              </span>
-            </div>
+            {(() => {
+              const somaItensOC = itensChecklist.reduce((acc, c) => acc + (Number(c.valor_unitario || 0) * Number(c.qtd_pedida || 0)), 0)
+              const valorTotalOC = item.valor && Number(item.valor) > 0 ? Number(item.valor) : somaItensOC
+              return (
+                <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 6, padding: '10px 14px', marginBottom: 14 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#065F46', textTransform: 'uppercase' }}>Valor Total da Ordem de Compra:</span>
+                  <span style={{ fontSize: 15, fontWeight: 900, color: '#047857', fontFamily: 'monospace' }}>
+                    {valorTotalOC > 0 ? formatBRL(valorTotalOC) : 'Em cotação / A definir'}
+                  </span>
+                </div>
+              )
+            })()}
 
             {/* Quadro Oficial de Condições de Compra e Pagamento na OC */}
             <div style={{ background: '#F8FAFC', border: '1.5px solid #CBD5E1', borderRadius: 6, padding: '10px 14px', marginBottom: 14, color: '#111827' }}>
