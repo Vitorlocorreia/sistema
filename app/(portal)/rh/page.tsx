@@ -3613,6 +3613,7 @@ export default function RhPage() {
         }
 
         const { data: newFunc, error: funcErr } = await supabase.from('funcionarios').insert({
+          status: 'Registrado',
           nome: invite.nome_destinatario,
           cpf: invite.cpf,
           matricula: invite.matricula,
@@ -3628,6 +3629,7 @@ export default function RhPage() {
         let createdId = newFunc?.id
         if (funcErr || !createdId) {
           const { data: fbFunc } = await supabase.from('funcionarios').insert({
+            status: 'Registrado',
             nome: invite.nome_destinatario,
             cpf: invite.cpf,
             matricula: invite.matricula,
@@ -4425,6 +4427,7 @@ export default function RhPage() {
 
     let createdId: string | null = null
     const { data: newFunc, error: funcError } = await supabase.from('funcionarios').insert({
+      status: 'Registrado',
       nome: invite.nome_destinatario,
       cpf: invite.cpf,
       matricula: invite.matricula,
@@ -4440,6 +4443,7 @@ export default function RhPage() {
     if (funcError) {
       // Fallback caso a coluna dados_registro ainda não exista no schema local
       const { data: fallbackFunc, error: errFallback } = await supabase.from('funcionarios').insert({
+        status: 'Registrado',
         nome: invite.nome_destinatario,
         cpf: invite.cpf,
         matricula: invite.matricula,

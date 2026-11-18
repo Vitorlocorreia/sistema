@@ -469,19 +469,6 @@ export default function RDO() {
 
     setIsCreatingRdo(true)
     try {
-      // Trava de duplicidade: verifica se ja existe RDO para esta mesma obra nesta mesma data
-      const { data: existingRdo } = await supabase
-        .from('rdos')
-        .select('id')
-        .eq('obra_id', newObraId)
-        .eq('data', newData)
-        .limit(1)
-
-      if (existingRdo && existingRdo.length > 0) {
-        toast('Atenção: Já existe um Diário de Obra lançado para esta obra nesta mesma data!', 'error')
-        return
-      }
-
       // 1. Insert RDO
       const { data: rdoData, error: rdoErr } = await supabase.from('rdos').insert({
         obra_id: newObraId,
