@@ -389,6 +389,50 @@ export default function SuprimentosPage() {
   const [busca, setBusca] = useState('')
   const [filtroPrioridade, setFiltroPrioridade] = useState('todas')
   const [filtroStatusFinanceiro, setFiltroStatusFinanceiro] = useState('todos')
+  const [filtroTipoData, setFiltroTipoData] = useState<'criacao' | 'vencimento' | 'entrega'>('criacao')
+  const [filtroPeriodo, setFiltroPeriodo] = useState<string>('todos')
+  const [filtroDataInicio, setFiltroDataInicio] = useState<string>('')
+  const [filtroDataFim, setFiltroDataFim] = useState<string>('')
+
+  const formatYMDLocal = (d: Date) => {
+    const yyyy = d.getFullYear()
+    const mm = String(d.getMonth() + 1).padStart(2, '0')
+    const dd = String(d.getDate()).padStart(2, '0')
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  const aplicarPeriodoRapido = (periodo: string) => {
+    setFiltroPeriodo(periodo)
+    const hoje = new Date()
+    if (periodo === 'todos') {
+      setFiltroDataInicio('')
+      setFiltroDataFim('')
+    } else if (periodo === 'hoje') {
+      const ymd = formatYMDLocal(hoje)
+      setFiltroDataInicio(ymd)
+      setFiltroDataFim(ymd)
+    } else if (periodo === '7dias') {
+      const ini = new Date(hoje)
+      ini.setDate(hoje.getDate() - 6)
+      setFiltroDataInicio(formatYMDLocal(ini))
+      setFiltroDataFim(formatYMDLocal(hoje))
+    } else if (periodo === '30dias') {
+      const ini = new Date(hoje)
+      ini.setDate(hoje.getDate() - 29)
+      setFiltroDataInicio(formatYMDLocal(ini))
+      setFiltroDataFim(formatYMDLocal(hoje))
+    } else if (periodo === 'mes_atual') {
+      const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
+      const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+      setFiltroDataInicio(formatYMDLocal(ini))
+      setFiltroDataFim(formatYMDLocal(fim))
+    } else if (periodo === 'mes_passado') {
+      const ini = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)
+      const fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0)
+      setFiltroDataInicio(formatYMDLocal(ini))
+      setFiltroDataFim(formatYMDLocal(fim))
+    }
+  }
   const [visao, setVisao] = useState<'esteira' | 'tabela'>('esteira')
   const [colunaArquivadosRecolhida, setColunaArquivadosRecolhida] = useState<boolean>(true)
   const [buscaArquivados, setBuscaArquivados] = useState<string>('')
@@ -797,9 +841,28 @@ export default function SuprimentosPage() {
         if (filtroStatusFinanceiro === 'sem_conta' && conta) return false
       }
 
+      // 5. Filtro por Data / Período
+      if (filtroDataInicio || filtroDataFim) {
+        let dataRef: string | null = null
+        if (filtroTipoData === 'vencimento') {
+          const dv = item.data_vencimento || contasVinculadas[item.id]?.data_vencimento
+          dataRef = dv ? dv.slice(0, 10) : null
+        } else if (filtroTipoData === 'entrega') {
+          dataRef = item.data_previsao_entrega ? item.data_previsao_entrega.slice(0, 10) : null
+        } else {
+          if (item.created_at) {
+            const dt = new Date(item.created_at)
+            dataRef = !Number.isNaN(dt.getTime()) ? formatYMDLocal(dt) : item.created_at.slice(0, 10)
+          }
+        }
+        if (!dataRef) return false
+        if (filtroDataInicio && dataRef < filtroDataInicio) return false
+        if (filtroDataFim && dataRef > filtroDataFim) return false
+      }
+
       return true
     })
-  }, [suprimentos, abaAtiva, mesaAtiva, mesasCustom, busca, filtroPrioridade, filtroStatusFinanceiro, obras, contasVinculadas])
+  }, [suprimentos, abaAtiva, mesaAtiva, mesasCustom, busca, filtroPrioridade, filtroStatusFinanceiro, filtroTipoData, filtroDataInicio, filtroDataFim, obras, contasVinculadas])
 
   // KPIs dinâmicos da Sub-Aba Ativa e da Mesa Selecionada
   const kpis = useMemo(() => {
@@ -820,6 +883,25 @@ export default function SuprimentosPage() {
       }
     }
 
+    if (filtroDataInicio || filtroDataFim) {
+      itensDaMesa = itensDaMesa.filter(item => {
+        let dataRef: string | null = null
+        if (filtroTipoData === 'vencimento') {
+          const dv = item.data_vencimento || contasVinculadas[item.id]?.data_vencimento
+          dataRef = dv ? dv.slice(0, 10) : null
+        } else if (filtroTipoData === 'entrega') {
+          dataRef = item.data_previsao_entrega ? item.data_previsao_entrega.slice(0, 10) : null
+        } else if (item.created_at) {
+          const dt = new Date(item.created_at)
+          dataRef = !Number.isNaN(dt.getTime()) ? formatYMDLocal(dt) : item.created_at.slice(0, 10)
+        }
+        if (!dataRef) return false
+        if (filtroDataInicio && dataRef < filtroDataInicio) return false
+        if (filtroDataFim && dataRef > filtroDataFim) return false
+        return true
+      })
+    }
+
     const totalAberto = itensDaMesa.filter(s => s.status !== 'Entregue' && s.status !== 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
     const emCotacao = itensDaMesa.filter(s => s.status === 'Em Cotação').length
     const aguardandoAprovacao = itensDaMesa.filter(s => s.status === 'Aprovação').length
@@ -830,7 +912,7 @@ export default function SuprimentosPage() {
     const valorArquivado = itensDaMesa.filter(s => s.status === 'Arquivado').reduce((acc, s) => acc + (s.valor || 0), 0)
 
     return { totalAberto, emCotacao, aguardandoAprovacao, lancadosNoFinanceiro, valorLancado, entreguesNaObra, arquivados, valorArquivado }
-  }, [suprimentos, abaAtiva, mesaAtiva, colaboradorAtivo?.id, mesasCustom])
+  }, [suprimentos, abaAtiva, mesaAtiva, colaboradorAtivo?.id, mesasCustom, filtroTipoData, filtroDataInicio, filtroDataFim, contasVinculadas])
 
   // Notificação inteligente quando uma obra selecionada não tem itens na aba atual mas tem em outras
   const alertaOutrasAbas = useMemo(() => {
@@ -2077,6 +2159,60 @@ export default function SuprimentosPage() {
             </select>
           </div>
 
+          {/* Filtro por Data / Período */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', background: C.bgCard, border: `1px solid ${(filtroDataInicio || filtroDataFim) ? C.amber : C.border}`, borderRadius: 6, padding: '3px 8px' }}>
+            <Calendar size={12} color={(filtroDataInicio || filtroDataFim) ? C.amber : C.inkSoft} />
+            <select
+              style={{ ...inputStyle, width: 'auto', padding: '4px 6px', fontSize: 11, border: 'none', background: 'transparent' }}
+              value={filtroTipoData}
+              onChange={e => setFiltroTipoData(e.target.value as 'criacao' | 'vencimento' | 'entrega')}
+              title="Escolha qual data do pedido deseja filtrar"
+            >
+              <option value="criacao">Data do Pedido</option>
+              <option value="vencimento">Data Vencimento</option>
+              <option value="entrega">Previsão Entrega</option>
+            </select>
+
+            <div style={{ width: 1, height: 14, background: C.border }} />
+
+            <select
+              style={{ ...inputStyle, width: 'auto', padding: '4px 6px', fontSize: 11, border: 'none', background: 'transparent', fontWeight: (filtroDataInicio || filtroDataFim) ? 800 : 600, color: (filtroDataInicio || filtroDataFim) ? C.amber : C.ink }}
+              value={filtroPeriodo}
+              onChange={e => aplicarPeriodoRapido(e.target.value)}
+              title="Atalhos rápidos de período"
+            >
+              <option value="todos">Todo o período</option>
+              <option value="hoje">Hoje</option>
+              <option value="7dias">Últimos 7 dias</option>
+              <option value="30dias">Últimos 30 dias</option>
+              <option value="mes_atual">Este mês</option>
+              <option value="mes_passado">Mês passado</option>
+              <option value="personalizado">Personalizado</option>
+            </select>
+
+            <input
+              type="date"
+              value={filtroDataInicio}
+              onChange={e => {
+                setFiltroDataInicio(e.target.value)
+                setFiltroPeriodo(e.target.value || filtroDataFim ? 'personalizado' : 'todos')
+              }}
+              title="Data inicial"
+              style={{ ...inputStyle, width: 122, padding: '3px 6px', fontSize: 11 }}
+            />
+            <span style={{ fontSize: 10, color: C.inkSoft }}>até</span>
+            <input
+              type="date"
+              value={filtroDataFim}
+              onChange={e => {
+                setFiltroDataFim(e.target.value)
+                setFiltroPeriodo(filtroDataInicio || e.target.value ? 'personalizado' : 'todos')
+              }}
+              title="Data final"
+              style={{ ...inputStyle, width: 122, padding: '3px 6px', fontSize: 11 }}
+            />
+          </div>
+
           {/* Botão de Controle da Coluna de Arquivados na Esteira */}
           {visao === 'esteira' && (
             <>
@@ -2153,17 +2289,30 @@ export default function SuprimentosPage() {
             </>
           )}
 
-          {(busca || filtroPrioridade !== 'todas' || filtroStatusFinanceiro !== 'todos') && (
+          {(busca || filtroPrioridade !== 'todas' || filtroStatusFinanceiro !== 'todos' || filtroDataInicio || filtroDataFim) && (
             <button
               onClick={() => {
                 setBusca('')
                 setFiltroPrioridade('todas')
                 setFiltroStatusFinanceiro('todos')
+                setFiltroPeriodo('todos')
+                setFiltroDataInicio('')
+                setFiltroDataFim('')
               }}
               style={{ ...btnBase, padding: '6px 10px', background: C.bgCard, color: C.inkSoft, border: `1px solid ${C.border}` }}
             >
               Limpar Filtros
             </button>
+          )}
+
+          {(filtroDataInicio || filtroDataFim) && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: 6, padding: '5px 10px', fontSize: 11, color: C.ink }}>
+              <span style={{ fontWeight: 800, color: C.amber }}>{suprimentosFiltrados.length} pedido(s)</span>
+              <span style={{ color: C.inkSoft }}>no período · Total:</span>
+              <strong style={{ color: '#10B981', fontFamily: 'monospace' }}>
+                R$ {suprimentosFiltrados.reduce((acc, s) => acc + (Number(s.valor) || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </strong>
+            </div>
           )}
         </div>
       </div>
