@@ -260,6 +260,8 @@ export function SuprimentoCardDrawer({
   const [modalExportarOC, setModalExportarOC] = useState(false)
   const [copiadoWhats, setCopiadoWhats] = useState(false)
   const [sincronizandoDgennyOC, setSincronizandoDgennyOC] = useState(false)
+  const [modoLayout, setModoLayout] = useState<'centralizado' | 'lateral'>('centralizado')
+  const [fichaExpandida, setFichaExpandida] = useState<boolean>(true)
 
   const prevItemIdRef = useRef<string | null>(null)
 
@@ -1561,41 +1563,46 @@ export function SuprimentoCardDrawer({
       <div
         className="no-print"
         style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9999,
-        display: 'flex',
-        justifyContent: 'flex-end',
-        background: 'rgba(0, 0, 0, 0.65)',
-        backdropFilter: 'blur(3px)',
-        animation: 'fadeIn 0.15s ease'
-      }}
-      onClick={onClose}
-    >
+          position: 'fixed',
+          inset: 0,
+          zIndex: 9999,
+          display: 'flex',
+          justifyContent: modoLayout === 'centralizado' ? 'center' : 'flex-end',
+          alignItems: modoLayout === 'centralizado' ? 'center' : 'stretch',
+          padding: modoLayout === 'centralizado' ? '12px' : 0,
+          background: 'rgba(0, 0, 0, 0.72)',
+          backdropFilter: 'blur(4px)',
+          animation: 'fadeIn 0.15s ease'
+        }}
+        onClick={onClose}
+      >
       <div
         style={{
-          width: tabAtiva === 'dgenny' || tabAtiva === 'contrato' ? 960 : 700,
+          width: modoLayout === 'centralizado' ? 'min(1140px, 96vw)' : (tabAtiva === 'dgenny' || tabAtiva === 'contrato' ? 960 : 720),
           maxWidth: '96vw',
-          transition: 'width 0.2s ease',
-          height: '100%',
-          background: C.bgPanel,
+          height: modoLayout === 'centralizado' ? 'min(92vh, 920px)' : '100%',
+          borderRadius: modoLayout === 'centralizado' ? 12 : 0,
+          border: modoLayout === 'centralizado' ? `1px solid ${C.border}` : 'none',
           borderLeft: `1px solid ${C.border}`,
+          transition: 'all 0.2s ease',
+          background: C.bgPanel,
           display: 'flex',
           flexDirection: 'column',
-          boxShadow: '-10px 0 35px rgba(0, 0, 0, 0.5)',
+          boxShadow: modoLayout === 'centralizado' ? '0 25px 60px rgba(0, 0, 0, 0.65)' : '-10px 0 35px rgba(0, 0, 0, 0.5)',
           overflow: 'hidden'
         }}
         onClick={e => e.stopPropagation()}
       >
-        {/* ─── 1. TOPO DA GAVETA: TÍTULO, ETAPA E FECHAR ──────────────────────── */}
+        {/* ─── 1. TOPO COMPACTO FIXO: CÓDIGO, ETAPA, TÍTULO E AÇÕES ────────────── */}
         <div
           style={{
-            padding: '16px 20px',
+            padding: '12px 18px',
             borderBottom: `1px solid ${C.border}`,
             background: C.bgCard,
             display: 'flex',
             flexDirection: 'column',
-            gap: 10
+            gap: 8,
+            flexShrink: 0
           }}
         >
           {/* LINHA 1: Código + Etapa na esquerda | Ações principais na direita */}
@@ -1748,6 +1755,44 @@ export function SuprimentoCardDrawer({
               </button>
 
               <button
+                type="button"
+                onClick={() => setFichaExpandida(prev => !prev)}
+                style={{
+                  border: `1px solid ${C.border}`,
+                  background: fichaExpandida ? 'rgba(255, 255, 255, 0.05)' : 'rgba(245, 158, 11, 0.14)',
+                  color: fichaExpandida ? C.inkSoft : C.amber,
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  padding: '4px 9px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+                title={fichaExpandida ? 'Recolher ficha de dados para dar mais espaço às abas' : 'Expandir ficha de dados do pedido'}
+              >
+                {fichaExpandida ? '▴ Ocultar Ficha' : '▾ Ver Ficha'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setModoLayout(prev => (prev === 'centralizado' ? 'lateral' : 'centralizado'))}
+                style={{
+                  border: `1px solid ${C.border}`,
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  color: C.inkSoft,
+                  fontSize: 10.5,
+                  fontWeight: 800,
+                  padding: '4px 9px',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+                title="Alternar entre janela centralizada ampla e gaveta lateral"
+              >
+                {modoLayout === 'centralizado' ? '⇥ Lateral' : '⤢ Centralizar'}
+              </button>
+
+              <button
                 onClick={onClose}
                 style={{
                   background: 'transparent',
@@ -1760,7 +1805,7 @@ export function SuprimentoCardDrawer({
                   alignItems: 'center',
                   justifyContent: 'center'
                 }}
-                title="Fechar gaveta (Esc)"
+                title="Fechar janela (Esc)"
               >
                 <X size={18} />
               </button>
@@ -1926,6 +1971,193 @@ export function SuprimentoCardDrawer({
               </div>
             )
           })()}
+        </div>
+
+        {/* ─── 2. ABAS DE NAVEGAÇÃO DA GAVETA ─────────────────────────────────── */}
+        <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.bgCard, padding: '0 16px', overflowX: 'auto', flexShrink: 0, whiteSpace: 'nowrap' }}>
+          {/* ABA DE CONTRATO & ACOMPANHAMENTO MENSAL */}
+          <button
+            onClick={() => setTabAtiva('contrato')}
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              fontWeight: tabAtiva === 'contrato' ? 800 : 600,
+              color: tabAtiva === 'contrato' ? C.amber : C.inkSoft,
+              borderBottom: `2px solid ${tabAtiva === 'contrato' ? C.amber : 'transparent'}`,
+              background: isContratoInicial ? 'rgba(245, 158, 11, 0.05)' : 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Calendar size={13} color={tabAtiva === 'contrato' ? C.amber : undefined} />
+            <span>Acompanhamento Mensal</span>
+            <span style={{
+              fontSize: 9.5,
+              fontWeight: 900,
+              padding: '1px 5px',
+              borderRadius: 4,
+              background: item?.contrato_encerrado ? 'rgba(100, 116, 139, 0.25)' : C.amber,
+              color: item?.contrato_encerrado ? '#94A3B8' : '#0A0A0A'
+            }}>
+              {item?.contrato_encerrado ? 'Encerrado' : 'Mensal'}
+            </span>
+          </button>
+
+          <button
+            onClick={() => setTabAtiva('checklist')}
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              fontWeight: tabAtiva === 'checklist' ? 800 : 600,
+              color: tabAtiva === 'checklist' ? C.amber : C.inkSoft,
+              borderBottom: `2px solid ${tabAtiva === 'checklist' ? C.amber : 'transparent'}`,
+              background: 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <CheckSquare size={13} />
+            Checklist ({itensConcluidos}/{totalItens})
+          </button>
+
+          <button
+            onClick={() => setTabAtiva('dgenny')}
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              fontWeight: tabAtiva === 'dgenny' ? 800 : 600,
+              color: tabAtiva === 'dgenny' ? C.amber : C.inkSoft,
+              borderBottom: `2px solid ${tabAtiva === 'dgenny' ? C.amber : 'transparent'}`,
+              background: 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Bot size={13} />
+            Cotação IA (WhatsApp)
+          </button>
+
+          <button
+            onClick={() => setTabAtiva('anexos')}
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              fontWeight: tabAtiva === 'anexos' ? 800 : 600,
+              color: tabAtiva === 'anexos' ? C.amber : C.inkSoft,
+              borderBottom: `2px solid ${tabAtiva === 'anexos' ? C.amber : 'transparent'}`,
+              background: 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Paperclip size={13} />
+            Anexos ({anexosList.length})
+          </button>
+
+          <button
+            onClick={() => setTabAtiva('chat')}
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              fontWeight: tabAtiva === 'chat' ? 800 : 600,
+              color: tabAtiva === 'chat' ? C.amber : C.inkSoft,
+              borderBottom: `2px solid ${tabAtiva === 'chat' ? C.amber : 'transparent'}`,
+              background: 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <MessageSquare size={13} />
+            Chat do Card ({chatList.length})
+          </button>
+
+          <button
+            onClick={() => setTabAtiva('historico')}
+            style={{
+              padding: '10px 14px',
+              fontSize: 12,
+              fontWeight: tabAtiva === 'historico' ? 800 : 600,
+              color: tabAtiva === 'historico' ? C.amber : C.inkSoft,
+              borderBottom: `2px solid ${tabAtiva === 'historico' ? C.amber : 'transparent'}`,
+              background: 'none',
+              borderTop: 'none',
+              borderLeft: 'none',
+              borderRight: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <History size={13} />
+            Histórico ({historicoList.length})
+          </button>
+        </div>
+
+        {/* ─── 3. CORPO ROLÁVEL UNIFICADO (FICHA RETRÁTIL + CONTEÚDO DA ABA) ──── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Bloco Retrátil da Ficha Técnica & Alertas */}
+          <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+            <div
+              onClick={() => setFichaExpandida(prev => !prev)}
+              style={{
+                padding: '8px 14px',
+                background: 'rgba(255, 255, 255, 0.02)',
+                borderBottom: (fichaExpandida || modoEdicaoCompleta) ? `1px solid ${C.border}` : 'none',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 11 }}>
+                <span style={{ fontWeight: 800, color: C.amber, textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.04em' }}>
+                  📋 Ficha do Pedido
+                </span>
+                <span style={{ color: C.inkSoft }}>
+                  Obra: <strong style={{ color: C.ink }}>{item.obra_nome_manual || obras.find(o => o.id === item.obra_id)?.nome || 'Sem obra'}</strong>
+                </span>
+                <span style={{ color: C.inkSoft }}>
+                  · Fornecedor: <strong style={{ color: C.ink }}>{item.fornecedor || 'A definir'}</strong>
+                </span>
+                <span style={{ color: C.inkSoft }}>
+                  · Valor: <strong style={{ color: '#10B981', fontFamily: 'monospace' }}>{valorCardEfetivo ? formatBRL(valorCardEfetivo) : 'Em cotação'}</strong>
+                </span>
+              </div>
+              <span style={{ fontSize: 10.5, fontWeight: 800, color: C.amber }}>
+                {(fichaExpandida || modoEdicaoCompleta) ? '▴ Recolher detalhes' : '▾ Expandir detalhes'}
+              </span>
+            </div>
+
+            {(fichaExpandida || modoEdicaoCompleta) && (
+              <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
           {/* ─── PAINEL DE EDIÇÃO COMPLETA DA FICHA OU VISUALIZAÇÃO PADRÃO ──── */}
           {modoEdicaoCompleta ? (
@@ -2895,7 +3127,6 @@ export function SuprimentoCardDrawer({
               )}
             </>
           )}
-        </div>
 
         {/* Alerta de Lançamento Financeiro Pendente (Em Trânsito) */}
         {!contaVinculada && (item.status === 'Em Trânsito' || item.status === 'Entregue') && onAbrirLancamentoFinanceiro && (
@@ -3012,154 +3243,10 @@ export function SuprimentoCardDrawer({
           </div>
         )}
 
-        {/* ─── 2. ABAS DE NAVEGAÇÃO DA GAVETA ─────────────────────────────────── */}
-        <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.bgCard, padding: '0 16px' }}>
-          {/* ABA DE CONTRATO & ACOMPANHAMENTO MENSAL */}
-          <button
-            onClick={() => setTabAtiva('contrato')}
-            style={{
-              padding: '10px 14px',
-              fontSize: 12,
-              fontWeight: tabAtiva === 'contrato' ? 800 : 600,
-              color: tabAtiva === 'contrato' ? C.amber : C.inkSoft,
-              borderBottom: `2px solid ${tabAtiva === 'contrato' ? C.amber : 'transparent'}`,
-              background: isContratoInicial ? 'rgba(245, 158, 11, 0.05)' : 'none',
-              borderTop: 'none',
-              borderLeft: 'none',
-              borderRight: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <Calendar size={13} color={tabAtiva === 'contrato' ? C.amber : undefined} />
-            <span>Acompanhamento Mensal</span>
-            <span style={{
-              fontSize: 9.5,
-              fontWeight: 900,
-              padding: '1px 5px',
-              borderRadius: 4,
-              background: item?.contrato_encerrado ? 'rgba(100, 116, 139, 0.25)' : C.amber,
-              color: item?.contrato_encerrado ? '#94A3B8' : '#0A0A0A'
-            }}>
-              {item?.contrato_encerrado ? 'Encerrado' : 'Mensal'}
-            </span>
-          </button>
 
-          <button
-            onClick={() => setTabAtiva('checklist')}
-            style={{
-              padding: '10px 14px',
-              fontSize: 12,
-              fontWeight: tabAtiva === 'checklist' ? 800 : 600,
-              color: tabAtiva === 'checklist' ? C.amber : C.inkSoft,
-              borderBottom: `2px solid ${tabAtiva === 'checklist' ? C.amber : 'transparent'}`,
-              background: 'none',
-              borderTop: 'none',
-              borderLeft: 'none',
-              borderRight: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <CheckSquare size={13} />
-            Checklist ({itensConcluidos}/{totalItens})
-          </button>
-
-          <button
-            onClick={() => setTabAtiva('dgenny')}
-            style={{
-              padding: '10px 14px',
-              fontSize: 12,
-              fontWeight: tabAtiva === 'dgenny' ? 800 : 600,
-              color: tabAtiva === 'dgenny' ? C.amber : C.inkSoft,
-              borderBottom: `2px solid ${tabAtiva === 'dgenny' ? C.amber : 'transparent'}`,
-              background: 'none',
-              borderTop: 'none',
-              borderLeft: 'none',
-              borderRight: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <Bot size={13} />
-            Cotação IA (WhatsApp)
-          </button>
-
-          <button
-            onClick={() => setTabAtiva('anexos')}
-            style={{
-              padding: '10px 14px',
-              fontSize: 12,
-              fontWeight: tabAtiva === 'anexos' ? 800 : 600,
-              color: tabAtiva === 'anexos' ? C.amber : C.inkSoft,
-              borderBottom: `2px solid ${tabAtiva === 'anexos' ? C.amber : 'transparent'}`,
-              background: 'none',
-              borderTop: 'none',
-              borderLeft: 'none',
-              borderRight: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <Paperclip size={13} />
-            Anexos ({anexosList.length})
-          </button>
-
-          <button
-            onClick={() => setTabAtiva('chat')}
-            style={{
-              padding: '10px 14px',
-              fontSize: 12,
-              fontWeight: tabAtiva === 'chat' ? 800 : 600,
-              color: tabAtiva === 'chat' ? C.amber : C.inkSoft,
-              borderBottom: `2px solid ${tabAtiva === 'chat' ? C.amber : 'transparent'}`,
-              background: 'none',
-              borderTop: 'none',
-              borderLeft: 'none',
-              borderRight: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <MessageSquare size={13} />
-            Chat do Card ({chatList.length})
-          </button>
-
-          <button
-            onClick={() => setTabAtiva('historico')}
-            style={{
-              padding: '10px 14px',
-              fontSize: 12,
-              fontWeight: tabAtiva === 'historico' ? 800 : 600,
-              color: tabAtiva === 'historico' ? C.amber : C.inkSoft,
-              borderBottom: `2px solid ${tabAtiva === 'historico' ? C.amber : 'transparent'}`,
-              background: 'none',
-              borderTop: 'none',
-              borderLeft: 'none',
-              borderRight: 'none',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6
-            }}
-          >
-            <History size={13} />
-            Histórico ({historicoList.length})
-          </button>
-        </div>
-
-        {/* ─── 3. CONTEÚDO DA ABA ATIVA ────────────────────────────────────────── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+              </div>
+            )}
+          </div>
 
           {/* ════ ABA: CONTRATO & ACOMPANHAMENTO MENSAL ═══════════════ */}
           {tabAtiva === 'contrato' && (
