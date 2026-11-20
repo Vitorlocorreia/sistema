@@ -51,7 +51,7 @@ export interface ItemChecklist {
 function parseNumeroBR(val: string | number | null | undefined): number {
   if (typeof val === 'number') return Number.isFinite(val) ? val : 0
   if (!val) return 0
-  const str = String(val).replace(/R\$/gi, '').trim()
+  const str = String(val).replace(/R\$/gi, '').replace(/\s/g, '').trim()
   let normalized = str
   if (str.includes(',')) {
     normalized = str.replace(/\./g, '').replace(',', '.')
@@ -764,8 +764,7 @@ export function SuprimentoCardDrawer({
 
   // 3.2 SALVAR VALOR TOTAL
   async function handleSalvarValor(valorTexto: string) {
-    const limpo = valorTexto.replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.')
-    const valorNum = parseFloat(limpo) || 0
+    const valorNum = parseNumeroBR(valorTexto)
     const antigoNum = item.valor || 0
     if (valorNum === antigoNum) {
       setEditandoValor(false)
@@ -948,7 +947,7 @@ export function SuprimentoCardDrawer({
       }
 
       // 9. Valor
-      const valorLimpo = formEdicao.valor ? parseFloat(formEdicao.valor.replace('R$', '').replace(/\s/g, '').replace('.', '').replace(',', '.')) : null
+      const valorLimpo = formEdicao.valor ? (parseNumeroBR(formEdicao.valor) || null) : null
       if (valorLimpo !== (item.valor || null)) {
         const vAntigo = item.valor ? `R$ ${item.valor.toFixed(2)}` : 'Em cotação'
         const vNovo = valorLimpo ? `R$ ${valorLimpo.toFixed(2)}` : 'Em cotação'

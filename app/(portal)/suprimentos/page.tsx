@@ -113,6 +113,21 @@ export interface SuprimentoItem {
 }
 // ─── HELPERS DE CONTRATOS & SERVIÇOS/LOCAÇÕES ───────────────────────────────
 
+function parseMoedaBR(val: string | number | null | undefined): number {
+  if (typeof val === 'number') return Number.isFinite(val) ? val : 0
+  if (!val) return 0
+  const str = String(val).replace(/R\$/gi, '').replace(/\s/g, '').trim()
+  if (!str) return 0
+  let normalized = str
+  if (str.includes(',')) {
+    normalized = str.replace(/\./g, '').replace(',', '.')
+  } else if (/^\d{1,3}(\.\d{3})+$/.test(str)) {
+    normalized = str.replace(/\./g, '')
+  }
+  const num = parseFloat(normalized)
+  return Number.isFinite(num) ? num : 0
+}
+
 export function matchesAba(tipo: 'material' | 'servico' | 'locacao', aba: 'materiais' | 'servicos' | 'locacoes'): boolean {
   if (aba === 'materiais') return tipo === 'material'
   if (aba === 'servicos') return tipo === 'servico'
@@ -955,7 +970,7 @@ export default function SuprimentosPage() {
       const selectedForn = fornecedores.find(f => f.id === novoForm.fornecedor_id)
       const fornNome = selectedForn ? (selectedForn.nome_fantasia || selectedForn.razao_social) : ''
 
-      const cleanValor = novoForm.valor ? parseFloat(novoForm.valor.replace(/\./g, '').replace(',', '.')) : null
+      const cleanValor = novoForm.valor ? (parseMoedaBR(novoForm.valor) || null) : null
 
       const responsavelEscolhido = colaboradores.find(c => c.id === novoForm.responsavel_id)
       const respNome = responsavelEscolhido?.nome || null
@@ -1001,7 +1016,7 @@ export default function SuprimentosPage() {
         detalhe: `Solicitação criada no sistema por ${solicitanteNome}.${respNome ? ` Responsável da Demanda: ${respNome}.` : ''}${proxNome ? ` Próximo responsável: ${proxNome}.` : ''}`
       }]
 
-      const cleanValorMensal = novoForm.valor_mensal ? parseFloat(novoForm.valor_mensal.replace(/\./g, '').replace(',', '.')) : null
+      const cleanValorMensal = novoForm.valor_mensal ? (parseMoedaBR(novoForm.valor_mensal) || null) : null
       const selectedEmp = empresas.find(e => e.id === novoForm.empresa_id)
       const empNome = selectedEmp ? (selectedEmp.nome_fantasia || selectedEmp.razao_social) : (empresas[0]?.nome_fantasia || empresas[0]?.razao_social || 'JWA')
       const empId = selectedEmp?.id || empresas[0]?.id || null
@@ -1325,7 +1340,7 @@ export default function SuprimentosPage() {
       : `  • ${item.titulo} — *${item.quantidade || '1'} ${item.unidade || 'un'}*`
 
     const valNum = valorStr
-      ? parseFloat(String(valorStr).replace(/\./g, '').replace(',', '.'))
+      ? parseMoedaBR(valorStr)
       : (item.valor || 0)
     const valFormatado = valNum > 0
       ? `R$ ${valNum.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -1386,7 +1401,7 @@ export default function SuprimentosPage() {
     setAprovForm({
       empresa_id: defaultEmpresaId,
       fornecedor_id: matchForn?.id || '',
-      valor_final: item.valor ? String(item.valor) : '',
+      valor_final: item.valor ? Number(item.valor).toFixed(2).replace('.', ',') : '',
       data_vencimento: item.data_vencimento || new Date(Date.now() + 28 * 86400000).toISOString().split('T')[0],
       condicao_pagamento: item.condicao_pagamento || condicaoSalvaConta || (matchForn?.prazo_pagamento ? `${matchForn.prazo_pagamento} dias` : '28 dias'),
       forma_pagamento: item.forma_pagamento || (matchForn?.pix ? 'PIX' : 'Boleto Faturado'),
@@ -1407,7 +1422,7 @@ export default function SuprimentosPage() {
     if (!itemSelecionado) return
 
     const valorNum = aprovForm.valor_final
-      ? parseFloat(aprovForm.valor_final.replace(/\./g, '').replace(',', '.'))
+      ? parseMoedaBR(aprovForm.valor_final)
       : (itemSelecionado.valor || 0)
 
     if (aprovForm.lancar_financeiro) {
