@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
       billingLocation,
       paymentMethod,
       buyerEmail,
+      loggedUserEmail,
+      loggedUserName,
       whatsappNumber,
       items,
       suppliers,
@@ -107,25 +109,60 @@ export async function POST(req: NextRequest) {
       }
     })
 
-    // Resolve buyerEmail obrigatório na API dgenny
+    // Resolve buyerEmail obrigatório na API dgenny a partir do usuário real logado
     let resolvedBuyerEmail = buyerEmail ? String(buyerEmail).trim() : ''
-    if (!resolvedBuyerEmail) {
-      try {
-        const usersRes = await dgenny.getUsers()
-        const users = usersRes?.items || []
-        const preferred =
-          users.find(u => u.email.toLowerCase().includes('victor')) ||
-          users.find(u => u.email.toLowerCase().includes('kassio')) ||
+    try {
+      const usersRes = await dgenny.getUsers()
+      const users = usersRes?.items || []
+      const norm = (str: string) =>
+        (str || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim()
+
+      const exactInDgenny = resolvedBuyerEmail
+        ? users.find(u => (u.email || '').trim().toLowerCase() === resolvedBuyerEmail.toLowerCase())
+        : null
+
+      if (exactInDgenny?.email) {
+        resolvedBuyerEmail = exactInDgenny.email
+      } else {
+        const emailCand = (loggedUserEmail || resolvedBuyerEmail || '').trim().toLowerCase()
+        const nomeCand = norm(loggedUserName || '')
+        const primeiroNome = nomeCand.split(/\s+/)[0] || ''
+
+        const matched =
+          (emailCand ? users.find(u => (u.email || '').trim().toLowerCase() === emailCand) : null) ||
+          (emailCand && emailCand.split('@')[0]?.length >= 3
+            ? users.find(u => (u.email || '').split('@')[0]?.toLowerCase() === emailCand.split('@')[0])
+            : null) ||
+          (primeiroNome.length >= 3
+            ? users.find(u => {
+                const uName = norm(u.name || '')
+                const uFirst = uName.split(/\s+/)[0] || ''
+                const uAssist = norm((u as any).assistantName || '')
+                const uEmailPrefix = norm((u.email || '').split('@')[0] || '')
+                return (
+                  uFirst === primeiroNome ||
+                  uAssist === primeiroNome ||
+                  uName.includes(primeiroNome) ||
+                  uEmailPrefix.includes(primeiroNome)
+                )
+              })
+            : null) ||
+          users.find(u => !(u.email || '').toLowerCase().includes('suporte')) ||
           users[0]
-        if (preferred?.email) {
-          resolvedBuyerEmail = preferred.email
+
+        if (matched?.email) {
+          resolvedBuyerEmail = matched.email
         }
-      } catch {
-        // fallback abaixo
       }
+    } catch {
+      // mantém resolvedBuyerEmail enviado pelo cliente
     }
     if (!resolvedBuyerEmail) {
-      resolvedBuyerEmail = 'victor@jwasa.com.br'
+      resolvedBuyerEmail = loggedUserEmail || 'kassio@jwasa.com.br'
     }
 
     // Resolve billingLocation oficial da JWA se não enviado com ID

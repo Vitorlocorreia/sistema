@@ -3592,6 +3592,7 @@ export function SuprimentoCardDrawer({
               suprimento={item}
               obra={obras.find(o => o.id === item.obra_id)}
               fornecedoresDisponiveis={fornecedores}
+              colaboradorAtivo={colaboradorAtivo}
               onSuprimentoUpdated={(updated) => {
                 onUpdateItem(updated)
               }}

@@ -46,13 +46,65 @@ interface DgennyCotacaoTabProps {
     responsavel?: string | null
     endereco?: string | null
   }>
+  colaboradorAtivo?: { id?: string; nome?: string; email?: string; cargo?: string } | null
   onSuprimentoUpdated: (updatedItem: any) => void
+}
+
+function resolverBuyerDgenny(
+  users: Array<{ id?: string; name?: string; email?: string; assistantName?: string | null }>,
+  candidatos: Array<{ email?: string | null; nome?: string | null }>
+): string {
+  const norm = (str: string) =>
+    (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim()
+
+  const validUsers = (users || []).filter(u => u?.email)
+
+  for (const cand of candidatos) {
+    const emailCand = (cand?.email || '').trim().toLowerCase()
+    const nomeCand = norm(cand?.nome || '')
+    const primeiroNome = nomeCand.split(/\s+/)[0] || ''
+
+    if (emailCand) {
+      const exact = validUsers.find(u => (u.email || '').trim().toLowerCase() === emailCand)
+      if (exact?.email) return exact.email
+
+      const prefix = emailCand.split('@')[0]
+      if (prefix && prefix.length >= 3) {
+        const byPrefix = validUsers.find(u => (u.email || '').split('@')[0]?.toLowerCase() === prefix)
+        if (byPrefix?.email) return byPrefix.email
+      }
+    }
+
+    if (primeiroNome && primeiroNome.length >= 3) {
+      const byName = validUsers.find(u => {
+        const uName = norm(u.name || '')
+        const uFirst = uName.split(/\s+/)[0] || ''
+        const uAssist = norm(u.assistantName || '')
+        const uEmailPrefix = norm((u.email || '').split('@')[0] || '')
+        return (
+          uFirst === primeiroNome ||
+          uAssist === primeiroNome ||
+          uName.includes(primeiroNome) ||
+          uEmailPrefix.includes(primeiroNome)
+        )
+      })
+      if (byName?.email) return byName.email
+    }
+  }
+
+  const nonSupport = validUsers.find(u => !(u.email || '').toLowerCase().includes('suporte'))
+  return nonSupport?.email || validUsers[0]?.email || ''
 }
 
 export function DgennyCotacaoTab({
   suprimento,
   obra,
   fornecedoresDisponiveis,
+  colaboradorAtivo,
   onSuprimentoUpdated
 }: DgennyCotacaoTabProps) {
   // Status da API dgenny + dados da conta JWA
@@ -94,6 +146,7 @@ export function DgennyCotacaoTab({
   // Criação de nova cotação
   const [selectedPhones, setSelectedPhones] = useState<string[]>([])
   const [buyerEmail, setBuyerEmail] = useState<string>('')
+  const [buyerAlteradoManualmente, setBuyerAlteradoManualmente] = useState<boolean>(false)
   const [frete, setFrete] = useState<'CIF' | 'FOB' | 'NEGOTIABLE' | 'INSTALLED'>('CIF')
   const [prazoDias, setPrazoDias] = useState<number>(3)
   const [condicaoPagamento, setCondicaoPagamento] = useState<string>('A Combinar')
@@ -249,13 +302,14 @@ export function DgennyCotacaoTab({
         const res = await fetch('/api/dgenny/status')
         const data = await res.json()
         const users = data.users || []
-        const defaultUser =
-          users.find((u: any) => u.email?.toLowerCase().includes('victor')) ||
-          users.find((u: any) => u.email?.toLowerCase().includes('kassio')) ||
-          users[0]
+        const resolvedEmail = resolverBuyerDgenny(users, [
+          { email: colaboradorAtivo?.email, nome: colaboradorAtivo?.nome },
+          { nome: suprimento?.responsavel_nome },
+          { nome: suprimento?.solicitante }
+        ])
 
-        if (defaultUser?.email) {
-          setBuyerEmail(defaultUser.email)
+        if (resolvedEmail) {
+          setBuyerEmail(resolvedEmail)
         }
 
         setApiStatus({
@@ -283,6 +337,21 @@ export function DgennyCotacaoTab({
       })
       .catch(() => {})
   }, [])
+
+  // Sincroniza comprador com o usuário real logado assim que colaboradorAtivo e apiStatus.users estiverem disponíveis
+  useEffect(() => {
+    if (buyerAlteradoManualmente) return
+    const users = apiStatus.users || []
+    if (!users.length) return
+    const resolved = resolverBuyerDgenny(users, [
+      { email: colaboradorAtivo?.email, nome: colaboradorAtivo?.nome },
+      { nome: suprimento?.responsavel_nome },
+      { nome: suprimento?.solicitante }
+    ])
+    if (resolved && resolved !== buyerEmail) {
+      setBuyerEmail(resolved)
+    }
+  }, [apiStatus.users, colaboradorAtivo?.email, colaboradorAtivo?.nome, suprimento?.responsavel_nome, suprimento?.solicitante, buyerAlteradoManualmente, buyerEmail])
 
   // 2. Identifica se o suprimento já possui cotação dgenny no histórico (ou casamento automático pelo código/título) e sincroniza endereço/anexos
   useEffect(() => {
@@ -529,7 +598,17 @@ export function DgennyCotacaoTab({
             title: condicaoPagamento,
             description: condicaoPagamento
           },
-          buyerEmail: buyerEmail || undefined,
+          buyerEmail:
+            buyerEmail ||
+            resolverBuyerDgenny(apiStatus.users || [], [
+              { email: colaboradorAtivo?.email, nome: colaboradorAtivo?.nome },
+              { nome: suprimento?.responsavel_nome },
+              { nome: suprimento?.solicitante }
+            ]) ||
+            colaboradorAtivo?.email ||
+            undefined,
+          loggedUserEmail: colaboradorAtivo?.email || undefined,
+          loggedUserName: colaboradorAtivo?.nome || undefined,
           items: itensParaCotar,
           suppliers: fornecedoresSelecionados.map((f, idx) => ({
             externalId: `FORN-${idx + 1}-${f.phone}`,
@@ -3570,7 +3649,10 @@ export function DgennyCotacaoTab({
             </label>
             <select
               value={buyerEmail}
-              onChange={e => setBuyerEmail(e.target.value)}
+              onChange={e => {
+                setBuyerEmail(e.target.value)
+                setBuyerAlteradoManualmente(true)
+              }}
               style={{
                 width: '100%',
                 background: C.bgPanel,
