@@ -14,6 +14,7 @@ import { C } from '@/lib/tokens'
 import { PageTitle } from '@/components/PageTitle'
 import { supabase, fetchAllChunks } from '@/lib/supabase'
 import { toast } from '@/components/Toast'
+import { DateInput } from '@/components/DateInput'
 import type { Empresa, Fornecedor, Conta, ContaComRelacoes, Obra, Colaborador, ConfigPermissao, CargoSistema, ItemNegociacao, ItemMedicao } from '@/lib/types'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { motion, AnimatePresence } from 'motion/react'
@@ -4859,11 +4860,10 @@ function ContasTab({ colaboradorAtivo, permissaoAtiva, colaboradores = [] }: Tab
 
                 <div>
                   <label style={label}>{form.tipo === 'pagar' ? 'Data de Vencimento *' : 'Data de Previsão *'}</label>
-                  <input
+                  <DateInput
                     style={input}
-                    type="date"
                     value={form.tipo === 'pagar' ? form.data_vencimento : form.data_previsao}
-                    onChange={e => form.tipo === 'pagar' ? setForm(f => ({ ...f, data_vencimento: e.target.value })) : setForm(f => ({ ...f, data_previsao: e.target.value }))}
+                    onChange={val => form.tipo === 'pagar' ? setForm(f => ({ ...f, data_vencimento: val })) : setForm(f => ({ ...f, data_previsao: val }))}
                     required
                   />
                 </div>
@@ -7571,7 +7571,7 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                                           )}
 
                                           {formNegociacao.tipo === 'prorrogacao' && (
-                                            <input style={input} type="date" placeholder="Nova Data" value={formNegociacao.nova_data} onChange={e => setFormNegociacao(f => ({ ...f, nova_data: e.target.value }))} />
+                                            <DateInput style={input} placeholder="Nova Data" value={formNegociacao.nova_data} onChange={val => setFormNegociacao(f => ({ ...f, nova_data: val }))} />
                                           )}
 
                                           <textarea 
@@ -7898,11 +7898,11 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
                 </div>
                 <div>
                   <label style={label}>Data Previsão</label>
-                  <input style={input} type="date" value={formEdicao.data_previsao || ''} onChange={e => setFormEdicao(f => ({ ...f, data_previsao: e.target.value }))} />
+                  <DateInput style={input} value={formEdicao.data_previsao || ''} onChange={val => setFormEdicao(f => ({ ...f, data_previsao: val }))} />
                 </div>
                 <div>
                   <label style={label}>Vencimento</label>
-                  <input style={input} type="date" value={formEdicao.data_vencimento || ''} onChange={e => setFormEdicao(f => ({ ...f, data_vencimento: e.target.value }))} />
+                  <DateInput style={input} value={formEdicao.data_vencimento || ''} onChange={val => setFormEdicao(f => ({ ...f, data_vencimento: val }))} />
                 </div>
               </div>
 
@@ -8036,11 +8036,10 @@ function HistoricoTab({ colaboradorAtivo, permissaoAtiva, confirm, prompt, initi
               {formEditNegociacao.tipo === 'prorrogacao' && (
                 <div>
                   <label style={label}>Nova Data Prorrogada</label>
-                  <input
+                  <DateInput
                     style={input}
-                    type="date"
                     value={formEditNegociacao.nova_data}
-                    onChange={e => setFormEditNegociacao({ ...formEditNegociacao, nova_data: e.target.value })}
+                    onChange={val => setFormEditNegociacao({ ...formEditNegociacao, nova_data: val })}
                   />
                 </div>
               )}

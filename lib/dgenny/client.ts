@@ -102,10 +102,36 @@ export class DgennyClient {
   }
 
   /**
-   * Lista fornecedores já cadastrados na base da dgenny da empresa
+   * Lista integralmente todos os fornecedores cadastrados na base da dgenny (paginando via nextCursor)
    */
-  async getSuppliers(): Promise<{ ok: boolean; items: DgennySavedSupplier[] }> {
-    return this.request<{ ok: boolean; items: DgennySavedSupplier[] }>('/api/partner/v1/suppliers')
+  async getSuppliers(query?: string): Promise<{ ok: boolean; items: DgennySavedSupplier[] }> {
+    const allItems: DgennySavedSupplier[] = []
+    let cursor: string | null = null
+    const seenCursors = new Set<string>()
+
+    for (let page = 0; page < 50; page++) {
+      const params = new URLSearchParams({ limit: '100' })
+      if (query?.trim()) params.set('query', query.trim())
+      if (cursor) params.set('cursor', cursor)
+
+      const res = await this.request<{
+        ok: boolean
+        items: DgennySavedSupplier[]
+        nextCursor?: string | null
+      }>(`/api/partner/v1/suppliers?${params.toString()}`)
+
+      if (Array.isArray(res.items)) {
+        allItems.push(...res.items)
+      }
+
+      if (!res.nextCursor || seenCursors.has(res.nextCursor)) {
+        break
+      }
+      seenCursors.add(res.nextCursor)
+      cursor = res.nextCursor
+    }
+
+    return { ok: true, items: allItems }
   }
 
   /**

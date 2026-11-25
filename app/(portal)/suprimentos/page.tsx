@@ -49,6 +49,7 @@ import {
 } from 'lucide-react'
 import { PageTitle } from '@/components/PageTitle'
 import { toast } from '@/components/Toast'
+import { DateInput } from '@/components/DateInput'
 import { supabase } from '@/lib/supabase'
 import { C } from '@/lib/tokens'
 import { useRealtimeSync } from '@/hooks/useRealtimeSync'
@@ -4147,21 +4148,19 @@ export default function SuprimentosPage() {
 
                     <div>
                       <span style={labelStyle}>Início da Vigência / Chegada na Obra</span>
-                      <input
-                        type="date"
+                      <DateInput
                         style={inputStyle}
                         value={novoForm.data_inicio}
-                        onChange={e => setNovoForm({ ...novoForm, data_inicio: e.target.value })}
+                        onChange={val => setNovoForm({ ...novoForm, data_inicio: val })}
                       />
                     </div>
 
                     <div>
                       <span style={labelStyle}>Término Previsto / Devolução</span>
-                      <input
-                        type="date"
+                      <DateInput
                         style={inputStyle}
                         value={novoForm.data_termino}
-                        onChange={e => setNovoForm({ ...novoForm, data_termino: e.target.value })}
+                        onChange={val => setNovoForm({ ...novoForm, data_termino: val })}
                       />
                     </div>
 
@@ -4683,11 +4682,10 @@ export default function SuprimentosPage() {
 
                 <div>
                   <span style={labelStyle}>Data de Vencimento / Previsão {aprovForm.lancar_financeiro ? '*' : ''}</span>
-                  <input
-                    type="date"
+                  <DateInput
                     style={inputStyle}
                     value={aprovForm.data_vencimento}
-                    onChange={e => setAprovForm({ ...aprovForm, data_vencimento: e.target.value })}
+                    onChange={val => setAprovForm({ ...aprovForm, data_vencimento: val })}
                     required={aprovForm.lancar_financeiro}
                   />
                 </div>

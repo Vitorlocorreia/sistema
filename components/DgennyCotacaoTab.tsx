@@ -174,7 +174,27 @@ export function DgennyCotacaoTab({
   const [termoBusca, setTermoBusca] = useState(suprimento?.titulo || '')
   const [localBusca, setLocalBusca] = useState(obra?.nome || 'São Paulo, SP')
   const [buscando, setBuscando] = useState(false)
+  const [tempoBuscaSegundos, setTempoBuscaSegundos] = useState(0)
   const [fornecedoresEncontrados, setFornecedoresEncontrados] = useState<any[]>([])
+
+  // Filtro da lista consolidada de fornecedores (Passo 1)
+  const [filtroFornecedorLista, setFiltroFornecedorLista] = useState('')
+  const [filtroOrigemFornecedor, setFiltroOrigemFornecedor] = useState<'dgenny_e_selecionados' | 'todos' | 'dgenny' | 'sistema'>('dgenny_e_selecionados')
+
+  // Painel dedicado "Usar Fornecedor do Sistema"
+  const [abaSistemaAberta, setAbaSistemaAberta] = useState(false)
+  const [buscaSistema, setBuscaSistema] = useState('')
+
+  useEffect(() => {
+    if (!buscando) {
+      setTempoBuscaSegundos(0)
+      return
+    }
+    const timer = setInterval(() => {
+      setTempoBuscaSegundos(prev => prev + 1)
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [buscando])
 
   // Central de Conversas WhatsApp (Split-Pane)
   const [chatSupplier, setChatSupplier] = useState<any | null>(null)
@@ -245,10 +265,11 @@ export function DgennyCotacaoTab({
       }
     })
 
-    // 2. Fornecedores já salvos na conta dgenny da JWA
+    // 2. Fornecedores já salvos na conta dgenny da JWA (mescla e enriquece com os do sistema)
     ;(apiStatus.dgennySuppliers || []).forEach(ds => {
       const phone = normalizePhone(ds.phone || '')
-      if (phone.length >= 12 && !map.has(phone)) {
+      if (phone.length >= 12) {
+        const existing = map.get(phone)
         const displayName =
           ds.name && ds.name !== 'Compartilhado'
             ? ds.name
@@ -257,13 +278,23 @@ export function DgennyCotacaoTab({
             : ds.cnpj
             ? `Fornecedor CNPJ ${ds.cnpj}`
             : `Fornecedor ${phone}`
-        map.set(phone, {
-          phone,
-          name: displayName,
-          contactName: ds.contactName,
-          cnpj: ds.cnpj,
-          origem: 'dgenny'
-        })
+
+        if (existing) {
+          map.set(phone, {
+            ...existing,
+            name: existing.name || displayName,
+            contactName: existing.contactName || ds.contactName || null,
+            cnpj: existing.cnpj || ds.cnpj || null
+          })
+        } else {
+          map.set(phone, {
+            phone,
+            name: displayName,
+            contactName: ds.contactName,
+            cnpj: ds.cnpj,
+            origem: 'dgenny'
+          })
+        }
       }
     })
 
@@ -294,6 +325,51 @@ export function DgennyCotacaoTab({
 
     return Array.from(map.values())
   }, [fornecedoresDisponiveis, apiStatus.dgennySuppliers, fornecedoresManuais, fornecedoresEncontrados])
+
+  const fornecedoresListaFiltrada = useMemo(() => {
+    const termo = filtroFornecedorLista.trim().toLowerCase()
+    const termoDigitos = termo.replace(/\D/g, '')
+    return listaFornecedoresConsolidada.filter(f => {
+      if (filtroOrigemFornecedor === 'dgenny_e_selecionados') {
+        const isDgennySide = f.origem === 'dgenny' || f.origem === 'radar' || f.origem === 'manual'
+        const isSistemaSelecionado = f.origem === 'sistema' && selectedPhones.includes(f.phone)
+        if (!isDgennySide && !isSistemaSelecionado) return false
+      } else if (filtroOrigemFornecedor !== 'todos' && f.origem !== filtroOrigemFornecedor) {
+        return false
+      }
+      if (!termo) return true
+      return (
+        f.name.toLowerCase().includes(termo) ||
+        f.phone.includes(termoDigitos || termo) ||
+        (f.cnpj && (f.cnpj.toLowerCase().includes(termo) || (termoDigitos && f.cnpj.replace(/\D/g, '').includes(termoDigitos)))) ||
+        (f.contactName && f.contactName.toLowerCase().includes(termo))
+      )
+    })
+  }, [listaFornecedoresConsolidada, filtroFornecedorLista, filtroOrigemFornecedor, selectedPhones])
+
+  const fornecedoresSistemaFiltrados = useMemo(() => {
+    const termo = buscaSistema.trim().toLowerCase()
+    const termoDigitos = termo.replace(/\D/g, '')
+    return (fornecedoresDisponiveis || [])
+      .map(f => {
+        const phone = normalizePhone(f.telefone || '')
+        return {
+          ...f,
+          normalizedPhone: phone,
+          displayName: f.nome_fantasia || f.razao_social
+        }
+      })
+      .filter(f => {
+        if (!termo) return true
+        return (
+          f.displayName.toLowerCase().includes(termo) ||
+          f.razao_social.toLowerCase().includes(termo) ||
+          (f.cnpj && (f.cnpj.toLowerCase().includes(termo) || (termoDigitos && f.cnpj.replace(/\D/g, '').includes(termoDigitos)))) ||
+          (f.responsavel && f.responsavel.toLowerCase().includes(termo)) ||
+          (f.normalizedPhone && f.normalizedPhone.includes(termoDigitos || termo))
+        )
+      })
+  }, [fornecedoresDisponiveis, buscaSistema])
 
   // 1. Verifica status da conexão com dgenny e carrega catálogos/usuários
   useEffect(() => {
@@ -494,13 +570,19 @@ export function DgennyCotacaoTab({
     }
     setBuscando(true)
     try {
+      const excludePhones = listaFornecedoresConsolidada
+        .map(f => f.phone)
+        .filter(Boolean)
+        .slice(0, 500)
+
       const res = await fetch('/api/dgenny/suppliers/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type: termoBusca.trim(),
           location: localBusca.trim(),
-          limit: 8,
+          limit: 30,
+          excludePhones,
           includeNearbyCities: true
         })
       })
@@ -3338,16 +3420,18 @@ export function DgennyCotacaoTab({
       <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 8, padding: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <label style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: C.inkSoft }}>
-            1. Selecionar Fornecedores ({selectedPhones.length} marcados)
+            1. Selecionar Fornecedores ({selectedPhones.length} marcados · {listaFornecedoresConsolidada.length} disponíveis)
           </label>
-          {listaFornecedoresConsolidada.length > 0 && (
+          {fornecedoresListaFiltrada.length > 0 && (
             <button
               type="button"
               onClick={() => {
-                if (selectedPhones.length === listaFornecedoresConsolidada.length) {
-                  setSelectedPhones([])
+                const phonesFiltrados = fornecedoresListaFiltrada.map(f => f.phone)
+                const todosMarcados = phonesFiltrados.every(p => selectedPhones.includes(p))
+                if (todosMarcados) {
+                  setSelectedPhones(prev => prev.filter(p => !phonesFiltrados.includes(p)))
                 } else {
-                  setSelectedPhones(listaFornecedoresConsolidada.map(f => f.phone))
+                  setSelectedPhones(prev => Array.from(new Set([...prev, ...phonesFiltrados])))
                 }
               }}
               style={{
@@ -3359,14 +3443,63 @@ export function DgennyCotacaoTab({
                 cursor: 'pointer'
               }}
             >
-              {selectedPhones.length === listaFornecedoresConsolidada.length ? 'Desmarcar todos' : 'Selecionar todos'}
+              {fornecedoresListaFiltrada.every(f => selectedPhones.includes(f.phone)) ? 'Desmarcar visíveis' : 'Selecionar visíveis'}
             </button>
           )}
         </div>
 
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', marginBottom: 8 }}>
+          <div style={{ position: 'relative', flex: '1 1 220px' }}>
+            <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+            <input
+              type="text"
+              value={filtroFornecedorLista}
+              onChange={e => setFiltroFornecedorLista(e.target.value)}
+              placeholder="Buscar fornecedor salvo no sistema ou dgenny (nome, CNPJ, telefone)..."
+              style={{
+                width: '100%',
+                background: C.bgPanel,
+                border: `1px solid ${C.border}`,
+                borderRadius: 5,
+                padding: '5px 8px 5px 26px',
+                fontSize: 11,
+                color: C.ink
+              }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 4 }}>
+            {(
+              [
+                { id: 'dgenny_e_selecionados', label: 'dgenny + Selecionados' },
+                { id: 'dgenny', label: 'Base dgenny' },
+                { id: 'sistema', label: 'Sistema' },
+                { id: 'todos', label: 'Todos' }
+              ] as const
+            ).map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setFiltroOrigemFornecedor(tab.id)}
+                style={{
+                  padding: '4px 8px',
+                  borderRadius: 5,
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  border: `1px solid ${filtroOrigemFornecedor === tab.id ? C.amber : C.border}`,
+                  background: filtroOrigemFornecedor === tab.id ? 'rgba(245, 158, 11, 0.14)' : C.bgPanel,
+                  color: filtroOrigemFornecedor === tab.id ? C.amber : C.inkSoft
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div
           style={{
-            maxHeight: 165,
+            maxHeight: 200,
             overflowY: 'auto',
             background: C.bgPanel,
             border: `1px solid ${C.border}`,
@@ -3377,12 +3510,14 @@ export function DgennyCotacaoTab({
             gap: 4
           }}
         >
-          {listaFornecedoresConsolidada.length === 0 ? (
+          {fornecedoresListaFiltrada.length === 0 ? (
             <div style={{ padding: 10, fontSize: 11, color: C.inkSoft, textAlign: 'center' }}>
-              Nenhum fornecedor com telefone cadastrado. Adicione abaixo ou use o Radar por Região.
+              {listaFornecedoresConsolidada.length === 0
+                ? 'Nenhum fornecedor com telefone cadastrado. Adicione abaixo ou use o Radar por Região.'
+                : 'Nenhum fornecedor encontrado para o filtro aplicado.'}
             </div>
           ) : (
-            listaFornecedoresConsolidada.map(f => {
+            fornecedoresListaFiltrada.map(f => {
               const isSelected = selectedPhones.includes(f.phone)
               return (
                 <label
@@ -3438,6 +3573,135 @@ export function DgennyCotacaoTab({
                 </label>
               )
             })
+          )}
+        </div>
+
+        {/* Usar Fornecedor do Sistema */}
+        <div style={{ marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}` }}>
+          <button
+            type="button"
+            onClick={() => setAbaSistemaAberta(prev => !prev)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '7px 10px',
+              borderRadius: 6,
+              background: abaSistemaAberta ? 'rgba(16, 185, 129, 0.1)' : C.bgPanel,
+              border: `1px solid ${abaSistemaAberta ? '#10B981' : C.border}`,
+              color: abaSistemaAberta ? '#10B981' : C.ink,
+              fontSize: 11,
+              fontWeight: 800,
+              cursor: 'pointer'
+            }}
+          >
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <UserPlus size={13} color={abaSistemaAberta ? '#10B981' : C.amber} />
+              Usar Fornecedor do Sistema ({fornecedoresDisponiveis?.length || 0} salvos)
+            </span>
+            <span style={{ fontSize: 10.5, color: C.inkSoft }}>
+              {abaSistemaAberta ? 'Ocultar ▲' : 'Selecionar do sistema ▼'}
+            </span>
+          </button>
+
+          {abaSistemaAberta && (
+            <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={12} color={C.inkSoft} style={{ position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  value={buscaSistema}
+                  onChange={e => setBuscaSistema(e.target.value)}
+                  placeholder="Buscar fornecedor salvo no sistema (nome, CNPJ, responsável, telefone)..."
+                  style={{
+                    width: '100%',
+                    background: C.bgPanel,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 5,
+                    padding: '5px 8px 5px 26px',
+                    fontSize: 11,
+                    color: C.ink
+                  }}
+                />
+              </div>
+
+              <div
+                style={{
+                  maxHeight: 190,
+                  overflowY: 'auto',
+                  background: C.bgPanel,
+                  border: `1px solid ${C.border}`,
+                  borderRadius: 6,
+                  padding: 6,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4
+                }}
+              >
+                {fornecedoresSistemaFiltrados.length === 0 ? (
+                  <div style={{ padding: 10, fontSize: 11, color: C.inkSoft, textAlign: 'center' }}>
+                    Nenhum fornecedor do sistema encontrado.
+                  </div>
+                ) : (
+                  fornecedoresSistemaFiltrados.map(f => {
+                    const temWhatsappValido = f.normalizedPhone.length >= 12
+                    const isSelected = temWhatsappValido && selectedPhones.includes(f.normalizedPhone)
+                    return (
+                      <label
+                        key={f.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          padding: '6px 8px',
+                          borderRadius: 4,
+                          background: isSelected ? 'rgba(16, 185, 129, 0.1)' : 'transparent',
+                          border: `1px solid ${isSelected ? 'rgba(16, 185, 129, 0.35)' : 'transparent'}`,
+                          cursor: temWhatsappValido ? 'pointer' : 'not-allowed',
+                          opacity: temWhatsappValido ? 1 : 0.6,
+                          fontSize: 11,
+                          color: C.ink
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            disabled={!temWhatsappValido}
+                            checked={isSelected}
+                            onChange={() => {
+                              if (temWhatsappValido) togglePhoneSelection(f.normalizedPhone)
+                            }}
+                          />
+                          <div>
+                            <div style={{ fontWeight: 700 }}>{f.displayName}</div>
+                            <div style={{ fontSize: 10, color: C.inkSoft }}>
+                              {temWhatsappValido ? `+${f.normalizedPhone}` : 'Sem telefone/WhatsApp válido'}
+                              {f.cnpj ? ` · CNPJ: ${f.cnpj}` : ''}
+                              {f.responsavel ? ` · Contato: ${f.responsavel}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 9,
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            padding: '1px 5px',
+                            borderRadius: 3,
+                            background: isSelected ? 'rgba(16, 185, 129, 0.16)' : 'rgba(148, 163, 184, 0.14)',
+                            color: isSelected ? '#10B981' : C.inkSoft
+                          }}
+                        >
+                          {isSelected ? 'Incluído' : 'Sistema'}
+                        </span>
+                      </label>
+                    )
+                  })
+                )}
+              </div>
+            </div>
           )}
         </div>
 
@@ -3581,7 +3845,7 @@ export function DgennyCotacaoTab({
                 fontSize: 11,
                 fontWeight: 800,
                 color: C.amber,
-                cursor: 'pointer',
+                cursor: buscando ? 'wait' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -3589,8 +3853,31 @@ export function DgennyCotacaoTab({
               }}
             >
               <Search size={12} className={buscando ? 'animate-spin' : ''} />
-              {buscando ? 'Localizando fornecedores na região...' : 'Buscar Fornecedores com WhatsApp Verificado'}
+              {buscando
+                ? `Buscando na região... (${tempoBuscaSegundos}s)`
+                : 'Buscar Fornecedores com WhatsApp Verificado'}
             </button>
+
+            {buscando && (
+              <div
+                style={{
+                  fontSize: 10.5,
+                  color: C.inkSoft,
+                  background: 'rgba(245, 158, 11, 0.08)',
+                  border: '1px solid rgba(245, 158, 11, 0.25)',
+                  borderRadius: 5,
+                  padding: '6px 8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}
+              >
+                <Clock size={12} color={C.amber} />
+                <span>
+                  A dgenny está consultando mapas, filtrando o nicho com IA e validando WhatsApp antes de retornar a lista (geralmente 20s a 90s).
+                </span>
+              </div>
+            )}
 
             {fornecedoresEncontrados.length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 160, overflowY: 'auto' }}>

@@ -109,7 +109,7 @@ export interface DgennySavedSupplier {
   supplierId: string
   name: string
   contactName: string | null
-  phone: string
+  phone: string | null
   email: string | null
   cnpj: string | null
   address: string | null

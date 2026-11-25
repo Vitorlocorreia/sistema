@@ -33,6 +33,7 @@ import {
   ArchiveRestore
 } from 'lucide-react'
 import { supabase } from '@/lib/supabase'
+import { DateInput } from '@/components/DateInput'
 import { C } from '@/lib/tokens'
 import { toast } from '@/components/Toast'
 import { DgennyCotacaoTab } from '@/components/DgennyCotacaoTab'
@@ -2400,10 +2401,9 @@ export function SuprimentoCardDrawer({
                 {/* Previsão de Entrega */}
                 <div>
                   <label style={{ fontSize: 9.5, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Previsão de Entrega</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={formEdicao.data_previsao_entrega}
-                    onChange={e => setFormEdicao(prev => ({ ...prev, data_previsao_entrega: e.target.value }))}
+                    onChange={val => setFormEdicao(prev => ({ ...prev, data_previsao_entrega: val }))}
                     style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 11, padding: '6px 8px', borderRadius: 4, outline: 'none' }}
                   />
                 </div>
@@ -2411,10 +2411,9 @@ export function SuprimentoCardDrawer({
                 {/* Vencimento Financeiro */}
                 <div>
                   <label style={{ fontSize: 9.5, fontWeight: 700, color: C.inkSoft, textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>Vencimento Financeiro</label>
-                  <input
-                    type="date"
+                  <DateInput
                     value={formEdicao.data_vencimento}
-                    onChange={e => setFormEdicao(prev => ({ ...prev, data_vencimento: e.target.value }))}
+                    onChange={val => setFormEdicao(prev => ({ ...prev, data_vencimento: val }))}
                     style={{ width: '100%', background: C.bgPanel, border: `1px solid ${C.border}`, color: C.ink, fontSize: 11, padding: '6px 8px', borderRadius: 4, outline: 'none' }}
                   />
                 </div>
@@ -2917,10 +2916,9 @@ export function SuprimentoCardDrawer({
                 {/* 7. Previsão de Entrega */}
                 <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px' }}>
                   <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: 2 }}>Previsão Entrega</span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={item.data_previsao_entrega || ''}
-                    onChange={e => handleAtualizarPropriedade('data_previsao_entrega', e.target.value, 'Previsão de Entrega')}
+                    onChange={val => handleAtualizarPropriedade('data_previsao_entrega', val, 'Previsão de Entrega')}
                     style={{ width: '100%', background: 'transparent', border: 'none', color: C.ink, fontSize: 10.5, outline: 'none', cursor: 'pointer', padding: 0 }}
                   />
                 </div>
@@ -2928,10 +2926,9 @@ export function SuprimentoCardDrawer({
                 {/* 8. Vencimento Financeiro */}
                 <div style={{ background: C.bgPanel, border: `1px solid ${C.border}`, borderRadius: 4, padding: '6px 8px' }}>
                   <span style={{ fontSize: 9, color: C.inkSoft, textTransform: 'uppercase', fontWeight: 700, display: 'block', marginBottom: 2 }}>Vencimento Fin.</span>
-                  <input
-                    type="date"
+                  <DateInput
                     value={item.data_vencimento || ''}
-                    onChange={e => handleAtualizarPropriedade('data_vencimento', e.target.value, 'Vencimento Financeiro')}
+                    onChange={val => handleAtualizarPropriedade('data_vencimento', val, 'Vencimento Financeiro')}
                     style={{ width: '100%', background: 'transparent', border: 'none', color: C.ink, fontSize: 10.5, outline: 'none', cursor: 'pointer', padding: 0 }}
                   />
                 </div>
