@@ -232,6 +232,8 @@ export function SuprimentoCardDrawer({
   const [novaCondicao, setNovaCondicao] = useState('')
   const [editandoObsOC, setEditandoObsOC] = useState(false)
   const [novaObsOC, setNovaObsOC] = useState('')
+  const [editandoInstrucoesOC, setEditandoInstrucoesOC] = useState(false)
+  const [novaInstrucoesOC, setNovaInstrucoesOC] = useState('')
   const [salvando, setSalvando] = useState(false)
 
   // Chat
@@ -297,6 +299,8 @@ export function SuprimentoCardDrawer({
         setEditandoCondicao(false)
         setNovaObsOC(item.observacoes_oc || '')
         setEditandoObsOC(false)
+        setNovaInstrucoesOC(item.dados_contrato?.instrucoes_entrega || '')
+        setEditandoInstrucoesOC(false)
         setEditandoChecklistId(null)
         setModoEdicaoCompleta(false)
 
@@ -340,6 +344,7 @@ export function SuprimentoCardDrawer({
         if (!editandoObraManual) setNovaObraManual(item.obra_nome_manual || '')
         if (!editandoCondicao) setNovaCondicao(item.condicao_pagamento || '')
         if (!editandoObsOC) setNovaObsOC(item.observacoes_oc || '')
+        if (!editandoInstrucoesOC) setNovaInstrucoesOC(item.dados_contrato?.instrucoes_entrega || '')
         if (!modoEdicaoCompleta) {
           setFormEdicao({
             codigo: item.codigo || '',
@@ -1260,6 +1265,31 @@ export function SuprimentoCardDrawer({
     return m && m[1] ? m[1].trim() : ''
   })()
   const condicaoCompraEfetiva = item.condicao_pagamento || condicaoExtraidaDaConta || ''
+  const numOCAtual = item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())
+  const instrucoesEntregaPadrao = `O material deve ser entregue acompanhado de Nota Fiscal com indicação do número desta Ordem de Compra (${numOCAtual}). Horário de recebimento em canteiro das 07:30 às 17:00.`
+  const instrucoesEntregaSalva = (item.dados_contrato?.instrucoes_entrega || '').trim()
+  const instrucoesEntregaEfetiva = instrucoesEntregaSalva || instrucoesEntregaPadrao
+
+  async function handleSalvarInstrucoesOC(textoNovo: string | null) {
+    const limpo = (textoNovo || '').trim()
+    const novosDadosContrato = {
+      ...(item.dados_contrato || {}),
+      instrucoes_entrega: limpo || null
+    }
+    const ok = await registrarMexida(
+      'edicao_instrucoes_oc',
+      limpo
+        ? `Atualizou as Instruções de Entrega da OC para: "${limpo}"`
+        : 'Restaurou as Instruções de Entrega da OC para o texto padrão',
+      instrucoesEntregaSalva || 'Padrão',
+      limpo || 'Padrão',
+      { dados_contrato: novosDadosContrato }
+    )
+    if (ok) {
+      setEditandoInstrucoesOC(false)
+      toast('Instruções de entrega da OC atualizadas!', 'success')
+    }
+  }
   const valorCardEfetivo =
     parseNumeroBR(item.valor) > 0
       ? parseNumeroBR(item.valor)
@@ -1374,6 +1404,7 @@ export function SuprimentoCardDrawer({
     if (item.tipo_frete) texto += `Frete / Entrega: ${item.tipo_frete}\n`
     texto += `Vencimento Previsto: ${vencimento}\n`
     if (item.observacoes_oc) texto += `Observacoes da Compra: ${item.observacoes_oc}\n`
+    if (instrucoesEntregaSalva) texto += `Instrucoes de Entrega: ${instrucoesEntregaSalva}\n`
     if (item.solicitante) texto += `Solicitante: ${item.solicitante}\n`
     if (item.responsavel_nome) texto += `Responsavel: ${item.responsavel_nome}\n`
     texto += `\n*ITENS SOLICITADOS:*\n`
@@ -3079,6 +3110,73 @@ export function SuprimentoCardDrawer({
                 )}
               </div>
 
+              {/* Barra Rápida de Instruções de Entrega da OC */}
+              <div style={{
+                background: C.bgPanel,
+                border: `1px solid ${instrucoesEntregaSalva ? 'rgba(245, 158, 11, 0.3)' : C.border}`,
+                borderRadius: 5,
+                padding: '6px 10px',
+                fontSize: 11
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, color: C.amber, textTransform: 'uppercase' }}>
+                    🚚 Instruções de Entrega na Ordem de Compra (OC):
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNovaInstrucoesOC(instrucoesEntregaEfetiva)
+                      setEditandoInstrucoesOC(!editandoInstrucoesOC)
+                    }}
+                    style={{ border: 'none', background: 'transparent', color: C.amber, fontSize: 10, fontWeight: 700, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 3 }}
+                  >
+                    <Edit2 size={10} /> {editandoInstrucoesOC ? 'Fechar' : 'Editar Instruções de Entrega'}
+                  </button>
+                </div>
+                {editandoInstrucoesOC ? (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                    <input
+                      value={novaInstrucoesOC}
+                      onChange={e => setNovaInstrucoesOC(e.target.value)}
+                      placeholder="Instruções de entrega e horário de recebimento na obra..."
+                      autoFocus
+                      style={{ flex: 1, minWidth: 220, background: C.bgWhite, border: `1px solid ${C.amber}`, color: C.ink, fontSize: 11, padding: '4px 8px', borderRadius: 4, outline: 'none' }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') handleSalvarInstrucoesOC(novaInstrucoesOC)
+                        if (e.key === 'Escape') setEditandoInstrucoesOC(false)
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleSalvarInstrucoesOC(novaInstrucoesOC)}
+                      style={{ background: C.amber, color: '#0A0A0A', border: 'none', borderRadius: 4, padding: '4px 10px', fontSize: 10.5, fontWeight: 900, cursor: 'pointer' }}
+                    >
+                      Salvar
+                    </button>
+                    {instrucoesEntregaSalva && (
+                      <button
+                        type="button"
+                        onClick={() => handleSalvarInstrucoesOC(null)}
+                        style={{ background: 'transparent', color: C.inkSoft, border: `1px solid ${C.border}`, borderRadius: 4, padding: '4px 8px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Restaurar Padrão
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => {
+                      setNovaInstrucoesOC(instrucoesEntregaEfetiva)
+                      setEditandoInstrucoesOC(true)
+                    }}
+                    style={{ marginTop: 2, color: instrucoesEntregaSalva ? C.ink : C.inkSoft, fontSize: 11, cursor: 'pointer' }}
+                    title="Clique para personalizar as instruções de entrega desta OC"
+                  >
+                    {instrucoesEntregaEfetiva}
+                  </div>
+                )}
+              </div>
+
               {/* Alerta e Sincronização de Valor com Financeiro */}
               {contaVinculada && item.valor && Math.abs(contaVinculada.valor - item.valor) > 0.01 && (
                 <div style={{
@@ -4359,9 +4457,79 @@ export function SuprimentoCardDrawer({
               )}
             </div>
 
-            {/* Instruções / Observações */}
+            {/* Instruções / Observações (Editável direto na OC, botões ocultos na impressão) */}
             <div style={{ fontSize: 10.5, color: '#4B5563', border: '1px dashed #D1D5DB', borderRadius: 4, padding: '8px 12px', marginBottom: 30 }}>
-              <strong>Instruções de Entrega:</strong> O material deve ser entregue acompanhado de Nota Fiscal com indicação do número desta Ordem de Compra ({item.codigo || ('OC-' + item.id.slice(0, 8).toUpperCase())}). Horário de recebimento em canteiro das 07:30 às 17:00.
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ flex: 1 }}>
+                  <strong>Instruções de Entrega:</strong>{' '}
+                  <span>{instrucoesEntregaEfetiva}</span>
+                </div>
+                <button
+                  type="button"
+                  className="no-print"
+                  onClick={() => {
+                    setNovaInstrucoesOC(instrucoesEntregaEfetiva)
+                    setEditandoInstrucoesOC(prev => !prev)
+                  }}
+                  style={{
+                    background: '#F3F4F6',
+                    border: '1px solid #D1D5DB',
+                    color: '#1F2937',
+                    borderRadius: 4,
+                    padding: '2px 8px',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
+                    flexShrink: 0
+                  }}
+                  title="Editar texto de Instruções de Entrega desta Ordem de Compra"
+                >
+                  ✏️ {editandoInstrucoesOC ? 'Fechar' : 'Editar'}
+                </button>
+              </div>
+
+              {editandoInstrucoesOC && (
+                <div className="no-print" style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #E5E7EB', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <input
+                    value={novaInstrucoesOC}
+                    onChange={e => setNovaInstrucoesOC(e.target.value)}
+                    placeholder="Digite as instruções de entrega desta OC..."
+                    autoFocus
+                    style={{
+                      flex: 1,
+                      minWidth: 240,
+                      background: '#FFFFFF',
+                      border: '1.5px solid #2563EB',
+                      color: '#111827',
+                      fontSize: 11,
+                      padding: '5px 8px',
+                      borderRadius: 4,
+                      outline: 'none'
+                    }}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSalvarInstrucoesOC(novaInstrucoesOC)
+                      if (e.key === 'Escape') setEditandoInstrucoesOC(false)
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSalvarInstrucoesOC(novaInstrucoesOC)}
+                    style={{ background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: 4, padding: '5px 12px', fontSize: 11, fontWeight: 800, cursor: 'pointer' }}
+                  >
+                    Salvar na OC
+                  </button>
+                  {instrucoesEntregaSalva && (
+                    <button
+                      type="button"
+                      onClick={() => handleSalvarInstrucoesOC(null)}
+                      style={{ background: '#F3F4F6', color: '#374151', border: '1px solid #D1D5DB', borderRadius: 4, padding: '5px 10px', fontSize: 10.5, fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Restaurar Padrão
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Assinatura Eletrônica & Autenticação por Login (Dispensa assinatura manual) */}
