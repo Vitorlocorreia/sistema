@@ -114,7 +114,7 @@ export function NotificationCenter() {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [open])
 
-  // Marcar individual como lida
+  // Marcar individual como lida e abrir destino (como cartão no Trello)
   async function marcarComoLida(notif: NotificacaoItem) {
     if (!notif.lida) {
       setNotificacoes(prev => prev.map(n => n.id === notif.id ? { ...n, lida: true } : n))
@@ -124,9 +124,26 @@ export function NotificationCenter() {
       setOpen(false)
       if (notif.link.startsWith('http')) {
         window.open(notif.link, '_blank')
-      } else {
-        router.push(notif.link)
+        return
       }
+
+      try {
+        const parsed = new URL(notif.link, window.location.origin)
+        const cardId = parsed.searchParams.get('cardId')
+        if (cardId && window.location.pathname === parsed.pathname) {
+          window.history.replaceState({}, '', parsed.pathname + parsed.search)
+          window.dispatchEvent(
+            new CustomEvent('open-suprimento-card', {
+              detail: { cardId, tipo: notif.tipo }
+            })
+          )
+          return
+        }
+      } catch {
+        // Fallback para navegação padrão
+      }
+
+      router.push(notif.link)
     }
   }
 

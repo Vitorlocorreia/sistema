@@ -575,6 +575,31 @@ export default function SuprimentosPage() {
     }
   }, [])
 
+  // Abrir cartão automaticamente ao clicar em uma notificação (mesmo já estando em /suprimentos)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleOpenFromNotification = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ cardId?: string; tipo?: string }>
+      const cardId = customEvent.detail?.cardId
+      if (!cardId) return
+      const tabDestino = customEvent.detail?.tipo === 'chat_mencao' ? 'chat' : 'checklist'
+
+      const encontrado = suprimentos.find(s => s.id === cardId)
+      if (encontrado) {
+        handleAbrirCardDrawer(encontrado, tabDestino)
+        return
+      }
+
+      const { data } = await supabase.from('suprimentos').select('*').eq('id', cardId).single()
+      if (data) {
+        handleAbrirCardDrawer(data as SuprimentoItem, tabDestino)
+      }
+    }
+
+    window.addEventListener('open-suprimento-card', handleOpenFromNotification)
+    return () => window.removeEventListener('open-suprimento-card', handleOpenFromNotification)
+  }, [suprimentos, handleAbrirCardDrawer])
+
   // Modais
   const [modalNovoOpen, setModalNovoOpen] = useState(false)
   const [modalAprovarOpen, setModalAprovarOpen] = useState(false)
